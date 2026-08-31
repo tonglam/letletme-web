@@ -62,11 +62,7 @@ const TAB_CONFIG: ReadonlyArray<{
 ] as const
 
 function isLiveMatchesTab(value: string): value is LiveMatchesTab {
-	return (
-		value === 'live' ||
-		value === 'finished' ||
-		value === 'not-started'
-	)
+	return value === 'live' || value === 'finished' || value === 'not-started'
 }
 
 export function LiveMatchesClient({
@@ -106,6 +102,13 @@ export function LiveMatchesClient({
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [isOfficialUpdating, setIsOfficialUpdating] = useState(
 		initialOfficialUpdating
+	)
+	const [isOfficialSyncPending, setIsOfficialSyncPending] = useState(
+		initialOfficialUpdating && !initialSnapshot
+	)
+	const officialUpdatingRef = useRef(initialOfficialUpdating)
+	const officialSyncPendingRef = useRef(
+		initialOfficialUpdating && !initialSnapshot
 	)
 	const [error, setError] = useState<string | null>(initialError ?? null)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
@@ -167,14 +170,19 @@ export function LiveMatchesClient({
 					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
 					{
 						preferHttp: true,
-						suppressErrorLog: isOfficialUpdating,
+						suppressErrorLog:
+							officialUpdatingRef.current || officialSyncPendingRef.current,
 						scoreCoreRevision:
-							eventIds?.scoreCoreRevision ?? snapshotRef.current?.scoreCoreRevision ?? null
+							eventIds?.scoreCoreRevision ??
+							snapshotRef.current?.scoreCoreRevision ??
+							null
 					}
 				)
 				if (!mountedRef.current) return
 				const lifecycleCurrentEventId =
-					data.currentEventId ?? eventIds?.currentEventId ?? resolvedCurrentEventId
+					data.currentEventId ??
+					eventIds?.currentEventId ??
+					resolvedCurrentEventId
 				const nextSelectedEventId = lifecycleCurrentEventId
 					? selectLiveMatchEvent(
 							data.matches,
@@ -183,8 +191,7 @@ export function LiveMatchesClient({
 						)
 					: undefined
 				const mappedMatches =
-					nextSelectedEventId &&
-					nextSelectedEventId !== lifecycleCurrentEventId
+					nextSelectedEventId && nextSelectedEventId !== lifecycleCurrentEventId
 						? data.matches.filter(
 								match => match.eventId === nextSelectedEventId
 							)
@@ -194,23 +201,24 @@ export function LiveMatchesClient({
 				setSelectedEventId(nextSelectedEventId)
 				setResolvedNextEventId(data.nextEventId ?? undefined)
 				acceptSnapshot(
-					nextSelectedEventId === lifecycleCurrentEventId
-						? data.snapshot
-						: null
+					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
 				)
+				officialSyncPendingRef.current = false
+				officialUpdatingRef.current = false
+				setIsOfficialSyncPending(false)
+				setIsOfficialUpdating(false)
 				hasLastGoodData.current = true
 
-				if (
-					!hasUserSelectedTab.current &&
-					!hasSavedTabPreference.current
-				) {
+				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {
 					setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
 				}
 			} catch (err) {
-				if (!isOfficialUpdating) {
+				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
 					console.error('Failed to fetch live matches:', err)
 					if (mountedRef.current) {
-						setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
+						setError(
+							t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed')
+						)
 					}
 				}
 			} finally {
@@ -227,13 +235,7 @@ export function LiveMatchesClient({
 				}
 			}
 		},
-		[
-			acceptSnapshot,
-			isOfficialUpdating,
-			resolvedCurrentEventId,
-			resolvedNextEventId,
-			t
-		]
+		[acceptSnapshot, resolvedCurrentEventId, resolvedNextEventId, t]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
@@ -249,11 +251,20 @@ export function LiveMatchesClient({
 					undefined,
 					{
 						cache: 'no-store',
-						suppressErrorLog: isOfficialUpdating
+						suppressErrorLog:
+							officialUpdatingRef.current || officialSyncPendingRef.current
 					}
 				)
 				const context = probe.liveContext
-				setIsOfficialUpdating(isOfficialLiveUpdatingContext(context))
+				const observedOfficialUpdating = isOfficialLiveUpdatingContext(context)
+				officialUpdatingRef.current = observedOfficialUpdating
+				if (observedOfficialUpdating && !snapshotRef.current) {
+					officialSyncPendingRef.current = true
+				}
+				setIsOfficialSyncPending(officialSyncPendingRef.current)
+				setIsOfficialUpdating(
+					observedOfficialUpdating || officialSyncPendingRef.current
+				)
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 				const observedCurrentEventId = context?.anchorEventId ?? undefined
 				const observedNextEventId = context?.nextEventId ?? undefined
@@ -298,7 +309,7 @@ export function LiveMatchesClient({
 					scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
 				})
 			} catch (probeError) {
-				if (!isOfficialUpdating) {
+				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
 					console.error('Failed to check live match freshness:', probeError)
 					setError(t('refreshFailed'))
 				}
@@ -315,7 +326,6 @@ export function LiveMatchesClient({
 		acceptSnapshot,
 		fetchMatches,
 		isPageActive,
-		isOfficialUpdating,
 		resolvedCurrentEventId,
 		resolvedNextEventId,
 		t
@@ -381,7 +391,11 @@ export function LiveMatchesClient({
 		} catch {
 			return
 		}
-		if (savedTab && isLiveMatchesTab(savedTab) && matchesByTab[savedTab].length > 0) {
+		if (
+			savedTab &&
+			isLiveMatchesTab(savedTab) &&
+			matchesByTab[savedTab].length > 0
+		) {
 			hasSavedTabPreference.current = true
 			const timeoutId = window.setTimeout(() => setActiveTab(savedTab), 0)
 			return () => window.clearTimeout(timeoutId)
@@ -397,20 +411,22 @@ export function LiveMatchesClient({
 	}, [matchesByTab])
 
 	const pollingEventId = resolvedCurrentEventId
-	const autoRefreshEnabled = shouldPollLiveSnapshot({
-		isPageActive,
-		currentEventId: pollingEventId,
-		selectedEventId: pollingEventId,
-		snapshot,
-		windowState: snapshot?.windowState ?? snapshot?.state,
-		nextRefreshAt: snapshot?.nextRefreshAt,
-		isOfficialUpdating
-	}) || shouldPollLiveMatchesTransition({
-		isPageActive,
-		currentEventId: resolvedCurrentEventId,
-		nextEventId: resolvedNextEventId,
-		snapshot
-	})
+	const autoRefreshEnabled =
+		shouldPollLiveSnapshot({
+			isPageActive,
+			currentEventId: pollingEventId,
+			selectedEventId: pollingEventId,
+			snapshot,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt,
+			isOfficialUpdating: isOfficialUpdating || isOfficialSyncPending
+		}) ||
+		shouldPollLiveMatchesTransition({
+			isPageActive,
+			currentEventId: resolvedCurrentEventId,
+			nextEventId: resolvedNextEventId,
+			snapshot
+		})
 	const transitionPolling = shouldPollLiveMatchesTransition({
 		isPageActive,
 		currentEventId: resolvedCurrentEventId,
@@ -461,8 +477,7 @@ export function LiveMatchesClient({
 				return
 			}
 
-			const eventTarget =
-				event.target instanceof Element ? event.target : null
+			const eventTarget = event.target instanceof Element ? event.target : null
 			if (
 				eventTarget?.closest(
 					'input, textarea, select, [contenteditable="true"], [role="dialog"], [data-radix-dialog-content]'
@@ -551,13 +566,13 @@ export function LiveMatchesClient({
 			</Button>
 			<div className="min-h-4">
 				{!isLoading || isRefreshing ? (
-						<LiveAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={autoRefreshMatches}
-							nextRefreshAt={transitionPolling ? null : snapshot?.nextRefreshAt}
-							renderLabel={seconds => t('autoRefresh', { seconds })}
-							showLabel={false}
-						/>
+					<LiveAutoRefreshCountdown
+						enabled={autoRefreshEnabled}
+						onRefresh={autoRefreshMatches}
+						nextRefreshAt={transitionPolling ? null : snapshot?.nextRefreshAt}
+						renderLabel={seconds => t('autoRefresh', { seconds })}
+						showLabel={false}
+					/>
 				) : null}
 			</div>
 		</div>
@@ -687,7 +702,7 @@ export function LiveMatchesClient({
 										match={match}
 										allMatches={activeMatches}
 										currentIndex={i}
-											eventId={selectedEventId}
+										eventId={selectedEventId}
 									/>
 								))
 							) : (

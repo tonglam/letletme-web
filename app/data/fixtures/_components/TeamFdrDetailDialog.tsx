@@ -39,6 +39,7 @@ const FULL_SEASON_WINDOWS = Array.from({ length: 8 }, (_, index) => {
 type FullSeasonSchedule = {
 	fixturesByEvent: Map<number, FdrPlanningFixture[]>
 	unavailableEventIds: ReadonlySet<number>
+	failedWindowCount: number
 }
 
 function toPlanningFixture(
@@ -83,6 +84,7 @@ function mergeFullSeasonSchedule(
 ): FullSeasonSchedule {
 	const fixturesByEvent = new Map<number, FdrPlanningFixture[]>()
 	const unavailableEventIds = new Set<number>()
+	let failedWindowCount = 0
 
 	results.forEach((result, index) => {
 		const window = FULL_SEASON_WINDOWS[index]
@@ -93,6 +95,7 @@ function mergeFullSeasonSchedule(
 		)
 
 		if (result.status === 'rejected') {
+			failedWindowCount += 1
 			eventIds.forEach(eventId => unavailableEventIds.add(eventId))
 			return
 		}
@@ -107,7 +110,7 @@ function mergeFullSeasonSchedule(
 		)
 	})
 
-	return { fixturesByEvent, unavailableEventIds }
+	return { fixturesByEvent, unavailableEventIds, failedWindowCount }
 }
 
 function teamFixtureScore(cell: TeamFixtureCell): string | null {
@@ -279,18 +282,40 @@ function FullSeasonSchedule({
 	}
 
 	return (
-		<div
-			className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-4"
-			aria-label={t('teamDetailDescription')}
-		>
-			{FULL_SEASON_EVENT_IDS.map(eventId => (
-				<TeamFixtureDetailRow
-					key={eventId}
-					eventId={eventId}
-					gameweek={row.gameweeks[eventId - 1]!}
-					t={t}
-				/>
-			))}
+		<div className="space-y-3">
+			{schedule.failedWindowCount > 0 ? (
+				<div
+					className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-foreground"
+					role="status"
+				>
+					<span>
+						{t('teamSchedulePartial', {
+							failed: schedule.failedWindowCount,
+							total: FULL_SEASON_WINDOWS.length
+						})}
+					</span>
+					<button
+						type="button"
+						className="rounded-md border border-border/70 bg-background px-2.5 py-1 font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						onClick={onRetry}
+					>
+						{t('retrySchedule')}
+					</button>
+				</div>
+			) : null}
+			<div
+				className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-4"
+				aria-label={t('teamDetailDescription')}
+			>
+				{FULL_SEASON_EVENT_IDS.map(eventId => (
+					<TeamFixtureDetailRow
+						key={eventId}
+						eventId={eventId}
+						gameweek={row.gameweeks[eventId - 1]!}
+						t={t}
+					/>
+				))}
+			</div>
 		</div>
 	)
 }
@@ -313,44 +338,49 @@ export function TeamFdrDetailDialog({
 	const abortRef = useRef<AbortController | null>(null)
 	const shareRef = useRef<HTMLDivElement | null>(null)
 
-	const loadFullSeasonSchedule = useCallback(() => {
-		if (schedule) return Promise.resolve(schedule)
-		if (promiseRef.current) return promiseRef.current
+	const loadFullSeasonSchedule = useCallback(
+		(force = false) => {
+			if (!force && schedule && schedule.failedWindowCount === 0) {
+				return Promise.resolve(schedule)
+			}
+			if (promiseRef.current) return promiseRef.current
 
-		const controller = new AbortController()
-		abortRef.current = controller
-		setState('loading')
+			const controller = new AbortController()
+			abortRef.current = controller
+			setState('loading')
 
-		const promise = Promise.allSettled(
-			FULL_SEASON_WINDOWS.map(window =>
-				requestFixtureWindow(window, controller.signal)
+			const promise = Promise.allSettled(
+				FULL_SEASON_WINDOWS.map(window =>
+					requestFixtureWindow(window, controller.signal)
+				)
 			)
-		)
-			.then(results => {
-				if (controller.signal.aborted) return null
-				if (!results.some(result => result.status === 'fulfilled')) {
-					throw new Error('full season fixture schedule unavailable')
-				}
+				.then(results => {
+					if (controller.signal.aborted) return null
+					if (!results.some(result => result.status === 'fulfilled')) {
+						throw new Error('full season fixture schedule unavailable')
+					}
 
-				const nextSchedule = mergeFullSeasonSchedule(results)
-				setSchedule(nextSchedule)
-				setState('ready')
-				return nextSchedule
-			})
-			.catch(() => {
-				if (!controller.signal.aborted) setState('error')
-				return null
-			})
-			.finally(() => {
-				if (promiseRef.current === promise) {
-					promiseRef.current = null
-					abortRef.current = null
-				}
-			})
+					const nextSchedule = mergeFullSeasonSchedule(results)
+					setSchedule(nextSchedule)
+					setState('ready')
+					return nextSchedule
+				})
+				.catch(() => {
+					if (!controller.signal.aborted) setState('error')
+					return null
+				})
+				.finally(() => {
+					if (promiseRef.current === promise) {
+						promiseRef.current = null
+						abortRef.current = null
+					}
+				})
 
-		promiseRef.current = promise
-		return promise
-	}, [schedule])
+			promiseRef.current = promise
+			return promise
+		},
+		[schedule]
+	)
 
 	useEffect(() => {
 		if (open && team) void loadFullSeasonSchedule()
@@ -420,7 +450,7 @@ export function TeamFdrDetailDialog({
 							schedule={schedule}
 							state={state}
 							t={t}
-							onRetry={() => void loadFullSeasonSchedule()}
+							onRetry={() => void loadFullSeasonSchedule(true)}
 						/>
 					</div>
 				) : null}

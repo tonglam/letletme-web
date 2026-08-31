@@ -9,7 +9,10 @@ import {
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '../lib/live-refresh'
-import { liveScoreAuthorityLabel, traceableLiveScore } from '../lib/live-score-v2'
+import {
+	liveScoreAuthorityLabel,
+	traceableLiveScore
+} from '../lib/live-score-v2'
 
 const revision = (value: string) => value.repeat(64 / value.length)
 
@@ -61,7 +64,10 @@ describe('Live Points V2 web contract', () => {
 		assert.match(GET_LIVE_POINTS, /sourceCheckedAt/)
 		assert.match(GET_LIVE_POINTS, /contentUpdatedAt/)
 		assert.match(GET_LIVE_POINTS, /delivery\s*\{/)
-		assert.doesNotMatch(GET_LIVE_POINTS, /LINEUP_UNAVAILABLE|liveNetPoints|liveTotalPoints/)
+		assert.doesNotMatch(
+			GET_LIVE_POINTS,
+			/LINEUP_UNAVAILABLE|liveNetPoints|liveTotalPoints/
+		)
 		assert.doesNotMatch(GET_LIVE_POINTS, /checkedAt\b|\brevision\b(?!\s*\n)/)
 	})
 
@@ -115,12 +121,18 @@ describe('Live Points V2 web contract', () => {
 			'utf8'
 		)
 		const tournament = readFileSync(
-			new URL('../app/live/tournaments/[id]/TournamentDetailClient.tsx', import.meta.url),
+			new URL(
+				'../app/live/tournaments/[id]/TournamentDetailClient.tsx',
+				import.meta.url
+			),
 			'utf8'
 		)
 		assert.doesNotMatch(hook, /liveScoreDue/)
 		assert.doesNotMatch(tournament, /const liveScoreDue/)
-		assert.match(hook, /if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/)
+		assert.match(
+			hook,
+			/if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/
+		)
 		assert.match(
 			tournament,
 			/if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/
@@ -135,34 +147,66 @@ describe('Live Points V2 web contract', () => {
 			state: 'LIVE_ACTIVE' as const,
 			scoreCoreRevision: revision('a')
 		}
-		assert.equal(shouldPollLiveSnapshot({
-			isPageActive: true,
-			currentEventId: 1,
-			selectedEventId: 1,
-			snapshot
-		}), true)
-		assert.equal(shouldPollLiveSnapshot({
-			isPageActive: true,
-			currentEventId: 2,
-			selectedEventId: 1,
-			snapshot
-		}), false)
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 1,
+				selectedEventId: 1,
+				snapshot
+			}),
+			true
+		)
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 2,
+				selectedEventId: 1,
+				snapshot
+			}),
+			false
+		)
 	})
 
 	it('polls through the expected official sync when the first snapshot is absent', () => {
-		assert.equal(shouldPollLiveSnapshot({
-			isPageActive: true,
-			currentEventId: 2,
-			selectedEventId: 2,
-			snapshot: null,
-			isOfficialUpdating: true
-		}), true)
-		assert.equal(shouldPollLiveSnapshot({
-			isPageActive: true,
-			currentEventId: 2,
-			selectedEventId: 2,
-			snapshot: null
-		}), false)
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 2,
+				selectedEventId: 2,
+				snapshot: null,
+				isOfficialUpdating: true
+			}),
+			true
+		)
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 2,
+				selectedEventId: 2,
+				snapshot: null
+			}),
+			false
+		)
+	})
+
+	it('keeps both live consumers polling until the first snapshot fetch succeeds', () => {
+		const matches = readFileSync(
+			new URL('../app/live/matches/LiveMatchesClient.tsx', import.meta.url),
+			'utf8'
+		)
+		const points = readFileSync(
+			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
+			'utf8'
+		)
+		for (const source of [matches, points]) {
+			assert.match(source, /officialSyncPendingRef/)
+			assert.match(source, /officialSyncPendingRef\.current = false/)
+			assert.match(source, /isOfficialSyncPending/)
+			assert.match(
+				source,
+				/isOfficialUpdating:\s*isOfficialUpdating \|\| isOfficialSyncPending/
+			)
+		}
 	})
 
 	it('maps delivery timestamps without using source checks as content revisions', () => {
@@ -195,6 +239,17 @@ describe('Live Points V2 web contract', () => {
 		const value = traceableLiveScore(score())
 		assert.ok(value)
 		assert.equal(liveScoreAuthorityLabel(value), '预计')
-		assert.equal(traceableLiveScore(score({ delivery: { state: 'UNAVAILABLE', servedFrom: 'PROCESS_LKG', reasonCodes: [] } })), undefined)
+		assert.equal(
+			traceableLiveScore(
+				score({
+					delivery: {
+						state: 'UNAVAILABLE',
+						servedFrom: 'PROCESS_LKG',
+						reasonCodes: []
+					}
+				})
+			),
+			undefined
+		)
 	})
 })

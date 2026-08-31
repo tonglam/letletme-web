@@ -29,7 +29,7 @@ import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import type { useTranslations } from 'next-intl'
-import { HeartPulse, Sparkles } from 'lucide-react'
+import { HeartPulse, RefreshCcw, Sparkles } from 'lucide-react'
 import { Suspense } from 'react'
 import type { ReactNode } from 'react'
 
@@ -107,6 +107,21 @@ function EmptyHint({ children }: { children: ReactNode }) {
 		>
 			{children}
 		</p>
+	)
+}
+
+function PulseFreshnessNotice({ t }: { t: MarketT }) {
+	return (
+		<div
+			className="flex items-center gap-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-foreground"
+			role="status"
+		>
+			<RefreshCcw
+				className="size-3.5 shrink-0 text-warning"
+				aria-hidden="true"
+			/>
+			<span>{t('pulseStaleWarning')}</span>
+		</div>
 	)
 }
 
@@ -841,6 +856,7 @@ export async function MarketDashboard({
 		<MarketPlayerSelectionProvider>
 			<div className="space-y-8">
 				{glance}
+				{pulse?.coverage.stale ? <PulseFreshnessNotice t={t} /> : null}
 				{order.map(id => (
 					<section key={id}>{sectionById[id]}</section>
 				))}

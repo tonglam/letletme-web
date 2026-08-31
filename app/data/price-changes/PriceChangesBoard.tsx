@@ -52,6 +52,7 @@ import {
 	type PriceChangeSortState,
 	type PriceChangeScope
 } from '@/lib/price-change-sorting'
+import { buildPriceChangeFilterUrl } from '@/lib/price-change-filter-url'
 import { selectPriceChangeSquadPlayers } from '@/app/data/price-changes/_lib/price-change-share'
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
@@ -348,6 +349,18 @@ export function PriceChangesBoard({
 		setPage(1)
 	}, [initialMovement, initialScope])
 
+	const updateFilterUrl = (
+		nextScope: PriceChangeScope,
+		nextMovement: PriceChangeMovementFilter
+	) => {
+		if (typeof window === 'undefined') return
+		window.history.replaceState(
+			window.history.state,
+			'',
+			buildPriceChangeFilterUrl(window.location.href, nextScope, nextMovement)
+		)
+	}
+
 	usePriceChangeLiveBoard({
 		board,
 		onUpdate: (nextBoard, state) => {
@@ -416,12 +429,15 @@ export function PriceChangesBoard({
 	}, [page, pageCount])
 
 	const resetFilters = () => {
+		const nextScope = DEFAULT_PRICE_CHANGE_SCOPE
+		const nextMovement: PriceChangeMovementFilter = 'all'
 		setSearch('')
-		setScope(DEFAULT_PRICE_CHANGE_SCOPE)
-		setMovement('all')
+		setScope(nextScope)
+		setMovement(nextMovement)
 		setSort(DEFAULT_PRICE_CHANGE_SORT)
 		setTeamId('all')
 		setPage(1)
+		updateFilterUrl(nextScope, nextMovement)
 	}
 
 	const hasFilters =
@@ -718,8 +734,10 @@ export function PriceChangesBoard({
 							<Select
 								value={scope}
 								onValueChange={value => {
-									setScope(value as PriceChangeScope)
+									const nextScope = value as PriceChangeScope
+									setScope(nextScope)
 									setPage(1)
+									updateFilterUrl(nextScope, movement)
 								}}
 							>
 								<SelectTrigger
@@ -745,9 +763,11 @@ export function PriceChangesBoard({
 								value={movement}
 								onValueChange={value => {
 									const nextMovement = value as PriceChangeMovementFilter
+									const nextScope = nextMovement === 'locked' ? 'all' : scope
 									setMovement(nextMovement)
-									if (nextMovement === 'locked') setScope('all')
+									setScope(nextScope)
 									setPage(1)
+									updateFilterUrl(nextScope, nextMovement)
 								}}
 							>
 								<SelectTrigger

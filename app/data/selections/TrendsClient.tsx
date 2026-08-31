@@ -63,12 +63,7 @@ const TOP_RANK_LIMIT = 12
 const PERSONAL_SQUAD_SIZE = 15
 
 type TrendView =
-	| 'template'
-	| 'ownership'
-	| 'captaincy'
-	| 'transfers'
-	| 'squad'
-	| 'other'
+	'template' | 'ownership' | 'captaincy' | 'transfers' | 'squad' | 'other'
 
 type TrendViewDefinition = {
 	id: TrendView
@@ -680,7 +675,8 @@ export default function TrendsClient({
 	async function select(
 		nextCohort: string,
 		nextEvent: number,
-		pushHistory = true
+		pushHistory = true,
+		bypassCache = false
 	) {
 		const knownCohort = cohorts.find(item => item.id === nextCohort)
 		if (!knownCohort || !isTrendCohortReady(knownCohort)) return
@@ -691,7 +687,8 @@ export default function TrendsClient({
 		setEventId(nextEvent)
 		setError(null)
 		if (pushHistory) updateUrl(nextAccess, nextCohort, nextEvent)
-		const cached = cache.current.get(key)
+		if (bypassCache) cache.current.delete(key)
+		const cached = bypassCache ? undefined : cache.current.get(key)
 		if (cached) {
 			inFlight.current.forEach(request => request.controller.abort())
 			inFlight.current.clear()
@@ -825,8 +822,8 @@ export default function TrendsClient({
 							? t('squadPicks', {
 									shown: section.rows.length,
 									expected: PERSONAL_SQUAD_SIZE
-							})
-						: t('topRanked', { count: TOP_RANK_LIMIT })
+								})
+							: t('topRanked', { count: TOP_RANK_LIMIT })
 				)
 				const rows =
 					section.capability === 'TEMPLATE' ||
@@ -1031,6 +1028,17 @@ export default function TrendsClient({
 						</div>
 					</Card>
 
+					{denominators.mismatch ? (
+						<p className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+							{t('denominatorMismatch')}
+						</p>
+					) : null}
+					{denominators.missing ? (
+						<p className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+							{t('denominatorMissing')}
+						</p>
+					) : null}
+
 					{!canLoadMine ? (
 						<div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 							<span>{t('needEntry')}</span>
@@ -1147,7 +1155,8 @@ export default function TrendsClient({
 																	void select(
 																		committed.cohort.id,
 																		committed.eventId,
-																		false
+																		false,
+																		true
 																	)
 																}
 															/>

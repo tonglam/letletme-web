@@ -66,6 +66,7 @@ const FULL_SEASON_WINDOWS = Array.from({ length: 8 }, (_, index) => {
 type FullSeasonSchedule = {
 	fixturesByEvent: Map<number, FixturePlanningFixture[]>
 	unavailableEventIds: ReadonlySet<number>
+	failedWindowCount: number
 }
 
 function pitchPosition(value: string): PitchPosition {
@@ -212,9 +213,7 @@ function CompactFixtureRow({
 							fixture.finished || (fixture.started && score)
 								? (score ?? '—')
 								: `FDR ${difficulty}`
-						const venue = isHome
-							? t('fixtureHomeShort')
-							: t('fixtureAwayShort')
+						const venue = isHome ? t('fixtureHomeShort') : t('fixtureAwayShort')
 
 						return (
 							<span
@@ -267,6 +266,7 @@ function mergeFullSeasonSchedule(
 ): FullSeasonSchedule {
 	const fixturesByEvent = new Map<number, FixturePlanningFixture[]>()
 	const unavailableEventIds = new Set<number>()
+	let failedWindowCount = 0
 
 	results.forEach((result, index) => {
 		const window = FULL_SEASON_WINDOWS[index]
@@ -277,6 +277,7 @@ function mergeFullSeasonSchedule(
 		)
 
 		if (result.status === 'rejected') {
+			failedWindowCount += 1
 			eventIds.forEach(eventId => unavailableEventIds.add(eventId))
 			return
 		}
@@ -291,7 +292,7 @@ function mergeFullSeasonSchedule(
 		)
 	})
 
-	return { fixturesByEvent, unavailableEventIds }
+	return { fixturesByEvent, unavailableEventIds, failedWindowCount }
 }
 
 function clampEventId(value: number): number {
@@ -338,7 +339,10 @@ function PlayerScheduleRangeControls({
 				>
 					{FULL_SEASON_EVENT_IDS.filter(eventId => eventId <= toGw).map(
 						eventId => (
-							<option key={eventId} value={eventId}>
+							<option
+								key={eventId}
+								value={eventId}
+							>
 								GW{eventId}
 							</option>
 						)
@@ -356,7 +360,10 @@ function PlayerScheduleRangeControls({
 				>
 					{FULL_SEASON_EVENT_IDS.filter(eventId => eventId >= fromGw).map(
 						eventId => (
-							<option key={eventId} value={eventId}>
+							<option
+								key={eventId}
+								value={eventId}
+							>
 								GW{eventId}
 							</option>
 						)
@@ -488,7 +495,10 @@ function FullSeasonSchedule({
 					<p className="text-caption text-muted-foreground">
 						{t('mySquadScheduleLoading')}
 					</p>
-					<div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-8" aria-hidden="true">
+					<div
+						className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-8"
+						aria-hidden="true"
+					>
 						{Array.from({ length: 8 }, (_, index) => (
 							<span
 								key={index}
@@ -530,6 +540,26 @@ function FullSeasonSchedule({
 							/>
 						))}
 					</ol>
+					{schedule.failedWindowCount > 0 ? (
+						<div
+							className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-foreground"
+							role="status"
+						>
+							<span>
+								{t('mySquadSchedulePartial', {
+									failed: schedule.failedWindowCount,
+									total: FULL_SEASON_WINDOWS.length
+								})}
+							</span>
+							<button
+								type="button"
+								className="rounded-md border border-border/70 bg-background px-2.5 py-1 font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								onClick={onRetry}
+							>
+								{t('retrySchedule')}
+							</button>
+						</div>
+					) : null}
 				</>
 			)}
 		</div>
@@ -613,46 +643,55 @@ export function MySquadFdrDesk({
 		return { starters, bench, rowById }
 	}, [eventIds, rows, t])
 
-	const loadFullSeasonSchedule = useCallback(() => {
-		if (fullSeasonSchedule) return Promise.resolve(fullSeasonSchedule)
-		if (fullSchedulePromiseRef.current) return fullSchedulePromiseRef.current
+	const loadFullSeasonSchedule = useCallback(
+		(force = false) => {
+			if (
+				!force &&
+				fullSeasonSchedule &&
+				fullSeasonSchedule.failedWindowCount === 0
+			) {
+				return Promise.resolve(fullSeasonSchedule)
+			}
+			if (fullSchedulePromiseRef.current) return fullSchedulePromiseRef.current
 
-		const controller = new AbortController()
-		fullScheduleAbortRef.current = controller
-		setFullSeasonScheduleState('loading')
+			const controller = new AbortController()
+			fullScheduleAbortRef.current = controller
+			setFullSeasonScheduleState('loading')
 
-		const promise = Promise.allSettled(
-			FULL_SEASON_WINDOWS.map(window =>
-				requestFixtureWindow(window, controller.signal)
+			const promise = Promise.allSettled(
+				FULL_SEASON_WINDOWS.map(window =>
+					requestFixtureWindow(window, controller.signal)
+				)
 			)
-		)
-			.then(results => {
-				if (controller.signal.aborted) return null
-				if (!results.some(result => result.status === 'fulfilled')) {
-					throw new Error('full season fixture schedule unavailable')
-				}
+				.then(results => {
+					if (controller.signal.aborted) return null
+					if (!results.some(result => result.status === 'fulfilled')) {
+						throw new Error('full season fixture schedule unavailable')
+					}
 
-				const schedule = mergeFullSeasonSchedule(results)
-				setFullSeasonSchedule(schedule)
-				setFullSeasonScheduleState('ready')
-				return schedule
-			})
-			.catch(() => {
-				if (!controller.signal.aborted) {
-					setFullSeasonScheduleState('error')
-				}
-				return null
-			})
-			.finally(() => {
-				if (fullSchedulePromiseRef.current === promise) {
-					fullSchedulePromiseRef.current = null
-					fullScheduleAbortRef.current = null
-				}
-			})
+					const schedule = mergeFullSeasonSchedule(results)
+					setFullSeasonSchedule(schedule)
+					setFullSeasonScheduleState('ready')
+					return schedule
+				})
+				.catch(() => {
+					if (!controller.signal.aborted) {
+						setFullSeasonScheduleState('error')
+					}
+					return null
+				})
+				.finally(() => {
+					if (fullSchedulePromiseRef.current === promise) {
+						fullSchedulePromiseRef.current = null
+						fullScheduleAbortRef.current = null
+					}
+				})
 
-		fullSchedulePromiseRef.current = promise
-		return promise
-	}, [fullSeasonSchedule])
+			fullSchedulePromiseRef.current = promise
+			return promise
+		},
+		[fullSeasonSchedule]
+	)
 
 	useEffect(() => {
 		return () => {
@@ -704,8 +743,8 @@ export function MySquadFdrDesk({
 	}
 
 	const selectedTeamName = selectedRow
-		? teams.find(team => team.teamId === selectedRow.teamId)?.teamName ??
-			selectedRow.teamShortName
+		? (teams.find(team => team.teamId === selectedRow.teamId)?.teamName ??
+			selectedRow.teamShortName)
 		: ''
 
 	return (
@@ -775,20 +814,20 @@ export function MySquadFdrDesk({
 					if (!open) setSelectedRow(null)
 				}}
 			>
-					<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overscroll-contain p-3 sm:max-w-2xl sm:p-4">
-						{selectedRow ? (
-							<FullSeasonSchedule
-								key={rowId(selectedRow)}
-								selectedRow={selectedRow}
-								teamName={selectedTeamName}
-								schedule={fullSeasonSchedule}
-								state={fullSeasonScheduleState}
-								fromGw={fromGw}
-								horizon={horizon}
-								t={t}
-								onRetry={() => void loadFullSeasonSchedule()}
-							/>
-						) : null}
+				<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overscroll-contain p-3 sm:max-w-2xl sm:p-4">
+					{selectedRow ? (
+						<FullSeasonSchedule
+							key={rowId(selectedRow)}
+							selectedRow={selectedRow}
+							teamName={selectedTeamName}
+							schedule={fullSeasonSchedule}
+							state={fullSeasonScheduleState}
+							fromGw={fromGw}
+							horizon={horizon}
+							t={t}
+							onRetry={() => void loadFullSeasonSchedule(true)}
+						/>
+					) : null}
 				</DialogContent>
 			</Dialog>
 		</>

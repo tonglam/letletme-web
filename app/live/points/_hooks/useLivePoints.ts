@@ -105,6 +105,13 @@ export function useLivePoints({
 	const [isOfficialUpdating, setIsOfficialUpdating] = useState(
 		initialOfficialUpdating
 	)
+	const [isOfficialSyncPending, setIsOfficialSyncPending] = useState(
+		initialOfficialUpdating && !initialLiveSnapshot
+	)
+	const officialUpdatingRef = useRef(initialOfficialUpdating)
+	const officialSyncPendingRef = useRef(
+		initialOfficialUpdating && !initialLiveSnapshot
+	)
 	const [error, setError] = useState<string>()
 	const [liveData, setLiveData] = useState<LiveCalcData | undefined>(
 		initialLiveData
@@ -197,7 +204,8 @@ export function useLivePoints({
 					{ eventId, elementIds },
 					{
 						cache: 'no-store',
-						suppressErrorLog: isOfficialUpdating
+						suppressErrorLog:
+							officialUpdatingRef.current || officialSyncPendingRef.current
 					}
 				)
 
@@ -233,12 +241,12 @@ export function useLivePoints({
 				if (lastExplainAttemptAtRef.current === now) {
 					lastExplainAttemptAtRef.current = 0
 				}
-				if (!isOfficialUpdating) {
+				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
 					console.warn('Failed to fetch explain stats batch:', explainError)
 				}
 			}
 		},
-		[isOfficialUpdating]
+		[]
 	)
 
 	const fetchLivePointsForGameweek = useCallback(
@@ -287,7 +295,8 @@ export function useLivePoints({
 						{ eventId, entryId: activeEntryId },
 						{
 							cache: 'no-store',
-							suppressErrorLog: isOfficialUpdating
+							suppressErrorLog:
+								officialUpdatingRef.current || officialSyncPendingRef.current
 						}
 					)
 					const live = liveResponse.calcLivePointsByEntry
@@ -372,6 +381,9 @@ export function useLivePoints({
 						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
 					)
 					hasLoadedLiveDataRef.current = true
+					officialSyncPendingRef.current = false
+					officialUpdatingRef.current = false
+					setIsOfficialSyncPending(false)
 					setIsOfficialUpdating(false)
 					latestLiveDataRef.current = { requestKey, live }
 					setLiveData(live)
@@ -386,7 +398,7 @@ export function useLivePoints({
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
 				} catch (fetchError) {
 					if (requestId !== requestIdRef.current) return
-					if (!isOfficialUpdating) {
+					if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
 						console.error('Failed to fetch live points:', fetchError)
 						setError(t('loadFailed'))
 					}
@@ -416,13 +428,7 @@ export function useLivePoints({
 			})
 			return request
 		},
-		[
-			acceptSnapshot,
-			activeEntryId,
-			enrichLivePointBreakdowns,
-			isOfficialUpdating,
-			t
-		]
+		[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
 	)
 
 	useEffect(() => {
@@ -485,12 +491,21 @@ export function useLivePoints({
 				undefined,
 				{
 					cache: 'no-store',
-					suppressErrorLog: isOfficialUpdating
+					suppressErrorLog:
+						officialUpdatingRef.current || officialSyncPendingRef.current
 				}
 			)
 			if (requestId !== requestIdRef.current) return
 			const context = probe.liveContext
-			setIsOfficialUpdating(isOfficialLiveUpdatingContext(context))
+			const observedOfficialUpdating = isOfficialLiveUpdatingContext(context)
+			officialUpdatingRef.current = observedOfficialUpdating
+			if (observedOfficialUpdating && !snapshotRef.current) {
+				officialSyncPendingRef.current = true
+			}
+			setIsOfficialSyncPending(officialSyncPendingRef.current)
+			setIsOfficialUpdating(
+				observedOfficialUpdating || officialSyncPendingRef.current
+			)
 			const observedAnchorEventId = context?.anchorEventId ?? undefined
 			if (observedAnchorEventId && observedAnchorEventId !== currentGameweek) {
 				setCurrentGameweek(observedAnchorEventId)
@@ -521,7 +536,7 @@ export function useLivePoints({
 			await fetchLivePointsForGameweek(selectedGameweek)
 		} catch (probeError) {
 			if (requestId !== requestIdRef.current) return
-			if (!isOfficialUpdating) {
+			if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
 				console.error('Failed to check live points freshness:', probeError)
 				setError(t('loadFailed'))
 			}
@@ -531,7 +546,6 @@ export function useLivePoints({
 		enrichLivePointBreakdowns,
 		fetchLivePointsForGameweek,
 		currentGameweek,
-		isOfficialUpdating,
 		selectedGameweek,
 		t
 	])
@@ -570,7 +584,13 @@ export function useLivePoints({
 
 		followsAnchorRef.current = initialSelectedGameweek == null
 		setCurrentGameweek(initialEventId)
-		setIsOfficialUpdating(initialOfficialUpdating)
+		officialUpdatingRef.current = initialOfficialUpdating
+		officialSyncPendingRef.current =
+			initialOfficialUpdating && !initialLiveSnapshot
+		setIsOfficialSyncPending(officialSyncPendingRef.current)
+		setIsOfficialUpdating(
+			initialOfficialUpdating || officialSyncPendingRef.current
+		)
 		setActiveEntryId(initialEntryId)
 		setEntryIdInput(initialEntryId ? String(initialEntryId) : '')
 		setSelectedGameweek(nextSelectedGameweek)
@@ -711,7 +731,7 @@ export function useLivePoints({
 		snapshot,
 		windowState: snapshot?.state,
 		nextRefreshAt: snapshot?.nextRefreshAt,
-		isOfficialUpdating
+		isOfficialUpdating: isOfficialUpdating || isOfficialSyncPending
 	})
 
 	return {

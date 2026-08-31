@@ -195,6 +195,8 @@ describe('my squad fixture pitch', () => {
 		assert.doesNotMatch(desk, /mySquadPitchDifficulty/)
 		assert.doesNotMatch(desk, /fixtureScorePending/)
 		assert.match(desk, /data-retry-squad-schedule="true"/)
+		assert.match(desk, /failedWindowCount/)
+		assert.match(desk, /loadFullSeasonSchedule\(true\)/)
 		assert.match(
 			desk,
 			/-mx-4 overflow-hidden rounded-xl border border-border\/60 bg-\[#210025\]/
@@ -277,6 +279,8 @@ describe('team FDR average scale', () => {
 		assert.match(detail, /data-share-fit-content="true"/)
 		assert.match(detail, /data-share-preserve-width="true"/)
 		assert.match(detail, /actions=\{\['image'\]\}/)
+		assert.match(detail, /failedWindowCount/)
+		assert.match(detail, /loadFullSeasonSchedule\(true\)/)
 		assert.match(detail, /<DialogDescription className="sr-only">/)
 		assert.doesNotMatch(detail, /t\('teamDetailLegend'\)/)
 	})
@@ -370,6 +374,20 @@ describe('fixture controls copy', () => {
 			source,
 			/className="mb-3 border-b border-border\/50 pb-2"/
 		)
+	})
+})
+
+describe('market freshness disclosure', () => {
+	it('keeps pulse-level stale coverage visible beside pulse-backed sections', async () => {
+		const source = await readFile(
+			new URL('../app/data/market/MarketDashboard.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.match(source, /pulse\?\.coverage\.stale/)
+		assert.match(source, /PulseFreshnessNotice/)
+		assert.match(source, /t\('pulseStaleWarning'\)/)
+		assert.match(source, /role="status"/)
 	})
 })
 
