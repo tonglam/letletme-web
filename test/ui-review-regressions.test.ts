@@ -651,6 +651,23 @@ describe('homepage share images', () => {
 	})
 })
 
+describe('market availability search recovery', () => {
+	it('keeps a failed search page retryable without a full page reload', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/data/market/MarketAvailabilityDisclosure.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(source, /searchActive && unavailable && nextOffset !== null/)
+		assert.match(source, /onClick=\{\(\) => void loadPage\(nextOffset\)\}/)
+		assert.match(source, /availabilitySearchRetrying/)
+		assert.match(source, /availabilitySearchRetry/)
+	})
+})
+
 describe('countdown share layout', () => {
 	it('keeps the share title readable when the card is captured from a narrow slot', async () => {
 		const [source, styles] = await Promise.all([

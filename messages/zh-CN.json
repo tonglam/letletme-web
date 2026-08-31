@@ -1446,6 +1446,8 @@
 		"availabilitySearchPrompt": "输入至少 2 个字符，在全部更新中查找球员。",
 		"availabilitySearchLoading": "正在载入全部更新…已载入 {loaded}/{total}",
 		"availabilitySearchLoadFailed": "部分更新暂时无法载入，已显示当前已载入的结果。",
+		"availabilitySearchRetry": "重试载入更新",
+		"availabilitySearchRetrying": "正在重试载入更新…",
 		"availabilitySearchResults": "找到 {count} 条更新",
 		"availabilitySearchNoMatches": "没有匹配的出场状态更新。"
 	},

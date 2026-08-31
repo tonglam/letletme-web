@@ -1446,6 +1446,8 @@
 		"availabilitySearchPrompt": "Enter at least 2 characters to search all updates.",
 		"availabilitySearchLoading": "Loading all updates… {loaded}/{total} loaded",
 		"availabilitySearchLoadFailed": "Some updates could not be loaded; showing the results available so far.",
+		"availabilitySearchRetry": "Retry loading updates",
+		"availabilitySearchRetrying": "Retrying updates…",
 		"availabilitySearchResults": "{count, plural, one {# update found} other {# updates found}}",
 		"availabilitySearchNoMatches": "No availability updates match that name."
 	},

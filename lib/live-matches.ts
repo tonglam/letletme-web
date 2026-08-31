@@ -221,6 +221,51 @@ export function transformLiveMatchdayV2(
 	return snapshot.matches.map(mapLiveMatchdayFixture)
 }
 
+/**
+ * Core price enrichment is intentionally fail-soft. When a newer score desk
+ * arrives while Core is unavailable, keep its scores and player details but
+ * retain prices already painted from the accepted same-event publication.
+ */
+export function retainLiveMatchPlayerPrices(
+	candidate: readonly Match[],
+	accepted: readonly Match[]
+): Match[] {
+	const acceptedPrices = new Map<number, number>()
+	for (const match of accepted) {
+		for (const player of [
+			...match.homeTeam.players,
+			...match.awayTeam.players
+		]) {
+			if (
+				typeof player.element === 'number' &&
+				player.price != null
+			) {
+				acceptedPrices.set(player.element, player.price)
+			}
+		}
+	}
+
+	const retainTeam = (team: Match['homeTeam']): Match['homeTeam'] => {
+		let teamChanged = false
+		const players = team.players.map(player => {
+			if (player.price != null || player.element == null) return player
+			const price = acceptedPrices.get(player.element)
+			if (price == null) return player
+			teamChanged = true
+			return { ...player, price }
+		})
+		return teamChanged ? { ...team, players } : team
+	}
+
+	return candidate.map(match => {
+		const homeTeam = retainTeam(match.homeTeam)
+		const awayTeam = retainTeam(match.awayTeam)
+		return homeTeam === match.homeTeam && awayTeam === match.awayTeam
+			? match
+			: { ...match, homeTeam, awayTeam }
+	})
+}
+
 export function validateLiveMatchdayV2(
 	payload: LiveMatchdayV2Payload
 ): LiveMatchdayV2Payload {
@@ -445,6 +490,12 @@ export function canReplaceLiveMatchesLkg(
 	) {
 		// Generations are scoped to season/event. A lifecycle transition may
 		// replace the previous event, but same-event generations are ordered.
+		if (
+			value.snapshot.season === accepted.season &&
+			value.snapshot.eventId < accepted.eventId
+		) {
+			return false
+		}
 		return true
 	}
 

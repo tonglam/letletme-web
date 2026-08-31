@@ -17,6 +17,7 @@ import {
 	isFixtureWindowResponse,
 	type FixturePlanningFixture
 } from '@/lib/fixture-window'
+import { mergeFixtureWindowSchedules } from '@/lib/fixture-window-schedule'
 import {
 	buildFdrDeskModel,
 	DEFAULT_FDR_HORIZON,
@@ -498,28 +499,9 @@ export default function FixturesClient({
 					)
 						return
 
-					const resolvedEventIds = new Set<number>()
-					const observedUnknownEventIds = new Set<number>()
-					let fulfilledCount = 0
-					for (const result of results) {
-						if (result.status === 'rejected') continue
-						fulfilledCount += 1
-						for (
-							let eventId = result.value.fromGw;
-							eventId <= result.value.toGw;
-							eventId += 1
-						) {
-							resolvedEventIds.add(eventId)
-						}
-						for (const [rawEventId, fixtures] of Object.entries(
-							result.value.fixturesByEvent
-						)) {
-							cacheRef.current.set(Number(rawEventId), fixtures)
-						}
-						result.value.unknownEventIds.forEach(eventId =>
-							observedUnknownEventIds.add(eventId)
-						)
-					}
+					const fulfilledCount = results.filter(
+						result => result.status === 'fulfilled'
+					).length
 
 					if (fulfilledCount === 0) {
 						setPendingHorizon(null)
@@ -527,24 +509,23 @@ export default function FixturesClient({
 						return
 					}
 
-					setUnknownEventIds(previous =>
-						Array.from(
-							new Set([
-								...previous.filter(id => !resolvedEventIds.has(id)),
-								...Array.from(observedUnknownEventIds)
-							])
-						).sort((a, b) => a - b)
+					const merged = mergeFixtureWindowSchedules(
+						results,
+						windows,
+						fixtures => fixtures,
+						{
+							fixturesByEvent: cacheRef.current,
+							unavailableEventIds: unknownEvents,
+							failedWindowCount: 0
+						}
 					)
-					setFixturesByEvent(new Map(cacheRef.current))
+					cacheRef.current = merged.fixturesByEvent
+					setUnknownEventIds(
+						Array.from(merged.unavailableEventIds).sort((a, b) => a - b)
+					)
+					setFixturesByEvent(new Map(merged.fixturesByEvent))
 					setPendingHorizon(null)
-					setLoadError(
-						results.some(
-							result =>
-								result.status === 'rejected' ||
-								(result.status === 'fulfilled' &&
-									result.value.unknownEventIds.length > 0)
-						)
-					)
+					setLoadError(merged.failedWindowCount > 0)
 					startTransition(() => setHorizon(effectiveNext))
 				})
 				.finally(() => {

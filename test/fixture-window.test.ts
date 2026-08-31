@@ -280,6 +280,48 @@ describe('fixture window loader', () => {
 		assert.deepEqual(merged.fixturesByEvent.get(10), [planningFixture(10)])
 	})
 
+	it('marks a rejected sparse range unavailable when another range succeeds', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[
+				{
+					status: 'fulfilled',
+					value: {
+						fromGw: 2,
+						toGw: 2,
+						fixturesByEvent: { '2': [] },
+						unknownEventIds: []
+					}
+				},
+				{ status: 'rejected', reason: new Error('GW5 unavailable') }
+			],
+			[
+				{ fromGw: 2, count: 1 },
+				{ fromGw: 5, count: 1 }
+			],
+			fixtures => fixtures
+		)
+
+		assert.equal(merged.failedWindowCount, 1)
+		assert.deepEqual(Array.from(merged.unavailableEventIds), [5])
+		assert.deepEqual(merged.fixturesByEvent.get(2), [])
+	})
+
+	it('keeps a retained fixture retryable when its range rejects', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[{ status: 'rejected', reason: new Error('GW11 unavailable') }],
+			[{ fromGw: 11, count: 1 }],
+			fixtures => fixtures,
+			{
+				fixturesByEvent: new Map([[11, [planningFixture(11)]]]),
+				unavailableEventIds: new Set<number>(),
+				failedWindowCount: 0
+			}
+		)
+
+		assert.deepEqual(merged.fixturesByEvent.get(11), [planningFixture(11)])
+		assert.equal(merged.unavailableEventIds.has(11), true)
+	})
+
 	it('retains an earlier fixture row when a retry marks that event unknown', () => {
 		const merged = mergeFixtureWindowSchedules(
 			[

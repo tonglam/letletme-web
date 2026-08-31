@@ -34,9 +34,9 @@ export function mergeFixtureWindowSchedules<T>(
 
 		if (result.status === 'rejected') {
 			failedWindowCount += 1
-			eventIds.forEach(eventId => {
-				if (!fixturesByEvent.has(eventId)) unavailableEventIds.add(eventId)
-			})
+			// Keep every rejected event retryable, even when an older fixture row
+			// is retained as the last-known-good display value.
+			eventIds.forEach(eventId => unavailableEventIds.add(eventId))
 			return
 		}
 

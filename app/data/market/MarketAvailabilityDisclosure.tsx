@@ -275,8 +275,8 @@ export function MarketAvailabilityDisclosure({
 												</button>
 											) : null}
 										</div>
-										<p
-											id="market-availability-search-status"
+						<p
+							id="market-availability-search-status"
 											role="status"
 											aria-live="polite"
 											className="text-xs text-muted-foreground"
@@ -294,9 +294,21 @@ export function MarketAvailabilityDisclosure({
 														? tExplore('availabilitySearchNoMatches')
 														: tExplore('availabilitySearchResults', {
 																	count: filteredUpdates.length
-																})}
-										</p>
-									</div>
+										})}
+						</p>
+						{searchActive && unavailable && nextOffset !== null ? (
+							<button
+								type="button"
+								className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+								onClick={() => void loadPage(nextOffset)}
+								disabled={loading}
+							>
+								{loading
+									? tExplore('availabilitySearchRetrying')
+									: tExplore('availabilitySearchRetry')}
+							</button>
+						) : null}
+					</div>
 									{searchActive &&
 									!loading &&
 									nextOffset === null &&
