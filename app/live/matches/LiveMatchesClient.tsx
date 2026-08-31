@@ -21,7 +21,6 @@ import {
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
 	retainLiveMatchPlayerDetails,
-	retainLiveMatchPlayerPrices,
 	type LiveMatchdayStatus
 } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
@@ -77,7 +76,6 @@ export function LiveMatchesClient({
 	const format = useFormatter()
 	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
-	const matchesRef = useRef<Match[]>(initialMatches)
 	const [resolvedCurrentEventId, setResolvedCurrentEventId] = useState<
 		number | undefined
 	>(currentEventId)
@@ -94,6 +92,7 @@ export function LiveMatchesClient({
 		initialSnapshot ?? null
 	)
 	const snapshotRef = useRef<LiveMatchdayStatus | null>(initialSnapshot ?? null)
+	const matchesRef = useRef<Match[]>(initialMatches)
 	const hasSavedTabPreference = useRef(false)
 	const hasUserSelectedTab = useRef(false)
 	const isFetchInFlight = useRef(false)
@@ -171,24 +170,18 @@ export function LiveMatchesClient({
 				const matchesWithRetainedDetails = canRetainAcceptedDetails
 					? retainLiveMatchPlayerDetails(data.matches, matchesRef.current)
 					: data.matches
-				const matchesForAcceptance = canRetainAcceptedDetails
-					? retainLiveMatchPlayerPrices(
-							matchesWithRetainedDetails,
-							matchesRef.current
-						)
-					: data.matches
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
 					(eventIds?.useActiveEvent ? undefined : eventIds?.currentEventId) ??
 					resolvedCurrentEventId
-				acceptMatches(matchesForAcceptance)
+				acceptMatches(matchesWithRetainedDetails)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
 				setSelectedEventId(lifecycleCurrentEventId)
 				acceptSnapshot(data.snapshot)
 				hasLastGoodData.current = replaceablePublication
 
 				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {
-					setActiveTab(getPreferredLiveMatchesTab(data.matches))
+					setActiveTab(getPreferredLiveMatchesTab(matchesWithRetainedDetails))
 				}
 			} catch (err) {
 				console.error('Failed to fetch live matches:', err)

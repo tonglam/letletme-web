@@ -77,7 +77,7 @@ const mapLiveMatchdayPlayer = (player: LiveMatchdayPlayer): PlayerStat => ({
 		'defensive_contribution',
 		'defensiveContribution'
 	]),
-	price: player.price ?? undefined,
+	price: player.price,
 	totalPoints: player.totalPoints
 })
 
@@ -128,9 +128,8 @@ const isTimestamp = (value: unknown): value is string =>
 const isOptionalTimestamp = (value: unknown): boolean =>
 	value === null || isTimestamp(value)
 
-const normalizedCorePriceRevision = (
-	value: string | null | undefined
-): string | null => (typeof value === 'string' ? value : null)
+export const LIVE_MATCH_PRICE_MIN = 35
+export const LIVE_MATCH_PRICE_MAX = 200
 
 function compareLiveMatchSeasons(left: string, right: string): number {
 	const leftNumber = Number(left)
@@ -228,51 +227,6 @@ export function transformLiveMatchdayV2(
 	snapshot: LiveMatchdaySnapshot
 ): Match[] {
 	return snapshot.matches.map(mapLiveMatchdayFixture)
-}
-
-/**
- * Core price enrichment is intentionally fail-soft. When a newer score desk
- * arrives while Core is unavailable, keep its scores and player details but
- * retain prices already painted from the accepted same-event publication.
- */
-export function retainLiveMatchPlayerPrices(
-	candidate: readonly Match[],
-	accepted: readonly Match[]
-): Match[] {
-	const acceptedPrices = new Map<number, number>()
-	for (const match of accepted) {
-		for (const player of [
-			...match.homeTeam.players,
-			...match.awayTeam.players
-		]) {
-			if (
-				typeof player.element === 'number' &&
-				player.price != null
-			) {
-				acceptedPrices.set(player.element, player.price)
-			}
-		}
-	}
-
-	const retainTeam = (team: Match['homeTeam']): Match['homeTeam'] => {
-		let teamChanged = false
-		const players = team.players.map(player => {
-			if (player.price != null || player.element == null) return player
-			const price = acceptedPrices.get(player.element)
-			if (price == null) return player
-			teamChanged = true
-			return { ...player, price }
-		})
-		return teamChanged ? { ...team, players } : team
-	}
-
-	return candidate.map(match => {
-		const homeTeam = retainTeam(match.homeTeam)
-		const awayTeam = retainTeam(match.awayTeam)
-		return homeTeam === match.homeTeam && awayTeam === match.awayTeam
-			? match
-			: { ...match, homeTeam, awayTeam }
-	})
 }
 
 /**
@@ -397,9 +351,6 @@ export function validateLiveMatchdayV2(
 		!snapshot.revisions.lifecycle ||
 		!snapshot.revisions.fixtureIdentity ||
 		!snapshot.revisions.scoreState ||
-		(snapshot.revisions.corePriceRevision !== undefined &&
-			snapshot.revisions.corePriceRevision !== null &&
-			typeof snapshot.revisions.corePriceRevision !== 'string') ||
 		(!detailRevisionPresent && !detailRevisionAbsent) ||
 		!isTimestamp(snapshot.times.deskSourceCheckedAt) ||
 		!isTimestamp(snapshot.times.deskContentUpdatedAt) ||
@@ -479,9 +430,9 @@ export function validateLiveMatchdayV2(
 					positionElementType,
 					player.position
 				) ||
-				(player.price !== undefined &&
-					player.price !== null &&
-					(!Number.isSafeInteger(player.price) || player.price < 0)) ||
+				!Number.isSafeInteger(player.price) ||
+				player.price < LIVE_MATCH_PRICE_MIN ||
+				player.price > LIVE_MATCH_PRICE_MAX ||
 				!Number.isSafeInteger(player.totalPoints) ||
 				!Array.isArray(player.stats)
 			) {
@@ -591,23 +542,6 @@ export function canReplaceLiveMatchesLkg(
 	if (candidate.detailGeneration > current.detailGeneration) return true
 	if (candidate.detailPublicationId !== current.detailPublicationId)
 		return false
-	const candidateCorePriceRevision = normalizedCorePriceRevision(
-		candidate.corePriceRevision
-	)
-	const currentCorePriceRevision = normalizedCorePriceRevision(
-		current.corePriceRevision
-	)
-	if (candidateCorePriceRevision !== currentCorePriceRevision) {
-		// A Core outage must not erase prices from an already accepted board;
-		// a newly available or changed Core revision may replace it.
-		if (
-			currentCorePriceRevision !== null &&
-			candidateCorePriceRevision === null
-		) {
-			return false
-		}
-		return true
-	}
 	return true
 }
 
