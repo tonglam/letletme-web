@@ -24,7 +24,6 @@ export function LiveMatchesEntry({
 			currentEventId={currentEventId}
 			selectedEventId={selectedEventId}
 			initialSnapshot={initialSnapshot}
-			isOfficialUpdating={isOfficialUpdating}
 		/>
 	)
 }

@@ -90,16 +90,6 @@ export function LiveMatchesClient({
 	)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [isOfficialUpdating, setIsOfficialUpdating] = useState(
-		initialOfficialUpdating
-	)
-	const [isOfficialSyncPending, setIsOfficialSyncPending] = useState(
-		initialOfficialUpdating && !initialSnapshot
-	)
-	const officialUpdatingRef = useRef(initialOfficialUpdating)
-	const officialSyncPendingRef = useRef(
-		initialOfficialUpdating && !initialSnapshot
-	)
 	const [error, setError] = useState<string | null>(initialError ?? null)
 	const [snapshot, setSnapshot] = useState<LiveMatchdayStatus | null>(
 		initialSnapshot ?? null
@@ -174,13 +164,9 @@ export function LiveMatchesClient({
 					setActiveTab(getPreferredLiveMatchesTab(data.matches))
 				}
 			} catch (err) {
-				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
-					console.error('Failed to fetch live matches:', err)
-					if (mountedRef.current) {
-						setError(
-							t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed')
-						)
-					}
+				console.error('Failed to fetch live matches:', err)
+				if (mountedRef.current) {
+					setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
 				}
 			} finally {
 				isFetchInFlight.current = false
@@ -264,10 +250,8 @@ export function LiveMatchesClient({
 				}
 				await fetchMatches(true, undefined, observedData)
 			} catch (probeError) {
-				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
-					console.error('Failed to check live match freshness:', probeError)
-					setError(t('refreshFailed'))
-				}
+				console.error('Failed to check live match freshness:', probeError)
+				setError(t('refreshFailed'))
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -676,11 +660,7 @@ export function LiveMatchesClient({
 								))
 							) : (
 								<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
-									{isOfficialUpdating && matches.length === 0
-										? t('officialUpdating')
-										: activeTabConfig
-											? t(activeTabConfig.labelKey)
-											: t('none')}
+									{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
 								</p>
 							)}
 						</TabsContent>

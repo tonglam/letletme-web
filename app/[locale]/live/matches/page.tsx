@@ -4,7 +4,6 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getLiveMatchesSnapshot, type QueryExecutor } from '@/lib/live-matches'
 import { getLivePageContext } from '@/lib/live-context-server'
-import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { getTranslations } from 'next-intl/server'
 
 type PageProps = { params: LocaleParams }
@@ -56,10 +55,8 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	try {
 		live = await getLiveMatchesSnapshot(executor)
 	} catch (error) {
-		if (!isOfficialUpdating) {
-			console.error('Failed to fetch live matches:', error)
-			initialError = t('matchesFailed')
-		}
+		console.error('Failed to fetch live matches:', error)
+		initialError = t('matchesFailed')
 	}
 
 	if (!live?.snapshot) {
@@ -125,7 +122,6 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 				currentEventId={renderedCurrentEventId ?? undefined}
 				selectedEventId={renderedCurrentEventId ?? undefined}
 				initialSnapshot={snapshot}
-				isOfficialUpdating={isOfficialUpdating}
 			/>
 		</>
 	)
