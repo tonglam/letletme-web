@@ -352,6 +352,9 @@ describe('explore trends presentation', () => {
 		assert.match(source, /TabsTrigger/)
 		assert.match(source, /function TrendSquadPitch/)
 		assert.match(source, /PERSONAL_EXPOSURE/)
+		assert.match(source, /useLocale/)
+		assert.match(source, /localePathPrefix:/)
+		assert.match(source, /locale === 'en'/)
 		for (const text of [source, zhMessages, enMessages]) {
 			assert.doesNotMatch(text, /ROUND READ|signalDeskDescription|heroKicker/)
 		}
@@ -827,6 +830,11 @@ describe('live match share card', () => {
 			'utf8'
 		)
 		assert.match(navigation, /data-match-navigation="true"/)
+		assert.doesNotMatch(liveMatches, /GET_LIVE_CONTEXT/)
+		assert.match(
+			liveMatches,
+			/getLiveMatchesSnapshot\([\s\S]*?\n\s*null,\n\s*\{ preferHttp: true \}/
+		)
 		assert.match(liveMatches, /activeMatches\.length < 2/)
 		assert.match(liveMatches, /event\.key === 'ArrowLeft'/)
 		assert.match(liveMatches, /event\.key === 'ArrowRight'/)

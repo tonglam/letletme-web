@@ -12,10 +12,6 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_LIVE_CONTEXT,
-	type LiveContextResponse
-} from '@/lib/graphql/operations/live'
-import {
 	liveMatchdayNeedsRefresh,
 	shouldPollLiveMatchesTransition,
 	shouldPollLiveMatchday
@@ -98,7 +94,7 @@ export function LiveMatchesClient({
 	const hasSavedTabPreference = useRef(false)
 	const hasUserSelectedTab = useRef(false)
 	const isFetchInFlight = useRef(false)
-	const pendingRefreshRef = useRef(false)
+	const pendingRefreshRef = useRef<{ useActiveEvent: boolean } | null>(null)
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const hasLastGoodData = useRef(initialSnapshot != null)
@@ -117,12 +113,16 @@ export function LiveMatchesClient({
 	const fetchMatches = useCallback(
 		async (
 			isRefresh = false,
-			eventIds?: { currentEventId?: number },
+			eventIds?: { currentEventId?: number; useActiveEvent?: boolean },
 			prefetched?: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>
 		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
-				if (isRefresh) pendingRefreshRef.current = true
+				if (isRefresh) {
+					pendingRefreshRef.current = {
+						useActiveEvent: eventIds?.useActiveEvent === true
+					}
+				}
 				return
 			}
 
@@ -139,7 +139,9 @@ export function LiveMatchesClient({
 					prefetched ??
 					(await getLiveMatchesSnapshot(
 						executeQuery,
-						eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
+						eventIds?.useActiveEvent
+							? null
+							: (eventIds?.currentEventId ?? resolvedCurrentEventId ?? null),
 						{
 							preferHttp: true
 						}
@@ -155,7 +157,7 @@ export function LiveMatchesClient({
 				}
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
-					eventIds?.currentEventId ??
+					(eventIds?.useActiveEvent ? undefined : eventIds?.currentEventId) ??
 					resolvedCurrentEventId
 				setMatches(data.matches)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
@@ -174,14 +176,18 @@ export function LiveMatchesClient({
 			} finally {
 				isFetchInFlight.current = false
 				if (!mountedRef.current) {
-					pendingRefreshRef.current = false
+					pendingRefreshRef.current = null
 					return
 				}
 				setIsLoading(false)
 				setIsRefreshing(false)
-				if (pendingRefreshRef.current) {
-					pendingRefreshRef.current = false
-					void fetchMatches(true)
+				const pendingRefresh = pendingRefreshRef.current
+				if (pendingRefresh) {
+					pendingRefreshRef.current = null
+					void fetchMatches(
+						true,
+						pendingRefresh.useActiveEvent ? { useActiveEvent: true } : undefined
+					)
 				}
 			}
 		},
@@ -202,20 +208,32 @@ export function LiveMatchesClient({
 					snapshot: snapshotRef.current
 				})
 				if (transitionProbe) {
-					const probe = await executeQuery<LiveContextResponse>(
-						GET_LIVE_CONTEXT,
-						undefined,
-						{ cache: 'no-store' }
+					// Match V2 owns the active-event pointer for this page. A Live
+					// Points context probe can be stale or unavailable after the
+					// current event has moved on.
+					const observedData = await getLiveMatchesSnapshot(
+						executeQuery,
+						null,
+						{ preferHttp: true }
 					)
 					const observedCurrentEventId =
-						probe.liveContext?.anchorEventId ?? undefined
+						observedData.currentEventId ?? undefined
 					if (
 						observedCurrentEventId &&
 						observedCurrentEventId !== resolvedCurrentEventId
 					) {
-						await fetchMatches(true, {
-							currentEventId: observedCurrentEventId
-						})
+						await fetchMatches(
+							true,
+							{ currentEventId: observedCurrentEventId },
+							observedData
+						)
+						return
+					}
+					if (
+						observedData.snapshot &&
+						liveMatchdayNeedsRefresh(snapshotRef.current, observedData.snapshot)
+					) {
+						await fetchMatches(true, undefined, observedData)
 						return
 					}
 					setError(null)
@@ -348,6 +366,12 @@ export function LiveMatchesClient({
 		currentEventId: resolvedCurrentEventId,
 		snapshot
 	})
+	const refreshMatches = useCallback(() => {
+		void fetchMatches(
+			true,
+			transitionPolling ? { useActiveEvent: true } : undefined
+		)
+	}, [fetchMatches, transitionPolling])
 	const lastUpdatedAt = snapshot?.times.deskContentUpdatedAt ?? null
 	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
 	useEffect(() => {
@@ -511,7 +535,7 @@ export function LiveMatchesClient({
 			<Button
 				variant="outline"
 				size="icon"
-				onClick={() => fetchMatches(true)}
+				onClick={refreshMatches}
 				disabled={isRefreshing || isLoading}
 				className="shrink-0"
 			>
@@ -578,7 +602,7 @@ export function LiveMatchesClient({
 							{t('error', { message: error })}
 						</p>
 						<Button
-							onClick={() => fetchMatches(true)}
+							onClick={refreshMatches}
 							variant="outline"
 						>
 							{t('tryAgain')}

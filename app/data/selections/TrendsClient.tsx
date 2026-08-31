@@ -1,7 +1,7 @@
 'use client'
 
 import { Link } from '@/i18n/navigation'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ArrowRight, RefreshCw, Sparkles } from 'lucide-react'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
@@ -373,10 +373,12 @@ function pitchPosition(value: number): SquadPitchPlayer['position'] {
 function TrendSquadPitch({
 	section,
 	eventId,
+	locale,
 	t
 }: {
 	section: TrendDeskSection
 	eventId: number
+	locale: string
 	t: ReturnType<typeof useTranslations<'Selections'>>
 }) {
 	const rows = section.rows ?? []
@@ -393,7 +395,10 @@ function TrendSquadPitch({
 					? formatNumber(row.count, 'en-US')
 					: formatMetric(row.percentage, 'en-US'),
 			scoreTone: 'neutral',
-			href: playerStatsHref({ p1: String(row.elementId) }),
+			href: playerStatsHref({
+				p1: String(row.elementId),
+				localePathPrefix: locale === 'en' ? '' : `/${locale}`
+			}),
 			position: pitchPosition(row.playerPosition),
 			...(teamCode
 				? { teamCode }
@@ -436,10 +441,12 @@ function TrendSquadPitch({
 function TrendTemplatePitch({
 	section,
 	eventId,
+	locale,
 	t
 }: {
 	section: TrendDeskSection
 	eventId: number
+	locale: string
 	t: ReturnType<typeof useTranslations<'Selections'>>
 }) {
 	const template = buildTrendTemplate(section.rows)
@@ -456,7 +463,10 @@ function TrendTemplatePitch({
 					? formatNumber(row.count, 'en-US')
 					: formatMetric(row.percentage, 'en-US'),
 			scoreTone: 'neutral',
-			href: playerStatsHref({ p1: String(row.elementId) }),
+			href: playerStatsHref({
+				p1: String(row.elementId),
+				localePathPrefix: locale === 'en' ? '' : `/${locale}`
+			}),
 			position: pitchPosition(row.playerPosition),
 			isCaptain: row.isCaptain === true,
 			isViceCaptain: row.isViceCaptain === true,
@@ -518,6 +528,7 @@ export default function TrendsClient({
 	initialDeskError = false
 }: Props) {
 	const t = useTranslations('Selections')
+	const locale = useLocale()
 	const [access, setAccess] = useState<TrendAccess>(initialAccess)
 	const [cohortId, setCohortId] = useState(initialCohortId ?? '')
 	const [eventId, setEventId] = useState(initialEventId)
@@ -1134,12 +1145,14 @@ export default function TrendsClient({
 													<TrendTemplatePitch
 														section={templateSection}
 														eventId={committed.eventId}
+														locale={locale}
 														t={t}
 													/>
 												) : showPitch && personalSection ? (
 													<TrendSquadPitch
 														section={personalSection}
 														eventId={committed.eventId}
+														locale={locale}
 														t={t}
 													/>
 												) : (

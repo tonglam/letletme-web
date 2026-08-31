@@ -211,8 +211,11 @@ describe('live matchday V2 publication', () => {
 			})
 		}) as typeof fetch
 		try {
-			await getLiveMatchesSnapshot(undefined, null, { preferHttp: true })
+			const active = await getLiveMatchesSnapshot(undefined, null, {
+				preferHttp: true
+			})
 			await getLiveMatchesSnapshot(undefined, 33, { preferHttp: true })
+			assert.equal(active.currentEventId, 33)
 		} finally {
 			globalThis.fetch = originalFetch
 		}
@@ -357,7 +360,10 @@ describe('live matchday V2 publication', () => {
 
 		assert.equal(canReplaceLiveMatchesLkg(older, accepted.snapshot), false)
 		assert.equal(canReplaceLiveMatchesLkg(newer, accepted.snapshot), true)
-		assert.equal(canReplaceLiveMatchesLkg(olderDetail, accepted.snapshot), false)
+		assert.equal(
+			canReplaceLiveMatchesLkg(olderDetail, accepted.snapshot),
+			false
+		)
 		assert.equal(
 			canReplaceLiveMatchesLkg(
 				{ ...older, snapshot: { ...older.snapshot!, eventId: 34 } },
