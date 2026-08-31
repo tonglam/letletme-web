@@ -3,14 +3,13 @@ import {
 	filterFixtures,
 	formatFixtureTime,
 	groupFixturesByDay,
-	type FixtureFilter,
+	type FixtureFilter
 } from '@/lib/fixtures-desk'
 import {
 	formatAvgFdr,
 	type FdrReviewBuckets,
 	type FdrReviewCandidate,
-	type SquadFdrRow,
-	type TeamFdrRow,
+	type SquadFdrRow
 } from '@/lib/fixtures-fdr'
 
 export type FixturesShareLabels = {
@@ -34,7 +33,7 @@ export function formatFixturesShareText(opts: {
 		filter = 'all',
 		useLocalTime = true,
 		locale = 'en',
-		labels,
+		labels
 	} = opts
 
 	const filtered = filterFixtures(fixtures, filter)
@@ -57,14 +56,13 @@ export function formatFixturesShareText(opts: {
 				} else if (f.started) {
 					const hs = f.homeScore
 					const as = f.awayScore
-					const score =
-						hs != null && as != null ? ` ${hs}–${as}` : ''
+					const score = hs != null && as != null ? ` ${hs}–${as}` : ''
 					result = `${labels.live ?? 'LIVE'}${score}`
 				} else if (f.kickoffTime) {
 					result = formatFixtureTime(
 						new Date(f.kickoffTime),
 						useLocalTime,
-						locale,
+						locale
 					)
 				} else {
 					result = '—'
@@ -82,46 +80,24 @@ export function formatFixturesShareText(opts: {
 	return sections.join('\n')
 }
 
-function cellLabel(c: TeamFdrRow['run'][number]): string {
+function cellLabel(c: SquadFdrRow['run'][number]): string {
 	const ha = c.wasHome ? 'H' : 'A'
-	return `${c.opponentShortName} ${ha}(${c.difficulty})`
+	return c.opponentShortName + ' ' + ha + '(' + String(c.difficulty) + ')'
 }
 
-function gameweekLabel(gameweek: TeamFdrRow['gameweeks'][number]): string {
-	if (gameweek.bgw) return `GW${gameweek.eventId}: BGW`
-	return `GW${gameweek.eventId}: ${gameweek.fixtures.map(cellLabel).join(' + ')}`
-}
-
-export function formatTeamTickerShareText(opts: {
-	fromGw: number
-	horizon: number
-	teams: TeamFdrRow[]
-	labels: { title: string; none: string; footer?: string }
-}): string {
-	const { fromGw, horizon, teams, labels } = opts
-	const lines = [
-		`${labels.title} · GW${fromGw}–${fromGw + horizon - 1}`,
-		'',
-	]
-	if (teams.length === 0) {
-		lines.push(labels.none)
-	} else {
-		for (const t of teams) {
-			const run = t.gameweeks.map(gameweekLabel).join(' · ')
-			lines.push(
-				`- ${t.teamShortName} · avg ${formatAvgFdr(t.avgFdr)} · ${run}`,
-			)
-		}
-	}
-	if (labels.footer?.trim()) lines.push('', labels.footer.trim())
-	return lines.join('\n')
+function gameweekLabel(gameweek: SquadFdrRow['gameweeks'][number]): string {
+	if (gameweek.bgw) return 'GW' + String(gameweek.eventId) + ': BGW'
+	return (
+		'GW' +
+		String(gameweek.eventId) +
+		': ' +
+		gameweek.fixtures.map(cellLabel).join(' + ')
+	)
 }
 
 function formatCandidateLine(p: FdrReviewCandidate): string {
 	const next =
-		p.nextOpponent != null
-			? `${p.nextOpponent} ${p.nextHome ? 'H' : 'A'}`
-			: '—'
+		p.nextOpponent != null ? `${p.nextOpponent} ${p.nextHome ? 'H' : 'A'}` : '—'
 	const price = `£${(p.price / 10).toFixed(1)}m`
 	return `- ${p.webName} ${p.teamShortNameResolved} · ${price} · ${p.selectedByPercent.toFixed(1)}% · FDR ${formatAvgFdr(p.avgFdr)} · next ${next}`
 }
@@ -140,10 +116,7 @@ export function formatFdrCandidatesShareText(opts: {
 	}
 }): string {
 	const { fromGw, horizon, buckets, labels } = opts
-	const lines = [
-		`${labels.title} · GW${fromGw}–${fromGw + horizon - 1}`,
-		'',
-	]
+	const lines = [`${labels.title} · GW${fromGw}–${fromGw + horizon - 1}`, '']
 
 	const section = (name: string, list: FdrReviewCandidate[]) => {
 		lines.push(`${name} (${list.length})`)
@@ -152,10 +125,7 @@ export function formatFdrCandidatesShareText(opts: {
 		lines.push('')
 	}
 
-	section(
-		labels.differentialFavourable,
-		buckets.differentialFavourable,
-	)
+	section(labels.differentialFavourable, buckets.differentialFavourable)
 	section(labels.popularFavourable, buckets.popularFavourable)
 	section(labels.popularDifficult, buckets.popularDifficult)
 	if (lines[lines.length - 1] === '') lines.pop()
@@ -174,17 +144,14 @@ export function formatMySquadShareText(opts: {
 	}
 }): string {
 	const { fromGw, horizon, rows, labels } = opts
-	const lines = [
-		`${labels.title} · GW${fromGw}–${fromGw + horizon - 1}`,
-		'',
-	]
+	const lines = [`${labels.title} · GW${fromGw}–${fromGw + horizon - 1}`, '']
 	if (rows.length === 0) {
 		lines.push(labels.none)
 	} else {
 		for (const row of rows) {
 			const run = row.gameweeks.map(gameweekLabel).join(' · ')
 			lines.push(
-				`- ${row.webName} ${row.teamShortName} · ${row.positionCode} · avg ${formatAvgFdr(row.avgFdr)} · ${run}`,
+				`- ${row.webName} ${row.teamShortName} · ${row.positionCode} · avg ${formatAvgFdr(row.avgFdr)} · ${run}`
 			)
 		}
 	}
@@ -194,7 +161,7 @@ export function formatMySquadShareText(opts: {
 
 export function buildFixturesShareUrl(
 	origin: string,
-	localePathPrefix: string = '',
+	localePathPrefix: string = ''
 ): string {
 	const base = origin.replace(/\/$/, '')
 	const prefix = localePathPrefix.replace(/\/$/, '')

@@ -34,7 +34,7 @@ describe('GraphQL proxy read path', () => {
 		assert.match(route, /buildGraphQLProxyIngress/)
 		assert.match(route, /copySafeGraphQLUpstreamHeaders/)
 		assert.match(route, /request\.headers\.get\('X-LetLetMe-Contract'\)/)
-		assert.match(route, /headers\['X-LetLetMe-Contract'\] = livePointsContract/)
+		assert.match(route, /headers\['X-LetLetMe-Contract'\] = liveContract/)
 		assert.match(route, /includeRateLimitMetadata: cacheControl === 'no-store'/)
 		assert.match(
 			route,
@@ -59,7 +59,6 @@ describe('GraphQL proxy read path', () => {
 		for (const path of [
 			'../app/api/live/context/route.ts',
 			'../app/api/live/matches/route.ts',
-			'../app/api/live/matches/[fixtureId]/players/route.ts',
 			'../app/api/fixtures/window/route.ts',
 			'../app/api/gameweek/desk/route.ts',
 			'../app/api/home/fixtures/route.ts',

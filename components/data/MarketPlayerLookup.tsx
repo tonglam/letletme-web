@@ -49,6 +49,7 @@ export type MarketPlayerLookupProps = {
 	compact?: boolean
 	autoFocus?: boolean
 	onClearSeed?: () => void
+	onSelectPlayer?: (player: PlayerDirectoryItem) => void
 }
 
 export function MarketPlayerLookup({
@@ -58,6 +59,7 @@ export function MarketPlayerLookup({
 	compact = false,
 	autoFocus = compact,
 	onClearSeed,
+	onSelectPlayer,
 	revision = null
 }: MarketPlayerLookupProps = {}) {
 	const t = useTranslations('Market')
@@ -79,6 +81,10 @@ export function MarketPlayerLookup({
 	const searchDebounceStartedAt = useRef<number | null>(initialSearchStartedAt)
 	const historyGeneration = useRef(0)
 	const revisionParam = marketRevisionParam(revision)
+
+	useEffect(() => {
+		setSelectedPlayer(seedPlayer ?? null)
+	}, [seedPlayer])
 
 	useEffect(() => {
 		const generation = ++searchGeneration.current
@@ -131,7 +137,11 @@ export function MarketPlayerLookup({
 						setSearchReadyKey(normalizedSearch)
 					}
 				} catch (error) {
-					if (controller.signal.aborted) return
+					if (
+						controller.signal.aborted ||
+						(error instanceof Error && error.name === 'AbortError')
+					)
+						return
 					console.error('Failed to search the Market player directory:', error)
 					if (generation === searchGeneration.current) {
 						setPlayers([])
@@ -195,7 +205,11 @@ export function MarketPlayerLookup({
 					setHistoryReadyKey(`${selectedPlayer.id}:${revisionParam}`)
 				}
 			} catch (error) {
-				if (controller.signal.aborted) return
+				if (
+					controller.signal.aborted ||
+					(error instanceof Error && error.name === 'AbortError')
+				)
+					return
 				console.error('Failed to load Market player price history:', error)
 				if (generation === historyGeneration.current) {
 					setHistory([])
@@ -390,7 +404,8 @@ export function MarketPlayerLookup({
 														setSelectedPlayer(player)
 														setSearchTerm('')
 														if (compact) setSearchOpen(false)
-														onClearSeed?.()
+														onSelectPlayer?.(player)
+														if (!onSelectPlayer) onClearSeed?.()
 													}}
 												>
 													{t('priceHistoryShort')}
@@ -497,13 +512,13 @@ export function MarketPlayerLookup({
 												</p>
 											</div>
 											<span
-									className={`font-display text-sm font-semibold tabular-nums ${
-															change > 0
-																? 'text-success'
-																: change < 0
-																	? 'text-destructive'
-																	: 'text-muted-foreground'
-															}`}
+												className={`font-display text-sm font-semibold tabular-nums ${
+													change > 0
+														? 'text-success'
+														: change < 0
+															? 'text-destructive'
+															: 'text-muted-foreground'
+												}`}
 											>
 												{change > 0 ? '+' : ''}£{(change / 10).toFixed(1)}m
 											</span>

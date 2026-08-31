@@ -193,6 +193,9 @@ jobs:
       - name: Validate GraphQL operations against the pinned schema
         env:
           GRAPHQL_SCHEMA_MODULE: ${{ github.workspace }}/graphql-contract/src/graphql/schema.ts
+          NODE_ENV: test
+          DATABASE_URL: postgresql://graphql_ci:graphql_ci@127.0.0.1:5432/testdb
           REDIS_URL: redis://127.0.0.1:6379
           RATE_LIMIT_REDIS_URL: redis://127.0.0.1:6380
+          GRAPHQL_RATE_LIMIT_MODE: shadow-v4
         run: npm run contract:graphql

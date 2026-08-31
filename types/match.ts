@@ -46,6 +46,8 @@ export interface PlayerStat {
   player: string;
   element?: number;
   elementType?: number; // 1=GKP, 2=DEF, 3=MID, 4=FWD
+  /** FPL price in tenths of £m (e.g. 55 = £5.5m). */
+  price?: number;
   minutes?: number;
   goals?: number;
   assists?: number;

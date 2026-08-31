@@ -16,9 +16,15 @@ export type PriceChangeSortState = {
 	direction: PriceChangeSortDirection
 }
 
+export type PriceChangeMovementFilter = 'all' | 'rise' | 'fall' | 'locked'
+
+export type PriceChangeScope = 'all' | 'likely'
+
+export const DEFAULT_PRICE_CHANGE_SCOPE: PriceChangeScope = 'likely'
+
 export const DEFAULT_PRICE_CHANGE_SORT: PriceChangeSortState = {
 	column: 'progress',
-	direction: 'desc',
+	direction: 'desc'
 }
 
 const signalLikelihoodRank: Record<PriceChangePlayer['status'], number> = {
@@ -28,7 +34,7 @@ const signalLikelihoodRank: Record<PriceChangePlayer['status'], number> = {
 	LIKELY_FALL: 2,
 	UNLIKELY: 1,
 	LOCKED: 0,
-	CALIBRATING: 0,
+	CALIBRATING: 0
 }
 
 /** Players likely to move are the primary default audience for this board. */
@@ -41,16 +47,51 @@ export function isLikelyToChange(player: PriceChangePlayer): boolean {
 	)
 }
 
+/** Keep the homepage summary and the detail board on the same filter semantics. */
+export function matchesPriceChangePlayer(
+	player: PriceChangePlayer,
+	{
+		scope = 'all',
+		movement = 'all'
+	}: {
+		scope?: PriceChangeScope
+		movement?: PriceChangeMovementFilter
+	} = {}
+): boolean {
+	// Locked/calibrating is an explicit operational filter, not a prediction
+	// likelihood. It must remain reachable even while the board defaults to
+	// the likely-to-change scope.
+	if (
+		scope === 'likely' &&
+		movement !== 'locked' &&
+		!isLikelyToChange(player)
+	) {
+		return false
+	}
+	if (movement === 'rise' && player.progressPercent <= 0) return false
+	if (movement === 'fall' && player.progressPercent >= 0) return false
+	if (
+		movement === 'locked' &&
+		player.status !== 'LOCKED' &&
+		player.status !== 'CALIBRATING'
+	) {
+		return false
+	}
+	return true
+}
+
 /**
  * Default relevance: likely-to-change squad players, other likely-to-change
  * players, remaining squad players, then the rest of the player pool.
  */
 export function priceChangeRelevanceScore(
 	player: PriceChangePlayer,
-	squadElementIds: ReadonlySet<number>,
+	squadElementIds: ReadonlySet<number>
 ): number {
-	return (isLikelyToChange(player) ? 2 : 0) +
+	return (
+		(isLikelyToChange(player) ? 2 : 0) +
 		(squadElementIds.has(player.playerId) ? 1 : 0)
+	)
 }
 
 export function priceChangeMovementValue(player: PriceChangePlayer): number {
@@ -60,7 +101,7 @@ export function priceChangeMovementValue(player: PriceChangePlayer): number {
 function compareNullableNumbers(
 	left: number | null,
 	right: number | null,
-	direction: PriceChangeSortDirection,
+	direction: PriceChangeSortDirection
 ): number {
 	if (left == null && right == null) return 0
 	if (left == null) return 1
@@ -72,7 +113,7 @@ function compareNullableNumbers(
 function sortValue(
 	player: PriceChangePlayer,
 	column: PriceChangeSortColumn,
-	purchasePrices: Readonly<Record<string, number>>,
+	purchasePrices: Readonly<Record<string, number>>
 ): number | null {
 	switch (column) {
 		case 'price':
@@ -101,13 +142,13 @@ export function sortPriceChangePlayers(
 		sort = DEFAULT_PRICE_CHANGE_SORT,
 		squadElementIds = new Set<number>(),
 		purchasePrices = {},
-		locale,
+		locale
 	}: {
 		sort?: PriceChangeSortState
 		squadElementIds?: ReadonlySet<number>
 		purchasePrices?: Readonly<Record<string, number>>
 		locale?: string
-	} = {},
+	} = {}
 ): PriceChangePlayer[] {
 	const relevanceFirst =
 		sort.column === DEFAULT_PRICE_CHANGE_SORT.column &&
@@ -124,7 +165,7 @@ export function sortPriceChangePlayers(
 		const primary = compareNullableNumbers(
 			sortValue(left, sort.column, purchasePrices),
 			sortValue(right, sort.column, purchasePrices),
-			sort.direction,
+			sort.direction
 		)
 		if (primary !== 0) return primary
 
@@ -139,4 +180,36 @@ export function sortPriceChangePlayers(
 		if (name !== 0) return name
 		return left.playerId - right.playerId
 	})
+}
+
+/** Apply the canonical prediction scope before applying the board sort. */
+export function selectPriceChangePlayers(
+	players: readonly PriceChangePlayer[],
+	{
+		scope = 'all',
+		movement = 'all',
+		sort = DEFAULT_PRICE_CHANGE_SORT,
+		squadElementIds = new Set<number>(),
+		purchasePrices = {},
+		locale
+	}: {
+		scope?: PriceChangeScope
+		movement?: PriceChangeMovementFilter
+		sort?: PriceChangeSortState
+		squadElementIds?: ReadonlySet<number>
+		purchasePrices?: Readonly<Record<string, number>>
+		locale?: string
+	} = {}
+): PriceChangePlayer[] {
+	return sortPriceChangePlayers(
+		players.filter(player =>
+			matchesPriceChangePlayer(player, { scope, movement })
+		),
+		{
+			sort,
+			squadElementIds,
+			purchasePrices,
+			locale
+		}
+	)
 }

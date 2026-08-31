@@ -21,9 +21,15 @@ const METRIC_TONES: Record<PlayerMetric['tone'], string> = {
 	destructive: 'bg-destructive/10 text-destructive',
 }
 
+function formatPlayerPrice(price: number | null | undefined): string | null {
+	if (price == null || !Number.isFinite(price)) return null
+	return `£${(price / 10).toFixed(1)}m`
+}
+
 function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player: PlayerStat) => void }) {
 	const t = useTranslations('LiveMatches')
 	const metrics = getPlayerMetrics(player)
+	const priceLabel = formatPlayerPrice(player.price)
 	const metricLabels: Record<string, string> = {
 		MIN: t('minutesShort'),
 		Goals: t('goals'),
@@ -46,7 +52,19 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 			onClick={() => onSelect(player)}
 		>
 			<span className="flex items-start justify-between gap-3">
-				<span className="font-medium">{player.player}</span>
+				<span className="min-w-0">
+					<span
+						className="block truncate font-medium"
+						title={player.player}
+					>
+						{player.player}
+					</span>
+					{priceLabel ? (
+						<span className="mt-0.5 block text-sm tabular-nums text-muted-foreground">
+							{priceLabel}
+						</span>
+					) : null}
+				</span>
 				<span className="flex shrink-0 items-center gap-2">
 					{(player.bonus_points ?? 0) > 0 ? (
 						<Badge

@@ -8,6 +8,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
@@ -42,6 +43,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 		getVerifiedEntryContext()
 	])
 	const entryId = verified.entryId
+	if (isOfficialLiveUpdatingContext(liveContext)) {
+		return (
+			<SeasonPhaseState
+				feature="competition"
+				presentation={presentation}
+			/>
+		)
+	}
 	if (
 		presentation.phase === 'PRESEASON' ||
 		liveContext?.windowState === 'PRESEASON' ||

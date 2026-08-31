@@ -36,3 +36,33 @@ export async function getLivePageContext(): Promise<LivePageContext> {
 		}
 	}
 }
+
+/**
+ * Read the lifecycle only as an optional UI hint. Price predictions can still
+ * render its last usable board when this probe is unavailable, so this path is
+ * intentionally silent and never turns an optional context read into an
+ * application error.
+ */
+export async function getOptionalLivePageContext(): Promise<LivePageContext | null> {
+	try {
+		const response = await executePublicServerQuery<LiveContextResponse>(
+			'gameweek',
+			GET_LIVE_CONTEXT,
+			undefined,
+			{
+				cache: 'no-store',
+				timeoutMs: 1_500,
+				suppressErrorLog: true,
+			},
+		)
+		return {
+			presentation: resolveSeasonPresentation(
+				response.coreEventContext,
+				response.liveContext?.producerState ?? null,
+			),
+			liveContext: response.liveContext ?? null,
+		}
+	} catch {
+		return null
+	}
+}

@@ -10,7 +10,7 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	auth: ['Auth'],
 	fixtures: ['Fixtures', 'Share'],
 	gameweek: ['GameweekStats', 'Home', 'LivePoints', 'PlayerDirectory', 'Share'],
-	market: ['Market', 'Share'],
+	market: ['Market', 'MarketExplore', 'Share'],
 	priceChanges: ['PriceChanges', 'Share'],
 	playerStats: [
 		'PlayerStats',
@@ -39,6 +39,7 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	myFpl: [
 		'TeamStats',
 		'TournamentStats',
+		'LiveTournament',
 		'TournamentManage',
 		'TournamentLifecycle',
 		'LivePoints',

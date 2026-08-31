@@ -10,9 +10,11 @@ import { useEffect, useState } from 'react'
 export function MarketLocalUpdated({
 	capturedAt,
 	dateOnly = false,
+	className
 }: {
 	capturedAt: string
 	dateOnly?: boolean
+	className?: string
 }) {
 	const t = useTranslations('Market')
 	const format = useFormatter()
@@ -30,7 +32,7 @@ export function MarketLocalUpdated({
 		const formatOptions = dateOnly
 			? {
 					day: 'numeric' as const,
-					month: 'short' as const,
+					month: 'short' as const
 				}
 			: {
 					day: 'numeric' as const,
@@ -38,18 +40,16 @@ export function MarketLocalUpdated({
 					hour: '2-digit' as const,
 					minute: '2-digit' as const,
 					second: '2-digit' as const,
-					timeZoneName: 'short' as const,
+					timeZoneName: 'short' as const
 				}
-		setLabel(
-			format.dateTime(parsed, formatOptions),
-		)
+		setLabel(format.dateTime(parsed, formatOptions))
 	}, [capturedAt, dateOnly, format])
 
 	if (!label) {
 		return (
 			<time
 				dateTime={capturedAt}
-				className={`inline-block min-h-5 whitespace-nowrap tabular-nums ${dateOnly ? 'min-w-0' : 'min-w-56'}`}
+				className={`inline-block min-h-5 whitespace-nowrap text-xs text-muted-foreground tabular-nums ${dateOnly ? 'min-w-0' : 'min-w-56'} ${className ?? ''}`}
 				suppressHydrationWarning
 			>
 				{t('lastUpdated', { date: '…' })}
@@ -60,7 +60,7 @@ export function MarketLocalUpdated({
 	return (
 		<time
 			dateTime={capturedAt}
-			className={`inline-block min-h-5 whitespace-nowrap tabular-nums ${dateOnly ? 'min-w-0' : 'min-w-56'}`}
+			className={`inline-block min-h-5 whitespace-nowrap text-xs text-muted-foreground tabular-nums ${dateOnly ? 'min-w-0' : 'min-w-56'} ${className ?? ''}`}
 		>
 			{t('lastUpdated', { date: label })}
 		</time>

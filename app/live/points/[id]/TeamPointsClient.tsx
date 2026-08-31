@@ -31,6 +31,7 @@ interface TeamPointsClientProps {
 	initialOverall?: EntryOverallSnapshot
 	initialEntryLookupStatus?: EntryLookupStatus
 	initialEntryPersistenceState?: EntryPersistenceState | null
+	isOfficialUpdating?: boolean
 }
 
 export default function TeamPointsClient({
@@ -43,7 +44,8 @@ export default function TeamPointsClient({
 	initialSnapshot,
 	initialOverall,
 	initialEntryLookupStatus,
-	initialEntryPersistenceState
+	initialEntryPersistenceState,
+	isOfficialUpdating = false
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -51,7 +53,8 @@ export default function TeamPointsClient({
 		initialEventId,
 		initialSelectedGameweek,
 		initialLiveData,
-		initialSnapshot
+		initialSnapshot,
+		isOfficialUpdating
 	})
 	const {
 		overall,
@@ -101,6 +104,7 @@ export default function TeamPointsClient({
 				isLoading={livePoints.isLoading}
 				isRefreshing={livePoints.isRefreshing}
 				error={livePoints.error}
+				isOfficialUpdating={livePoints.isOfficialUpdating}
 				entryLookupStatus={entryLookupStatus}
 				entryPersistenceState={entryPersistenceState}
 				isPageActive={livePoints.isPageActive}

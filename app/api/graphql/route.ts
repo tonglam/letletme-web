@@ -183,12 +183,12 @@ export async function POST(request: NextRequest) {
 			'Content-Type': 'application/json',
 			'X-Request-Id': requestId
 		}
-		// Live Points is a breaking GraphQL contract. Preserve the exact client
-		// contract header through the Web proxy so the upstream V2 gate can make
-		// the same decision for browser, RSC, and Mini Program traffic.
-		const livePointsContract = request.headers.get('X-LetLetMe-Contract')
-		if (livePointsContract) {
-			headers['X-LetLetMe-Contract'] = livePointsContract
+		// Live products use independent breaking GraphQL contracts. Preserve the
+		// exact client header so the upstream gate makes the same decision for
+		// browser, RSC, and Mini Program traffic.
+		const liveContract = request.headers.get('X-LetLetMe-Contract')
+		if (liveContract) {
+			headers['X-LetLetMe-Contract'] = liveContract
 		}
 		if (authorization.value) {
 			headers.Authorization = authorization.value
@@ -406,8 +406,7 @@ function observeProxyResponse(
 	const batch: ClientSignalBatchV1 = {
 		schemaVersion: 1,
 		batchId: randomUUID(),
-		client:
-			input.trafficClass === 'mini' ? 'wechat_miniprogram' : 'web',
+		client: input.trafficClass === 'mini' ? 'wechat_miniprogram' : 'web',
 		release: releaseName(),
 		sentAt: new Date().toISOString(),
 		samples: [
@@ -415,10 +414,7 @@ function observeProxyResponse(
 				observedAt: new Date().toISOString(),
 				surface: surfaceForWorkload(input.workload, input.operationName),
 				metric: 'graphql_proxy_ms',
-				deviceGroup: deviceGroupForRequest(
-					input.request,
-					input.trafficClass
-				),
+				deviceGroup: deviceGroupForRequest(input.request, input.trafficClass),
 				sampleSource: sampleSourceForRequest(input.request),
 				result,
 				value: Math.max(0, Date.now() - input.startedAt)

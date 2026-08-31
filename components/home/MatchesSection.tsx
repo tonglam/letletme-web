@@ -1,6 +1,7 @@
 'use client'
 
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Link } from '@/i18n/navigation'
@@ -156,8 +157,12 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 						<div className="grid flex-1 grid-cols-3 items-center gap-4">
 							<div className="flex items-center justify-end gap-3">
 								<span className="text-right text-sm font-semibold md:text-base">
-									<span className="hidden md:inline">{match.homeTeam}</span>
-									<span className="md:hidden">{match.homeTeamShort}</span>
+									<span className="share-match-team-name hidden md:inline">
+										{match.homeTeam}
+									</span>
+									<span className="share-match-team-name md:hidden">
+										{match.homeTeamShort}
+									</span>
 								</span>
 								<Image
 									alt={t('teamLogo', { team: match.homeTeam })}
@@ -196,8 +201,12 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 									className="size-8 shrink-0 object-contain md:size-10"
 								/>
 								<span className="text-sm font-semibold md:text-base">
-									<span className="hidden md:inline">{match.awayTeam}</span>
-									<span className="md:hidden">{match.awayTeamShort}</span>
+									<span className="share-match-team-name hidden md:inline">
+										{match.awayTeam}
+									</span>
+									<span className="share-match-team-name md:hidden">
+										{match.awayTeamShort}
+									</span>
 								</span>
 							</div>
 						</div>
@@ -231,6 +240,7 @@ export function MatchesSection({
 	const [fixtureError, setFixtureError] = useState<string | null>(null)
 	const [useLocalTimezone, setUseLocalTimezone] = useState(false)
 	const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const generation = useRef(0)
 	const inFlight = useRef(new Map<number, InFlightRequest>())
 	const [cache] = useState(
@@ -447,8 +457,11 @@ export function MatchesSection({
 
 	return (
 		<Card
+			ref={shareRef}
 			data-home-matches
 			data-home-fixtures-event={committedEventId}
+			data-share-preserve-width="true"
+			data-share-fit-content="true"
 			className="min-h-[29rem] p-4 md:p-6"
 		>
 			{fixtureError ? (
@@ -473,7 +486,17 @@ export function MatchesSection({
 						/>
 					</h2>
 				</div>
-				<div className="flex flex-wrap items-center gap-2">
+				<div
+					className="flex flex-wrap items-center gap-2"
+					data-share-exclude="true"
+				>
+					<ShareActions
+						actions={['image']}
+						text={t(isLivePublication ? 'currentMatches' : 'upcomingMatches')}
+						imageRef={shareRef}
+						title={t(isLivePublication ? 'currentMatches' : 'upcomingMatches')}
+						disabled={matchDays.length === 0}
+					/>
 					<Link
 						href="/live/matches"
 						prefetch={false}
@@ -540,6 +563,7 @@ export function MatchesSection({
 					<div
 						role="tablist"
 						aria-label={t('fixtureDays')}
+						data-share-exclude="true"
 						className="mb-5 flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1"
 					>
 						{matchDays.map((matchDay, index) => {

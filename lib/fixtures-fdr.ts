@@ -3,7 +3,12 @@ import type {
 	FixtureSignalPlayer
 } from '@/lib/graphql/operations/market'
 
-export type FdrHorizon = 3 | 5 | 8
+/**
+ * Supported planning windows. The normal controls are 3/5/8; the remaining
+ * values are available as exact terminal-season windows when fewer than eight
+ * gameweeks remain.
+ */
+export type FdrHorizon = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 export const DEFAULT_FDR_HORIZON: FdrHorizon = 5
 export const FDR_HORIZONS: FdrHorizon[] = [3, 5, 8]
@@ -35,6 +40,9 @@ export type TeamFixtureCell = {
 	/** 1 easy … 5 hard for this team */
 	difficulty: number
 	finished: boolean
+	started?: boolean
+	homeScore?: number | null
+	awayScore?: number | null
 }
 
 export type TeamFixtureGameweek = {
@@ -57,8 +65,11 @@ export type FdrTeamIdentity = {
 export type FdrPlanningFixture = {
 	id: number
 	finished: boolean
+	started?: boolean
 	homeTeam: FdrTeamIdentity
 	awayTeam: FdrTeamIdentity
+	homeScore?: number | null
+	awayScore?: number | null
 	homeTeamDifficulty: number
 	awayTeamDifficulty: number
 }
@@ -182,7 +193,10 @@ export function buildTeamFdrRows(
 				opponentShortName: away.shortName,
 				wasHome: true,
 				difficulty: clampDifficulty(f.homeTeamDifficulty),
-				finished: f.finished
+				finished: f.finished,
+				started: f.started,
+				homeScore: f.homeScore,
+				awayScore: f.awayScore
 			})
 
 			const awayAcc = ensure(away.id, away.name, away.shortName)
@@ -192,7 +206,10 @@ export function buildTeamFdrRows(
 				opponentShortName: home.shortName,
 				wasHome: false,
 				difficulty: clampDifficulty(f.awayTeamDifficulty),
-				finished: f.finished
+				finished: f.finished,
+				started: f.started,
+				homeScore: f.homeScore,
+				awayScore: f.awayScore
 			})
 		}
 	}
@@ -449,7 +466,7 @@ export function formatAvgFdr(value: number | null): string {
 
 export function orderFdrTeamsForDisplay(
 	teams: readonly TeamFdrRow[],
-	sort: 'easiest' | 'hardest',
+	sort: 'easiest' | 'hardest'
 ): TeamFdrRow[] {
 	if (sort === 'easiest') {
 		return [...teams].sort((a, b) => {

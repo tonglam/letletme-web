@@ -43,7 +43,7 @@ test('gameweek switch keeps committed content, sends one GET, and reuses cache',
 	)
 	await page.goto('/explore/gameweek')
 
-	const overview = page.getByRole('heading', { name: 'Gameweek 33 Overview' })
+	const overview = page.getByRole('heading', { name: 'GW33 Overview' })
 	await expect(overview).toBeVisible()
 	const input = page.locator('#gameweek-jump-input')
 	await input.fill('32')
@@ -54,7 +54,7 @@ test('gameweek switch keeps committed content, sends one GET, and reuses cache',
 
 	releaseRequest()
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 32 Overview' })
+		page.getByRole('heading', { name: 'GW32 Overview' })
 	).toBeVisible()
 	await input.fill('33')
 	await input.press('Enter')
@@ -62,7 +62,7 @@ test('gameweek switch keeps committed content, sends one GET, and reuses cache',
 	await input.fill('32')
 	await input.press('Enter')
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 32 Overview' })
+		page.getByRole('heading', { name: 'GW32 Overview' })
 	).toBeVisible()
 	expect(requestCount).toBe(1)
 
@@ -93,7 +93,7 @@ test('failed gameweek desk keeps the previously committed gameweek', async ({
 		page.getByText('Failed to load the selected gameweek data.')
 	).toBeVisible()
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 33 Overview' })
+		page.getByRole('heading', { name: 'GW33 Overview' })
 	).toBeVisible()
 })
 
@@ -124,13 +124,13 @@ test('a late superseded desk response cannot overwrite the current selection', a
 	await input.fill('31')
 	await input.press('Enter')
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 31 Overview' })
+		page.getByRole('heading', { name: 'GW31 Overview' })
 	).toBeVisible()
 	release32()
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 31 Overview' })
+		page.getByRole('heading', { name: 'GW31 Overview' })
 	).toBeVisible()
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 32 Overview' })
+		page.getByRole('heading', { name: 'GW32 Overview' })
 	).not.toBeVisible()
 })

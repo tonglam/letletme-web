@@ -326,21 +326,32 @@ const planningFixturesForEvent = eventId => {
 		homeTeam,
 		awayTeam,
 		homeTeamDifficulty,
-		awayTeamDifficulty
+		awayTeamDifficulty,
+		result = {}
 	) => ({
 		id,
 		code: id,
 		event,
 		kickoffTime: '2026-08-09T15:00:00.000Z',
-		finished: false,
-		started: false,
+		finished: result.finished ?? false,
+		started: result.started ?? result.finished ?? false,
 		homeTeam,
 		awayTeam,
-		homeScore: null,
-		awayScore: null,
+		homeScore: result.homeScore ?? null,
+		awayScore: result.awayScore ?? null,
 		homeTeamDifficulty,
 		awayTeamDifficulty
 	})
+	if (eventId === 1) {
+		return [
+			fixture(1001, arsenal, chelsea, 2, 4, {
+				finished: true,
+				started: true,
+				homeScore: 2,
+				awayScore: 1
+			})
+		]
+	}
 	if (eventId === 33) {
 		return [
 			fixture(3301, arsenal, chelsea, 2, 4),
@@ -393,6 +404,21 @@ const livePicks = Array.from({ length: 15 }, (_, index) => {
 	}
 })
 
+const squadPicks = livePicks.map(pick => ({
+	...pick,
+	elementTypeName:
+		pick.element <= 2
+			? 'GOALKEEPER'
+			: pick.element <= 7
+				? 'DEFENDER'
+				: pick.element <= 12
+					? 'MIDFIELDER'
+					: 'FORWARD',
+	isCaptain: pick.element === 1,
+	isViceCaptain: pick.element === 2,
+	multiplier: pick.element === 1 ? 2 : 1
+}))
+
 const liveRevisionVector = revision => ({
 	publicationId: `e2e-live-${revision.slice(0, 8)}`,
 	generation: 1,
@@ -427,6 +453,68 @@ const liveDelivery = state => ({
 	state,
 	servedFrom: 'REDIS_CURRENT',
 	reasonCodes: []
+})
+
+const liveMatchdaySnapshot = ({ match, state, revision }) => ({
+	season: '2627',
+	eventId: 33,
+	state,
+	revisions: {
+		deskPublicationId: `e2e-matchday-${revision.slice(0, 8)}`,
+		deskGeneration: 1,
+		lifecycle: revision,
+		fixtureIdentity: revision,
+		scoreState: revision,
+		detailPublicationId:
+			state === 'PRE_DEADLINE'
+				? null
+				: `e2e-match-detail-${revision.slice(0, 8)}`,
+		detailGeneration: state === 'PRE_DEADLINE' ? null : 1,
+		playerDetail: state === 'PRE_DEADLINE' ? null : revision
+	},
+	times: {
+		deskSourceCheckedAt: '2026-08-04T18:00:30.000Z',
+		deskContentUpdatedAt: '2026-08-04T18:00:00.000Z',
+		deskPublishedAt: '2026-08-04T18:00:00.000Z',
+		deskStaleAt: '2026-08-04T18:01:07.500Z',
+		detailSourceCheckedAt:
+			state === 'PRE_DEADLINE' ? null : '2026-08-04T18:00:30.000Z',
+		detailContentUpdatedAt:
+			state === 'PRE_DEADLINE' ? null : '2026-08-04T18:00:00.000Z',
+		detailPublishedAt:
+			state === 'PRE_DEADLINE' ? null : '2026-08-04T18:00:00.000Z',
+		detailStaleAt: state === 'PRE_DEADLINE' ? null : '2026-08-04T18:01:07.500Z',
+		servedAt: '2026-08-04T18:00:30.000Z',
+		nextRefreshAt: '2026-08-04T18:01:00.000Z'
+	},
+	detailDelivery:
+		state === 'PRE_DEADLINE'
+			? {
+					state: 'PENDING',
+					servedFrom: null,
+					reasonCodes: ['DETAIL_NOT_PUBLISHED']
+				}
+			: liveDelivery(state === 'FINALIZED' ? 'FINAL' : 'FRESH'),
+	matches: [
+		{
+			fixtureId: match.matchId,
+			eventId: 33,
+			homeTeamId: match.homeTeamId,
+			homeTeamName: match.homeTeamName,
+			homeTeamShortName: match.homeTeamShortName,
+			awayTeamId: match.awayTeamId,
+			awayTeamName: match.awayTeamName,
+			awayTeamShortName: match.awayTeamShortName,
+			homeScore: match.homeScore,
+			awayScore: match.awayScore,
+			kickoffTime: match.kickoffTime,
+			minutes: match.minutes,
+			started: state === 'LIVE_ACTIVE',
+			finished: false,
+			finishedProvisional: false,
+			players: []
+		}
+	]
 })
 
 const liveSnapshot = ({
@@ -1217,51 +1305,21 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
-		if (query.includes('GetLiveMatchdayDesk')) {
+		if (query.includes('GetLiveMatchday')) {
 			const match = liveHydrationFixtureEnabled
 				? hydrationLiveMatch
 				: scheduledMatch
+			const state = liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'PRE_DEADLINE'
 			json(response, 200, {
 				data: {
-					liveMatchdayDesk: {
-						season: '2627',
-						eventId: 33,
-						scoreCoreRevision: 'a'.repeat(64),
-						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'PRE_DEADLINE',
-						windowState: liveHydrationFixtureEnabled
-							? 'LIVE_ACTIVE'
-							: 'PRE_DEADLINE',
-						dataAvailability: liveHydrationFixtureEnabled
-							? 'FRESH'
-							: 'UNAVAILABLE',
-						nextRefreshAt: '2026-08-04T18:01:00.000Z',
-						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
-						publishedAt: '2026-08-04T18:00:00.000Z',
-						source: 'REDIS_CURRENT',
-						revisions: liveRevisionVector('a'.repeat(64)),
-						times: liveTimes(),
-						delivery: liveDelivery(
-							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
-						),
-						stale: false,
-						matches: [
-							{
-								fixtureId: match.matchId,
-								eventId: 33,
-								homeTeamId: match.homeTeamId,
-								homeTeamName: match.homeTeamName,
-								awayTeamId: match.awayTeamId,
-								awayTeamName: match.awayTeamName,
-								homeScore: match.homeScore,
-								awayScore: match.awayScore,
-								kickoffTime: match.kickoffTime,
-								minutes: liveHydrationFixtureEnabled ? match.minutes : 0,
-								started: liveHydrationFixtureEnabled,
-								finished: false
-							}
-						],
-						nextFixtures: [],
-						highlights: []
+					liveMatchday: {
+						availability: 'READY',
+						delivery: liveDelivery('FRESH'),
+						snapshot: liveMatchdaySnapshot({
+							match,
+							state,
+							revision: 'a'.repeat(64)
+						})
 					}
 				}
 			})
@@ -1304,6 +1362,49 @@ const server = createServer((request, response) => {
 						played: 11,
 						toPlay: 0,
 						pickList: livePicks
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntryHistory')) {
+			json(response, 200, {
+				data: {
+					entryHistory: {
+						results: [{ eventId: 33 }],
+						history: []
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntryEventResult')) {
+			const entryId = Number(variables.entryId)
+			const eventId = Number(variables.eventId) || 33
+			json(response, 200, {
+				data: {
+					entryEventResult: {
+						eventId,
+						eventPoints: 22,
+						overallPoints: 1234,
+						overallRank: 56789,
+						eventTransfers: 0,
+						eventTransfersCost: 0,
+						eventNetPoints: 22,
+						eventBenchPoints: 0,
+						eventChip: null,
+						eventCaptainPoints: 12,
+						eventPlayedCaptain: { webName: 'Player 1' },
+						eventPicks: squadPicks,
+						teamValue: 1005,
+						bank: 10,
+						entry: {
+							id: entryId,
+							entryName: 'E2E United',
+							playerName: 'Test Manager',
+							totalTransfers: 22,
+							region: 'Australia'
+						}
 					}
 				}
 			})

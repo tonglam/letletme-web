@@ -247,6 +247,7 @@ async function renderMarketContent({
 						<MarketLocalUpdated
 							capturedAt={updatedAt}
 							dateOnly
+							className="text-xs text-muted-foreground"
 						/>
 					) : null
 				}

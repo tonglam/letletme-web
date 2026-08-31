@@ -6,6 +6,7 @@ import { PriceChangeSquadPitch } from '@/app/data/price-changes/PriceChangeSquad
 import { CountdownCard } from '@/components/home/CountdownCard'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
+import { PriceChangeSignalBadge } from '@/components/data/PriceChangeSignalBadge'
 import { ShareActions } from '@/components/share/ShareActions'
 import { formatLocalSnapshotTime } from '@/components/stats/LocalSnapshotTime'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -40,12 +41,18 @@ import {
 } from '@/lib/price-change-live-client'
 import type { TimeLeft } from '@/lib/home-deadline'
 import {
+	DEFAULT_PRICE_CHANGE_SCOPE,
 	DEFAULT_PRICE_CHANGE_SORT,
+	matchesPriceChangePlayer,
+	selectPriceChangePlayers,
 	sortPriceChangePlayers,
+	type PriceChangeMovementFilter,
 	type PriceChangeSortColumn,
 	type PriceChangeSortDirection,
-	type PriceChangeSortState
+	type PriceChangeSortState,
+	type PriceChangeScope
 } from '@/lib/price-change-sorting'
+import { buildPriceChangeFilterUrl } from '@/lib/price-change-filter-url'
 import { selectPriceChangeSquadPlayers } from '@/app/data/price-changes/_lib/price-change-share'
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
@@ -68,8 +75,6 @@ import { useTranslations } from 'next-intl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const PAGE_SIZE = 20
-
-type MovementFilter = 'all' | 'rise' | 'fall' | 'locked'
 
 const LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v2'
 const LEGACY_LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v1'
@@ -159,17 +164,6 @@ function persistLastValidBoard(board: PriceChangeBoard): void {
 	}
 }
 
-function statusClass(status: PriceChangePlayer['status']): string {
-	if (status.includes('RISE'))
-		return 'border-success/45 bg-success/10 text-success'
-	if (status.includes('FALL'))
-		return 'border-destructive/45 bg-destructive/10 text-destructive'
-	if (status === 'LOCKED' || status === 'CALIBRATING') {
-		return 'border-warning/45 bg-warning/10 text-warning'
-	}
-	return 'border-border/70 bg-muted/30 text-muted-foreground'
-}
-
 function changeHighlightClass(
 	status: PriceChangePlayer['status'],
 	card = false
@@ -208,8 +202,10 @@ function ownershipClass(trend: PriceChangePlayer['ownershipTrend']): string {
 }
 
 function statusAlertVariant(
-	status: PriceChangeBoard['status']
+	status: PriceChangeBoard['status'],
+	officialUpdating = false
 ): 'info' | 'warning' | 'destructive' | null {
+	if (officialUpdating) return null
 	if (status === 'PARTIAL') return 'info'
 	if (status === 'STALE') return 'warning'
 	if (status === 'UNAVAILABLE') return 'destructive'
@@ -276,7 +272,10 @@ export function PriceChangesBoard({
 	initialTimeLeft,
 	mySquadElementIds,
 	mySquadPicks,
-	mySquadState
+	mySquadState,
+	initialScope = DEFAULT_PRICE_CHANGE_SCOPE,
+	initialMovement = 'all',
+	isOfficialUpdating = false
 }: {
 	board: PriceChangeBoard
 	locale: string
@@ -284,12 +283,19 @@ export function PriceChangesBoard({
 	mySquadElementIds: number[]
 	mySquadPicks: SquadPickSeed[]
 	mySquadState: SquadLoadState
+	initialScope?: PriceChangeScope
+	initialMovement?: PriceChangeMovementFilter
+	isOfficialUpdating?: boolean
 }) {
 	const t = useTranslations('PriceChanges')
 	const router = useRouter()
 	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
-	const [movement, setMovement] = useState<MovementFilter>('all')
+	const [scope, setScope] = useState<PriceChangeScope>(
+		initialMovement === 'locked' ? 'all' : initialScope
+	)
+	const [movement, setMovement] =
+		useState<PriceChangeMovementFilter>(initialMovement)
 	const [sort, setSort] = useState<PriceChangeSortState>(
 		DEFAULT_PRICE_CHANGE_SORT
 	)
@@ -299,6 +305,7 @@ export function PriceChangesBoard({
 	const [liveState, setLiveState] = useState<
 		'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
 	>('DURABLE')
+	const isUpdatingNotice = isOfficialUpdating && displayBoard.status !== 'READY'
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const mySquadShareRef = useRef<HTMLDivElement | null>(null)
@@ -336,6 +343,24 @@ export function PriceChangesBoard({
 		return () => window.clearInterval(timer)
 	}, [router])
 
+	useEffect(() => {
+		setScope(initialMovement === 'locked' ? 'all' : initialScope)
+		setMovement(initialMovement)
+		setPage(1)
+	}, [initialMovement, initialScope])
+
+	const updateFilterUrl = (
+		nextScope: PriceChangeScope,
+		nextMovement: PriceChangeMovementFilter
+	) => {
+		if (typeof window === 'undefined') return
+		window.history.replaceState(
+			window.history.state,
+			'',
+			buildPriceChangeFilterUrl(window.location.href, nextScope, nextMovement)
+		)
+	}
+
 	usePriceChangeLiveBoard({
 		board,
 		onUpdate: (nextBoard, state) => {
@@ -367,16 +392,10 @@ export function PriceChangesBoard({
 	const filteredPlayers = useMemo(() => {
 		const query = search.trim().toLowerCase()
 		const matchingPlayers = displayBoard.players.filter(player => {
-			if (teamId !== 'all' && String(player.teamId) !== teamId) return false
-			if (movement === 'rise' && player.progressPercent <= 0) return false
-			if (movement === 'fall' && player.progressPercent >= 0) return false
-			if (
-				movement === 'locked' &&
-				player.status !== 'LOCKED' &&
-				player.status !== 'CALIBRATING'
-			) {
+			if (!matchesPriceChangePlayer(player, { scope, movement })) {
 				return false
 			}
+			if (teamId !== 'all' && String(player.teamId) !== teamId) return false
 			if (!query) return true
 			return `${player.webName} ${player.teamName} ${player.teamShortName}`
 				.toLowerCase()
@@ -384,10 +403,19 @@ export function PriceChangesBoard({
 		})
 		return sortPriceChangePlayers(matchingPlayers, {
 			sort,
-			squadElementIds: mySquad,
+			squadElementIds: scope === 'likely' ? new Set<number>() : mySquad,
 			locale
 		})
-	}, [displayBoard.players, locale, movement, mySquad, search, sort, teamId])
+	}, [
+		displayBoard.players,
+		locale,
+		movement,
+		mySquad,
+		scope,
+		search,
+		sort,
+		teamId
+	])
 
 	const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE))
 	const safePage = Math.min(page, pageCount)
@@ -401,15 +429,20 @@ export function PriceChangesBoard({
 	}, [page, pageCount])
 
 	const resetFilters = () => {
+		const nextScope = DEFAULT_PRICE_CHANGE_SCOPE
+		const nextMovement: PriceChangeMovementFilter = 'all'
 		setSearch('')
-		setMovement('all')
+		setScope(nextScope)
+		setMovement(nextMovement)
 		setSort(DEFAULT_PRICE_CHANGE_SORT)
 		setTeamId('all')
 		setPage(1)
+		updateFilterUrl(nextScope, nextMovement)
 	}
 
 	const hasFilters =
 		search.length > 0 ||
+		scope !== DEFAULT_PRICE_CHANGE_SCOPE ||
 		movement !== 'all' ||
 		sort.column !== DEFAULT_PRICE_CHANGE_SORT.column ||
 		sort.direction !== DEFAULT_PRICE_CHANGE_SORT.direction ||
@@ -434,16 +467,18 @@ export function PriceChangesBoard({
 		setSort({ column, direction })
 		setPage(1)
 	}
-	const alertVariant = statusAlertVariant(displayBoard.status)
+	const alertVariant = statusAlertVariant(displayBoard.status, isUpdatingNotice)
 	const from = filteredPlayers.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
 	const to = Math.min(safePage * PAGE_SIZE, filteredPlayers.length)
 	const shareScopePlayers = useMemo(() => {
-		return sortPriceChangePlayers(displayBoard.players, {
+		return selectPriceChangePlayers(displayBoard.players, {
+			scope,
+			movement,
 			sort,
-			squadElementIds: mySquad,
+			squadElementIds: scope === 'likely' ? new Set<number>() : mySquad,
 			locale
 		})
-	}, [displayBoard.players, locale, mySquad, sort])
+	}, [displayBoard.players, locale, movement, mySquad, scope, sort])
 	const mySquadBoardPlayers = useMemo(
 		() => selectPriceChangeSquadPlayers(displayBoard.players, mySquadPicks),
 		[displayBoard.players, mySquadPicks]
@@ -456,13 +491,13 @@ export function PriceChangesBoard({
 	const shareLabels = useMemo(
 		() => ({
 			title: t('title'),
-			scope: t('allPlayersTab'),
+			scope: scope === 'likely' ? t('scopeLikely') : t('scopeAll'),
 			updated: t('snapshotUpdatedAt'),
 			deadline: t('deadlineLabel'),
 			progress: t('progress'),
 			signal: t('signal'),
 			movement: t('netTransfers'),
-			none: t('shareNoFalls'),
+			none: t('shareNoPredictions'),
 			status: {
 				VERY_LIKELY_RISE: t('statusVeryLikelyRise'),
 				LIKELY_RISE: t('statusLikelyRise'),
@@ -473,7 +508,7 @@ export function PriceChangesBoard({
 				CALIBRATING: t('statusCalibrating')
 			}
 		}),
-		[t]
+		[scope, t]
 	)
 
 	const shareText = useMemo(() => {
@@ -496,7 +531,7 @@ export function PriceChangesBoard({
 		locale,
 		shareLabels,
 		shareScopePlayers,
-			snapshotUpdatedAtLabel
+		snapshotUpdatedAtLabel
 	])
 	const squadShareText = useMemo(() => {
 		const shareUrl =
@@ -538,8 +573,13 @@ export function PriceChangesBoard({
 					minutes: t('minutes'),
 					seconds: t('seconds')
 				}}
-				expiredBadge={t('deadlinePassed')}
-				expiredLabel={t('countdownExpired')}
+				expiredBadge={
+					isUpdatingNotice ? t('updatingLabel') : t('deadlinePassed')
+				}
+				expiredLabel={
+					isUpdatingNotice ? t('countdownUpdating') : t('countdownExpired')
+				}
+				expiredTone={isUpdatingNotice ? 'info' : 'warning'}
 				variant="light"
 			/>
 
@@ -555,6 +595,23 @@ export function PriceChangesBoard({
 						{t('instantUpdate')}
 					</Badge>
 					<span>{t('instantUpdateDescription')}</span>
+				</div>
+			) : null}
+			{isUpdatingNotice ? (
+				<div
+					className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/[0.045] px-4 py-3 text-sm text-muted-foreground"
+					role="status"
+				>
+					<RefreshCcw
+						className="mt-0.5 size-4 shrink-0 text-primary"
+						aria-hidden="true"
+					/>
+					<div className="min-w-0 space-y-0.5">
+						<p className="font-semibold text-foreground">
+							{t('updatingLabel')}
+						</p>
+						<p>{t('statusUpdating')}</p>
+					</div>
 				</div>
 			) : null}
 			{alertVariant ? (
@@ -638,12 +695,12 @@ export function PriceChangesBoard({
 				shareRef={mySquadShareRef}
 			/>
 
-				<Card className="overflow-hidden border-border/80 shadow-sm">
-					<div className="border-b border-border/70 bg-muted/10 p-4 sm:p-5">
-						<h2 className="mb-4 font-display text-lg font-semibold tracking-tight">
-							{t('allPlayersTab')}
-						</h2>
-						<div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+			<Card className="overflow-hidden border-border/80 shadow-sm">
+				<div className="border-b border-border/70 bg-muted/10 p-4 sm:p-5">
+					<h2 className="mb-4 font-display text-lg font-semibold tracking-tight">
+						{scope === 'likely' ? t('scopeLikely') : t('scopeAll')}
+					</h2>
+					<div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 						<div className="w-full max-w-xl space-y-1.5">
 							<label
 								className="eyebrow"
@@ -675,10 +732,48 @@ export function PriceChangesBoard({
 						>
 							<span className="eyebrow mr-1">{t('filtersLabel')}</span>
 							<Select
+								value={scope}
+								onValueChange={value => {
+									const nextScope: PriceChangeScope =
+										movement === 'locked' ? 'all' : (value as PriceChangeScope)
+									setScope(nextScope)
+									setPage(1)
+									updateFilterUrl(nextScope, movement)
+								}}
+							>
+								<SelectTrigger
+									id="price-change-scope"
+									aria-label={t('scopeLabel')}
+									className={cn(
+										'h-9 w-auto min-w-[9rem] rounded-full px-3 text-xs font-medium',
+										scope !== DEFAULT_PRICE_CHANGE_SCOPE &&
+											'border-primary/50 bg-primary/10 text-foreground'
+									)}
+								>
+									<span className="mr-1 text-muted-foreground">
+										{t('scopeLabel')}:
+									</span>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem
+										value="likely"
+										disabled={movement === 'locked'}
+									>
+										{t('scopeLikely')}
+									</SelectItem>
+									<SelectItem value="all">{t('scopeAll')}</SelectItem>
+								</SelectContent>
+							</Select>
+							<Select
 								value={movement}
 								onValueChange={value => {
-									setMovement(value as MovementFilter)
+									const nextMovement = value as PriceChangeMovementFilter
+									const nextScope = nextMovement === 'locked' ? 'all' : scope
+									setMovement(nextMovement)
+									setScope(nextScope)
 									setPage(1)
+									updateFilterUrl(nextScope, nextMovement)
 								}}
 							>
 								<SelectTrigger
@@ -896,15 +991,17 @@ export function PriceChangesBoard({
 														</div>
 													</td>
 													<td className="px-3 py-3.5">
-														<Badge
-															variant="outline"
-															className={cn(
-																'whitespace-nowrap',
-																statusClass(player.status)
+														<PriceChangeSignalBadge
+															status={player.status}
+															lockedUntil={player.lockedUntil}
+															hydrated={hydrated}
+															statusLabel={t(
+																statusTranslationKey[player.status]
 															)}
-														>
-															{t(statusTranslationKey[player.status])}
-														</Badge>
+															unlocksInDaysLabel={days =>
+																t('statusUnlocksInDays', { days })
+															}
+														/>
 													</td>
 													<td className="px-5 py-3.5 text-right">
 														<div
@@ -965,12 +1062,16 @@ export function PriceChangesBoard({
 														</p>
 													</div>
 												</div>
-												<Badge
-													variant="outline"
-													className={cn('shrink-0', statusClass(player.status))}
-												>
-													{t(statusTranslationKey[player.status])}
-												</Badge>
+												<PriceChangeSignalBadge
+													status={player.status}
+													lockedUntil={player.lockedUntil}
+													hydrated={hydrated}
+													statusLabel={t(statusTranslationKey[player.status])}
+													unlocksInDaysLabel={days =>
+														t('statusUnlocksInDays', { days })
+													}
+													className="shrink-0"
+												/>
 											</div>
 											<div className="flex items-center gap-3">
 												<div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">

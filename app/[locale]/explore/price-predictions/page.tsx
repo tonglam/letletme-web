@@ -8,6 +8,10 @@ import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { EMPTY_PRICE_CHANGE_BOARD } from '@/lib/graphql/operations/price-changes'
 import { computeTimeLeft } from '@/lib/home-deadline'
+import {
+	getOptionalLivePageContext,
+} from '@/lib/live-context-server'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import type {
@@ -17,10 +21,40 @@ import type {
 } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getTranslations } from 'next-intl/server'
+import {
+	DEFAULT_PRICE_CHANGE_SCOPE,
+	type PriceChangeMovementFilter,
+	type PriceChangeScope
+} from '@/lib/price-change-sorting'
 
 export const dynamic = 'force-dynamic'
 
-type PageProps = { params: LocaleParams }
+type PageProps = {
+	params: LocaleParams
+	searchParams: Promise<{
+		scope?: string | string[]
+		movement?: string | string[]
+	}>
+}
+
+function firstQueryValue(value: string | string[] | undefined): string | undefined {
+	return Array.isArray(value) ? value[0] : value
+}
+
+function requestedScope(value: string | string[] | undefined): PriceChangeScope {
+	return firstQueryValue(value) === 'all' ? 'all' : DEFAULT_PRICE_CHANGE_SCOPE
+}
+
+function requestedMovement(
+	value: string | string[] | undefined
+): PriceChangeMovementFilter {
+	const requested = firstQueryValue(value)
+	return requested === 'rise' ||
+		requested === 'fall' ||
+		requested === 'locked'
+		? requested
+		: 'all'
+}
 
 export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
@@ -32,7 +66,10 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-function statusBadgeClass(status: string): string {
+function statusBadgeClass(status: string, isOfficialUpdating = false): string {
+	if (isOfficialUpdating) {
+		return 'border-primary/40 bg-primary/10 text-primary'
+	}
 	if (status === 'READY') return 'border-success/45 bg-success/10 text-success'
 	if (status === 'PARTIAL' || status === 'STALE') {
 		return 'border-warning/45 bg-warning/10 text-warning'
@@ -65,13 +102,18 @@ function PriceChangesContractMarker({
 	)
 }
 
-async function renderPriceChangesPage({ params }: PageProps) {
+async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('PriceChanges')
-	const boardPromise = loadPriceChangeBoard().catch(error => {
-		console.error('[price-changes] board seed failed:', error)
-		return { priceChangeBoard: EMPTY_PRICE_CHANGE_BOARD }
-	})
+	const query = await searchParams
+	const initialScope = requestedScope(query.scope)
+	const initialMovement = requestedMovement(query.movement)
+	const boardPromise = loadPriceChangeBoard()
+		.then(response => ({ response, error: null as unknown }))
+		.catch(error => ({
+			response: { priceChangeBoard: EMPTY_PRICE_CHANGE_BOARD },
+			error,
+		}))
 	const [events, identity] = await Promise.all([
 		getCurrentAndNextEvents(),
 		getVerifiedEntryContext()
@@ -94,7 +136,8 @@ async function renderPriceChangesPage({ params }: PageProps) {
 		})
 	}
 
-	const [boardResponse, squad] = await Promise.all([boardPromise, squadPromise])
+	const [{ response: boardResponse, error: boardError }, squad] =
+		await Promise.all([boardPromise, squadPromise])
 	if (squad) {
 		mySquadPicks = squad.picks
 		mySquadElementIds = squad.picks
@@ -106,12 +149,22 @@ async function renderPriceChangesPage({ params }: PageProps) {
 	}
 
 	const board = boardResponse.priceChangeBoard
+	const optionalLivePageContext =
+		board.status === 'READY' ? null : await getOptionalLivePageContext()
+	const isOfficialUpdating =
+		board.status !== 'READY' &&
+		isOfficialLiveUpdatingContext(optionalLivePageContext?.liveContext)
+	if (boardError && !isOfficialUpdating) {
+		console.error('[price-changes] board seed failed:', boardError)
+	}
 	const deadlineMs = board.deadline ? Date.parse(board.deadline) : NaN
 	const initialTimeLeft = computeTimeLeft(
 		Number.isFinite(deadlineMs) ? deadlineMs : null
 	)
 	const statusLabel =
-		board.status === 'READY'
+		isOfficialUpdating
+			? t('updatingLabel')
+			: board.status === 'READY'
 			? t('fresh')
 			: board.status === 'PARTIAL'
 				? t('partial')
@@ -123,7 +176,9 @@ async function renderPriceChangesPage({ params }: PageProps) {
 		<PageShell>
 			<PriceChangesContractMarker
 				status={
-					board.status === 'READY'
+					isOfficialUpdating
+						? 'STALE'
+						: board.status === 'READY'
 						? 'READY'
 						: board.status === 'STALE' || board.status === 'PARTIAL'
 							? 'STALE'
@@ -140,7 +195,10 @@ async function renderPriceChangesPage({ params }: PageProps) {
 						<div className="flex flex-col items-end gap-1">
 							<Badge
 								variant="outline"
-								className={statusBadgeClass(board.status)}
+								className={statusBadgeClass(
+									board.status,
+									isOfficialUpdating,
+								)}
 							>
 								{statusLabel}
 							</Badge>
@@ -160,6 +218,9 @@ async function renderPriceChangesPage({ params }: PageProps) {
 					mySquadElementIds={mySquadElementIds}
 					mySquadPicks={mySquadPicks}
 					mySquadState={mySquadState}
+					initialScope={initialScope}
+					initialMovement={initialMovement}
+					isOfficialUpdating={isOfficialUpdating}
 				/>
 			</div>
 		</PageShell>

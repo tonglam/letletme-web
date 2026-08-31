@@ -27,6 +27,7 @@ interface LivePointsClientProps {
 	initialOverall?: EntryOverallSnapshot
 	initialEntryLookupStatus?: EntryLookupStatus
 	initialEntryPersistenceState?: EntryPersistenceState | null
+	isOfficialUpdating?: boolean
 }
 
 export default function LivePointsClient({
@@ -36,14 +37,16 @@ export default function LivePointsClient({
 	initialSnapshot,
 	initialOverall,
 	initialEntryLookupStatus,
-	initialEntryPersistenceState
+	initialEntryPersistenceState,
+	isOfficialUpdating = false
 }: LivePointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
 		initialEntryId,
 		initialEventId,
 		initialLiveData,
-		initialSnapshot
+		initialSnapshot,
+		isOfficialUpdating
 	})
 	const {
 		overall,
@@ -106,6 +109,7 @@ export default function LivePointsClient({
 				isLoading={livePoints.isLoading}
 				isRefreshing={livePoints.isRefreshing}
 				error={livePoints.error}
+				isOfficialUpdating={livePoints.isOfficialUpdating}
 				entryLookupStatus={entryLookupStatus}
 				entryPersistenceState={entryPersistenceState}
 				isPageActive={livePoints.isPageActive}

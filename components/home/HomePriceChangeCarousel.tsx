@@ -60,6 +60,7 @@ export type HomePriceChangeCarouselLabels = {
 	noTrendRises: string
 	noTrendFalls: string
 	noLikelyToChange: string
+	topCountLabel: string
 	likelyUnavailable: string
 	likelyUnavailableDescription: string
 	dataUnavailable: string
@@ -169,6 +170,8 @@ function PriceChangeDirection<T>({
 	title,
 	emptyLabel,
 	count,
+	totalItems,
+	countLabel,
 	renderItem
 }: {
 	items: readonly T[]
@@ -176,6 +179,8 @@ function PriceChangeDirection<T>({
 	title: string
 	emptyLabel: string
 	count?: number
+	totalItems?: number
+	countLabel?: string
 	renderItem: (item: T) => ReactNode
 }) {
 	const isRise = direction === 'RISE'
@@ -196,7 +201,11 @@ function PriceChangeDirection<T>({
 				/>
 				{title}
 				<span className="font-mono text-xs text-muted-foreground">
-					({count ?? items.length})
+					{totalItems != null && totalItems > items.length && countLabel
+						? countLabel
+								.replace('{shown}', String(items.length))
+								.replace('{total}', String(totalItems))
+						: `(${count ?? items.length})`}
 				</span>
 			</h3>
 			{items.length === 0 ? (
@@ -439,6 +448,8 @@ function LikelyPage({
 				direction="RISE"
 				title={labels.trendRises}
 				emptyLabel={labels.noTrendRises}
+				totalItems={likely.riseTotal}
+				countLabel={labels.topCountLabel}
 				renderItem={player => (
 					<LikelyPlayerRow
 						key={player.playerId}
@@ -453,6 +464,8 @@ function LikelyPage({
 				direction="FALL"
 				title={labels.trendFalls}
 				emptyLabel={labels.noTrendFalls}
+				totalItems={likely.fallTotal}
+				countLabel={labels.topCountLabel}
 				renderItem={player => (
 					<LikelyPlayerRow
 						key={player.playerId}
