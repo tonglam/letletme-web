@@ -454,7 +454,7 @@ describe('live matchday V2 publication', () => {
 		)
 	})
 
-	it('retains accepted player details when a newer desk has scores but no detail rows', async () => {
+	it('keeps an empty newer detail publication authoritative', async () => {
 		const accepted = await getLiveMatchesSnapshot(
 			async <T>(): Promise<T> => response() as T,
 			33
@@ -486,10 +486,10 @@ describe('live matchday V2 publication', () => {
 			accepted.matches
 		)
 		assert.equal(retained[0]?.homeTeam.score, 2)
-		assert.equal(retained[0]?.homeTeam.players[0]?.player, 'Home Player')
-		assert.equal(retained[0]?.awayTeam.players[0]?.player, 'Away Player')
-		assert.equal(retained[0]?.bonusPoints?.[0]?.player, 'Home Player')
-		assert.equal(retained[0]?.bps?.[0]?.player, 'Away Player')
+		assert.deepEqual(retained[0]?.homeTeam.players, [])
+		assert.deepEqual(retained[0]?.awayTeam.players, [])
+		assert.deepEqual(retained[0]?.bonusPoints, [])
+		assert.deepEqual(retained[0]?.bps, [])
 	})
 
 	it('fences retained details so an older publication cannot overwrite them', async () => {
