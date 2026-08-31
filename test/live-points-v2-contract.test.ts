@@ -5,6 +5,7 @@ import { describe, it } from 'node:test'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 import {
 	LIVE_AUTO_REFRESH_SECONDS,
+	canReplaceLiveMatchesSnapshot,
 	liveContextToSnapshot,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
@@ -111,6 +112,49 @@ describe('Live Points V2 web contract', () => {
 					}
 				}
 			),
+			true
+		)
+	})
+
+	it('never replaces an accepted event with an older V2 publication', () => {
+		const snapshot = (generation: number, publishedAt: string | null) => ({
+			season: '2627',
+			eventId: 1,
+			state: 'LIVE_ACTIVE' as const,
+			scoreCoreRevision: revision('a'),
+			publishedAt,
+			revisions: { ...score().revisions, generation }
+		})
+		const accepted = snapshot(4, '2026-08-29T10:04:00.000Z')
+
+		assert.equal(canReplaceLiveMatchesSnapshot(null, accepted), true)
+		assert.equal(
+			canReplaceLiveMatchesSnapshot(
+				accepted,
+				snapshot(3, '2026-08-29T10:03:00.000Z')
+			),
+			false
+		)
+		assert.equal(
+			canReplaceLiveMatchesSnapshot(
+				accepted,
+				snapshot(5, '2026-08-29T10:03:00.000Z')
+			),
+			true
+		)
+		assert.equal(
+			canReplaceLiveMatchesSnapshot(
+				accepted,
+				snapshot(4, '2026-08-29T10:02:00.000Z')
+			),
+			false
+		)
+		assert.equal(canReplaceLiveMatchesSnapshot(accepted, null), false)
+		assert.equal(
+			canReplaceLiveMatchesSnapshot(accepted, {
+				...snapshot(3, '2026-08-29T10:03:00.000Z'),
+				eventId: 2
+			}),
 			true
 		)
 	})

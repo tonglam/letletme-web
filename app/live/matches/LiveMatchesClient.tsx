@@ -17,6 +17,7 @@ import {
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
+	canReplaceLiveMatchesSnapshot,
 	liveRefreshEventIdentityChanged,
 	liveContextToSnapshot,
 	liveSnapshotNeedsRefresh,
@@ -196,13 +197,24 @@ export function LiveMatchesClient({
 								match => match.eventId === nextSelectedEventId
 							)
 						: data.matches
+				const candidateSnapshot =
+					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
+				const acceptedSnapshot = snapshotRef.current
+				const isSameAcceptedEvent =
+					acceptedSnapshot?.eventId === lifecycleCurrentEventId &&
+					nextSelectedEventId === lifecycleCurrentEventId
+				if (
+					isSameAcceptedEvent &&
+					!canReplaceLiveMatchesSnapshot(acceptedSnapshot, candidateSnapshot)
+				) {
+					setError(null)
+					return
+				}
 				setMatches(mappedMatches)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
 				setSelectedEventId(nextSelectedEventId)
 				setResolvedNextEventId(data.nextEventId ?? undefined)
-				acceptSnapshot(
-					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
-				)
+				acceptSnapshot(candidateSnapshot)
 				officialSyncPendingRef.current = false
 				officialUpdatingRef.current = false
 				setIsOfficialSyncPending(false)
@@ -301,6 +313,15 @@ export function LiveMatchesClient({
 					return
 				}
 				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+					if (
+						!canReplaceLiveMatchesSnapshot(
+							snapshotRef.current,
+							observedSnapshot
+						)
+					) {
+						setError(null)
+						return
+					}
 					acceptSnapshot(observedSnapshot)
 					setError(null)
 					return

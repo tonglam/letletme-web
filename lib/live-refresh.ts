@@ -130,6 +130,64 @@ export function liveSnapshotNeedsRefresh(
 	)
 }
 
+const safeRevisionGeneration = (
+	value: LiveSnapshotStatus | null | undefined
+): number | null => {
+	const generation = value?.revisions?.generation
+	return typeof generation === 'number' &&
+		Number.isSafeInteger(generation) &&
+		generation >= 0
+		? generation
+		: null
+}
+
+const timestampMilliseconds = (
+	value: string | null | undefined
+): number | null => {
+	if (!value) return null
+	const parsed = Date.parse(value)
+	return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * Keep a browser LKG when a same-event refresh returns an older publication.
+ * Redis previous/process LKG are valid delivery sources, but their ordering
+ * must not be allowed to move an already accepted board backwards.
+ */
+export function canReplaceLiveMatchesSnapshot(
+	accepted: LiveSnapshotStatus | null | undefined,
+	candidate: LiveSnapshotStatus | null | undefined
+): boolean {
+	if (!accepted) return true
+	if (!candidate) return false
+	// Event transitions are handled by the lifecycle identity checks; this
+	// helper only orders publications within one event.
+	if (accepted.eventId !== candidate.eventId) return true
+
+	const acceptedGeneration = safeRevisionGeneration(accepted)
+	const candidateGeneration = safeRevisionGeneration(candidate)
+	if (acceptedGeneration !== null) {
+		// Current V2 always supplies the revision vector. If an accepted
+		// publication has an ordering marker, an unmarked candidate is not safe
+		// to replace it with.
+		if (candidateGeneration === null) return false
+		if (candidateGeneration < acceptedGeneration) return false
+		if (candidateGeneration > acceptedGeneration) return true
+	}
+
+	const acceptedPublishedAt = timestampMilliseconds(accepted.publishedAt)
+	const candidatePublishedAt = timestampMilliseconds(candidate.publishedAt)
+	if (
+		acceptedPublishedAt !== null &&
+		candidatePublishedAt !== null &&
+		candidatePublishedAt < acceptedPublishedAt
+	) {
+		return false
+	}
+
+	return true
+}
+
 export function liveRefreshEventIdentityChanged(
 	acceptedCurrentEventId: number | undefined,
 	acceptedNextEventId: number | undefined,
