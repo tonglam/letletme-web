@@ -483,7 +483,8 @@ describe('live matchday V2 publication', () => {
 
 		const retained = retainLiveMatchPlayerDetails(
 			candidate.matches,
-			accepted.matches
+			accepted.matches,
+			{ detailFallback: 'candidate' }
 		)
 		assert.equal(retained[0]?.homeTeam.score, 2)
 		assert.deepEqual(retained[0]?.homeTeam.players, [])
@@ -559,7 +560,7 @@ describe('live matchday V2 publication', () => {
 		const retained = retainLiveMatchPlayerDetails(
 			deskOnly.matches,
 			accepted.matches,
-			{ preferAcceptedDetails: true }
+			{ detailFallback: 'accepted' }
 		)
 		const retainedSnapshot = retainLiveMatchdayDetailRevision(
 			deskOnly.snapshot!,
@@ -611,7 +612,7 @@ describe('live matchday V2 publication', () => {
 		const retained = retainLiveMatchPlayerDetails(
 			candidate.matches,
 			accepted.matches,
-			{ preferAcceptedDetails: true }
+			{ detailFallback: 'accepted' }
 		)
 		assert.deepEqual(retained[0]?.homeTeam.players, [])
 		assert.deepEqual(retained[0]?.awayTeam.players, [])

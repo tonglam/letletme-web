@@ -166,9 +166,9 @@ export function LiveMatchesClient({
 					data.snapshot !== null &&
 					acceptedSnapshot !== null &&
 					shouldRetainAcceptedLiveMatchDetails(data.snapshot, acceptedSnapshot)
-				const matchesWithRetainedDetails = canRetainAcceptedDetails
+				const matchesWithRetainedDetails = retainAcceptedDetailRevision
 					? retainLiveMatchPlayerDetails(data.matches, matchesRef.current, {
-							preferAcceptedDetails: retainAcceptedDetailRevision
+							detailFallback: 'accepted'
 						})
 					: data.matches
 				const snapshotWithRetainedDetails =

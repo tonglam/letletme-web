@@ -240,19 +240,24 @@ export function transformLiveMatchdayV2(
 export function retainLiveMatchPlayerDetails(
 	candidate: readonly Match[],
 	accepted: readonly Match[],
-	options: { preferAcceptedDetails?: boolean } = {}
+	options: { detailFallback?: 'accepted' | 'candidate' } = {}
 ): Match[] {
-	const preferAcceptedDetails = options.preferAcceptedDetails === true
+	// The candidate is authoritative by default. The caller may select the
+	// accepted board only after the revision fence proves that candidate detail
+	// is absent or older; a present newer publication, including an empty one,
+	// must never resurrect rows from the accepted board.
+	const detailFallback = options.detailFallback ?? 'candidate'
+	const useAcceptedDetails = detailFallback === 'accepted'
 	const acceptedByFixtureId = new Map(accepted.map(match => [match.id, match]))
 
 	return candidate.map(match => {
 		const previous = acceptedByFixtureId.get(match.id)
 		if (!previous) return match
 
-		const homePlayers = preferAcceptedDetails
+		const homePlayers = useAcceptedDetails
 			? previous.homeTeam.players
 			: match.homeTeam.players
-		const awayPlayers = preferAcceptedDetails
+		const awayPlayers = useAcceptedDetails
 			? previous.awayTeam.players
 			: match.awayTeam.players
 		const homeTeam =
@@ -263,12 +268,10 @@ export function retainLiveMatchPlayerDetails(
 			awayPlayers === match.awayTeam.players
 				? match.awayTeam
 				: { ...match.awayTeam, players: awayPlayers }
-		const bonusPoints = preferAcceptedDetails
+		const bonusPoints = useAcceptedDetails
 			? previous.bonusPoints
 			: match.bonusPoints
-		const bps = preferAcceptedDetails
-			? previous.bps
-			: match.bps
+		const bps = useAcceptedDetails ? previous.bps : match.bps
 
 		if (
 			homeTeam === match.homeTeam &&
