@@ -289,6 +289,15 @@ describe('live matchday V2 publication', () => {
 		assert.equal(canReplaceLiveMatchesLkg(data), false)
 	})
 
+	it('accepts a V2 payload without the optional Core price revision', async () => {
+		const data = response()
+		const revisions = data.liveMatchday.snapshot!
+			.revisions as unknown as Record<string, unknown>
+		delete revisions.corePriceRevision
+
+		assert.doesNotThrow(() => validateLiveMatchdayV2(data))
+	})
+
 	it('allows only a complete publication to replace the same-event browser LKG', async () => {
 		const ready = await getLiveMatchesSnapshot(
 			async <T>(): Promise<T> => response() as T,

@@ -128,6 +128,10 @@ const isTimestamp = (value: unknown): value is string =>
 const isOptionalTimestamp = (value: unknown): boolean =>
 	value === null || isTimestamp(value)
 
+const normalizedCorePriceRevision = (
+	value: string | null | undefined
+): string | null => (typeof value === 'string' ? value : null)
+
 const isMatchDelivery = (value: unknown): value is LiveMatchdayDelivery => {
 	if (!value || typeof value !== 'object') return false
 	const delivery = value as LiveMatchdayDelivery
@@ -275,7 +279,8 @@ export function validateLiveMatchdayV2(
 		!snapshot.revisions.lifecycle ||
 		!snapshot.revisions.fixtureIdentity ||
 		!snapshot.revisions.scoreState ||
-		(snapshot.revisions.corePriceRevision !== null &&
+		(snapshot.revisions.corePriceRevision !== undefined &&
+			snapshot.revisions.corePriceRevision !== null &&
 			typeof snapshot.revisions.corePriceRevision !== 'string') ||
 		(!detailRevisionPresent && !detailRevisionAbsent) ||
 		!isTimestamp(snapshot.times.deskSourceCheckedAt) ||
@@ -455,14 +460,21 @@ export function canReplaceLiveMatchesLkg(
 	if (candidate.detailGeneration > current.detailGeneration) return true
 	if (candidate.detailPublicationId !== current.detailPublicationId)
 		return false
-	if (candidate.corePriceRevision !== current.corePriceRevision) {
+	const candidateCorePriceRevision = normalizedCorePriceRevision(
+		candidate.corePriceRevision
+	)
+	const currentCorePriceRevision = normalizedCorePriceRevision(
+		current.corePriceRevision
+	)
+	if (candidateCorePriceRevision !== currentCorePriceRevision) {
 		// A Core outage must not erase prices from an already accepted board;
 		// a newly available or changed Core revision may replace it.
 		if (
-			current.corePriceRevision !== null &&
-			typeof candidate.corePriceRevision !== 'string'
-		)
+			currentCorePriceRevision !== null &&
+			candidateCorePriceRevision === null
+		) {
 			return false
+		}
 		return true
 	}
 	return true

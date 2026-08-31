@@ -231,8 +231,12 @@ export function liveMatchdayNeedsRefresh(
 		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
 		accepted.revisions.scoreState !== observed.revisions.scoreState ||
 		accepted.revisions.playerDetail !== observed.revisions.playerDetail ||
-		accepted.revisions.corePriceRevision !==
-			observed.revisions.corePriceRevision
+		(typeof accepted.revisions.corePriceRevision === 'string'
+			? accepted.revisions.corePriceRevision
+			: null) !==
+			(typeof observed.revisions.corePriceRevision === 'string'
+				? observed.revisions.corePriceRevision
+				: null)
 	)
 }
 
