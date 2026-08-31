@@ -77,6 +77,7 @@ const mapLiveMatchdayPlayer = (player: LiveMatchdayPlayer): PlayerStat => ({
 		'defensive_contribution',
 		'defensiveContribution'
 	]),
+	price: player.price ?? undefined,
 	totalPoints: player.totalPoints
 })
 
@@ -274,6 +275,8 @@ export function validateLiveMatchdayV2(
 		!snapshot.revisions.lifecycle ||
 		!snapshot.revisions.fixtureIdentity ||
 		!snapshot.revisions.scoreState ||
+		(snapshot.revisions.corePriceRevision !== null &&
+			typeof snapshot.revisions.corePriceRevision !== 'string') ||
 		(!detailRevisionPresent && !detailRevisionAbsent) ||
 		!isTimestamp(snapshot.times.deskSourceCheckedAt) ||
 		!isTimestamp(snapshot.times.deskContentUpdatedAt) ||
@@ -353,6 +356,9 @@ export function validateLiveMatchdayV2(
 					positionElementType,
 					player.position
 				) ||
+				(player.price !== undefined &&
+					player.price !== null &&
+					(!Number.isSafeInteger(player.price) || player.price < 0)) ||
 				!Number.isSafeInteger(player.totalPoints) ||
 				!Array.isArray(player.stats)
 			) {
@@ -447,7 +453,19 @@ export function canReplaceLiveMatchesLkg(
 	if (candidate.detailGeneration === null) return false
 	if (candidate.detailGeneration < current.detailGeneration) return false
 	if (candidate.detailGeneration > current.detailGeneration) return true
-	return candidate.detailPublicationId === current.detailPublicationId
+	if (candidate.detailPublicationId !== current.detailPublicationId)
+		return false
+	if (candidate.corePriceRevision !== current.corePriceRevision) {
+		// A Core outage must not erase prices from an already accepted board;
+		// a newly available or changed Core revision may replace it.
+		if (
+			current.corePriceRevision !== null &&
+			typeof candidate.corePriceRevision !== 'string'
+		)
+			return false
+		return true
+	}
+	return true
 }
 
 const validEventId = (value: unknown): number | null =>

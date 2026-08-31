@@ -230,7 +230,9 @@ export function liveMatchdayNeedsRefresh(
 		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
 		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
 		accepted.revisions.scoreState !== observed.revisions.scoreState ||
-		accepted.revisions.playerDetail !== observed.revisions.playerDetail
+		accepted.revisions.playerDetail !== observed.revisions.playerDetail ||
+		accepted.revisions.corePriceRevision !==
+			observed.revisions.corePriceRevision
 	)
 }
 

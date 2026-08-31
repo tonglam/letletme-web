@@ -30,6 +30,7 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 			lifecycle: 'life-1',
 			fixtureIdentity: 'fixture-1',
 			scoreState: 'score-1',
+			corePriceRevision: 'core-1',
 			detailPublicationId: 'detail-1',
 			detailGeneration: 1,
 			playerDetail: 'players-1'
@@ -74,6 +75,7 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 						webName: 'Home Player',
 						position: 'MIDFIELDER',
 						teamId: 1,
+						price: 55,
 						totalPoints: 8,
 						stats: [
 							{
@@ -160,6 +162,7 @@ describe('live matchday V2 publication', () => {
 		assert.deepEqual(timeouts, [5_000])
 		assert.equal(data.matches.length, 1)
 		assert.equal(data.matches[0]?.homeTeam.players[0]?.player, 'Home Player')
+		assert.equal(data.matches[0]?.homeTeam.players[0]?.price, 55)
 		assert.equal(data.matches[0]?.homeTeam.players[0]?.minutes, 33)
 		assert.equal(data.matches[0]?.bonusPoints?.[0]?.points, 2)
 		assert.equal(data.snapshot?.delivery?.servedFrom, 'REDIS_CURRENT')
@@ -398,6 +401,13 @@ describe('live matchday V2 publication', () => {
 			liveMatchdayNeedsRefresh(accepted, {
 				...heartbeat,
 				revisions: { ...heartbeat.revisions, playerDetail: 'players-2' }
+			}),
+			true
+		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				revisions: { ...heartbeat.revisions, corePriceRevision: 'core-2' }
 			}),
 			true
 		)

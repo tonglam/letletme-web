@@ -267,7 +267,9 @@ export function LiveMatchesClient({
 					return
 				}
 				if (!liveMatchdayNeedsRefresh(snapshotRef.current, observedSnapshot)) {
-					acceptSnapshot(observedSnapshot)
+					if (canReplaceLiveMatchesLkg(observedData, snapshotRef.current)) {
+						acceptSnapshot(observedSnapshot)
+					}
 					setError(null)
 					return
 				}
