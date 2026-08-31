@@ -20,7 +20,9 @@ import {
 	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
+	retainLiveMatchdayDetailRevision,
 	retainLiveMatchPlayerDetails,
+	shouldRetainAcceptedLiveMatchDetails,
 	type LiveMatchdayStatus
 } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
@@ -153,23 +155,37 @@ export function LiveMatchesClient({
 						}
 					))
 				if (!mountedRef.current) return
-				const replaceablePublication = canReplaceLiveMatchesLkg(
-					data,
-					snapshotRef.current
-				)
-				if (!replaceablePublication && hasLastGoodData.current) {
-					if (data.snapshot !== null) setError(t('refreshFailed'))
-					return
-				}
 				const acceptedSnapshot = snapshotRef.current
 				const canRetainAcceptedDetails =
 					data.snapshot !== null &&
 					acceptedSnapshot !== null &&
 					data.snapshot.season === acceptedSnapshot.season &&
 					data.snapshot.eventId === acceptedSnapshot.eventId
+				const retainAcceptedDetailRevision =
+					canRetainAcceptedDetails &&
+					data.snapshot !== null &&
+					acceptedSnapshot !== null &&
+					shouldRetainAcceptedLiveMatchDetails(data.snapshot, acceptedSnapshot)
 				const matchesWithRetainedDetails = canRetainAcceptedDetails
-					? retainLiveMatchPlayerDetails(data.matches, matchesRef.current)
+					? retainLiveMatchPlayerDetails(data.matches, matchesRef.current, {
+							preferAcceptedDetails: retainAcceptedDetailRevision
+						})
 					: data.matches
+				const snapshotWithRetainedDetails =
+					retainAcceptedDetailRevision && data.snapshot && acceptedSnapshot
+						? retainLiveMatchdayDetailRevision(data.snapshot, acceptedSnapshot)
+						: data.snapshot
+				const replaceablePublication = canReplaceLiveMatchesLkg(
+					{
+						...data,
+						snapshot: snapshotWithRetainedDetails
+					},
+					acceptedSnapshot
+				)
+				if (!replaceablePublication && hasLastGoodData.current) {
+					if (data.snapshot !== null) setError(t('refreshFailed'))
+					return
+				}
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
 					(eventIds?.useActiveEvent ? undefined : eventIds?.currentEventId) ??
@@ -177,7 +193,7 @@ export function LiveMatchesClient({
 				acceptMatches(matchesWithRetainedDetails)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
 				setSelectedEventId(lifecycleCurrentEventId)
-				acceptSnapshot(data.snapshot)
+				acceptSnapshot(snapshotWithRetainedDetails)
 				hasLastGoodData.current = replaceablePublication
 
 				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {

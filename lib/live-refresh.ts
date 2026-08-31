@@ -21,6 +21,22 @@ export function isLiveRefreshTerminalState(state?: string | null): boolean {
 }
 
 /**
+ * Official post-deadline sync is scoped to the active event. A historical
+ * event must report ordinary request failures even while the current event is
+ * waiting for its official input publication.
+ */
+export function shouldSuppressOfficialLiveErrors(
+	eventId: number,
+	currentEventId: number,
+	isOfficialUpdating: boolean,
+	isOfficialSyncPending: boolean
+): boolean {
+	return (
+		eventId === currentEventId && (isOfficialUpdating || isOfficialSyncPending)
+	)
+}
+
+/**
  * A finished matchday still needs a cheap lifecycle probe so an open matches
  * page can discover the next gameweek. This does not authorize another live
  * score refresh; the caller only reloads the desk when the event identity
@@ -225,12 +241,22 @@ export function liveMatchdayNeedsRefresh(
 	observed: LiveMatchdayStatus | null | undefined
 ): boolean {
 	if (!accepted || !observed) return true
+	const acceptedDetailGeneration = accepted.revisions.detailGeneration
+	const observedDetailGeneration = observed.revisions.detailGeneration
+	const observedDetailIsNotNewer =
+		acceptedDetailGeneration !== null &&
+		(observedDetailGeneration === null ||
+			observedDetailGeneration < acceptedDetailGeneration ||
+			(observedDetailGeneration === acceptedDetailGeneration &&
+				observed.revisions.detailPublicationId !==
+					accepted.revisions.detailPublicationId))
 	return (
 		accepted.eventId !== observed.eventId ||
 		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
 		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
 		accepted.revisions.scoreState !== observed.revisions.scoreState ||
-		accepted.revisions.playerDetail !== observed.revisions.playerDetail
+		(!observedDetailIsNotNewer &&
+			accepted.revisions.playerDetail !== observed.revisions.playerDetail)
 	)
 }
 

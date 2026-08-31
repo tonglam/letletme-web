@@ -9,6 +9,7 @@ import {
 	liveContextToSnapshot,
 	livePointsRequestChangesEvent,
 	liveSnapshotNeedsRefresh,
+	shouldSuppressOfficialLiveErrors,
 	shouldPollLiveSnapshot
 } from '../lib/live-refresh'
 import {
@@ -185,6 +186,13 @@ describe('Live Points V2 web contract', () => {
 		assert.equal(livePointsRequestChangesEvent(1, 2), true)
 		assert.equal(livePointsRequestChangesEvent(1, 1), false)
 		assert.equal(livePointsRequestChangesEvent(undefined, 2), false)
+	})
+
+	it('scopes official sync error suppression to the active event', () => {
+		assert.equal(shouldSuppressOfficialLiveErrors(1, 1, true, false), true)
+		assert.equal(shouldSuppressOfficialLiveErrors(2, 1, true, false), false)
+		assert.equal(shouldSuppressOfficialLiveErrors(2, 1, false, true), false)
+		assert.equal(shouldSuppressOfficialLiveErrors(1, 1, false, true), true)
 	})
 
 	it('does not turn a due refresh deadline into a full Live Points reload', () => {

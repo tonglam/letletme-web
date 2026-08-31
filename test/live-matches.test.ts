@@ -9,7 +9,9 @@ import {
 	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	parseLiveMatchesRequestParams,
+	retainLiveMatchdayDetailRevision,
 	retainLiveMatchPlayerDetails,
+	shouldRetainAcceptedLiveMatchDetails,
 	type QueryExecutor,
 	type QueryExecutorOptions,
 	transformLiveMatchdayV2,
@@ -475,8 +477,7 @@ describe('live matchday V2 publication', () => {
 			]
 		})
 		const candidate = await getLiveMatchesSnapshot(
-			async <T>(): Promise<T> =>
-				response({ snapshot: candidateSnapshot }) as T,
+			async <T>(): Promise<T> => response({ snapshot: candidateSnapshot }) as T,
 			33
 		)
 
@@ -489,6 +490,102 @@ describe('live matchday V2 publication', () => {
 		assert.equal(retained[0]?.awayTeam.players[0]?.player, 'Away Player')
 		assert.equal(retained[0]?.bonusPoints?.[0]?.player, 'Home Player')
 		assert.equal(retained[0]?.bps?.[0]?.player, 'Away Player')
+	})
+
+	it('fences retained details so an older publication cannot overwrite them', async () => {
+		const accepted = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							detailGeneration: 10,
+							detailPublicationId: 'detail-10',
+							playerDetail: 'players-10'
+						}
+					})
+				}) as T,
+			33
+		)
+		const deskOnly = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							deskGeneration: 2,
+							deskPublicationId: 'desk-2',
+							detailGeneration: null,
+							detailPublicationId: null,
+							playerDetail: null
+						},
+						times: {
+							...snapshot().times,
+							detailSourceCheckedAt: null,
+							detailContentUpdatedAt: null,
+							detailPublishedAt: null,
+							detailStaleAt: null
+						},
+						detailDelivery: {
+							state: 'PENDING',
+							servedFrom: null,
+							reasonCodes: ['DETAIL_PENDING']
+						},
+						matches: [
+							{
+								...snapshot().matches[0]!,
+								homeScore: 2,
+								players: [
+									{
+										...snapshot().matches[0]!.players[0]!,
+										webName: 'Older detail candidate'
+									}
+								]
+							}
+						]
+					})
+				}) as T,
+			33
+		)
+
+		assert.equal(canReplaceLiveMatchesLkg(deskOnly, accepted.snapshot), true)
+		assert.equal(
+			shouldRetainAcceptedLiveMatchDetails(
+				deskOnly.snapshot!,
+				accepted.snapshot!
+			),
+			true
+		)
+		const retained = retainLiveMatchPlayerDetails(
+			deskOnly.matches,
+			accepted.matches,
+			{ preferAcceptedDetails: true }
+		)
+		const retainedSnapshot = retainLiveMatchdayDetailRevision(
+			deskOnly.snapshot!,
+			accepted.snapshot!
+		)
+		assert.equal(retained[0]?.homeTeam.players[0]?.player, 'Home Player')
+		assert.equal(retainedSnapshot.revisions.detailGeneration, 10)
+		assert.equal(retainedSnapshot.detailDelivery.state, 'STALE')
+
+		const olderDetail = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							deskGeneration: 2,
+							deskPublicationId: 'desk-2',
+							detailGeneration: 8,
+							detailPublicationId: 'detail-8',
+							playerDetail: 'players-8'
+						}
+					})
+				}) as T,
+			33
+		)
+		assert.equal(canReplaceLiveMatchesLkg(olderDetail, retainedSnapshot), false)
 	})
 
 	it('adopts heartbeat metadata without rebuilding fixtures and reloads only Match revisions', async () => {
@@ -516,6 +613,49 @@ describe('live matchday V2 publication', () => {
 			liveMatchdayNeedsRefresh(accepted, {
 				...heartbeat,
 				revisions: { ...heartbeat.revisions, playerDetail: 'players-2' }
+			}),
+			true
+		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				revisions: {
+					...heartbeat.revisions,
+					detailPublicationId: null,
+					detailGeneration: null,
+					playerDetail: null
+				},
+				times: {
+					...heartbeat.times,
+					detailSourceCheckedAt: null,
+					detailContentUpdatedAt: null,
+					detailPublishedAt: null,
+					detailStaleAt: null
+				}
+			}),
+			false
+		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				revisions: {
+					...heartbeat.revisions,
+					detailPublicationId: 'detail-0',
+					detailGeneration: 0,
+					playerDetail: 'players-0'
+				}
+			}),
+			false
+		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				revisions: {
+					...heartbeat.revisions,
+					detailPublicationId: 'detail-2',
+					detailGeneration: 2,
+					playerDetail: 'players-2'
+				}
 			}),
 			true
 		)

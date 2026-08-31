@@ -125,6 +125,70 @@ function PulseFreshnessNotice({ t }: { t: MarketT }) {
 	)
 }
 
+function PulseCoverageMeta({
+	coverage,
+	locale,
+	t
+}: {
+	coverage: MarketPulse['coverage']
+	locale: string
+	t: MarketT
+}) {
+	const incomplete =
+		!coverage.complete ||
+		coverage.missingDates.length > 0 ||
+		coverage.observedDays <= 1
+	if (!incomplete) return null
+
+	const range =
+		coverage.observedDays === 0
+			? t('coverageEmpty')
+			: coverage.observedDays === 1 && coverage.firstDate
+				? t('coverageOneDay', {
+						date: formatCalendarDate(coverage.firstDate, locale)
+					})
+				: coverage.firstDate && coverage.latestDate
+					? t('coverageTracking', {
+							from: formatCalendarDate(coverage.firstDate, locale),
+							to: formatCalendarDate(coverage.latestDate, locale)
+						})
+					: t('coverageEmpty')
+	const missing =
+		coverage.missingDates.length > 0
+			? t('ownershipMissingDates', {
+					dates: coverage.missingDates
+						.map(date => formatCalendarDate(date, locale))
+						.join(', ')
+				})
+			: null
+
+	return (
+		<div
+			className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2"
+			role="status"
+		>
+			<p className="text-xs text-foreground">{range}</p>
+			<p className="text-xs text-muted-foreground">
+				{t('ownershipObservedDays', {
+					observed: coverage.observedDays,
+					requested: coverage.requestedDays
+				})}
+			</p>
+			{missing ? <p className="text-xs text-foreground">{missing}</p> : null}
+			{coverage.observedDays === 1 ? (
+				<p className="text-xs text-muted-foreground">
+					{t('movementNeedsAnotherDay')}
+				</p>
+			) : null}
+			{coverage.observedDays === 0 ? (
+				<p className="text-xs text-muted-foreground">
+					{t('nextCapture', { time: '09:25–09:35 UTC+8' })}
+				</p>
+			) : null}
+		</div>
+	)
+}
+
 function PlayerStatsAnchor({
 	playerId,
 	locale,
@@ -856,6 +920,13 @@ export async function MarketDashboard({
 		<MarketPlayerSelectionProvider>
 			<div className="space-y-8">
 				{glance}
+				{pulse ? (
+					<PulseCoverageMeta
+						coverage={pulse.coverage}
+						locale={locale}
+						t={t}
+					/>
+				) : null}
 				{pulse?.coverage.stale ? <PulseFreshnessNotice t={t} /> : null}
 				{order.map(id => (
 					<section key={id}>{sectionById[id]}</section>

@@ -237,24 +237,28 @@ export function transformLiveMatchdayV2(
  */
 export function retainLiveMatchPlayerDetails(
 	candidate: readonly Match[],
-	accepted: readonly Match[]
+	accepted: readonly Match[],
+	options: { preferAcceptedDetails?: boolean } = {}
 ): Match[] {
-	const acceptedByFixtureId = new Map(
-		accepted.map(match => [match.id, match])
-	)
+	const preferAcceptedDetails = options.preferAcceptedDetails === true
+	const acceptedByFixtureId = new Map(accepted.map(match => [match.id, match]))
 
 	return candidate.map(match => {
 		const previous = acceptedByFixtureId.get(match.id)
 		if (!previous) return match
 
 		const homePlayers =
-			match.homeTeam.players.length > 0
-				? match.homeTeam.players
-				: previous.homeTeam.players
+			preferAcceptedDetails && previous.homeTeam.players.length > 0
+				? previous.homeTeam.players
+				: match.homeTeam.players.length > 0
+					? match.homeTeam.players
+					: previous.homeTeam.players
 		const awayPlayers =
-			match.awayTeam.players.length > 0
-				? match.awayTeam.players
-				: previous.awayTeam.players
+			preferAcceptedDetails && previous.awayTeam.players.length > 0
+				? previous.awayTeam.players
+				: match.awayTeam.players.length > 0
+					? match.awayTeam.players
+					: previous.awayTeam.players
 		const homeTeam =
 			homePlayers === match.homeTeam.players
 				? match.homeTeam
@@ -264,12 +268,14 @@ export function retainLiveMatchPlayerDetails(
 				? match.awayTeam
 				: { ...match.awayTeam, players: awayPlayers }
 		const bonusPoints =
-			(match.bonusPoints == null || match.bonusPoints.length === 0) &&
+			(preferAcceptedDetails ||
+				match.bonusPoints == null ||
+				match.bonusPoints.length === 0) &&
 			(previous.bonusPoints?.length ?? 0) > 0
 				? previous.bonusPoints
 				: match.bonusPoints
 		const bps =
-			(match.bps == null || match.bps.length === 0) &&
+			(preferAcceptedDetails || match.bps == null || match.bps.length === 0) &&
 			(previous.bps?.length ?? 0) > 0
 				? previous.bps
 				: match.bps
@@ -291,6 +297,72 @@ export function retainLiveMatchPlayerDetails(
 			...(bps !== match.bps ? { bps } : {})
 		}
 	})
+}
+
+/**
+ * A newer score desk may be published without a usable detail publication.
+ * Keep the accepted detail revision as the ordering fence so an older detail
+ * fallback cannot replace the rows that are still being displayed.
+ */
+export function shouldRetainAcceptedLiveMatchDetails(
+	candidate: Pick<LiveMatchdayStatus, 'revisions'>,
+	accepted: Pick<LiveMatchdayStatus, 'revisions'>
+): boolean {
+	const acceptedRevision = accepted.revisions
+	const candidateRevision = candidate.revisions
+	if (
+		acceptedRevision.detailPublicationId === null ||
+		acceptedRevision.detailGeneration === null ||
+		acceptedRevision.playerDetail === null
+	) {
+		return false
+	}
+	if (candidateRevision.detailGeneration === null) return true
+	if (candidateRevision.detailGeneration < acceptedRevision.detailGeneration) {
+		return true
+	}
+	return (
+		candidateRevision.detailGeneration === acceptedRevision.detailGeneration &&
+		candidateRevision.detailPublicationId !==
+			acceptedRevision.detailPublicationId
+	)
+}
+
+/** Carry the exact detail provenance for rows retained from the accepted LKG. */
+export function retainLiveMatchdayDetailRevision(
+	candidate: LiveMatchdayStatus,
+	accepted: LiveMatchdayStatus
+): LiveMatchdayStatus {
+	if (!shouldRetainAcceptedLiveMatchDetails(candidate, accepted)) {
+		return candidate
+	}
+
+	return {
+		...candidate,
+		revisions: {
+			...candidate.revisions,
+			detailPublicationId: accepted.revisions.detailPublicationId,
+			detailGeneration: accepted.revisions.detailGeneration,
+			playerDetail: accepted.revisions.playerDetail
+		},
+		times: {
+			...candidate.times,
+			detailSourceCheckedAt: accepted.times.detailSourceCheckedAt,
+			detailContentUpdatedAt: accepted.times.detailContentUpdatedAt,
+			detailPublishedAt: accepted.times.detailPublishedAt,
+			detailStaleAt: accepted.times.detailStaleAt
+		},
+		detailDelivery: {
+			...accepted.detailDelivery,
+			state: 'STALE',
+			reasonCodes: Array.from(
+				new Set([
+					...accepted.detailDelivery.reasonCodes,
+					'DETAIL_REVISION_RETAINED'
+				])
+			)
+		}
+	}
 }
 
 export function validateLiveMatchdayV2(
@@ -521,10 +593,7 @@ export function canReplaceLiveMatchesLkg(
 			accepted.season
 		)
 		if (seasonOrder < 0) return false
-		if (
-			seasonOrder === 0 &&
-			value.snapshot.eventId < accepted.eventId
-		) {
+		if (seasonOrder === 0 && value.snapshot.eventId < accepted.eventId) {
 			return false
 		}
 		return true
