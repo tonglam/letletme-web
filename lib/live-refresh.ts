@@ -2,6 +2,7 @@ import type {
 	LiveContextResponse,
 	LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
+import type { LiveMatchdayStatus } from '@/lib/live-matches'
 
 // Context is a cheap ETag probe. Keep it more frequent than the Data live
 // publication poll so a newly published revision is noticed promptly without
@@ -28,17 +29,41 @@ export function isLiveRefreshTerminalState(state?: string | null): boolean {
 export function shouldPollLiveMatchesTransition({
 	isPageActive,
 	currentEventId,
-	nextEventId,
 	snapshot
 }: {
 	isPageActive: boolean
 	currentEventId?: number
-	nextEventId?: number
-	snapshot?: LiveSnapshotStatus | null
+	snapshot?: LiveMatchdayStatus | null
 }): boolean {
-	if (!isPageActive || !currentEventId || !nextEventId) return false
+	if (!isPageActive || !currentEventId) return false
 	if (!snapshot || snapshot.eventId !== currentEventId) return false
-	return isLiveRefreshTerminalState(snapshot.windowState ?? snapshot.state)
+	return isLiveRefreshTerminalState(snapshot.state)
+}
+
+/** Match V2 uses its own lifecycle and server cadence, never LP freshness. */
+export function shouldPollLiveMatchday({
+	isPageActive,
+	currentEventId,
+	selectedEventId,
+	snapshot
+}: {
+	isPageActive: boolean
+	currentEventId?: number
+	selectedEventId?: number
+	snapshot?: LiveMatchdayStatus | null
+}): boolean {
+	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
+		return false
+	}
+	// A known event with no desk is a recoverable cold/unavailable state. Keep
+	// bounded retries enabled so the page can recover without a manual reload.
+	if (!snapshot) return true
+	if (snapshot.eventId !== selectedEventId) return false
+	if (isLiveRefreshTerminalState(snapshot.state)) return false
+	// The countdown consumes the server-provided nextRefreshAt when present;
+	// the boolean only decides whether non-terminal Match observations remain
+	// eligible for polling.
+	return true
 }
 
 export function liveContextToSnapshot(
@@ -130,62 +155,23 @@ export function liveSnapshotNeedsRefresh(
 	)
 }
 
-const safeRevisionGeneration = (
-	value: LiveSnapshotStatus | null | undefined
-): number | null => {
-	const generation = value?.revisions?.generation
-	return typeof generation === 'number' &&
-		Number.isSafeInteger(generation) &&
-		generation >= 0
-		? generation
-		: null
-}
-
-const timestampMilliseconds = (
-	value: string | null | undefined
-): number | null => {
-	if (!value) return null
-	const parsed = Date.parse(value)
-	return Number.isFinite(parsed) ? parsed : null
-}
-
 /**
- * Keep a browser LKG when a same-event refresh returns an older publication.
- * Redis previous/process LKG are valid delivery sources, but their ordering
- * must not be allowed to move an already accepted board backwards.
+ * Matchday payloads are owned by the score/fixture publication. Changes to
+ * picks, rank, or unrelated live-point projections must not refetch the full
+ * fixture-and-player payload.
  */
-export function canReplaceLiveMatchesSnapshot(
-	accepted: LiveSnapshotStatus | null | undefined,
-	candidate: LiveSnapshotStatus | null | undefined
+export function liveMatchdayNeedsRefresh(
+	accepted: LiveMatchdayStatus | null | undefined,
+	observed: LiveMatchdayStatus | null | undefined
 ): boolean {
-	if (!accepted) return true
-	if (!candidate) return false
-	// Event transitions are handled by the lifecycle identity checks; this
-	// helper only orders publications within one event.
-	if (accepted.eventId !== candidate.eventId) return true
-
-	const acceptedGeneration = safeRevisionGeneration(accepted)
-	const candidateGeneration = safeRevisionGeneration(candidate)
-	if (acceptedGeneration !== null) {
-		// Current V2 always supplies the revision vector. If an accepted
-		// publication has an ordering marker, an unmarked candidate is not safe
-		// to replace it with.
-		if (candidateGeneration === null) return false
-		if (candidateGeneration < acceptedGeneration) return false
-		if (candidateGeneration > acceptedGeneration) return true
-	}
-
-	const acceptedPublishedAt = timestampMilliseconds(accepted.publishedAt)
-	const candidatePublishedAt = timestampMilliseconds(candidate.publishedAt)
-	if (
-		acceptedPublishedAt !== null &&
-		candidatePublishedAt !== null &&
-		candidatePublishedAt < acceptedPublishedAt
-	) {
-		return false
-	}
-
-	return true
+	if (!accepted || !observed) return true
+	return (
+		accepted.eventId !== observed.eventId ||
+		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
+		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
+		accepted.revisions.scoreState !== observed.revisions.scoreState ||
+		accepted.revisions.playerDetail !== observed.revisions.playerDetail
+	)
 }
 
 export function liveRefreshEventIdentityChanged(

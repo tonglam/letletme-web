@@ -5,11 +5,17 @@ import { describe, it } from 'node:test'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 import {
 	LIVE_AUTO_REFRESH_SECONDS,
-	canReplaceLiveMatchesSnapshot,
 	liveContextToSnapshot,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '../lib/live-refresh'
+import {
+	LIVE_MATCHES_CONTRACT_VERSION,
+	LIVE_POINTS_CONTRACT_VERSION,
+	liveContractVersionForQuery,
+	requiresLiveMatchesV2Contract,
+	requiresLivePointsV2Contract
+} from '../lib/graphql-client'
 import {
 	liveScoreAuthorityLabel,
 	traceableLiveScore
@@ -59,6 +65,22 @@ const score = (overrides: Record<string, unknown> = {}) => ({
 })
 
 describe('Live Points V2 web contract', () => {
+	it('keeps live matches on their separate breaking contract', () => {
+		const matchdayQuery = 'query LiveMatchday { liveMatchday { availability } }'
+		assert.equal(requiresLiveMatchesV2Contract(matchdayQuery), true)
+		assert.equal(requiresLivePointsV2Contract(matchdayQuery), false)
+		assert.equal(LIVE_MATCHES_CONTRACT_VERSION, 'live-matches-v2')
+		assert.equal(LIVE_POINTS_CONTRACT_VERSION, 'live-points-v2')
+		assert.equal(liveContractVersionForQuery(matchdayQuery), 'live-matches-v2')
+		assert.throws(
+			() =>
+				liveContractVersionForQuery(
+					'query Mixed { liveMatchday { availability } liveContext { season } }'
+				),
+			/LIVE_CONTRACT_MIXED_OPERATION/
+		)
+	})
+
 	it('requests only V2 fields and keeps duplicate score aliases out of the document', () => {
 		assert.match(GET_LIVE_POINTS, /score\s*\{/)
 		assert.match(GET_LIVE_POINTS, /revisions\s*\{/)
@@ -116,49 +138,6 @@ describe('Live Points V2 web contract', () => {
 		)
 	})
 
-	it('never replaces an accepted event with an older V2 publication', () => {
-		const snapshot = (generation: number, publishedAt: string | null) => ({
-			season: '2627',
-			eventId: 1,
-			state: 'LIVE_ACTIVE' as const,
-			scoreCoreRevision: revision('a'),
-			publishedAt,
-			revisions: { ...score().revisions, generation }
-		})
-		const accepted = snapshot(4, '2026-08-29T10:04:00.000Z')
-
-		assert.equal(canReplaceLiveMatchesSnapshot(null, accepted), true)
-		assert.equal(
-			canReplaceLiveMatchesSnapshot(
-				accepted,
-				snapshot(3, '2026-08-29T10:03:00.000Z')
-			),
-			false
-		)
-		assert.equal(
-			canReplaceLiveMatchesSnapshot(
-				accepted,
-				snapshot(5, '2026-08-29T10:03:00.000Z')
-			),
-			true
-		)
-		assert.equal(
-			canReplaceLiveMatchesSnapshot(
-				accepted,
-				snapshot(4, '2026-08-29T10:02:00.000Z')
-			),
-			false
-		)
-		assert.equal(canReplaceLiveMatchesSnapshot(accepted, null), false)
-		assert.equal(
-			canReplaceLiveMatchesSnapshot(accepted, {
-				...snapshot(3, '2026-08-29T10:03:00.000Z'),
-				eventId: 2
-			}),
-			true
-		)
-	})
-
 	it('does not turn a due refresh deadline into a full Live Points reload', () => {
 		const hook = readFileSync(
 			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
@@ -209,48 +188,6 @@ describe('Live Points V2 web contract', () => {
 			}),
 			false
 		)
-	})
-
-	it('polls through the expected official sync when the first snapshot is absent', () => {
-		assert.equal(
-			shouldPollLiveSnapshot({
-				isPageActive: true,
-				currentEventId: 2,
-				selectedEventId: 2,
-				snapshot: null,
-				isOfficialUpdating: true
-			}),
-			true
-		)
-		assert.equal(
-			shouldPollLiveSnapshot({
-				isPageActive: true,
-				currentEventId: 2,
-				selectedEventId: 2,
-				snapshot: null
-			}),
-			false
-		)
-	})
-
-	it('keeps both live consumers polling until the first snapshot fetch succeeds', () => {
-		const matches = readFileSync(
-			new URL('../app/live/matches/LiveMatchesClient.tsx', import.meta.url),
-			'utf8'
-		)
-		const points = readFileSync(
-			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
-			'utf8'
-		)
-		for (const source of [matches, points]) {
-			assert.match(source, /officialSyncPendingRef/)
-			assert.match(source, /officialSyncPendingRef\.current = false/)
-			assert.match(source, /isOfficialSyncPending/)
-			assert.match(
-				source,
-				/isOfficialUpdating:\s*isOfficialUpdating \|\| isOfficialSyncPending/
-			)
-		}
 	})
 
 	it('maps delivery timestamps without using source checks as content revisions', () => {

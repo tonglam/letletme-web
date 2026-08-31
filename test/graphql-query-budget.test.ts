@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
 import {
 	GET_EVENT_LIVE_EXPLAINS,
-	GET_LIVE_MATCHDAY_DESK,
+	GET_LIVE_MATCHDAY,
 	GET_LIVE_POINTS
 } from '../lib/graphql/operations/live'
 import {
@@ -57,15 +57,12 @@ describe('GraphQL request budget', () => {
 		)
 	})
 
-	it('keeps GET_LIVE_MATCHDAY_DESK below the production 200-node guard', () => {
-		const document = parse(GET_LIVE_MATCHDAY_DESK)
+	it('keeps GET_LIVE_MATCHDAY below the production 200-node guard', () => {
+		const document = parse(GET_LIVE_MATCHDAY)
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
 
-		assert.ok(
-			astNodes < 200,
-			`GET_LIVE_MATCHDAY_DESK has ${astNodes} AST nodes`
-		)
+		assert.ok(astNodes < 200, `GET_LIVE_MATCHDAY has ${astNodes} AST nodes`)
 	})
 
 	it('keeps GET_LIVE_POINTS below the production 200-node guard', () => {

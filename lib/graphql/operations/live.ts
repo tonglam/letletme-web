@@ -401,242 +401,248 @@ export interface LiveSnapshotResponse {
 	liveSnapshot: LiveSnapshotStatus | null
 }
 
-export const GET_LIVE_MATCHDAY_DESK = `
-  query GetLiveMatchdayDesk($ref: LivePublicationRefInput) {
-		liveMatchdayDesk(ref: $ref) {
-			season
-			eventId
-			scoreCoreRevision
-			state
-			windowState
-			dataAvailability
-			sourceCheckedAt
-			publishedAt
-			source
-			stale
-			nextRefreshAt
-			revisions {
-				publicationId
-				generation
-				lifecycle
-				fixtureIdentity
-				scoreCore
-				displayStats
-				explain
-				picksBase
-				officialAdjustment
-				previousTotals
-				finalResult
-				rules
-				algorithm
-				input
-			}
-			times {
-				sourceCheckedAt
-				contentUpdatedAt
-				publishedAt
-				checkpointedAt
-				servedAt
-				staleAt
-				nextRefreshAt
-			}
+export const GET_LIVE_MATCHDAY = `
+	query GetLiveMatchday($eventId: Int) {
+		liveMatchday(eventId: $eventId) {
+			availability
 			delivery { state servedFrom reasonCodes }
-		matches {
-        fixtureId
-        eventId
-        homeTeamId
-        homeTeamName
-        awayTeamId
-        awayTeamName
-        homeScore
-        awayScore
-        kickoffTime
-		minutes
-		started
-			finished
-			finishedProvisional
+			snapshot {
+				season
+				eventId
+				state
+				revisions {
+					deskPublicationId
+					deskGeneration
+					lifecycle
+					fixtureIdentity
+					scoreState
+					detailPublicationId
+					detailGeneration
+					playerDetail
+				}
+				times {
+					deskSourceCheckedAt
+					deskContentUpdatedAt
+					deskPublishedAt
+					deskStaleAt
+					detailSourceCheckedAt
+					detailContentUpdatedAt
+					detailPublishedAt
+					detailStaleAt
+					servedAt
+					nextRefreshAt
+				}
+				detailDelivery { state servedFrom reasonCodes }
+				matches {
+					fixtureId
+					eventId
+					homeTeamId
+					homeTeamName
+					homeTeamShortName
+					awayTeamId
+					awayTeamName
+					awayTeamShortName
+					homeScore
+					awayScore
+					kickoffTime
+					minutes
+					started
+					finished
+					finishedProvisional
+					players {
+						id
+						webName
+						position
+						teamId
+						totalPoints
+						stats { identifier value points pointsModification }
+					}
+				}
+			}
 		}
-    }
-  }
+	}
 `
 
-// Types for player data in matches
-export interface MatchPlayerData {
-	element?: number
-	code?: number
+export type LiveMatchdayAvailability = 'READY' | 'UNAVAILABLE'
+
+export type LiveMatchdayDeliveryState =
+	'FRESH' | 'STALE' | 'DEGRADED' | 'FINAL' | 'PENDING' | 'UNAVAILABLE'
+
+export type LiveMatchdayServedFrom =
+	'REDIS_CURRENT' | 'REDIS_PREVIOUS' | 'PROCESS_LKG' | 'POSTGRES_CHECKPOINT'
+
+export interface LiveMatchdayDelivery {
+	state: LiveMatchdayDeliveryState
+	servedFrom: LiveMatchdayServedFrom | null
+	reasonCodes: string[]
+}
+
+export interface LiveMatchdayRevisionVector {
+	deskPublicationId: string
+	deskGeneration: number
+	lifecycle: string
+	fixtureIdentity: string
+	scoreState: string
+	detailPublicationId: string | null
+	detailGeneration: number | null
+	playerDetail: string | null
+}
+
+export interface LiveMatchdayTimes {
+	deskSourceCheckedAt: string
+	deskContentUpdatedAt: string
+	deskPublishedAt: string
+	deskStaleAt: string | null
+	detailSourceCheckedAt: string | null
+	detailContentUpdatedAt: string | null
+	detailPublishedAt: string | null
+	detailStaleAt: string | null
+	servedAt: string
+	nextRefreshAt: string | null
+}
+
+export interface LiveMatchdayPlayerStat {
+	identifier: string
+	value: number
+	points: number
+	pointsModification: number | null
+}
+
+export interface LiveMatchdayPlayer {
+	id: number
 	webName: string
-	price?: number
-	elementType?: number
-	elementTypeName?: string
-	teamId?: number
-	teamCode?: number
-	teamName?: string
-	teamShortName?: string
-	minutes: number
-	goalsScored?: number
-	assists?: number
-	cleanSheets?: number
-	goalsConceded?: number
-	ownGoals?: number
-	penaltiesSaved?: number
-	penaltiesMissed?: number
-	yellowCards?: number
-	redCards?: number
-	saves?: number
-	defensiveContribution?: number
-	bonus?: number
-	bps?: number
+	position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
+	teamId: number
 	totalPoints: number
-	starts?: boolean
-	expectedGoals?: number | null
-	expectedAssists?: number | null
-	expectedGoalInvolvements?: number | null
-	expectedGoalsConceded?: number | null
-	inDreamTeam?: boolean
+	stats: LiveMatchdayPlayerStat[]
 }
 
-export interface ManagerData {
-	webName: string
-	totalPoints: number
-	minutes?: number
-}
-
-// Types for live matches query
-export interface NotStartedMatch {
-	matchId: number
-	minutes: number
-	homeTeamId: number
-	homeTeamName: string
-	homeTeamShortName?: string
-	homePosition: number
-	homeScore: number
-	awayTeamId: number
-	awayTeamName: string
-	awayTeamShortName?: string
-	awayPosition: number
-	awayScore: number
-	kickoffTime: string
-	playStatus: string
-}
-
-export interface PlayingMatch {
-	matchId: number
-	minutes: number
-	homeTeamId: number
-	homeTeamName: string
-	homeTeamShortName: string
-	homePosition: number
-	homeScore: number
-	homeTeamDataList: MatchPlayerData[]
-	awayTeamId: number
-	awayTeamName: string
-	awayTeamShortName: string
-	awayPosition: number
-	awayScore: number
-	awayTeamDataList: MatchPlayerData[]
-	kickoffTime: string
-	playStatus: string
-}
-
-export interface FinishedMatch {
-	matchId: number
-	minutes: number
-	homeTeamId: number
-	homeTeamName: string
-	homeTeamShortName: string
-	homePosition: number
-	homeScore: number
-	homeTeamDataList: Array<{
-		element: number
-		webName: string
-		elementType?: number
-		minutes: number
-		goalsScored: number
-		assists: number
-		cleanSheets: number
-		goalsConceded?: number
-		ownGoals?: number
-		yellowCards?: number
-		redCards?: number
-		saves: number
-		defensiveContribution?: number
-		bonus: number
-		bps: number
-		totalPoints: number
-		inDreamTeam: boolean
-	}>
-	awayTeamId: number
-	awayTeamName: string
-	awayTeamShortName: string
-	awayPosition: number
-	awayScore: number
-	awayTeamDataList: Array<{
-		element: number
-		webName: string
-		elementType?: number
-		minutes: number
-		goalsScored: number
-		assists: number
-		cleanSheets: number
-		goalsConceded?: number
-		ownGoals?: number
-		yellowCards?: number
-		redCards?: number
-		saves: number
-		defensiveContribution?: number
-		bonus: number
-		bps: number
-		totalPoints: number
-		inDreamTeam: boolean
-	}>
-	kickoffTime: string
-	playStatus: string
-}
-
-export interface LiveMatchesData {
-	notStarted: NotStartedMatch[]
-	playing: PlayingMatch[]
-	finished: FinishedMatch[]
-}
-
-export interface LiveMatchdayDeskRow {
+export interface LiveMatchdayFixture {
 	fixtureId: number
 	eventId: number
 	homeTeamId: number
 	homeTeamName: string
-	homeTeamShortName?: string
+	homeTeamShortName: string
 	awayTeamId: number
 	awayTeamName: string
-	awayTeamShortName?: string
+	awayTeamShortName: string
 	homeScore: number | null
 	awayScore: number | null
 	kickoffTime: string | null
 	minutes: number
 	started: boolean
 	finished: boolean
-	finishedProvisional?: boolean
+	finishedProvisional: boolean
+	players: LiveMatchdayPlayer[]
 }
 
-export interface LiveMatchdayDesk {
+export type LiveMatchdayState =
+	| 'PRE_DEADLINE'
+	| 'LIVE_ACTIVE'
+	| 'BETWEEN_FIXTURES'
+	| 'DAY_SETTLING'
+	| 'GW_REVIEW'
+	| 'FINALIZED'
+
+export interface LiveMatchdaySnapshot {
 	season: string
 	eventId: number
-	scoreCoreRevision: string
-	state: LiveSnapshotState
-	windowState: LiveWindowState
-	dataAvailability: LiveDataAvailability
-	publishedAt: string
-	source: LiveSnapshotSource
-	sourceCheckedAt?: string | null
-	stale?: boolean
-	revisions: LiveRevisionVector
-	times: LiveTimes
-	delivery: LiveDelivery
-	nextRefreshAt?: string | null
-	matches: LiveMatchdayDeskRow[]
+	state: LiveMatchdayState
+	revisions: LiveMatchdayRevisionVector
+	times: LiveMatchdayTimes
+	detailDelivery: LiveMatchdayDelivery
+	matches: LiveMatchdayFixture[]
 }
 
-export interface LiveMatchdayDeskResponse {
-	liveMatchdayDesk: LiveMatchdayDesk
+export interface LiveMatchdayResult {
+	availability: LiveMatchdayAvailability
+	delivery: LiveMatchdayDelivery
+	snapshot: LiveMatchdaySnapshot | null
+}
+
+export interface LiveMatchdayResponse {
+	liveMatchday: LiveMatchdayResult
+}
+
+/** Home only needs the immutable fixture identity and live score overlay. */
+export const GET_LIVE_MATCHDAY_FIXTURE_SUMMARY = `
+	query GetLiveMatchdayFixtureSummary($eventId: Int!) {
+		liveMatchday(eventId: $eventId) {
+			availability
+			delivery { state servedFrom reasonCodes }
+			snapshot {
+				season
+				eventId
+				state
+				revisions {
+					deskPublicationId
+					deskGeneration
+					lifecycle
+					fixtureIdentity
+					scoreState
+				}
+				times {
+					deskSourceCheckedAt
+					deskContentUpdatedAt
+					deskPublishedAt
+					deskStaleAt
+					servedAt
+					nextRefreshAt
+				}
+				matches {
+					fixtureId
+					eventId
+					homeTeamId
+					homeTeamName
+					homeTeamShortName
+					awayTeamId
+					awayTeamName
+					awayTeamShortName
+					homeScore
+					awayScore
+					kickoffTime
+					minutes
+					started
+					finished
+					finishedProvisional
+				}
+			}
+		}
+	}
+`
+
+export type LiveMatchdayFixtureSummary = Omit<LiveMatchdayFixture, 'players'>
+
+export interface LiveMatchdaySummarySnapshot {
+	season: string
+	eventId: number
+	state: LiveMatchdayState
+	revisions: Pick<
+		LiveMatchdayRevisionVector,
+		| 'deskPublicationId'
+		| 'deskGeneration'
+		| 'lifecycle'
+		| 'fixtureIdentity'
+		| 'scoreState'
+	>
+	times: Pick<
+		LiveMatchdayTimes,
+		| 'deskSourceCheckedAt'
+		| 'deskContentUpdatedAt'
+		| 'deskPublishedAt'
+		| 'deskStaleAt'
+		| 'servedAt'
+		| 'nextRefreshAt'
+	>
+	matches: LiveMatchdayFixtureSummary[]
+}
+
+export interface LiveMatchdayFixtureSummaryResponse {
+	liveMatchday: {
+		availability: LiveMatchdayAvailability
+		delivery: LiveMatchdayDelivery
+		snapshot: LiveMatchdaySummarySnapshot | null
+	}
 }
 
 export const GET_LIVE_CONTEXT = `
@@ -738,125 +744,6 @@ export type LiveDataAvailability =
 
 export type LiveAnchorMode =
 	'UPCOMING' | 'CURRENT' | 'PREVIOUS_FINAL' | 'OFFSEASON'
-
-export const GET_LIVE_FIXTURE_PLAYERS = `
-  query GetLiveFixturePlayers($ref: LivePublicationRefInput!, $fixtureId: Int!) {
-		liveFixturePlayers(ref: $ref, fixtureId: $fixtureId) {
-		season
-		eventId
-		scoreCoreRevision
-      fixtureId
-      players {
-        player { id webName price position team { id name shortName } }
-        minutes goalsScored assists cleanSheets goalsConceded ownGoals
-        penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
-        defensiveContribution totalPoints starts inDreamTeam
-      }
-    }
-  }
-`
-
-export interface LiveFixturePerformance {
-	player: {
-		id: number
-		webName: string
-		price: number
-		position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
-		team: { id: number; name: string; shortName: string } | null
-	} | null
-	minutes: number | null
-	goalsScored: number | null
-	assists: number | null
-	cleanSheets: number | null
-	goalsConceded: number | null
-	ownGoals: number | null
-	penaltiesSaved: number | null
-	penaltiesMissed: number | null
-	yellowCards: number | null
-	redCards: number | null
-	saves: number | null
-	bonus: number | null
-	bps: number | null
-	defensiveContribution: number | null
-	totalPoints: number
-}
-
-export interface LiveFixturePlayersData {
-	season: string
-	eventId: number
-	scoreCoreRevision: string
-	fixtureId: number
-	players: LiveFixturePerformance[]
-}
-
-export interface LiveFixturePlayersResponse {
-	liveFixturePlayers: LiveFixturePlayersData
-}
-
-export interface LiveFixturePlayersBatchResponse {
-	fixture0: LiveFixturePlayersData
-	fixture1?: LiveFixturePlayersData
-	fixture2?: LiveFixturePlayersData
-	fixture3?: LiveFixturePlayersData
-	fixture4?: LiveFixturePlayersData
-}
-
-export const GET_EVENT_LIVE_PERFORMANCES = `
-	query GetEventLivePerformances($eventId: Int!) {
-		eventLive(eventId: $eventId) {
-			performances {
-				player { id webName price position team { id name shortName } }
-				minutes goalsScored assists cleanSheets goalsConceded ownGoals
-				penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
-				defensiveContribution totalPoints starts inDreamTeam
-			}
-		}
-	}
-`
-
-export interface EventLivePerformancesResponse {
-	eventLive: {
-		performances: LiveFixturePerformance[]
-	} | null
-}
-
-const LIVE_FIXTURE_PLAYERS_FRAGMENT = `
-	fragment LiveFixturePlayersBatchFields on LiveFixturePlayers {
-		season eventId scoreCoreRevision fixtureId
-		players {
-			player { id webName price position team { id name shortName } }
-			minutes goalsScored assists cleanSheets goalsConceded ownGoals
-			penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
-			defensiveContribution totalPoints
-		}
-	}
-`
-
-/** Five fixtures per operation keeps one match window bounded without N+1 calls. */
-export function buildLiveFixturePlayersBatchQuery(count: number): string {
-	const boundedCount = Math.max(1, Math.min(5, Math.trunc(count)))
-	const definitions = Array.from(
-		{ length: boundedCount },
-		(_, index) => `$fixture${index}: Int!`
-	).join('\n\t\t')
-	const selections = Array.from(
-		{ length: boundedCount },
-		(_, index) =>
-			`fixture${index}: liveFixturePlayers(ref: $ref, fixtureId: $fixture${index}) { ...LiveFixturePlayersBatchFields }`
-	).join('\n\t\t')
-	return `
-		query GetLiveFixturePlayersBatch(
-			$ref: LivePublicationRefInput!
-			${definitions}
-		) {
-			${selections}
-		}
-		${LIVE_FIXTURE_PLAYERS_FRAGMENT}
-	`
-}
-
-export const GET_LIVE_FIXTURE_PLAYERS_BATCH =
-	buildLiveFixturePlayersBatchQuery(5)
 
 export const GET_EVENT_LIVE_EXPLAIN = `
   query EventLiveExplainPlayer($eventId: Int!, $elementId: Int!) {
