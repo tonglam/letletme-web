@@ -36,6 +36,18 @@ REFERENCE_DEF_RE = re.compile(
 REFERENCE_TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".txt", ".text", ".rst"}
 URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:", re.IGNORECASE)
 PEM_RE = re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")
+BASIC_AUTH_RE = re.compile(r"(?i)\bauthorization\s*:\s*basic\s+([A-Za-z0-9+/]{8,}={0,2})")
+CLI_CREDENTIAL_RE = re.compile(
+    r"(?ix)(?<![A-Za-z0-9_-])(?:"
+    r"(?:--(?:password|pass|token|api[-_]?key|access[-_]?token)(?:=|\s+))"
+    r"|(?:redis-cli)(?:[^\n;&|`]*?)\s+-a(?:=|\s+|(?=[^\s`<>#]))"
+    r"|(?:mysql(?:dump|admin|sh)?)(?:[^\n;&|`]*?)\s+-p(?:=|(?=[^\s`<>#]))"
+    r")(?!-)([^\s`<>#]+)"
+)
+AWS_CREDENTIAL_ARGUMENT_RE = re.compile(
+    r"(?ix)\baws\s+configure\s+set\s+(?:aws[_-])?(?:secret[_-]?access[_-]?key|access[_-]?key(?:[_-]?id)?|session[_-]?token)"
+    r"\s+([^\s`<>#]+)"
+)
 IP_LITERAL_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:\[[0-9A-Fa-f:.]+\]|[0-9]{1,3}(?:\.[0-9]{1,3}){3}|"
     r"[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{0,4}){2,7})(?![A-Za-z0-9_])"
@@ -53,6 +65,9 @@ SECRET_VALUE_RES = (
     re.compile(r'''(?ix)(?<![A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])+(?:secret|credential)(?:[_-](?:key|token|value))?["']?\s*[:=]\s*((?:"(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[^\n`<>#]+))'''),
     re.compile(r'''(?ix)(?<![A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*(?:notification[_ -]?api[_ -]?token|notification[_ -]?token|notifier[_ -]?token|metrics[_ -]?token|telegram[_ -]?bot[_ -]?token|session[_ -]?(?:cookie|token)|cookie)["']?\s*[:=]\s*((?:"(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[^\n`<>#]+))'''),
     re.compile(r"(?i)\bauthorization\s*:\s*bearer\s+([A-Za-z0-9._~+/=-]{8,})"),
+    BASIC_AUTH_RE,
+    CLI_CREDENTIAL_RE,
+    AWS_CREDENTIAL_ARGUMENT_RE,
     re.compile(r"(?i)\b(?:postgres(?:ql)?|mysql|redis(?:s)?|mongodb(?:\+srv)?):\/\/[^\s/@:]*:([^\s/@]+)@"),
     # HTTP(S) and Git userinfo can carry a password/token even when the host
     # is public. Keep the username optional so ``https://:secret@host`` is
@@ -131,7 +146,6 @@ CANONICAL_CONFIG_COMMIT = "312eaf56264f65bcc74fd7b81d8981a3517eca02"
 IGNORED_PARTS = {".git", "node_modules", ".next"}
 UNMANAGED_INSTRUCTION_PREFIXES = {
     (".agents", "skills"),
-    (".claude", "skills"),
 }
 
 
@@ -376,7 +390,12 @@ def _is_unmanaged_plugin_skill_path(path: Path, repo: Path) -> bool:
         relative = path.absolute().relative_to(repo.absolute())
     except ValueError:
         return False
-    return len(relative.parts) >= 2 and relative.parts[:2] == (".claude", "skills")
+    if len(relative.parts) < 3 or relative.parts[:2] != (".claude", "skills"):
+        return False
+    # Keep the narrow legacy exemption for installer-created symlink aliases;
+    # a regular Claude skill directory is repository-owned and must be
+    # discovered and governed like every other instruction entrypoint.
+    return (repo / ".claude" / "skills" / relative.parts[2]).is_symlink()
 
 
 def resolve_path(
@@ -771,7 +790,7 @@ def scan_reference_graph(
             is_reference_text = candidate.suffix.casefold() in REFERENCE_TEXT_SUFFIXES or candidate.suffix == ""
             if is_reference_text and candidate.suffix.casefold() == ".md" and candidate.stat().st_size > int(policy.get("max_skill_bytes", 32768)):
                 errors.append(f"{candidate}: referenced instruction exceeds max_skill_bytes")
-            if policy.get("forbid_secrets_in_instructions") and has_secret(reference_text):
+            if policy.get("forbid_secrets_in_instructions") and has_secret_bytes(raw):
                 errors.append(f"{candidate}: possible secret/token pattern")
             # Only recurse through known instruction/config text (plus
             # extensionless files, which are commonly executable instruction
@@ -787,9 +806,21 @@ def check_governance_binding(path: Path, text: str, errors: list[str]) -> None:
 
     # Treat wrapped Markdown lines as one clause while retaining word
     # boundaries; otherwise a harmless line wrap can disable the check.
-    operative = _without_markdown_code(text)
-    operative = re.sub(r"<!--.*?(?:-->|$)", " ", operative, flags=re.S)
-    lowered = " ".join(operative.casefold().split())
+    section, outside = _governance_parts(text)
+    if section is None:
+        errors.append(f"{path}: must contain exactly one operative '## Governance and review' section")
+        lowered = ""
+    else:
+        lowered = section.casefold()
+        conflicts = (
+            r"\b(?:ignore|disregard|bypass|waive)\b.{0,160}\b(?:review|finding|thread|ci|cleanup|quota|unresolved|undispositioned)\b",
+            r"\b(?:merge|ship|release)\b.{0,160}\b(?:without|even\s+with)\b.{0,80}\b(?:review|finding|thread|ci|cleanup|unresolved|undispositioned)\b",
+            r"\b(?:allow|permit)\b.{0,160}\b(?:merge|ship|release)\b.{0,80}\b(?:unresolved|undispositioned)\b",
+        )
+        if any(re.search(pattern, section, flags=re.I | re.S) for pattern in conflicts):
+            errors.append(f"{path}: Governance and review section conflicts with the mandatory review rules")
+        if any(re.search(pattern, outside, flags=re.I | re.S) for pattern in conflicts):
+            errors.append(f"{path}: operative text outside Governance and review conflicts with the mandatory review rules")
     required_clauses = {
         "quota rule": (
             "a review may be skipped only after two consecutive explicit quota-limit responses",
@@ -814,8 +845,8 @@ def check_governance_binding(path: Path, text: str, errors: list[str]) -> None:
             errors.append(f"{path}: missing operative {label} clause")
 
 
-def _governance_section(text: str) -> str | None:
-    """Return a whitespace-normalized governance section for parity checks."""
+def _governance_parts(text: str) -> tuple[str | None, str]:
+    """Return the operative governance section and text outside it."""
 
     # Headings in fenced/indented Markdown examples are not operative.  A
     # duplicate operative heading is rejected rather than allowing the first
@@ -827,14 +858,23 @@ def _governance_section(text: str) -> str | None:
         if re.match(r"^\s*##\s+Governance and review\s*$", line, flags=re.I)
     ]
     if len(matches) != 1:
-        return None
+        return None, ""
     start = matches[0]
     end = len(lines)
     for index in range(start + 1, len(lines)):
         if re.match(r"^\s*##\s+", lines[index]):
             end = index
             break
-    return " ".join("\n".join(lines[start:end]).split())
+    section = " ".join("\n".join(lines[start:end]).split())
+    outside = " ".join("\n".join(lines[:start] + lines[end:]).split()).casefold()
+    return section, outside
+
+
+def _governance_section(text: str) -> str | None:
+    """Return a whitespace-normalized governance section for parity checks."""
+
+    section, _ = _governance_parts(text)
+    return section
 
 
 def check_agents_claude_consistency(repo: Path, errors: list[str]) -> None:
@@ -1003,6 +1043,47 @@ def has_secret(text: str) -> bool:
     return False
 
 
+LOCKED_CREDENTIAL_KEY_RE = re.compile(
+    r"(?i)\b(?:api[_ -]?(?:key|token)|access[_ -]?(?:token|key)|"
+    r"private[_ -]?key|client[_ -]?secret|service[_ -]?(?:role[_ -]?)?"
+    r"(?:key|token)|secret[_ -]?(?:access[_ -]?)?(?:key|token)|"
+    r"notification[_ -]?(?:api[_ -]?)?token|metrics[_ -]?token|"
+    r"telegram[_ -]?bot[_ -]?token|session[_ -]?(?:cookie|token)|cookie)"
+)
+
+
+def has_locked_skill_secret(text: str) -> bool:
+    """Scan installed plugin content without enforcing repository skill metadata."""
+
+    if (
+        PEM_RE.search(text)
+        or SECRET_VALUE_RES[-1].search(text)
+    ):
+        return True
+    for pattern in (BASIC_AUTH_RE, CLI_CREDENTIAL_RE, AWS_CREDENTIAL_ARGUMENT_RE):
+        for match in pattern.finditer(text):
+            value = match.group(1) if match.lastindex else match.group(0)
+            if not _looks_like_placeholder(value):
+                return True
+    for pattern in SECRET_VALUE_RES[:-1]:
+        if pattern in {BASIC_AUTH_RE, CLI_CREDENTIAL_RE, AWS_CREDENTIAL_ARGUMENT_RE}:
+            continue
+        for match in pattern.finditer(text):
+            if not LOCKED_CREDENTIAL_KEY_RE.search(match.group(0)):
+                continue
+            value = match.group(1) if match.lastindex else match.group(0)
+            if not _looks_like_placeholder(value):
+                return True
+    return False
+
+
+def _json_field_has_secret(field: str, *, locked: bool = False) -> bool:
+    """Check whether a decoded JSON field name is a credential-bearing key."""
+
+    probe = f'"{field}": "credential-probe-value"'
+    return has_locked_skill_secret(probe) if locked else has_secret(probe)
+
+
 def has_secret_bytes(raw: bytes) -> bool:
     """Scan binary/text references without losing UTF-16/UTF-32 credentials."""
 
@@ -1013,10 +1094,135 @@ def has_secret_bytes(raw: bytes) -> bool:
     # ignored and remain covered by the latin-1 scan.
     for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "utf-32", "utf-32-le", "utf-32-be"):
         try:
-            candidates.append(raw.decode(encoding))
+            decoded = raw.decode(encoding)
+            candidates.append(decoded)
+            # JSON consumers decode escaped object keys/values before using
+            # them. Scan a normalized serialization as well so an escaped
+            # ``passw\\u006frd`` key cannot hide a literal credential.
+            try:
+                # Keep objects as tuples of pairs so duplicate keys remain
+                # visible without retaining or serializing every descendant
+                # subtree for every ancestor pair.
+                parsed = json.loads(decoded, object_pairs_hook=lambda items: tuple(items))
+            except (TypeError, ValueError, json.JSONDecodeError, RecursionError):
+                if "\\u" in decoded:
+                    escaped_key_normalized = re.sub(
+                        r"\\u([0-9a-fA-F]{4})",
+                        lambda match: chr(int(match.group(1), 16)),
+                        decoded,
+                    )
+                    if escaped_key_normalized != decoded and has_secret(escaped_key_normalized):
+                        return True
+                continue
+            try:
+                normalized = json.dumps(parsed, ensure_ascii=False)
+            except (TypeError, ValueError, RecursionError):
+                normalized = None
+            if normalized is not None and has_secret(normalized):
+                return True
+            pending = [(parsed, None, None)]
+            while pending:
+                current, field, inherited_field = pending.pop()
+                sensitive_field = inherited_field
+                if field is not None and _json_field_has_secret(field):
+                    sensitive_field = field
+                if isinstance(current, tuple):
+                    for key, value in reversed(current):
+                        pending.append((value, key, sensitive_field))
+                elif isinstance(current, list):
+                    for value in reversed(current):
+                        pending.append((value, field, sensitive_field))
+                elif sensitive_field is not None:
+                    if has_secret(f'"{sensitive_field}": {json.dumps(current, ensure_ascii=False)}'):
+                        return True
+                elif field is not None:
+                    if has_secret(f'"{field}": {json.dumps(current, ensure_ascii=False)}'):
+                        return True
+                elif isinstance(current, str) and has_secret(current):
+                    return True
         except UnicodeDecodeError:
             continue
     return any(has_secret(candidate) for candidate in candidates)
+
+
+def has_locked_skill_secret_bytes(raw: bytes) -> bool:
+    """Scan locked skill bytes across common text encodings."""
+
+    candidates = [raw.decode("latin-1")]
+    for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "utf-32", "utf-32-le", "utf-32-be"):
+        try:
+            decoded = raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        candidates.append(decoded)
+        try:
+            parsed = json.loads(decoded, object_pairs_hook=lambda items: tuple(items))
+        except (TypeError, ValueError, json.JSONDecodeError, RecursionError):
+            if "\\u" in decoded:
+                escaped_key_normalized = re.sub(
+                    r"\\u([0-9a-fA-F]{4})",
+                    lambda match: chr(int(match.group(1), 16)),
+                    decoded,
+                )
+                if escaped_key_normalized != decoded and has_locked_skill_secret(escaped_key_normalized):
+                    return True
+            continue
+        try:
+            normalized = json.dumps(parsed, ensure_ascii=False)
+        except (TypeError, ValueError, RecursionError):
+            normalized = None
+        if normalized is not None and has_locked_skill_secret(normalized):
+            return True
+        pending = [(parsed, None, None)]
+        while pending:
+            current, field, inherited_field = pending.pop()
+            sensitive_field = inherited_field
+            if field is not None and _json_field_has_secret(field, locked=True):
+                sensitive_field = field
+            if isinstance(current, tuple):
+                for key, value in reversed(current):
+                    pending.append((value, key, sensitive_field))
+            elif isinstance(current, list):
+                for value in reversed(current):
+                    pending.append((value, field, sensitive_field))
+            elif sensitive_field is not None:
+                if has_locked_skill_secret(f'"{sensitive_field}": {json.dumps(current, ensure_ascii=False)}'):
+                    return True
+            elif field is not None:
+                if has_locked_skill_secret(f'"{field}": {json.dumps(current, ensure_ascii=False)}'):
+                    return True
+            elif isinstance(current, str) and has_locked_skill_secret(current):
+                return True
+    return any(has_locked_skill_secret(candidate) for candidate in candidates)
+
+
+def skill_tree_digest(path: Path) -> str:
+    """Hash every regular file by sorted relative path and raw bytes."""
+
+    files: list[tuple[str, bytes]] = []
+    for item in path.rglob("*"):
+        relative = item.relative_to(path)
+        if any(part in {".git", "node_modules"} for part in relative.parts):
+            continue
+        if item.is_symlink():
+            raise ValueError(f"{item}: locked skill tree may not contain a symlink")
+        if item.is_dir():
+            continue
+        if not item.is_file():
+            raise ValueError(f"{item}: locked skill tree contains an unsupported entry")
+        files.append((relative.as_posix(), item.read_bytes()))
+    digest = hashlib.sha256()
+    # ``skills`` computes hashes with JavaScript's default locale ordering;
+    # case-folding is the stable cross-platform equivalent for these paths.
+    # Length-prefix both fields so concatenation cannot make two distinct
+    # path/content sequences hash identically.
+    for relative, raw in sorted(files, key=lambda value: value[0].casefold()):
+        relative_bytes = relative.encode("utf-8")
+        digest.update(len(relative_bytes).to_bytes(8, "big"))
+        digest.update(relative_bytes)
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    return digest.hexdigest()
 
 
 def check_yaml_shape(path: Path, errors: list[str], *, skill_name: str | None = None) -> None:
@@ -1078,7 +1284,7 @@ def _skill_entrypoints(root: Path, repo: Path) -> Iterable[Path]:
                 pending.append(child)
 
 
-def _validate_skill_inventory(repo: Path, skills: list[Any], errors: list[str]) -> None:
+def _validate_skill_inventory(repo: Path, skills: list[Any], errors: list[str]) -> dict[str, str]:
     """Reject unowned repository skill directories without touching plugins.
 
     ``.agents/skills`` can contain both repository-owned skills and installed
@@ -1090,17 +1296,17 @@ def _validate_skill_inventory(repo: Path, skills: list[Any], errors: list[str]) 
 
     root = repo / ".agents" / "skills"
     if not root.exists() and not root.is_symlink():
-        return
+        return {}
     if root.is_symlink():
         errors.append(f"{root}: skill inventory root may not be a symlink")
-        return
+        return {}
     contracted: set[str] = set()
     for raw in skills:
         relative = Path(str(raw))
         parts = relative.parts
         if not relative.is_absolute() and len(parts) >= 3 and parts[:2] == (".agents", "skills"):
             contracted.add(parts[2])
-    locked: set[str] = set()
+    locked: dict[str, str] = {}
     lock_path = repo / "skills-lock.json"
     if lock_path.exists():
         try:
@@ -1112,38 +1318,99 @@ def _validate_skill_inventory(repo: Path, skills: list[Any], errors: list[str]) 
             if not isinstance(value, dict):
                 errors.append(f"{lock_path}: skills must be a mapping")
             else:
-                locked = {str(name) for name in value}
-    allowed = contracted | locked
+                for name, metadata in value.items():
+                    skill_name = str(name)
+                    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill_name):
+                        errors.append(f"{lock_path}: invalid locked skill name: {skill_name!r}")
+                        continue
+                    if not isinstance(metadata, dict):
+                        errors.append(f"{lock_path}: metadata for {skill_name!r} must be a mapping")
+                        continue
+                    source = metadata.get("source")
+                    source_type = metadata.get("sourceType")
+                    computed_hash = metadata.get("computedHash")
+                    if not isinstance(source, str) or not source.strip():
+                        errors.append(f"{lock_path}: {skill_name!r} must declare a non-empty source")
+                        continue
+                    if not isinstance(source_type, str) or not re.fullmatch(
+                        r"[a-z0-9]+(?:-[a-z0-9]+)*", source_type
+                    ):
+                        errors.append(f"{lock_path}: {skill_name!r} has invalid sourceType")
+                        continue
+                    if not isinstance(computed_hash, str) or not re.fullmatch(
+                        r"[0-9a-fA-F]{64}", computed_hash
+                    ):
+                        errors.append(f"{lock_path}: {skill_name!r} must declare a SHA-256 computedHash")
+                        continue
+                    locked[skill_name] = computed_hash
+    allowed = contracted | set(locked)
     try:
         children = sorted(root.iterdir(), key=lambda path: path.name)
     except OSError as exc:
         errors.append(f"{root}: cannot inspect skill inventory: {exc}")
-        return
+        return locked
     for child in children:
         if child.name not in allowed:
             errors.append(
                 f"{child}: skill is not listed in the instruction contract or skills-lock.json"
             )
+    return locked
 
 
-def _instruction_paths(repo: Path, *, include_discovery: bool) -> list[Path]:
+def _instruction_paths(
+    repo: Path,
+    *,
+    include_discovery: bool,
+    contracted_skill_names: set[str] | None = None,
+) -> list[Path]:
     if not include_discovery:
         return []
+    contracted_skill_names = contracted_skill_names or set()
     paths: set[Path] = set()
     # Discover repository-owned scoped entrypoints at every depth.  Installed
     # plugin/global skill trees are preserved inputs; their nested instruction
     # files are not silently promoted into this repository's contract.  The
     # contract-listed repository skills are checked separately by validate_skill.
+    def should_descend(relative: Path) -> bool:
+        parts = relative.parts
+        if any(part in IGNORED_PARTS for part in parts):
+            return False
+        if len(parts) >= 2 and parts[:2] == (".agents", "skills"):
+            return len(parts) < 3 or parts[2] in contracted_skill_names
+        return not _is_unmanaged_instruction_path(relative)
+
     for root, directories, files in os.walk(repo, followlinks=False):
         root_path = Path(root)
         relative_root = root_path.relative_to(repo)
-        if _is_unmanaged_instruction_path(relative_root):
+        if relative_root.parts == (".agents", "skills") and not contracted_skill_names:
+            directories[:] = []
+            continue
+        if len(relative_root.parts) >= 3 and relative_root.parts[:2] == (".agents", "skills"):
+            if relative_root.parts[2] not in contracted_skill_names:
+                directories[:] = []
+                continue
+        if len(relative_root.parts) >= 2 and relative_root.parts[:2] == (".claude", "skills"):
+            # Skill trees are handled as entrypoints below.  Do not let their
+            # nested helper files become unrelated instruction discoveries.
+            directories[:] = []
+            continue
+        if _is_unmanaged_instruction_path(relative_root) and not (
+            (
+                relative_root.parts == (".agents", "skills")
+                and contracted_skill_names
+            )
+            or (
+                len(relative_root.parts) >= 3
+                and relative_root.parts[:2] == (".agents", "skills")
+                and relative_root.parts[2] in contracted_skill_names
+            )
+        ):
             directories[:] = []
             continue
         directories[:] = [
             name
             for name in directories
-            if not _is_unmanaged_instruction_path(relative_root / name)
+            if should_descend(relative_root / name)
         ]
         for name in files:
             if name in {"AGENTS.md", "AGENTS.override.md", "CLAUDE.md"}:
@@ -1154,7 +1421,58 @@ def _instruction_paths(repo: Path, *, include_discovery: bool) -> list[Path]:
                 if path.is_file() or path.is_symlink():
                     if not _is_unmanaged_instruction_path(path.relative_to(repo)):
                         paths.add(path.absolute())
+    claude_skills_root = repo / ".claude" / "skills"
+    if claude_skills_root.is_dir():
+        for skill in claude_skills_root.iterdir():
+            if skill.is_symlink() or not skill.is_dir():
+                continue
+            entry = skill / "SKILL.md"
+            if entry.is_file():
+                paths.add(entry.absolute())
     return sorted(paths)
+
+
+def _validate_claude_skill_aliases(
+    repo: Path,
+    allowed_skill_names: set[str],
+    errors: list[str],
+) -> None:
+    """Validate legacy Claude skill symlinks without exempting retargets."""
+
+    root = repo / ".claude" / "skills"
+    root_exists = root.exists()
+    root_symlink = root.is_symlink()
+    if not root_exists and not root_symlink:
+        return
+    if root_symlink:
+        errors.append(f"{root}: Claude skill alias root may not be a symlink")
+        return
+    try:
+        children = sorted(root.iterdir(), key=lambda path: path.name)
+    except OSError as exc:
+        errors.append(f"{root}: cannot inspect Claude skill aliases: {exc}")
+        return
+    for alias in children:
+        if alias.is_symlink():
+            expected = repo / ".agents" / "skills" / alias.name
+            if alias.name not in allowed_skill_names:
+                errors.append(f"{alias}: Claude skill alias is not contracted or lock-listed")
+                continue
+            try:
+                target = alias.resolve(strict=True)
+                expected_target = expected.resolve(strict=True)
+            except OSError as exc:
+                errors.append(f"{alias}: Claude skill alias target is unavailable: {exc}")
+                continue
+            if target != expected_target or not expected_target.is_dir():
+                errors.append(f"{alias}: Claude skill alias must target {expected}")
+            continue
+        if not alias.is_dir():
+            errors.append(f"{alias}: Claude skill entry must be a directory or validated symlink")
+            continue
+        entry = alias / "SKILL.md"
+        if not entry.is_file():
+            errors.append(f"{alias}: regular Claude skill directory must contain SKILL.md")
 
 
 def _validate_instruction_file(
@@ -1491,7 +1809,47 @@ def validate_skill(
             errors.append(f"{reference}: exceeds max_skill_bytes")
         if is_reference:
             check_reference_links(reference, repo, errors, allow_external=allow_external)
-        if policy.get("forbid_secrets_in_instructions") and has_secret(reference_text):
+        if policy.get("forbid_secrets_in_instructions") and has_secret_bytes(raw):
+            errors.append(f"{reference}: possible secret/token pattern")
+
+
+def validate_locked_skill(
+    path: Path,
+    policy: dict[str, Any],
+    errors: list[str],
+    *,
+    expected_hash: str | None = None,
+) -> None:
+    """Check lock-listed plugin bytes while allowing third-party metadata shapes."""
+
+    if not path.is_dir():
+        errors.append(f"{path}: locked skill must be a directory")
+        return
+    entry = path / "SKILL.md"
+    if not entry.is_file():
+        errors.append(f"{path}: locked skill must contain a regular SKILL.md entrypoint")
+    if expected_hash:
+        try:
+            actual_hash = skill_tree_digest(path)
+        except (OSError, ValueError) as exc:
+            errors.append(f"{path}: cannot hash locked skill tree: {exc}")
+        else:
+            if actual_hash.casefold() != expected_hash.casefold():
+                errors.append(
+                    f"{path}: locked skill content hash {actual_hash} does not match skills-lock.json computedHash"
+                )
+    for reference in path.rglob("*"):
+        if reference.is_symlink():
+            errors.append(f"{reference}: locked skill tree may not contain a symlink")
+            continue
+        if not reference.is_file():
+            continue
+        try:
+            raw = reference.read_bytes()
+        except OSError as exc:
+            errors.append(f"{reference}: cannot read locked skill content: {exc}")
+            continue
+        if policy.get("forbid_secrets_in_instructions") and has_locked_skill_secret_bytes(raw):
             errors.append(f"{reference}: possible secret/token pattern")
 
 
@@ -1539,7 +1897,7 @@ def validate_asset(
         errors.append(f"{repo}: root does not exist")
     if not registry_only and repo.exists():
         allow_absolute = asset.get("kind") == "instruction-system"
-        _validate_skill_inventory(repo, skills, errors)
+        locked_skills = _validate_skill_inventory(repo, skills, errors)
         required_paths: set[Path] = set()
         for relative in agents:
             try:
@@ -1577,32 +1935,65 @@ def validate_asset(
                 continue
             required_paths.add((path / policy.get("require_skill_entrypoint", "SKILL.md")) if path.is_dir() else path)
             validate_skill(path, repo, policy, errors, allow_external=allow_absolute)
+        # Lock-listed third-party mounts are still repository-resident input.
+        # Validate their current contents before treating the lock as an
+        # inventory exemption; otherwise a modified plugin tree could hide
+        # secrets or broken references behind its trusted name.
+        for name in sorted(locked_skills):
+            path = repo / ".agents" / "skills" / name
+            if path.exists() or path.is_symlink():
+                validate_locked_skill(path, policy, errors, expected_hash=locked_skills[name])
 
-        discovered = _instruction_paths(repo, include_discovery=asset.get("kind") != "instruction-system")
+        contracted_skill_names = {
+            Path(str(raw)).parts[2]
+            for raw in skills
+            if len(Path(str(raw)).parts) >= 3
+            and Path(str(raw)).parts[:2] == (".agents", "skills")
+        }
+        _validate_claude_skill_aliases(
+            repo,
+            contracted_skill_names | set(locked_skills),
+            errors,
+        )
+        discovered = _instruction_paths(
+            repo,
+            include_discovery=asset.get("kind") != "instruction-system",
+            contracted_skill_names=contracted_skill_names,
+        )
         discovered_set = set(discovered)
         for path in discovered:
+            relative_parts = path.relative_to(repo).parts
+            governed_entrypoint = path.name == "CLAUDE.md" or (
+                len(relative_parts) >= 3
+                and relative_parts[:2] in {(".claude", "agents"), (".claude", "rules")}
+            ) or (
+                len(relative_parts) >= 4
+                and relative_parts[:2] == (".agents", "skills")
+                and relative_parts[2] in contracted_skill_names
+                and path.name in {"AGENTS.md", "AGENTS.override.md", "CLAUDE.md"}
+            )
             _validate_instruction_file(
                 path,
                 repo,
                 policy,
                 errors,
-                require_governance=(
-                    path.name == "CLAUDE.md"
-                    or ".claude" in path.relative_to(repo).parts
-                    and any(part in {"agents", "rules"} for part in path.relative_to(repo).parts)
-                ),
+                require_governance=governed_entrypoint,
             )
             # CLAUDE.md is an operative consumer entrypoint in repositories
             # that provide it, even when the legacy contract lists only
             # AGENTS.md. Treat it as governed automatically rather than
             # allowing a conflicting file to hide as an unlisted extra.
-            relative_parts = path.relative_to(repo).parts
             if path.name == "CLAUDE.md" or (
                 len(relative_parts) >= 3
                 and relative_parts[:2] == (".claude", "agents")
             ) or (
                 len(relative_parts) >= 3
                 and relative_parts[:2] == (".claude", "rules")
+            ) or (
+                len(relative_parts) >= 4
+                and relative_parts[:2] == (".agents", "skills")
+                and relative_parts[2] in contracted_skill_names
+                and path.name in {"AGENTS.md", "AGENTS.override.md", "CLAUDE.md"}
             ):
                 required_paths.add(path)
         for path in sorted(discovered_set - required_paths):
