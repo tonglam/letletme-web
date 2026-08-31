@@ -110,6 +110,49 @@ export function fixtureWindowEventIds(fromGw: number, count: number): number[] {
 	return Array.from({ length: count }, (_, index) => fromGw + index)
 }
 
+export type FixtureWindowRange = {
+	fromGw: number
+	count: number
+}
+
+/**
+ * Split a sparse set of missing gameweeks into valid consecutive API windows.
+ * The route accepts at most five consecutive gameweeks per request; keeping
+ * gaps out of each range prevents a successful response from being mistaken
+ * for coverage of an event that was never requested.
+ */
+export function buildFixtureWindowRanges(
+	eventIds: readonly number[]
+): FixtureWindowRange[] {
+	const uniqueEventIds = Array.from(new Set(eventIds)).sort((a, b) => a - b)
+	if (
+		uniqueEventIds.some(
+			eventId =>
+				!Number.isInteger(eventId) ||
+				eventId < 1 ||
+				eventId > FIXTURE_WINDOW_MAX_EVENT_ID
+		)
+	) {
+		throw new RangeError('Fixture event IDs must be integers within 1-38')
+	}
+	if (uniqueEventIds.length === 0) return []
+
+	const ranges: FixtureWindowRange[] = []
+	let rangeFromGw = uniqueEventIds[0]!
+	let count = 1
+	for (const eventId of uniqueEventIds.slice(1)) {
+		if (eventId === rangeFromGw + count && count < FIXTURE_WINDOW_MAX_COUNT) {
+			count += 1
+			continue
+		}
+		ranges.push({ fromGw: rangeFromGw, count })
+		rangeFromGw = eventId
+		count = 1
+	}
+	ranges.push({ fromGw: rangeFromGw, count })
+	return ranges
+}
+
 export function buildFixtureWindowQuery(count: number): string {
 	assertFixtureWindowInput(1, count)
 	const variables = Array.from(

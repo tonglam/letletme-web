@@ -13,6 +13,7 @@ import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/mark
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { buildSquadTeamExposure } from '@/lib/squad-picks'
 import {
+	buildFixtureWindowRanges,
 	isFixtureWindowResponse,
 	type FixturePlanningFixture
 } from '@/lib/fixture-window'
@@ -440,12 +441,7 @@ export default function FixturesClient({
 	const selectHorizon = useCallback(
 		(next: FdrHorizon) => {
 			const effectiveNext = resolveFixturePlanningHorizon(fromGw, next)
-			if (
-				effectiveNext == null ||
-				effectiveNext === horizon ||
-				effectiveNext === pendingHorizon
-			)
-				return
+			if (effectiveNext == null || effectiveNext === pendingHorizon) return
 			requestGenerationRef.current += 1
 			requestRef.current?.abort()
 			if (effectiveNext < horizon) {
@@ -459,60 +455,97 @@ export default function FixturesClient({
 			const missing = Array.from(
 				{ length: targetEnd - fromGw + 1 },
 				(_, index) => fromGw + index
-			).filter(eventId => !cacheRef.current.has(eventId))
+			).filter(
+				eventId => !cacheRef.current.has(eventId) || unknownEvents.has(eventId)
+			)
+			if (effectiveNext === horizon && missing.length === 0) {
+				setPendingHorizon(null)
+				setLoadError(false)
+				return
+			}
 			if (missing.length === 0) {
 				setPendingHorizon(null)
 				setLoadError(false)
 				startTransition(() => setHorizon(effectiveNext))
 				return
 			}
-			const first = missing[0]!
-			const count = Math.min(5, missing.length)
+			const windows = buildFixtureWindowRanges(missing)
 			const generation = requestGenerationRef.current
 			const controller = new AbortController()
 			requestRef.current = controller
 			setPendingHorizon(effectiveNext)
 			setLoading(true)
 			setLoadError(false)
-			void fetch(`/api/fixtures/window?fromGw=${first}&count=${count}`, {
-				signal: controller.signal,
-				headers: { accept: 'application/json' }
-			})
-				.then(async response => {
+			void Promise.allSettled(
+				windows.map(async window => {
+					const response = await fetch(
+						`/api/fixtures/window?fromGw=${window.fromGw}&count=${window.count}`,
+						{
+							signal: controller.signal,
+							headers: { accept: 'application/json' }
+						}
+					)
 					const payload: unknown = await response.json().catch(() => null)
 					if (!response.ok || !isFixtureWindowResponse(payload))
 						throw new Error('fixture window unavailable')
-					if (generation !== requestGenerationRef.current) return
-					for (const [rawEventId, fixtures] of Object.entries(
-						payload.fixturesByEvent
-					)) {
-						cacheRef.current.set(Number(rawEventId), fixtures)
-					}
-					setUnknownEventIds(previous =>
-						Array.from(
-							new Set([
-								...previous.filter(id => !payload.unknownEventIds.includes(id)),
-								...payload.unknownEventIds
-							])
-						)
-					)
-					setFixturesByEvent(new Map(cacheRef.current))
-					setPendingHorizon(null)
-					setLoadError(false)
-					startTransition(() => setHorizon(effectiveNext))
+					return payload
 				})
-				.catch(error => {
+			)
+				.then(results => {
 					if (
 						controller.signal.aborted ||
 						generation !== requestGenerationRef.current
 					)
 						return
-					console.warn(
-						'[fixtures] horizon fetch failed:',
-						error instanceof Error ? error.name : 'UnknownError'
+
+					const resolvedEventIds = new Set<number>()
+					const observedUnknownEventIds = new Set<number>()
+					let fulfilledCount = 0
+					for (const result of results) {
+						if (result.status === 'rejected') continue
+						fulfilledCount += 1
+						for (
+							let eventId = result.value.fromGw;
+							eventId <= result.value.toGw;
+							eventId += 1
+						) {
+							resolvedEventIds.add(eventId)
+						}
+						for (const [rawEventId, fixtures] of Object.entries(
+							result.value.fixturesByEvent
+						)) {
+							cacheRef.current.set(Number(rawEventId), fixtures)
+						}
+						result.value.unknownEventIds.forEach(eventId =>
+							observedUnknownEventIds.add(eventId)
+						)
+					}
+
+					if (fulfilledCount === 0) {
+						setPendingHorizon(null)
+						setLoadError(true)
+						return
+					}
+
+					setUnknownEventIds(previous =>
+						Array.from(
+							new Set([
+								...previous.filter(id => !resolvedEventIds.has(id)),
+								...Array.from(observedUnknownEventIds)
+							])
+						).sort((a, b) => a - b)
 					)
+					setFixturesByEvent(new Map(cacheRef.current))
 					setPendingHorizon(null)
-					setLoadError(true)
+					setLoadError(
+						results.some(
+							result =>
+								result.status === 'rejected' ||
+								(result.status === 'fulfilled' &&
+									result.value.unknownEventIds.length > 0)
+						)
+					)
+					startTransition(() => setHorizon(effectiveNext))
 				})
 				.finally(() => {
 					if (generation === requestGenerationRef.current) {
@@ -521,7 +554,7 @@ export default function FixturesClient({
 					}
 				})
 		},
-		[fromGw, horizon, pendingHorizon]
+		[fromGw, horizon, pendingHorizon, unknownEvents]
 	)
 
 	const model = useMemo(

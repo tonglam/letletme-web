@@ -155,6 +155,13 @@ export function liveSnapshotNeedsRefresh(
 	)
 }
 
+export function livePointsRequestChangesEvent(
+	acceptedEventId: number | null | undefined,
+	requestedEventId: number
+): boolean {
+	return acceptedEventId != null && acceptedEventId !== requestedEventId
+}
+
 /**
  * A refresh response may come from a fallback publication that is older than
  * the response already painted. Keep the accepted same-event publication

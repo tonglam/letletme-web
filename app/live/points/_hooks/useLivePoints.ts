@@ -16,6 +16,7 @@ import {
 import {
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
 	canReplaceLivePointsSnapshot,
+	livePointsRequestChangesEvent,
 	liveSnapshotNeedsRefresh,
 	liveContextToSnapshot,
 	shouldPollLiveSnapshot,
@@ -270,8 +271,12 @@ export function useLivePoints({
 			currentRequestKeyRef.current = requestKey
 			const request = (async () => {
 				const switchingGameweek =
-					hasLoadedLiveDataRef.current &&
-					latestLiveDataRef.current?.requestKey !== requestKey
+					livePointsRequestChangesEvent(
+						snapshotRef.current?.eventId,
+						eventId
+					) ||
+					(hasLoadedLiveDataRef.current &&
+						latestLiveDataRef.current?.requestKey !== requestKey)
 				const initialLoad = !hasLoadedLiveDataRef.current
 				// Clear previous GW paint when switching so failures never show stale squad.
 				if (switchingGameweek) {

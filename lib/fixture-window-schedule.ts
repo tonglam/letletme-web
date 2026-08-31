@@ -50,7 +50,9 @@ export function mergeFixtureWindowSchedules<T>(
 			}
 		)
 		result.value.unknownEventIds.forEach(eventId => {
-			fixturesByEvent.delete(eventId)
+			// A transiently unknown retry must not erase a fixture already retained
+			// from an earlier complete window. Keep the row as an LKG while the
+			// unavailable marker makes the event retryable and visibly uncertain.
 			unavailableEventIds.add(eventId)
 		})
 	})

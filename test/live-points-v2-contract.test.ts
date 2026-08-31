@@ -7,6 +7,7 @@ import {
 	LIVE_AUTO_REFRESH_SECONDS,
 	canReplaceLivePointsSnapshot,
 	liveContextToSnapshot,
+	livePointsRequestChangesEvent,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '../lib/live-refresh'
@@ -178,6 +179,12 @@ describe('Live Points V2 web contract', () => {
 			canReplaceLivePointsSnapshot({ ...newer, eventId: 2 }, accepted),
 			false
 		)
+	})
+
+	it('clears a context snapshot before loading a different historical event', () => {
+		assert.equal(livePointsRequestChangesEvent(1, 2), true)
+		assert.equal(livePointsRequestChangesEvent(1, 1), false)
+		assert.equal(livePointsRequestChangesEvent(undefined, 2), false)
 	})
 
 	it('does not turn a due refresh deadline into a full Live Points reload', () => {

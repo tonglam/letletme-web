@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
 import {
 	buildFixtureWindowQuery,
+	buildFixtureWindowRanges,
 	fixtureWindowEventIds,
 	isFixtureWindowResponse,
 	loadFixtureWindowWithExecutor,
@@ -98,6 +99,21 @@ describe('fixture window input and query', () => {
 		}
 		assert.deepEqual(fixtureWindowEventIds(34, 5), [34, 35, 36, 37, 38])
 		assert.throws(() => fixtureWindowEventIds(35, 5), RangeError)
+	})
+
+	it('splits sparse missing gameweeks into bounded contiguous windows', () => {
+		assert.deepEqual(buildFixtureWindowRanges([2, 5, 6, 7, 8]), [
+			{ fromGw: 2, count: 1 },
+			{ fromGw: 5, count: 4 }
+		])
+		assert.deepEqual(buildFixtureWindowRanges([1, 2, 3, 4, 5, 6, 7]), [
+			{ fromGw: 1, count: 5 },
+			{ fromGw: 6, count: 2 }
+		])
+		assert.deepEqual(buildFixtureWindowRanges([7, 5, 5, 6]), [
+			{ fromGw: 5, count: 3 }
+		])
+		assert.throws(() => buildFixtureWindowRanges([0]), RangeError)
 	})
 
 	it('builds one shared-fragment alias query for every supported count', () => {
@@ -262,6 +278,33 @@ describe('fixture window loader', () => {
 		assert.equal(merged.failedWindowCount, 1)
 		assert.deepEqual(Array.from(merged.unavailableEventIds), [11])
 		assert.deepEqual(merged.fixturesByEvent.get(10), [planningFixture(10)])
+	})
+
+	it('retains an earlier fixture row when a retry marks that event unknown', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[
+				{
+					status: 'fulfilled',
+					value: {
+						fromGw: 10,
+						toGw: 11,
+						fixturesByEvent: { '10': [planningFixture(10)] },
+						unknownEventIds: [11]
+					}
+				}
+			],
+			[{ fromGw: 10, count: 2 }],
+			fixtures => fixtures,
+			{
+				fixturesByEvent: new Map([[11, [planningFixture(11)]]]),
+				unavailableEventIds: new Set<number>(),
+				failedWindowCount: 0
+			}
+		)
+
+		assert.deepEqual(merged.fixturesByEvent.get(11), [planningFixture(11)])
+		assert.equal(merged.unavailableEventIds.has(11), true)
+		assert.equal(merged.failedWindowCount, 1)
 	})
 })
 
