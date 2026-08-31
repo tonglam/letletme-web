@@ -1,27 +1,20 @@
-import TournamentStatsClient from '@/app/me/tournament/TournamentStatsClient'
-import {
-	aggregateToRankingSummary,
-	aggregateToSeasonSnapshot,
-	boardRowsToEventResults
-} from '@/app/me/tournament/_lib/my-fpl-adapters'
-import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
+import TournamentReviewV2Client from '@/app/me/tournament/TournamentReviewV2Client'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
 	GET_ENTRY_LEAGUES,
 	selectUntrackedFplClassicLeagueRanks,
-	type EntryLeaguesResponse
+	type EntryLeaguesResponse,
+	type FplClassicLeagueRank
 } from '@/lib/graphql/operations/leagues'
 import {
-	GET_MY_FPL_COMPETITION_BOARD,
-	GET_MY_FPL_COMPETITIONS_DESK,
-	type MyFplCompetitionAggregate,
-	type MyFplCompetitionBoardPage,
-	type MyFplCompetitionBoardResponse,
-	type MyFplCompetitionsDeskResponse,
-	type MyFplReviewState,
-	type MyFplSnapshotMeta
+	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+	GET_MY_TOURNAMENT_REVIEW_CATALOG,
+	GET_MY_TOURNAMENT_SEASON_REVIEW,
+	type MyTournamentGameweekReviewResponse,
+	type MyTournamentReviewCatalogResponse,
+	type MyTournamentReviewScope,
+	type MyTournamentSeasonReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
-import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
@@ -29,6 +22,8 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
 import { RouteLoaderTiming } from '@/lib/route-loader-timing'
+import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
+import { selectTournamentReviewEventId } from '@/app/me/tournament/_lib/tournament-review-v2'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +33,7 @@ type PageProps = {
 		tournamentId?: string
 		view?: string
 		gw?: string
+		scope?: string
 	}>
 }
 
@@ -51,12 +47,12 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-function TournamentStatsFallback() {
+function TournamentReviewFallback() {
 	return (
-		<div className="container mx-auto max-w-4xl px-4 py-8">
-			<div className="h-8 w-48 animate-pulse rounded bg-muted/60" />
+		<div className="container mx-auto max-w-6xl px-4 py-8">
+			<div className="h-8 w-64 animate-pulse rounded bg-muted/60" />
 			<div className="mt-6 h-28 w-full animate-pulse rounded-xl bg-muted/40" />
-			<div className="mt-6 h-40 w-full animate-pulse rounded-xl bg-muted/40" />
+			<div className="mt-6 h-56 w-full animate-pulse rounded-xl bg-muted/40" />
 		</div>
 	)
 }
@@ -66,7 +62,19 @@ const positiveInteger = (value: string | undefined): number | null => {
 	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
-/** My Competitions review is backed by one pinned My FPL publication revision. */
+const requestedScope = (value: string | undefined): MyTournamentReviewScope =>
+	value?.toLowerCase() === 'all' ? 'ALL' : 'ACCESSIBLE'
+
+const isScopeAuthorizationError = (error: unknown): boolean => {
+	if (!error || typeof error !== 'object') return false
+	const candidate = error as { code?: unknown; status?: unknown }
+	return candidate.code === 'FORBIDDEN' || candidate.status === 403
+}
+
+/**
+ * V2 is the only new consumer path: this page reads immutable, finalized
+ * tournament-review publications. Unsettled gameweeks remain in Live.
+ */
 export default async function TournamentStatsPage({
 	params,
 	searchParams
@@ -80,6 +88,7 @@ export default async function TournamentStatsPage({
 	])
 	const { locale } = pageLocale
 	const initialView = parseTournamentStatsView(sp.view)
+	let scope = requestedScope(sp.scope)
 
 	const { session, entryId } = context
 	if (!session) {
@@ -91,7 +100,7 @@ export default async function TournamentStatsPage({
 		redirect(localizeHref('/onboarding/bind-entry', locale))
 	}
 
-	const fplClassicRanksPromise = timing
+	const fplClassicRanksPromise: Promise<FplClassicLeagueRank[]> = timing
 		.measure('fpl-classic-ranks', () =>
 			executeServerQueryWithSession<EntryLeaguesResponse>(
 				session,
@@ -104,7 +113,7 @@ export default async function TournamentStatsPage({
 			selectUntrackedFplClassicLeagueRanks(response.entryLeagues)
 		)
 		.catch(error => {
-			console.warn('[tournament stats] FPL Classic ranks unavailable', {
+			console.warn('[tournament review] FPL Classic ranks unavailable', {
 				error: error instanceof Error ? error.name : 'UnknownError'
 			})
 			return []
@@ -112,161 +121,149 @@ export default async function TournamentStatsPage({
 
 	const requestedTournamentId = positiveInteger(sp.tournamentId)
 	const requestedEventId = positiveInteger(sp.gw)
-
-	let initialTournaments: EntryTournament[] = []
-	let initialSelectedTournamentId = ''
-	let initialDataGameweek: number | null = null
-	let initialSliceGameweek: number | null = null
-	let initialCurrentRows = [] as ReturnType<typeof boardRowsToEventResults>
-	let initialSeasonFieldRows = initialCurrentRows
-	let initialSeasonSnapshot = null as ReturnType<
-		typeof aggregateToSeasonSnapshot
-	>
-	let initialPreviousRows = initialCurrentRows
-	let initialRankingSummary = null as ReturnType<
-		typeof aggregateToRankingSummary
-	>
-	let initialBoard: MyFplCompetitionBoardPage | null = null
-	let initialAggregate: MyFplCompetitionAggregate | null = null
-	let initialPlayerMeta: Record<
-		number,
-		{ webName: string; teamShortName: string }
-	> = {}
-	let initialReviewState: MyFplReviewState = 'EMPTY'
+	let initialCatalog: MyTournamentReviewCatalogResponse['myTournamentReviewCatalog'] =
+		{
+			state: 'UNAVAILABLE',
+			asOf: new Date().toISOString(),
+			viewerEntryId: entryId,
+			adminReadAll: false,
+			tournaments: []
+		}
+	let initialSelectedTournamentId: number | null = null
+	let initialEventId: number | null = null
+	let initialFinalizedEventIds: number[] = []
+	let initialGameweekReview:
+		MyTournamentGameweekReviewResponse['myTournamentGameweekReview'] | null =
+		null
+	let initialSeasonReview:
+		MyTournamentSeasonReviewResponse['myTournamentSeasonReview'] | null = null
 	let initialError: string | null = null
-	let usedFallbackGameweek = false
-	let currentGameweek = 0
-	let initialLatestFinalizedGameweek: number | null = null
-	let initialSnapshotMeta: MyFplSnapshotMeta | null = null
 
 	try {
-		let response: MyFplCompetitionsDeskResponse
+		let catalogResponse: MyTournamentReviewCatalogResponse
 		try {
-			response = await timing.measure('my-fpl-competitions-desk', () =>
-				executeServerQueryWithSession<MyFplCompetitionsDeskResponse>(
-					session,
-					GET_MY_FPL_COMPETITIONS_DESK,
-					{
-						tournamentId: requestedTournamentId,
-						eventId: initialView === 'season' ? null : requestedEventId
-					},
-					{ cache: 'no-store' }
-				)
-			)
-		} catch (error) {
-			// A stale/non-member URL must not hide the authenticated tournament list.
-			if (requestedTournamentId === null) throw error
-			console.warn(
-				'[tournament stats] selected tournament unavailable; retrying list:',
-				error
-			)
-			response = await timing.measure('my-fpl-competitions-list-retry', () =>
-				executeServerQueryWithSession<MyFplCompetitionsDeskResponse>(
-					session,
-					GET_MY_FPL_COMPETITIONS_DESK,
-					{
-						tournamentId: null,
-						eventId: initialView === 'season' ? null : requestedEventId
-					},
-					{ cache: 'no-store' }
-				)
-			)
-		}
-
-		const desk = response.myFplCompetitionsDesk
-		initialTournaments = desk.tournaments
-		initialSelectedTournamentId = String(desk.selectedTournamentId ?? '')
-		initialReviewState = desk.state
-		initialSnapshotMeta = desk.snapshotMeta
-		if (
-			desk.state === 'READY' &&
-			desk.selectedTournamentId !== null &&
-			desk.eventId !== null
-		) {
-			const boardResponse = await timing.measure(
-				'my-fpl-competition-board',
+			catalogResponse = await timing.measure(
+				'my-tournament-review-v2-catalog',
 				() =>
-					executeServerQueryWithSession<MyFplCompetitionBoardResponse>(
+					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
 						session,
-						GET_MY_FPL_COMPETITION_BOARD,
-						{
-							tournamentId: desk.selectedTournamentId,
-							eventId: desk.eventId,
-							page: 1,
-							pageSize: 100,
-							search: null,
-							snapshotRevision: desk.snapshotMeta?.revision ?? null
-						},
-						{ cache: 'no-store' }
+						GET_MY_TOURNAMENT_REVIEW_CATALOG,
+						{ scope },
+						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
 					)
 			)
-			initialBoard = boardResponse.myFplCompetitionBoard
-			initialReviewState = initialBoard.state
+		} catch (error) {
+			// A query-string scope is a preference, not proof of the platform
+			// admin capability. Fall back to the viewer's accessible catalog when
+			// a shared/manual `scope=all` URL is opened by a normal user.
+			if (scope !== 'ALL' || !isScopeAuthorizationError(error)) throw error
+			scope = 'ACCESSIBLE'
+			catalogResponse = await timing.measure(
+				'my-tournament-review-v2-catalog-accessible-fallback',
+				() =>
+					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
+						session,
+						GET_MY_TOURNAMENT_REVIEW_CATALOG,
+						{ scope },
+						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+					)
+			)
 		}
-		const reviewReady = initialReviewState === 'READY'
-		if (!reviewReady) initialBoard = null
-		initialAggregate = reviewReady ? desk.aggregate : null
-		currentGameweek =
-			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
-		initialSliceGameweek = reviewReady ? desk.eventId : null
-		const rows = boardRowsToEventResults(initialBoard, desk.selectedTournament)
-		initialCurrentRows = initialReviewState === 'READY' ? rows : []
-		initialSeasonFieldRows = initialCurrentRows
-		initialLatestFinalizedGameweek = desk.context.latestFinalizedEventId ?? null
-		initialDataGameweek =
-			initialReviewState === 'READY' && desk.eventId !== null
-				? initialView === 'season'
-					? (initialLatestFinalizedGameweek ?? desk.eventId)
-					: desk.eventId
-				: null
-		initialSeasonSnapshot = reviewReady
-			? aggregateToSeasonSnapshot(initialAggregate, initialBoard)
-			: null
-		initialRankingSummary = reviewReady
-			? aggregateToRankingSummary(initialAggregate)
-			: null
+		initialCatalog = catalogResponse.myTournamentReviewCatalog
+		const selected =
+			initialCatalog.tournaments.find(
+				item => item.tournamentId === requestedTournamentId
+			) ??
+			initialCatalog.tournaments[0] ??
+			null
+		initialSelectedTournamentId = selected?.tournamentId ?? null
+		const latestSettledEventId =
+			selected?.latestAvailableEventId ??
+			selected?.latestFinalizedEventId ??
+			null
+		if (initialSelectedTournamentId && latestSettledEventId) {
+			// Resolve the tournament's immutable event set before accepting a URL
+			// gameweek. A positive event below the latest one may still predate a
+			// custom tournament and therefore have no publication.
+			const latestSeasonResponse = await timing.measure(
+				'my-tournament-review-v2-event-index',
+				() =>
+					executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
+						session,
+						GET_MY_TOURNAMENT_SEASON_REVIEW,
+						{
+							tournamentId: initialSelectedTournamentId,
+							throughEventId: latestSettledEventId,
+							first: 100
+						},
+						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+					)
+			)
+			const latestSeasonReview = latestSeasonResponse.myTournamentSeasonReview
+			initialFinalizedEventIds = latestSeasonReview.finalizedEventIds
+			initialEventId = selectTournamentReviewEventId(
+				requestedEventId,
+				latestSettledEventId,
+				initialFinalizedEventIds
+			)
 
-		console.info('[tournament stats] SSR snapshot desk seed', {
-			view: initialView,
-			requestedTournamentId,
-			requestedEventId,
-			selectedTournamentId: desk.selectedTournamentId,
-			currentGw: desk.context.currentEventId,
-			latestFinalizedGw: desk.context.latestFinalizedEventId,
-			state: initialReviewState,
-			rows: initialCurrentRows.length,
-			fieldSize: initialBoard?.fieldSize ?? 0
-		})
+			if (initialEventId) {
+				const [gameweekResponse, seasonResponse] = await timing.measure(
+					'my-tournament-review-v2-snapshots',
+					() =>
+						Promise.all([
+							executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
+								session,
+								GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+								{
+									tournamentId: initialSelectedTournamentId,
+									eventId: initialEventId,
+									first: 100
+								},
+								{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+							),
+							initialEventId === latestSettledEventId
+								? Promise.resolve(latestSeasonResponse)
+								: executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
+										session,
+										GET_MY_TOURNAMENT_SEASON_REVIEW,
+										{
+											tournamentId: initialSelectedTournamentId,
+											throughEventId: initialEventId,
+											first: 100
+										},
+										{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+									)
+						])
+				)
+				initialGameweekReview = gameweekResponse.myTournamentGameweekReview
+				initialSeasonReview = seasonResponse.myTournamentSeasonReview
+			}
+		}
 	} catch (error) {
-		console.error('[tournament stats] Failed to seed finalized desk:', error)
+		// Keep server logs free of query variables, identities, and upstream
+		// response bodies. The request-stage metric carries the bounded failure
+		// outcome for diagnosis.
+		console.error('[tournament review v2] Finalized review seed unavailable')
 		initialError = t('tournamentStatsFailed')
 	}
 	const initialFplClassicRanks = await fplClassicRanksPromise
-	timing.finish(initialError ? 'unavailable' : 'ready')
 
+	timing.finish(initialError ? 'unavailable' : 'ready')
 	return (
-		<Suspense fallback={<TournamentStatsFallback />}>
-			<TournamentStatsClient
+		<Suspense fallback={<TournamentReviewFallback />}>
+			<TournamentReviewV2Client
 				entryId={entryId}
 				initialFplClassicRanks={initialFplClassicRanks}
-				initialCurrentGameweek={currentGameweek}
-				initialLatestFinalizedGameweek={initialLatestFinalizedGameweek}
-				initialTournaments={initialTournaments}
+				initialCatalog={initialCatalog}
+				initialScope={scope}
+				initialView={initialView}
 				initialSelectedTournamentId={initialSelectedTournamentId}
-				initialDataGameweek={initialDataGameweek}
-				initialSliceGameweek={initialSliceGameweek}
-				initialCurrentRows={initialCurrentRows}
-				initialSeasonFieldRows={initialSeasonFieldRows}
-				initialSeasonSnapshot={initialSeasonSnapshot}
-				initialPreviousRows={initialPreviousRows}
-				initialRankingSummary={initialRankingSummary}
-				initialPlayerMeta={initialPlayerMeta}
-				initialUsedFallbackGameweek={usedFallbackGameweek}
-				initialReviewState={initialReviewState}
-				initialBoard={initialBoard}
-				initialAggregate={initialAggregate}
+				initialEventId={initialEventId}
+				initialFinalizedEventIds={initialFinalizedEventIds}
+				initialGameweekReview={initialGameweekReview}
+				initialSeasonReview={initialSeasonReview}
 				initialError={initialError}
-				initialSnapshotMeta={initialSnapshotMeta}
 			/>
 		</Suspense>
 	)

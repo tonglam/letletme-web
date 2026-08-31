@@ -640,3 +640,281 @@ export const GET_MY_FPL_COMPETITION_SEASON_PATH = `
     }
   }
 `
+
+export type MyTournamentReviewScope = 'ACCESSIBLE' | 'ALL'
+export type MyTournamentReviewFormat = 'POINTS' | 'H2H' | 'KNOCKOUT'
+export type MyTournamentReviewState =
+	'PENDING' | 'WAITING_SOURCE' | 'READY' | 'DEGRADED' | 'UNAVAILABLE'
+
+export interface MyTournamentReviewCatalogItem {
+	tournamentId: number
+	name: string
+	creator: string
+	leagueId: number
+	leagueType: string
+	totalTeamNum: number
+	latestFinalizedEventId: number | null
+	latestAvailableEventId: number | null
+	latestRevision: string | null
+	latestFormat: MyTournamentReviewFormat | null
+	state: MyTournamentReviewState
+	publishedAt: string | null
+}
+
+export interface MyTournamentReviewCatalogResponse {
+	myTournamentReviewCatalog: {
+		state: MyTournamentReviewState
+		asOf: string
+		viewerEntryId: number | null
+		adminReadAll: boolean
+		tournaments: MyTournamentReviewCatalogItem[]
+	}
+}
+
+export interface MyTournamentReviewFreshness {
+	eventDataCheckedAt: string
+	sourceMinCheckedAt: string
+	sourceMaxCheckedAt: string
+	publishedAt: string
+	ageSeconds: number
+}
+
+export interface MyTournamentReviewScopeMeta {
+	tournamentId: number
+	eventId: number
+	revision: string
+	format: MyTournamentReviewFormat
+	state: MyTournamentReviewState
+	freshness: MyTournamentReviewFreshness | null
+	rowCount: number
+	expectedSubjectCount: number
+	readySubjectCount: number
+	notApplicableSubjectCount: number
+	contentSha256: string | null
+}
+
+export interface MyTournamentReviewPointsRow {
+	entryId: number
+	entryName: string
+	playerName: string
+	applicable: boolean
+	groupId: number | null
+	rank: number | null
+	previousRank: number | null
+	grossPoints: number | null
+	transferCost: number | null
+	netPoints: number | null
+	tournamentScore: number | null
+	seasonGrossPoints: number | null
+	seasonNetPoints: number | null
+	eventRank: number | null
+	overallPoints: number | null
+	overallRank: number | null
+}
+
+export interface MyTournamentReviewPoints {
+	headlineMetric: string
+	grossPointsTotal: number
+	grossPointsAverage: number
+	netPointsTotal: number
+	seasonGrossPointsTotal: number
+	seasonGrossPointsAverage: number
+	seasonNetPointsTotal: number
+	rows: MyTournamentReviewPointsRow[]
+	nextCursor: string | null
+	hasNextPage: boolean
+}
+
+export interface MyTournamentReviewH2HSide {
+	entryId: number | null
+	entryName: string
+	isAverage: boolean
+	grossPoints: number | null
+	transferCost: number | null
+	netPoints: number | null
+	matchPoints: number | null
+	rank: number | null
+}
+
+export interface MyTournamentReviewH2HMatch {
+	matchId: string
+	groupId: number
+	home: MyTournamentReviewH2HSide | null
+	away: MyTournamentReviewH2HSide | null
+	isBye: boolean
+}
+
+export interface MyTournamentReviewH2HStanding {
+	groupId: number
+	entryId: number
+	entryName: string
+	rank: number
+	played: number
+	won: number
+	drawn: number
+	lost: number
+	matchPoints: number
+	pointsFor: number
+	pointsAgainst: number
+}
+
+export interface MyTournamentReviewH2H {
+	matches: MyTournamentReviewH2HMatch[]
+	standings: MyTournamentReviewH2HStanding[]
+	nextCursor: string | null
+	hasNextPage: boolean
+}
+
+export interface MyTournamentReviewKnockoutSide {
+	entryId: number
+	entryName: string
+	grossPoints: number | null
+	transferCost: number | null
+	netPoints: number | null
+	goalsScored: number | null
+	goalsConceded: number | null
+}
+
+export interface MyTournamentReviewKnockoutMatch {
+	round: number | null
+	name: string | null
+	matchId: number
+	playAgainstId: number
+	home: MyTournamentReviewKnockoutSide | null
+	away: MyTournamentReviewKnockoutSide | null
+	winnerEntryId: number | null
+}
+
+export interface MyTournamentReviewKnockout {
+	matches: MyTournamentReviewKnockoutMatch[]
+	nextCursor: string | null
+	hasNextPage: boolean
+}
+
+export interface MyTournamentGameweekReview {
+	state: MyTournamentReviewState
+	scope: MyTournamentReviewScopeMeta | null
+	points: MyTournamentReviewPoints | null
+	h2h: MyTournamentReviewH2H | null
+	knockout: MyTournamentReviewKnockout | null
+}
+
+export interface MyTournamentGameweekReviewResponse {
+	myTournamentGameweekReview: MyTournamentGameweekReview
+}
+
+export interface MyTournamentSeasonReview {
+	state: MyTournamentReviewState
+	tournamentId: number
+	throughEventId: number
+	latestEventId: number | null
+	latestRevision: string | null
+	format: MyTournamentReviewFormat | null
+	freshness: MyTournamentReviewFreshness | null
+	finalizedEventIds: number[]
+	points: MyTournamentReviewPoints | null
+	h2h: MyTournamentReviewH2H | null
+	knockout: MyTournamentReviewKnockout | null
+}
+
+export interface MyTournamentSeasonReviewResponse {
+	myTournamentSeasonReview: MyTournamentSeasonReview
+}
+
+const REVIEW_SCOPE_META_FIELDS = `
+  tournamentId eventId revision format state
+  freshness { eventDataCheckedAt sourceMinCheckedAt sourceMaxCheckedAt publishedAt ageSeconds }
+  rowCount expectedSubjectCount readySubjectCount notApplicableSubjectCount contentSha256
+`
+const REVIEW_POINTS_FIELDS = `
+  headlineMetric grossPointsTotal grossPointsAverage netPointsTotal
+  seasonGrossPointsTotal seasonGrossPointsAverage seasonNetPointsTotal
+  nextCursor hasNextPage
+  rows {
+    entryId entryName playerName applicable groupId rank previousRank grossPoints transferCost
+    netPoints tournamentScore seasonGrossPoints seasonNetPoints eventRank overallPoints overallRank
+  }
+`
+const REVIEW_H2H_FIELDS = `
+  nextCursor hasNextPage
+  matches {
+    matchId groupId isBye
+    home { entryId entryName isAverage grossPoints transferCost netPoints matchPoints rank }
+    away { entryId entryName isAverage grossPoints transferCost netPoints matchPoints rank }
+  }
+	standings {
+		groupId entryId entryName rank played won drawn lost matchPoints pointsFor pointsAgainst
+	}
+`
+const REVIEW_KNOCKOUT_FIELDS = `
+  nextCursor hasNextPage
+  matches {
+    round name matchId playAgainstId winnerEntryId
+    home { entryId entryName grossPoints transferCost netPoints goalsScored goalsConceded }
+    away { entryId entryName grossPoints transferCost netPoints goalsScored goalsConceded }
+  }
+`
+
+export const GET_MY_TOURNAMENT_REVIEW_CATALOG = `
+  query GetMyTournamentReviewCatalog($scope: MyTournamentReviewScope = ACCESSIBLE) {
+    myTournamentReviewCatalog(scope: $scope) {
+      state asOf viewerEntryId adminReadAll
+      tournaments {
+        tournamentId name creator leagueId leagueType totalTeamNum
+        latestFinalizedEventId latestAvailableEventId latestRevision latestFormat state publishedAt
+      }
+    }
+  }
+`
+
+export const GET_MY_TOURNAMENT_GAMEWEEK_REVIEW = `
+  query GetMyTournamentGameweekReview(
+    $tournamentId: Int!
+    $eventId: Int!
+    $first: Int = 100
+    $after: String
+    $revision: String
+  ) {
+    myTournamentGameweekReview(
+      tournamentId: $tournamentId eventId: $eventId first: $first after: $after revision: $revision
+    ) {
+      state
+      scope {${REVIEW_SCOPE_META_FIELDS}}
+      points {${REVIEW_POINTS_FIELDS}}
+      h2h {${REVIEW_H2H_FIELDS}}
+      knockout {${REVIEW_KNOCKOUT_FIELDS}}
+    }
+  }
+`
+
+export const GET_MY_TOURNAMENT_SEASON_REVIEW = `
+  query GetMyTournamentSeasonReview(
+    $tournamentId: Int!
+    $throughEventId: Int!
+    $first: Int = 100
+    $after: String
+  ) {
+    myTournamentSeasonReview(
+      tournamentId: $tournamentId
+      throughEventId: $throughEventId
+      first: $first
+      after: $after
+    ) {
+      state tournamentId throughEventId latestEventId latestRevision format
+      freshness { eventDataCheckedAt sourceMinCheckedAt sourceMaxCheckedAt publishedAt ageSeconds }
+      finalizedEventIds
+      points {${REVIEW_POINTS_FIELDS}}
+      h2h {${REVIEW_H2H_FIELDS}}
+      knockout {${REVIEW_KNOCKOUT_FIELDS}}
+    }
+  }
+`
+
+export const GET_MY_TOURNAMENT_REVIEW_STATUS = `
+  query GetMyTournamentReviewStatus($tournamentId: Int!) {
+    myTournamentReviewStatus(tournamentId: $tournamentId) {
+      tournamentId latestFinalizedEventId latestAvailableEventId
+      events { eventId format state nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt }
+    }
+  }
+`

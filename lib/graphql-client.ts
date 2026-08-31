@@ -13,6 +13,8 @@ export interface ExecuteQueryOptions {
 	cache?: RequestCache
 	next?: { revalidate?: number | false; tags?: string[] }
 	headers?: Record<string, string>
+	/** Explicit consumer contract required by version-gated GraphQL roots. */
+	contract?: 'my-tournament-review-v2'
 	timeoutMs?: number
 	signal?: AbortSignal
 	/** Error codes the immediate caller deliberately catches and recovers from. */
@@ -521,9 +523,12 @@ export async function executeQuery<T>(
 	const endpoint = getGraphQLEndpoint()
 	const cache = options?.cache ?? 'no-store'
 	const operationName = extractOperationName(query)
+	const contractHeaders = options?.contract
+		? { 'X-LetLetMe-Contract': options.contract }
+		: undefined
 
 	if (isClient) {
-		const key = `${cache}::${query}::${JSON.stringify(variables ?? null)}`
+		const key = `${cache}::${options?.contract ?? ''}::${query}::${JSON.stringify(variables ?? null)}`
 		const publicOperation = Boolean(
 			operationName && PUBLIC_BROWSER_OPERATION_ALLOWLIST.has(operationName)
 		)
@@ -544,7 +549,7 @@ export async function executeQuery<T>(
 			cache,
 			options?.next,
 			true,
-			undefined,
+			{ ...options?.headers, ...contractHeaders },
 			options?.timeoutMs,
 			options?.signal,
 			options?.handledErrorCodes,
@@ -567,7 +572,7 @@ export async function executeQuery<T>(
 		cache,
 		options?.next,
 		false,
-		options?.headers,
+		{ ...options?.headers, ...contractHeaders },
 		options?.timeoutMs,
 		options?.signal,
 		options?.handledErrorCodes,

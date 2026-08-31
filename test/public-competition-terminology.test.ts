@@ -37,6 +37,7 @@ const walkStrings = (
 
 const publicExceptionPaths = new Set([
 	'PageMetadata.tournamentStatsTitle',
+	'PageMetadata.tournamentStatsDescription',
 	'TournamentStats.title',
 	'Navigation.myTournament'
 ])
@@ -111,7 +112,21 @@ test('public competition copy is complete and contains no accidental legacy term
 		const legacyTerm = locale.name === 'en' ? /tournament/i : /锦标赛/
 		for (const entry of walkStrings(locale.messages)) {
 			const withoutPlaceholders = entry.value.replace(/\{[^}]+\}/g, '')
-			if (publicExceptionPaths.has(entry.path)) continue
+			if (
+				publicExceptionPaths.has(entry.path) ||
+				entry.path.startsWith('TournamentStats.')
+			) {
+				if (entry.path.startsWith('TournamentStats.')) {
+					assert.doesNotMatch(
+						withoutPlaceholders,
+						/official/i,
+						locale.name +
+							' review copy must not expose official terminology at ' +
+							entry.path
+					)
+				}
+				continue
+			}
 			assert.doesNotMatch(
 				withoutPlaceholders,
 				legacyTerm,
