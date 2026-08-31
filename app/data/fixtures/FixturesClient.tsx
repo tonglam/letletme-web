@@ -459,10 +459,7 @@ export default function FixturesClient({
 			const missing = Array.from(
 				{ length: targetEnd - fromGw + 1 },
 				(_, index) => fromGw + index
-			).filter(
-				eventId =>
-					!cacheRef.current.has(eventId) && !unknownEventIds.includes(eventId)
-			)
+			).filter(eventId => !cacheRef.current.has(eventId))
 			if (missing.length === 0) {
 				setPendingHorizon(null)
 				setLoadError(false)
@@ -524,7 +521,7 @@ export default function FixturesClient({
 					}
 				})
 		},
-		[fromGw, horizon, pendingHorizon, unknownEventIds]
+		[fromGw, horizon, pendingHorizon]
 	)
 
 	const model = useMemo(

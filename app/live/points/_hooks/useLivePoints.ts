@@ -15,6 +15,7 @@ import {
 } from '@/lib/graphql/operations/live'
 import {
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
+	canReplaceLivePointsSnapshot,
 	liveSnapshotNeedsRefresh,
 	liveContextToSnapshot,
 	shouldPollLiveSnapshot,
@@ -376,6 +377,20 @@ export function useLivePoints({
 					liveDataRetryRef.current = null
 					retryingRequestIdRef.current = null
 
+					const observedSnapshot = hydrateLiveSnapshot(
+						live,
+						liveResponse.calcLivePointsByEntry.snapshot
+					)
+					if (
+						!canReplaceLivePointsSnapshot(observedSnapshot, snapshotRef.current)
+					) {
+						// A successful request can still be served by an older
+						// fallback publication. Keep the accepted same-event pitch
+						// and score monotonic instead of repainting it backwards.
+						setError(undefined)
+						return
+					}
+
 					const allPlayers = mapLiveDataToPlayers(
 						live,
 						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
@@ -387,12 +402,7 @@ export function useLivePoints({
 					setIsOfficialUpdating(false)
 					latestLiveDataRef.current = { requestKey, live }
 					setLiveData(live)
-					acceptSnapshot(
-						hydrateLiveSnapshot(
-							live,
-							liveResponse.calcLivePointsByEntry.snapshot
-						)
-					)
+					acceptSnapshot(observedSnapshot)
 					setStartingPlayers(allPlayers.filter(player => !player.isBench))
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)

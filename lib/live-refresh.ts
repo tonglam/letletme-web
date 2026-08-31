@@ -156,6 +156,59 @@ export function liveSnapshotNeedsRefresh(
 }
 
 /**
+ * A refresh response may come from a fallback publication that is older than
+ * the response already painted. Keep the accepted same-event publication
+ * monotonic so a transient Redis/Data fallback cannot move the score
+ * backwards. Generation is the primary order; publishedAt is only a
+ * tie-breaker for snapshots that do not expose a complete revision vector.
+ */
+export function canReplaceLivePointsSnapshot(
+	candidate: LiveSnapshotStatus | null | undefined,
+	accepted: LiveSnapshotStatus | null | undefined
+): boolean {
+	if (!candidate) return false
+	if (!accepted) return true
+	if (candidate.eventId !== accepted.eventId) return false
+
+	const candidateGeneration = candidate.revisions?.generation
+	const acceptedGeneration = accepted.revisions?.generation
+	if (
+		typeof candidateGeneration === 'number' &&
+		typeof acceptedGeneration === 'number' &&
+		Number.isSafeInteger(candidateGeneration) &&
+		Number.isSafeInteger(acceptedGeneration)
+	) {
+		if (candidateGeneration !== acceptedGeneration) {
+			return candidateGeneration > acceptedGeneration
+		}
+
+		const candidatePublicationId = candidate.revisions?.publicationId
+		const acceptedPublicationId = accepted.revisions?.publicationId
+		if (candidatePublicationId && acceptedPublicationId) {
+			return candidatePublicationId === acceptedPublicationId
+		}
+	}
+
+	const candidatePublishedAt = Date.parse(
+		candidate.times?.publishedAt ?? candidate.publishedAt ?? ''
+	)
+	const acceptedPublishedAt = Date.parse(
+		accepted.times?.publishedAt ?? accepted.publishedAt ?? ''
+	)
+	if (
+		Number.isFinite(candidatePublishedAt) &&
+		Number.isFinite(acceptedPublishedAt)
+	) {
+		return candidatePublishedAt >= acceptedPublishedAt
+	}
+
+	// V2 snapshots should always carry generation/publication evidence. If a
+	// degraded legacy-shaped snapshot reaches this client, fail closed instead
+	// of allowing an unorderable response to overwrite the accepted one.
+	return false
+}
+
+/**
  * Matchday payloads are owned by the score/fixture publication. Changes to
  * picks, rank, or unrelated live-point projections must not refetch the full
  * fixture-and-player payload.

@@ -5,6 +5,7 @@ import { describe, it } from 'node:test'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 import {
 	LIVE_AUTO_REFRESH_SECONDS,
+	canReplaceLivePointsSnapshot,
 	liveContextToSnapshot,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
@@ -135,6 +136,47 @@ describe('Live Points V2 web contract', () => {
 				}
 			),
 			true
+		)
+	})
+
+	it('never replaces an accepted publication with an older same-event fallback', () => {
+		const accepted = liveContextToSnapshot({
+			season: '2627',
+			eventId: 1,
+			anchorEventId: 1,
+			latestFinalizedEventId: null,
+			nextEventId: 2,
+			scoreCoreRevision: revision('b'),
+			state: 'LIVE_ACTIVE',
+			windowState: 'LIVE_ACTIVE',
+			producerState: 'LIVE_ACTIVE',
+			anchorMode: 'CURRENT',
+			dataAvailability: 'FRESH',
+			source: 'REDIS_CURRENT',
+			stale: false,
+			publishedAt: '2026-08-29T10:01:00.000Z',
+			sourceCheckedAt: '2026-08-29T10:01:01.000Z',
+			nextRefreshAt: null,
+			revisions: { ...score().revisions, generation: 2 },
+			times: score().times,
+			delivery: score().delivery
+		})
+		const older = {
+			...accepted!,
+			publishedAt: '2026-08-29T10:00:00.000Z',
+			revisions: { ...accepted!.revisions!, generation: 1 }
+		}
+		const newer = {
+			...accepted!,
+			revisions: { ...accepted!.revisions!, generation: 3 }
+		}
+
+		assert.equal(canReplaceLivePointsSnapshot(older, accepted), false)
+		assert.equal(canReplaceLivePointsSnapshot(accepted, accepted), true)
+		assert.equal(canReplaceLivePointsSnapshot(newer, accepted), true)
+		assert.equal(
+			canReplaceLivePointsSnapshot({ ...newer, eventId: 2 }, accepted),
+			false
 		)
 	})
 

@@ -12,6 +12,7 @@ import {
 	type FixturePlanningFixture,
 	type FixtureWindowLoadResult
 } from '../lib/fixture-window'
+import { mergeFixtureWindowSchedules } from '../lib/fixture-window-schedule'
 import {
 	createFixtureWindowRouteHandler,
 	FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
@@ -239,6 +240,28 @@ describe('fixture window loader', () => {
 			}),
 			false
 		)
+	})
+
+	it('keeps fulfilled partial windows retryable', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[
+				{
+					status: 'fulfilled',
+					value: {
+						fromGw: 10,
+						toGw: 11,
+						fixturesByEvent: { '10': [planningFixture(10)] },
+						unknownEventIds: [11]
+					}
+				}
+			],
+			[{ fromGw: 10, count: 2 }],
+			fixtures => fixtures
+		)
+
+		assert.equal(merged.failedWindowCount, 1)
+		assert.deepEqual(Array.from(merged.unavailableEventIds), [11])
+		assert.deepEqual(merged.fixturesByEvent.get(10), [planningFixture(10)])
 	})
 })
 

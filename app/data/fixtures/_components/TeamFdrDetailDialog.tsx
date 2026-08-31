@@ -20,6 +20,7 @@ import {
 	type FixturePlanningFixture,
 	type FixtureWindowResponse
 } from '@/lib/fixture-window'
+import { mergeFixtureWindowSchedules } from '@/lib/fixture-window-schedule'
 import { cn } from '@/lib/utils'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -83,39 +84,12 @@ function mergeFullSeasonSchedule(
 	results: PromiseSettledResult<FixtureWindowResponse>[],
 	previous: FullSeasonSchedule | null = null
 ): FullSeasonSchedule {
-	const fixturesByEvent = new Map(previous?.fixturesByEvent ?? [])
-	const unavailableEventIds = new Set(previous?.unavailableEventIds ?? [])
-	let failedWindowCount = 0
-
-	results.forEach((result, index) => {
-		const window = FULL_SEASON_WINDOWS[index]
-		if (!window) return
-		const eventIds = Array.from(
-			{ length: window.count },
-			(_, eventIndex) => window.fromGw + eventIndex
-		)
-
-		if (result.status === 'rejected') {
-			failedWindowCount += 1
-			eventIds.forEach(eventId => {
-				if (!fixturesByEvent.has(eventId)) unavailableEventIds.add(eventId)
-			})
-			return
-		}
-
-		eventIds.forEach(eventId => unavailableEventIds.delete(eventId))
-		Object.entries(result.value.fixturesByEvent).forEach(
-			([rawEventId, fixtures]) => {
-				fixturesByEvent.set(Number(rawEventId), fixtures.map(toPlanningFixture))
-			}
-		)
-		result.value.unknownEventIds.forEach(eventId => {
-			fixturesByEvent.delete(eventId)
-			unavailableEventIds.add(eventId)
-		})
-	})
-
-	return { fixturesByEvent, unavailableEventIds, failedWindowCount }
+	return mergeFixtureWindowSchedules(
+		results,
+		FULL_SEASON_WINDOWS,
+		fixtures => fixtures.map(toPlanningFixture),
+		previous
+	)
 }
 
 function teamFixtureScore(cell: TeamFixtureCell): string | null {
