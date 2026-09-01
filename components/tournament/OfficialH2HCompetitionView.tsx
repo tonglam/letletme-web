@@ -640,7 +640,11 @@ export function OfficialH2HCompetitionView({
 		snapshot?.availability === 'READY'
 			? snapshot.delivery.state === 'FINAL'
 				? t('completed')
-				: t('live')
+				: snapshot.delivery.state === 'FRESH'
+					? t('live')
+					: snapshot.delivery.state === 'UNAVAILABLE'
+						? t('scoreOfficialUnavailable')
+						: t('scoreOfficialDelayed')
 			: t('pending')
 	const previousEvent = eventId > 1 ? eventId - 1 : null
 	const nextEvent = eventId < 38 ? eventId + 1 : null
