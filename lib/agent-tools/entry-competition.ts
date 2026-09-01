@@ -6,7 +6,7 @@ import {
 	ENTRY_SEARCH_DOCUMENT,
 	ENTRY_SNAPSHOT_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
-	OWN_ENTRY_EVENT_DOCUMENT
+	OWN_ENTRY_GAMEWEEK_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
 	coreEventId,
@@ -47,11 +47,74 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 
 	if (input.entryId === undefined) {
 		const entryId = requireVerifiedEntryId(options.session)
-		const [snapshot, reviewResult] = await Promise.all([
-			executeDocument<{
-				coreEventContext: CoreContext
-				entrySnapshot: unknown | null
-			}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId }),
+		const snapshotPromise = executeDocument<{
+			coreEventContext: CoreContext
+			entrySnapshot: unknown | null
+		}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId })
+		if (input.eventId !== undefined) {
+			const [snapshot, gameweekResult] = await Promise.all([
+				snapshotPromise,
+				executeDocument<{
+					coreEventContext: CoreContext
+					myFplManagerGameweek: {
+						state: string
+						eventId: number
+						context: {
+							season: string
+							coreRevision: string
+						}
+						[key: string]: unknown
+					}
+				}>(options, OWN_ENTRY_GAMEWEEK_DOCUMENT, { eventId: input.eventId })
+			])
+			if (!snapshot.entrySnapshot) {
+				throw new AgentToolError(
+					'NOT_FOUND',
+					'The verified entry has not been persisted by LetLetMe yet.',
+					404,
+					false
+				)
+			}
+			const gameweek = gameweekResult.myFplManagerGameweek
+			if (
+				snapshot.coreEventContext.season !==
+					gameweekResult.coreEventContext.season ||
+				snapshot.coreEventContext.revision !==
+					gameweekResult.coreEventContext.revision ||
+				gameweek.context.season !== snapshot.coreEventContext.season ||
+				gameweek.context.coreRevision !== snapshot.coreEventContext.revision ||
+				gameweek.eventId !== input.eventId
+			) {
+				throw new AgentToolError(
+					'UPSTREAM_UNAVAILABLE',
+					'The published entry revision or requested Gameweek changed during this request. Retry the tool.',
+					502,
+					true
+				)
+			}
+			const warnings: AgentWarning[] = []
+			if (gameweek.state !== 'READY') {
+				warnings.push({
+					code: `ENTRY_EXTENSION_${gameweek.state}`,
+					message:
+						'Some verified-entry analysis is not ready for this Gameweek.'
+				})
+			}
+			return toolResponse(
+				options,
+				{
+					accessScope: 'self',
+					entry: snapshot.entrySnapshot,
+					extensions: gameweek
+				},
+				coreRevisions(gameweekResult.coreEventContext),
+				warnings,
+				undefined,
+				gameweekResult.coreEventContext.sourceCheckedAt
+			)
+		}
+		const [snapshot, deskResult] = await Promise.all([
+			snapshotPromise,
 			executeDocument<{
 				coreEventContext: CoreContext
 				myFplManagerReview: {
@@ -61,17 +124,9 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 						coreRevision: string
 					}
 					timeline: unknown[]
-					currentGameweek?: unknown
 					[key: string]: unknown
 				}
-				myFplManagerGameweek?: unknown
-			}>(
-				options,
-				input.eventId === undefined
-					? OWN_ENTRY_DOCUMENT
-					: OWN_ENTRY_EVENT_DOCUMENT,
-				input.eventId === undefined ? {} : { eventId: input.eventId }
-			)
+			}>(options, OWN_ENTRY_DOCUMENT, {})
 		])
 		if (!snapshot.entrySnapshot) {
 			throw new AgentToolError(
@@ -82,13 +137,12 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 			)
 		}
 		if (
-			snapshot.coreEventContext.season !==
-				reviewResult.coreEventContext.season ||
+			snapshot.coreEventContext.season !== deskResult.coreEventContext.season ||
 			snapshot.coreEventContext.revision !==
-				reviewResult.coreEventContext.revision ||
-			reviewResult.myFplManagerReview.context.season !==
+				deskResult.coreEventContext.revision ||
+			deskResult.myFplManagerReview.context.season !==
 				snapshot.coreEventContext.season ||
-			reviewResult.myFplManagerReview.context.coreRevision !==
+			deskResult.myFplManagerReview.context.coreRevision !==
 				snapshot.coreEventContext.revision
 		) {
 			throw new AgentToolError(
@@ -98,7 +152,7 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				true
 			)
 		}
-		const review = reviewResult.myFplManagerReview
+		const review = deskResult.myFplManagerReview
 		const warnings: AgentWarning[] = []
 		if (review.state !== 'READY') {
 			warnings.push({
@@ -113,16 +167,13 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				entry: snapshot.entrySnapshot,
 				extensions: {
 					...review,
-					history: review.timeline.slice(-input.historyLimit),
-					...(reviewResult.myFplManagerGameweek
-						? { gameweek: reviewResult.myFplManagerGameweek }
-						: {})
+					timeline: review.timeline.slice(-input.historyLimit)
 				}
 			},
-			coreRevisions(reviewResult.coreEventContext),
+			coreRevisions(deskResult.coreEventContext),
 			warnings,
 			undefined,
-			reviewResult.coreEventContext.sourceCheckedAt
+			deskResult.coreEventContext.sourceCheckedAt
 		)
 	}
 
@@ -140,10 +191,7 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 	}
 	return toolResponse(
 		options,
-		{
-			accessScope: 'public',
-			entry: result.entrySnapshot
-		},
+		{ accessScope: 'public', entry: result.entrySnapshot },
 		coreRevisions(result.coreEventContext),
 		[],
 		undefined,
@@ -182,11 +230,7 @@ type CompetitionLiveSnapshot = {
 	eventId: number
 	state: string
 	revisions: { scoreCore: string }
-	times: {
-		sourceCheckedAt: string
-		contentUpdatedAt: string
-		publishedAt: string
-	}
+	times: { sourceCheckedAt: string; contentUpdatedAt: string; publishedAt: string }
 	delivery: { state: string; servedFrom: string; reasonCodes: string[] }
 } | null
 
@@ -406,7 +450,6 @@ export async function runCompetition(
 		coreRevisions(result.coreEventContext),
 		[],
 		{ nextCursor },
-		result.liveSnapshot?.times.sourceCheckedAt ??
-			result.coreEventContext.sourceCheckedAt
+		result.liveSnapshot?.times.sourceCheckedAt ?? result.coreEventContext.sourceCheckedAt
 	)
 }

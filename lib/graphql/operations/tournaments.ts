@@ -981,7 +981,7 @@ export interface EntryLiveCompetitionBoardRow {
 	entryName: string
 	playerName: string
 	rank: number
-	overallRank: number
+	overallRank: number | null
 	teamValue: number
 	chip: string
 	transferCost: number

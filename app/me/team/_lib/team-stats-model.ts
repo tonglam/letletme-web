@@ -9,17 +9,17 @@ import {
 import {
 	GET_MY_FPL_MANAGER_GAMEWEEK,
 	GET_MY_FPL_MANAGER_REVIEW,
-	GET_MY_FPL_MANAGER_TRANSFERS,
-	type MyFplReviewState,
-	type MyFplSnapshotMeta,
+	type MyFplManagerReview,
+	type MyFplManagerReviewResponse,
 	type MyFplManagerGameweekResponse,
-	type MyFplManagerReviewResponse
+	type MyFplReviewState,
+	type MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
 import {
-	eventResultFromMyFplManagerGameweek,
-	historyFromMyFplReview,
-	transfersFromMyFplManagerReview
-} from './my-fpl-adapters'
+	eventResultFromManagerGameweek,
+	historyFromManagerReview,
+	transfersFromManagerReview
+} from './manager-review-projection'
 
 export interface EventPickViewModel {
 	element: number | null
@@ -81,7 +81,7 @@ export interface TeamStatsViewModel {
 	eventName: string
 	eventPoints: number
 	overallPoints: number
-	overallRank: number
+	overallRank: number | null
 	eventTransfers: number
 	eventTransfersCost: number
 	eventNetPoints: number
@@ -96,7 +96,7 @@ export interface TeamStatsViewModel {
 		eventNetPoints: number
 		eventRank: number | null
 		overallPoints: number
-		overallRank: number
+		overallRank: number | null
 		eventTransfers: number
 		eventTransfersCost: number
 		/** Played captain that GW (resolved name); empty if unknown. */
@@ -216,7 +216,7 @@ export function identityFromEventResult(
 		region: entryEventResult.entry.region ?? '-',
 		totalTransfers: entryEventResult.entry.totalTransfers,
 		overallPoints: entryEventResult.overallPoints,
-		overallRank: entryEventResult.overallRank,
+		overallRank: entryEventResult.overallRank ?? undefined,
 		teamValue: entryEventResult.teamValue,
 		bank: entryEventResult.bank,
 		asOfGameweek: entryEventResult.eventId
@@ -490,7 +490,7 @@ export const isSnapshotRequestSuperseded = (
 	(error instanceof Error && error.name === 'SnapshotRequestSupersededError')
 
 const snapshotRequestKey = (entryId: number, revision: string | null): string =>
-	`${entryId}:${revision ?? 'legacy'}`
+	`${entryId}:${revision ?? 'current'}`
 
 const normalizeSnapshotRevision = (value: string | null): string | null => {
 	const candidate = value?.trim()
@@ -527,6 +527,16 @@ export const canCommitSnapshotResponse = (
 	)
 }
 
+/**
+ * Revisions are event-scoped. The through-event review revision can pin its
+ * nested gameweek, but a historical replay must resolve that event's own
+ * immutable publication instead of borrowing a numerically newer revision.
+ */
+export const reviewRevisionForGameweek = (
+	meta: MyFplSnapshotMeta | null | undefined,
+	eventId: number
+): string | null => (meta?.eventId === eventId ? meta.revision : null)
+
 export const entryEventCache = new Map<
 	string,
 	TimedCacheValue<EntryEventResult | null>
@@ -547,11 +557,15 @@ const entrySnapshotMetaCache = new Map<
 	number,
 	TimedCacheValue<MyFplSnapshotMeta | null>
 >()
-const entryDeskStateCache = new Map<number, TimedCacheValue<MyFplReviewState>>()
-const entryHistoryInFlight = new Map<
-	string,
-	Promise<EntryHistoryResponse['entryHistory']>
+const managerReviewStateCache = new Map<
+	number,
+	TimedCacheValue<MyFplReviewState>
 >()
+const managerReviewCache = new Map<
+	number,
+	TimedCacheValue<MyFplManagerReview>
+>()
+const managerReviewInFlight = new Map<string, Promise<MyFplManagerReview>>()
 const transferHistoryCache = new Map<
 	number,
 	TimedCacheValue<EntryGameweekTransfers[]>
@@ -559,10 +573,6 @@ const transferHistoryCache = new Map<
 const transferHistoryStateCache = new Map<
 	number,
 	TimedCacheValue<MyFplReviewState>
->()
-const transferHistoryInFlight = new Map<
-	string,
-	Promise<EntryGameweekTransfers[]>
 >()
 const entryEventStateCache = new Map<
 	string,
@@ -573,18 +583,17 @@ export const entryEventCacheKey = (
 	entryId: number,
 	eventId: number,
 	snapshotRevision?: string | null
-): string => `${entryId}:${eventId}:${snapshotRevision ?? 'legacy'}`
+): string => `${entryId}:${eventId}:${snapshotRevision ?? 'current'}`
 
 const clearEntrySnapshotCaches = (entryId: number): void => {
 	entryHistoryCache.delete(entryId)
 	entryHistoryStateCache.delete(entryId)
+	managerReviewCache.delete(entryId)
+	managerReviewStateCache.delete(entryId)
 	transferHistoryCache.delete(entryId)
 	transferHistoryStateCache.delete(entryId)
-	entryHistoryInFlight.forEach((_value, key) => {
-		if (key.startsWith(`${entryId}:`)) entryHistoryInFlight.delete(key)
-	})
-	transferHistoryInFlight.forEach((_value, key) => {
-		if (key.startsWith(`${entryId}:`)) transferHistoryInFlight.delete(key)
+	managerReviewInFlight.forEach((_value, key) => {
+		if (key.startsWith(`${entryId}:`)) managerReviewInFlight.delete(key)
 	})
 	const prefix = `${entryId}:`
 	entryEventCache.forEach((_value, key) => {
@@ -614,10 +623,10 @@ export const peekEntrySnapshotMeta = (
 ): MyFplSnapshotMeta | null | undefined =>
 	getFreshCacheValue(entrySnapshotMetaCache, entryId)
 
-export const peekEntryDeskState = (
+export const peekManagerReviewState = (
 	entryId: number
 ): MyFplReviewState | undefined =>
-	getFreshCacheValue(entryDeskStateCache, entryId)
+	getFreshCacheValue(managerReviewStateCache, entryId)
 
 export const peekTransferHistory = (
 	entryId: number
@@ -632,8 +641,13 @@ export const peekTransferHistoryState = (
 export const peekEntryEventResult = (
 	entryId: number,
 	eventId: number
-): EntryEventResult | null | undefined =>
-	getFreshCacheValue(
+): EntryEventResult | null | undefined => {
+	const active = getFreshCacheValue(
+		entryEventCache,
+		entryEventCacheKey(entryId, eventId, null)
+	)
+	if (active !== undefined) return active
+	return getFreshCacheValue(
 		entryEventCache,
 		entryEventCacheKey(
 			entryId,
@@ -641,17 +655,22 @@ export const peekEntryEventResult = (
 			peekEntrySnapshotMeta(entryId)?.revision
 		)
 	)
+}
 
 export const peekEntryGameweekState = (
 	entryId: number,
 	eventId: number
 ): MyFplReviewState | undefined => {
-	const key = entryEventCacheKey(
+	const pinnedKey = entryEventCacheKey(
 		entryId,
 		eventId,
 		peekEntrySnapshotMeta(entryId)?.revision
 	)
-	const state = getFreshCacheValue(entryEventStateCache, key)
+	const state =
+		getFreshCacheValue(
+			entryEventStateCache,
+			entryEventCacheKey(entryId, eventId, null)
+		) ?? getFreshCacheValue(entryEventStateCache, pinnedKey)
 	if (state !== undefined) return state
 	const result = peekEntryEventResult(entryId, eventId)
 	if (result !== undefined) return result ? 'READY' : 'EMPTY'
@@ -723,11 +742,11 @@ export const seedEntrySnapshotMeta = (
 	setCacheValue(entrySnapshotMetaCache, entryId, meta, HISTORY_CACHE_TTL_MS)
 }
 
-export const seedEntryDeskState = (
+export const seedManagerReviewState = (
 	entryId: number,
 	state: MyFplReviewState
 ): void => {
-	setCacheValue(entryDeskStateCache, entryId, state, HISTORY_CACHE_TTL_MS)
+	setCacheValue(managerReviewStateCache, entryId, state, HISTORY_CACHE_TTL_MS)
 }
 
 export const seedTransferHistoryCache = (
@@ -748,6 +767,18 @@ export const seedTransferHistoryCache = (
 	}
 }
 
+export const seedManagerReviewCache = (
+	entryId: number,
+	review: MyFplManagerReview
+): void => {
+	setCacheValue(managerReviewCache, entryId, review, HISTORY_CACHE_TTL_MS)
+}
+
+export const peekManagerReview = (
+	entryId: number
+): MyFplManagerReview | undefined =>
+	getFreshCacheValue(managerReviewCache, entryId)
+
 /**
  * One-shot hydrate of the browser session cache from SSR props.
  * Safe to call multiple times; later seeds overwrite with the same TTL rules.
@@ -756,41 +787,112 @@ export function hydrateTeamStatsSessionCache(opts: {
 	entryId: number
 	seedGw: number
 	currentGameweek: number
-	deskState?: MyFplReviewState
+	reviewState?: MyFplReviewState
 	history: EntryHistoryResponse['entryHistory'] | null
 	historyState?: MyFplReviewState
 	event: EntryEventResult | null
 	eventState?: MyFplReviewState
 	transfers: EntryGameweekTransfers[] | null
 	transfersState?: MyFplReviewState
+	review?: MyFplManagerReview | null
 	snapshotMeta?: MyFplSnapshotMeta | null
 }): void {
 	const {
 		entryId,
 		seedGw,
 		currentGameweek,
-		deskState,
+		reviewState,
 		history,
 		historyState,
 		event,
 		eventState,
 		transfers,
 		transfersState,
+		review,
 		snapshotMeta
 	} = opts
 	// Pin the session payloads before seeding them so a revision change clears
 	// only the previous version, not the SSR data being hydrated now.
 	seedEntrySnapshotMeta(entryId, snapshotMeta ?? null)
-	if (deskState) seedEntryDeskState(entryId, deskState)
+	if (reviewState) seedManagerReviewState(entryId, reviewState)
 	if (history) seedEntryHistoryCache(entryId, history, historyState ?? 'READY')
 	if (transfers !== null)
 		seedTransferHistoryCache(entryId, transfers, transfersState ?? 'READY')
+	if (review) seedManagerReviewCache(entryId, review)
 	if (seedGw > 0 && (event || eventState)) {
 		seedEntryEventCache(entryId, seedGw, event, {
 			isCurrentGameweek: seedGw === currentGameweek,
 			state: eventState
 		})
 	}
+}
+
+export const getManagerReviewCached = async (
+	entryId: number,
+	opts?: { force?: boolean; snapshotRevision?: string | null }
+): Promise<MyFplManagerReview> => {
+	const requestedRevision = opts?.snapshotRevision ?? null
+	const cachedRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
+	const requestRevision = requestedRevision ?? cachedRevision
+	const cacheMatchesRevision = requestRevision === cachedRevision
+	const cached =
+		!opts?.force && cacheMatchesRevision
+			? getFreshCacheValue(managerReviewCache, entryId)
+			: undefined
+	if (cached !== undefined) return cached
+	const requestKey = snapshotRequestKey(entryId, requestRevision)
+	const inflight = !opts?.force
+		? managerReviewInFlight.get(requestKey)
+		: undefined
+	if (inflight) return inflight
+
+	const request = executeQuery<MyFplManagerReviewResponse>(
+		GET_MY_FPL_MANAGER_REVIEW,
+		{ snapshotRevision: opts?.snapshotRevision ?? null },
+		{ cache: 'no-store' }
+	)
+		.then(response => {
+			const review = response.myFplManagerReview
+			const responseRevision = review.snapshotMeta?.revision ?? null
+			if (
+				!canCommitSnapshotResponse(entryId, requestRevision, responseRevision)
+			) {
+				throw new SnapshotRequestSupersededError()
+			}
+
+			seedEntrySnapshotMeta(entryId, review.snapshotMeta ?? null)
+			seedManagerReviewState(entryId, review.state)
+			seedEntryHistoryCache(
+				entryId,
+				historyFromManagerReview(review),
+				review.pastSeasonsState
+			)
+			seedTransferHistoryCache(
+				entryId,
+				transfersFromManagerReview(review),
+				review.state
+			)
+			if (review.currentGameweek) {
+				seedEntryEventCache(
+					entryId,
+					review.currentGameweek.eventId,
+					eventResultFromManagerGameweek(review.currentGameweek),
+					{
+						isCurrentGameweek: true,
+						state: review.currentGameweek.state
+					}
+				)
+			}
+			seedManagerReviewCache(entryId, review)
+			return review
+		})
+		.finally(() => {
+			if (managerReviewInFlight.get(requestKey) === request) {
+				managerReviewInFlight.delete(requestKey)
+			}
+		})
+	managerReviewInFlight.set(requestKey, request)
+	return request
 }
 
 export const getEntryHistoryCached = async (
@@ -807,42 +909,8 @@ export const getEntryHistoryCached = async (
 			? getFreshCacheValue(entryHistoryCache, entryId)
 			: undefined
 	if (cached !== undefined) return cached
-	const inflight = cacheMatchesRevision
-		? entryHistoryInFlight.get(snapshotRequestKey(entryId, requestRevision))
-		: undefined
-	if (inflight) return inflight
-	const request = executeQuery<MyFplManagerReviewResponse>(
-		GET_MY_FPL_MANAGER_REVIEW,
-		{ snapshotRevision: opts?.snapshotRevision ?? null },
-		{ cache: 'no-store' }
-	)
-		.then(response => {
-			const snapshot = response.myFplManagerReview
-			if (
-				!canCommitSnapshotResponse(
-					entryId,
-					requestRevision,
-					snapshot.snapshotMeta?.revision ?? null
-				)
-			) {
-				throw new SnapshotRequestSupersededError()
-			}
-			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
-			seedEntryDeskState(entryId, snapshot.state)
-			const history = historyFromMyFplReview(snapshot)
-			seedEntryHistoryCache(entryId, history, snapshot.pastSeasonsState)
-			return history
-		})
-		.finally(() => {
-			const key = snapshotRequestKey(entryId, requestRevision)
-			if (entryHistoryInFlight.get(key) === request)
-				entryHistoryInFlight.delete(key)
-		})
-	entryHistoryInFlight.set(
-		snapshotRequestKey(entryId, requestRevision),
-		request
-	)
-	return request
+	const review = await getManagerReviewCached(entryId, opts)
+	return historyFromManagerReview(review)
 }
 
 export const getEntryEventResultCached = async (
@@ -854,8 +922,10 @@ export const getEntryEventResultCached = async (
 		snapshotRevision?: string | null
 	}
 ): Promise<EntryEventResult | null> => {
-	const requestRevision =
-		opts?.snapshotRevision ?? peekEntrySnapshotMeta(entryId)?.revision ?? null
+	// A review revision is only valid for its own through-event publication.
+	// Historical gameweeks deliberately use the event-scoped active FINAL
+	// revision and must not move the review/session revision backwards.
+	const requestRevision = opts?.snapshotRevision ?? null
 	const cacheKey = entryEventCacheKey(entryId, eventId, requestRevision)
 	const cached = opts?.force
 		? undefined
@@ -877,19 +947,17 @@ export const getEntryEventResultCached = async (
 			const gameweek = response.myFplManagerGameweek
 			const responseRevision = gameweek.snapshotMeta?.revision ?? null
 			if (
+				requestRevision !== null &&
 				!canCommitSnapshotResponse(entryId, requestRevision, responseRevision)
 			) {
 				throw new SnapshotRequestSupersededError()
 			}
-			seedEntrySnapshotMeta(entryId, gameweek.snapshotMeta ?? null)
-			const result = eventResultFromMyFplManagerGameweek(gameweek)
-			const responseCacheKey = entryEventCacheKey(
-				entryId,
-				eventId,
-				responseRevision ?? requestRevision
-			)
-			setCacheValue(entryEventCache, responseCacheKey, result, ttl)
-			setCacheValue(entryEventStateCache, responseCacheKey, gameweek.state, ttl)
+			if (gameweek.snapshotMeta && gameweek.snapshotMeta.eventId !== eventId) {
+				throw new SnapshotRequestSupersededError()
+			}
+			const result = eventResultFromManagerGameweek(gameweek)
+			setCacheValue(entryEventCache, cacheKey, result, ttl)
+			setCacheValue(entryEventStateCache, cacheKey, gameweek.state, ttl)
 			return result
 		})
 		.finally(() => {
@@ -912,57 +980,10 @@ export const getTransferHistoryCached = async (
 		? getFreshCacheValue(transferHistoryCache, entryId)
 		: undefined
 	if (cached !== undefined) return cached
-	const inflight = cacheMatchesRevision
-		? transferHistoryInFlight.get(snapshotRequestKey(entryId, requestRevision))
-		: undefined
-	if (inflight) return inflight
-	const request = executeQuery<MyFplManagerReviewResponse>(
-		GET_MY_FPL_MANAGER_TRANSFERS,
-		{ snapshotRevision: opts?.snapshotRevision ?? null },
-		{ cache: 'no-store' }
-	)
-		.then(response => {
-			const snapshot = response.myFplManagerReview
-			if (
-				!canCommitSnapshotResponse(
-					entryId,
-					requestRevision,
-					snapshot.snapshotMeta?.revision ?? null
-				)
-			) {
-				throw new SnapshotRequestSupersededError()
-			}
-			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
-			const state = snapshot.state
-			const transfers = transfersFromMyFplManagerReview(snapshot)
-			setCacheValue(
-				transferHistoryStateCache,
-				entryId,
-				state,
-				state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
-			)
-			if (state === 'PENDING') {
-				transferHistoryCache.delete(entryId)
-			} else {
-				setCacheValue(
-					transferHistoryCache,
-					entryId,
-					transfers,
-					HISTORY_CACHE_TTL_MS
-				)
-			}
-			return transfers
-		})
-		.finally(() => {
-			const key = snapshotRequestKey(entryId, requestRevision)
-			if (transferHistoryInFlight.get(key) === request)
-				transferHistoryInFlight.delete(key)
-		})
-	transferHistoryInFlight.set(
-		snapshotRequestKey(entryId, requestRevision),
-		request
-	)
-	return request
+	const review = await getManagerReviewCached(entryId, {
+		snapshotRevision: opts?.snapshotRevision ?? null
+	})
+	return transfersFromManagerReview(review)
 }
 
 export type TeamStatsTab = 'squad' | 'transfer' | 'history' | 'chips'

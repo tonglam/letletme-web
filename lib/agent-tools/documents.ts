@@ -214,49 +214,49 @@ export const OWN_ENTRY_DOCUMENT = `
     coreEventContext { season revision sourceCheckedAt }
     myFplManagerReview {
       state
-      context { season coreRevision currentEventId nextEventId latestFinalizedEventId }
+      context {
+        season coreRevision currentEventId nextEventId latestFinalizedEventId latestPublishedEventId
+      }
       entry {
         id entryName playerName region startedEvent overallPoints overallRank bank teamValue totalTransfers
       }
+      throughEventId
       timeline {
-        eventId eventPoints eventRank overallPoints overallRank eventTransfers eventTransfersCost
-        eventNetPoints eventBenchPoints eventChip eventCaptainPoints captainWebName teamValue bank
-      }
-      pastSeasons { season totalPoints overallRank }
-      pastSeasonsState
-      currentGameweek {
-        state eventId
-        result {
-          eventId eventPoints overallPoints overallRank eventTransfers eventTransfersCost eventNetPoints
-          eventBenchPoints eventChip eventCaptainPoints playedCaptainWebName teamValue bank
-          picks {
-            element position webName teamShortName elementTypeName isCaptain isViceCaptain multiplier
-            totalPoints minutes againstShortName wasHome score isPlayed autoSub
+        eventId status eventPoints eventRank overallPoints overallRank overallRankDelta
+        eventTransfers eventTransfersCost eventNetPoints eventBenchPoints eventAutoSubPoints
+        eventChip eventCaptainPoints captainWebName captainTeamShortName teamValue bank
+        review {
+          formation lineupBasePoints bestElevenPoints benchRegretPoints
+          captain {
+            captainWebName captainBasePoints captainContribution viceCaptainWebName
+            viceCaptainBasePoints bestSquadWebName bestSquadPoints regretPoints
+          }
+          automaticSubstitutions {
+            elementIn elementInWebName elementOut elementOutWebName pointsGained
           }
         }
       }
+      pastSeasons { season totalPoints overallRank }
+      summary {
+        gameweeksReviewed provisionalGameweeks averageNetPoints medianNetPoints totalHitPoints
+        totalBenchPoints totalAutoSubPoints totalCaptainPoints overallRankChange
+        currentImprovementStreak longestImprovementStreak
+      }
+      snapshotMeta { revision eventId sourceCheckedAt publishedAt kind freshness }
     }
   }
 `
 
-export const OWN_ENTRY_EVENT_DOCUMENT = `
-  query AgentOwnEntryReviewEvent($eventId: Int!) {
+export const OWN_ENTRY_GAMEWEEK_DOCUMENT = `
+  query AgentOwnEntryGameweek($eventId: Int!) {
     coreEventContext { season revision sourceCheckedAt }
-    myFplManagerReview {
+    myFplManagerGameweek(eventId: $eventId) {
       state
-      context { season coreRevision currentEventId nextEventId latestFinalizedEventId }
+      context { season coreRevision }
+      eventId
       entry {
         id entryName playerName region startedEvent overallPoints overallRank bank teamValue totalTransfers
       }
-      timeline {
-        eventId eventPoints eventRank overallPoints overallRank eventTransfers eventTransfersCost
-        eventNetPoints eventBenchPoints eventChip eventCaptainPoints captainWebName teamValue bank
-      }
-      pastSeasons { season totalPoints overallRank }
-      pastSeasonsState
-    }
-    myFplManagerGameweek(eventId: $eventId) {
-      state eventId
       result {
         eventId eventPoints overallPoints overallRank eventTransfers eventTransfersCost eventNetPoints
         eventBenchPoints eventChip eventCaptainPoints playedCaptainWebName teamValue bank
@@ -265,6 +265,7 @@ export const OWN_ENTRY_EVENT_DOCUMENT = `
           totalPoints minutes againstShortName wasHome score isPlayed autoSub
         }
       }
+      snapshotMeta { revision eventId sourceCheckedAt publishedAt kind freshness }
     }
   }
 `
@@ -378,7 +379,7 @@ export const AGENT_GRAPHQL_DOCUMENTS = Object.freeze({
 	ENTRY_SNAPSHOT_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
-	OWN_ENTRY_EVENT_DOCUMENT,
+	OWN_ENTRY_GAMEWEEK_DOCUMENT,
 	COMPETITION_AVAILABILITY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,

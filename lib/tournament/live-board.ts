@@ -56,6 +56,9 @@ const isNullableString = (value: unknown): value is string | null =>
 const isNullableNumber = (value: unknown): value is number | null =>
 	value === null || (typeof value === 'number' && Number.isFinite(value))
 
+const isNullableInteger = (value: unknown): value is number | null =>
+	value === null || isInteger(value)
+
 const validDate = (value: unknown): value is string | null =>
 	value === null ||
 	(typeof value === 'string' && Number.isFinite(Date.parse(value)))
@@ -221,7 +224,6 @@ const validateRow = (
 	for (const field of [
 		'entry',
 		'rank',
-		'overallRank',
 		'transferCost',
 		'played',
 		'toPlay',
@@ -230,6 +232,7 @@ const validateRow = (
 	]) {
 		if (!isInteger(value[field])) missing.push(`${path}.${field}`)
 	}
+	if (!isNullableInteger(value.overallRank)) missing.push(`${path}.overallRank`)
 	if (typeof value.teamValue !== 'number' || !Number.isFinite(value.teamValue))
 		missing.push(`${path}.teamValue`)
 	for (const field of ['entryName', 'playerName', 'chip', 'captainName']) {
@@ -608,7 +611,7 @@ export const boardRowToTournamentEntry = (
 	gwPoints: row.score.eventPoints,
 	gwNetPoints: row.score.netEventPoints,
 	eventCost: row.score.transferCost,
-	overallRank: row.overallRank,
+	overallRank: row.overallRank ?? undefined,
 	livePoints: row.score.eventPoints,
 	totalPoints:
 		row.score.totalScope === 'OVERALL' ? row.score.totalPoints : null,

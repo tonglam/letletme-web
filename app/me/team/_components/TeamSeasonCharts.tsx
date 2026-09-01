@@ -56,7 +56,10 @@ function buildPoints(logs: TeamSeasonLogs): ChartPoint[] {
 		if (!Number.isFinite(gameweek) || gameweek <= 0) continue
 		byGw.set(gameweek, {
 			gameweek,
-			overallRank: row.overallRank > 0 ? row.overallRank : null,
+			overallRank:
+				row.overallRank != null && row.overallRank > 0
+					? row.overallRank
+					: null,
 			overallPoints: row.overallPoints,
 			netPoints: row.eventNetPoints,
 			eventPoints: row.eventPoints,

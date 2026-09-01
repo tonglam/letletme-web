@@ -32,7 +32,7 @@ import {
 	aggregateToSeasonSnapshot,
 	aggregateToTournamentStats,
 	boardRowsToEventResults
-} from '../_lib/my-fpl-adapters'
+} from '../_lib/competition-review-projection'
 import type { TournamentPathPoint } from '../_lib/tournament-stats-data'
 import {
 	buildTournamentSeasonField,

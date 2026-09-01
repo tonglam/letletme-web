@@ -46,25 +46,68 @@ export interface MyFplEntryIdentity {
 	totalTransfers: number | null
 }
 
+export interface MyFplManagerPositionPoints {
+	goalkeeper: number
+	defender: number
+	midfielder: number
+	forward: number
+	assistantManager: number
+	total: number
+}
+
+export interface MyFplManagerCaptainReview {
+	captainElement: number | null
+	captainWebName: string | null
+	captainTeamShortName: string | null
+	captainBasePoints: number
+	captainContribution: number
+	viceCaptainElement: number | null
+	viceCaptainWebName: string | null
+	viceCaptainBasePoints: number
+	bestSquadElement: number | null
+	bestSquadWebName: string | null
+	bestSquadPoints: number
+	regretPoints: number | null
+}
+
+export interface MyFplManagerAutomaticSubstitution {
+	elementIn: number
+	elementInWebName: string
+	elementOut: number
+	elementOutWebName: string
+	pointsGained: number
+}
+
+export interface MyFplManagerGameweekReview {
+	formation: string
+	lineupBasePoints: number
+	bestElevenPoints: number
+	benchRegretPoints: number | null
+	positionPoints: MyFplManagerPositionPoints
+	captain: MyFplManagerCaptainReview
+	automaticSubstitutions: MyFplManagerAutomaticSubstitution[]
+}
+
 export interface MyFplManagerTimelineRow {
 	eventId: number
+	status: MyFplSnapshotKind
 	eventPoints: number
 	eventRank: number | null
 	overallPoints: number
 	overallRank: number | null
-	overallRankDelta?: number | null
+	overallRankDelta: number | null
 	eventTransfers: number
 	eventTransfersCost: number
 	eventNetPoints: number
 	eventBenchPoints: number
-	eventAutoSubPoints?: number
+	eventAutoSubPoints: number
 	eventChip: string
 	eventCaptainPoints: number
 	captainWebName: string | null
 	captainTeamShortName: string | null
 	teamValue: number | null
 	bank: number | null
-	review?: unknown
+	review: MyFplManagerGameweekReview
 }
 
 export interface MyFplPastSeason {
@@ -134,20 +177,92 @@ export interface MyFplManagerGameweek {
 	eventId: number
 	entry: MyFplEntryIdentity | null
 	result: MyFplManagerGameweekResult | null
-	review?: unknown
+	review: MyFplManagerGameweekReview | null
 	snapshotMeta?: MyFplSnapshotMeta | null
+}
+
+export interface MyFplManagerFormationCount {
+	formation: string
+	gameweeks: number
+}
+
+export interface MyFplManagerChipReview {
+	chip: string
+	eventId: number
+	status: MyFplSnapshotKind
+	eventNetPoints: number
+	otherGameweeksAverageNetPoints: number | null
+	differenceFromOtherGameweeks: number | null
+	overallRankDelta: number | null
+}
+
+export interface MyFplManagerSeasonSummary {
+	gameweeksReviewed: number
+	provisionalGameweeks: number
+	totalNetPoints: number
+	averageNetPoints: number
+	medianNetPoints: number
+	bestGameweekId: number | null
+	bestNetPoints: number | null
+	worstGameweekId: number | null
+	worstNetPoints: number | null
+	totalHitPoints: number
+	hitGameweeks: number
+	totalBenchPoints: number
+	averageBenchPoints: number
+	zeroBenchGameweeks: number
+	highBenchGameweeks: number
+	totalAutoSubPoints: number
+	autoSubGameweeks: number
+	totalCaptainPoints: number
+	uniqueCaptains: number
+	captainBlankGameweeks: number
+	topCaptainWebName: string | null
+	topCaptainGameweeks: number
+	topCaptainRate: number
+	bestOverallRank: number | null
+	worstOverallRank: number | null
+	overallRankChange: number | null
+	currentImprovementStreak: number
+	longestImprovementStreak: number
+	formations: MyFplManagerFormationCount[]
+	positionPoints: MyFplManagerPositionPoints
+	chips: MyFplManagerChipReview[]
+}
+
+export interface MyFplManagerHoldingPeriod {
+	element: number
+	webName: string
+	teamShortName: string
+	elementTypeName: string
+	startedEventId: number
+	endedEventId: number | null
+	gameweeksHeld: number
+	starts: number
+	captaincies: number
+	pointsWhileOwned: number
+	scoringContribution: number
 }
 
 export interface MyFplTransferMove {
 	eventId: number
+	elementIn: number | null
 	elementInWebName: string
 	elementInTypeName: string
 	elementInTeamShortName: string
 	elementInCost: number
+	elementInPoints: number | null
+	elementInPlayed: boolean | null
+	elementOut: number | null
 	elementOutWebName: string
 	elementOutTypeName: string
 	elementOutTeamShortName: string
 	elementOutCost: number
+	elementOutPoints: number | null
+	sameGameweekGain: number | null
+	threeGameweekGain: number | null
+	fiveGameweekGain: number | null
+	evaluatedThroughEventId: number | null
 	time: string
 }
 
@@ -158,17 +273,48 @@ export interface MyFplTransferGameweek {
 	transfers: MyFplTransferMove[]
 }
 
+export interface MyFplSelectionRulePosition {
+	id: number
+	name: string
+	shortName: string
+	squadSelect: number
+	minPlay: number
+	maxPlay: number
+}
+
+export interface MyFplSelectionRuleChipWindow {
+	id: number
+	name: string
+	number: number
+	startEvent: number
+	stopEvent: number
+	chipType: string
+}
+
+export interface MyFplSelectionRules {
+	squadSize: number
+	startingSize: number
+	budget: number
+	maxPlayersPerTeam: number
+	currencyMultiplier: number
+	positions: MyFplSelectionRulePosition[]
+	chips: MyFplSelectionRuleChipWindow[]
+}
+
 export interface MyFplManagerReview {
 	state: MyFplReviewState
 	context: MyFplReviewContext
 	entry: MyFplEntryIdentity | null
 	throughEventId: number | null
 	timeline: MyFplManagerTimelineRow[]
+	summary: MyFplManagerSeasonSummary | null
+	holdings: MyFplManagerHoldingPeriod[]
 	transfers: MyFplTransferGameweek[]
 	pastSeasons: MyFplPastSeason[]
 	pastSeasonsState: MyFplReviewState
 	currentGameweek: MyFplManagerGameweek | null
-	snapshotMeta?: MyFplSnapshotMeta | null
+	rules: MyFplSelectionRules | null
+	snapshotMeta: MyFplSnapshotMeta | null
 }
 
 export interface MyFplCompetitionBoardRow {
@@ -370,24 +516,62 @@ const SNAPSHOT_META_FIELDS = `
       sourceMaxCheckedAt
 `
 
+const MANAGER_GAMEWEEK_REVIEW_FIELDS = `
+        formation
+        lineupBasePoints
+        bestElevenPoints
+        benchRegretPoints
+        positionPoints {
+          goalkeeper
+          defender
+          midfielder
+          forward
+		  assistantManager
+          total
+        }
+        captain {
+          captainElement
+          captainWebName
+          captainTeamShortName
+          captainBasePoints
+          captainContribution
+          viceCaptainElement
+          viceCaptainWebName
+          viceCaptainBasePoints
+          bestSquadElement
+          bestSquadWebName
+          bestSquadPoints
+          regretPoints
+        }
+        automaticSubstitutions {
+          elementIn
+          elementInWebName
+          elementOut
+          elementOutWebName
+          pointsGained
+        }
+`
+
 const MANAGER_TIMELINE_FIELDS = `
         eventId
+        status
         eventPoints
-		eventRank
-		overallPoints
-		overallRank
-		overallRankDelta
-		eventTransfers
-		eventTransfersCost
-		eventNetPoints
-		eventBenchPoints
-		eventAutoSubPoints
-		eventChip
-		eventCaptainPoints
+        eventRank
+        overallPoints
+        overallRank
+        overallRankDelta
+        eventTransfers
+        eventTransfersCost
+        eventNetPoints
+        eventBenchPoints
+        eventAutoSubPoints
+        eventChip
+        eventCaptainPoints
         captainWebName
         captainTeamShortName
         teamValue
         bank
+        review {${MANAGER_GAMEWEEK_REVIEW_FIELDS}}
 `
 
 const MANAGER_PICK_FIELDS = `
@@ -425,17 +609,54 @@ const MANAGER_PICK_FIELDS = `
           expectedGoalsConceded
 `
 
-const MANAGER_TRANSFER_FIELDS = `
+const TRANSFER_FIELDS = `
           eventId
+          elementIn
           elementInWebName
           elementInTypeName
           elementInTeamShortName
           elementInCost
+          elementInPoints
+          elementInPlayed
+          elementOut
           elementOutWebName
           elementOutTypeName
           elementOutTeamShortName
           elementOutCost
+          elementOutPoints
+          sameGameweekGain
+          threeGameweekGain
+          fiveGameweekGain
+          evaluatedThroughEventId
           time
+`
+
+const MANAGER_GAMEWEEK_FIELDS = `
+      state
+      context {${REVIEW_CONTEXT_FIELDS}}
+      eventId
+      entry {${ENTRY_FIELDS}}
+      result {
+        eventId
+        eventPoints
+        eventRank
+        overallPoints
+        overallRank
+        eventTransfers
+        eventTransfersCost
+        eventNetPoints
+        eventBenchPoints
+        eventAutoSubPoints
+        eventChip
+        eventCaptainPoints
+        playedCaptainWebName
+        playedCaptainTeamShortName
+        teamValue
+        bank
+        picks {${MANAGER_PICK_FIELDS}}
+      }
+      review {${MANAGER_GAMEWEEK_REVIEW_FIELDS}}
+      snapshotMeta {${SNAPSHOT_META_FIELDS}}
 `
 
 const BOARD_ROW_FIELDS = `
@@ -511,39 +732,79 @@ export const GET_MY_FPL_MANAGER_REVIEW = `
       state
       context {${REVIEW_CONTEXT_FIELDS}}
       entry {${ENTRY_FIELDS}}
+      throughEventId
       timeline {${MANAGER_TIMELINE_FIELDS}}
-      pastSeasons { season totalPoints overallRank }
-      pastSeasonsState
+      summary {
+        gameweeksReviewed
+        provisionalGameweeks
+        totalNetPoints
+        averageNetPoints
+        medianNetPoints
+        bestGameweekId
+        bestNetPoints
+        worstGameweekId
+        worstNetPoints
+        totalHitPoints
+        hitGameweeks
+        totalBenchPoints
+        averageBenchPoints
+        zeroBenchGameweeks
+        highBenchGameweeks
+        totalAutoSubPoints
+        autoSubGameweeks
+        totalCaptainPoints
+        uniqueCaptains
+        captainBlankGameweeks
+        topCaptainWebName
+        topCaptainGameweeks
+        topCaptainRate
+        bestOverallRank
+        worstOverallRank
+        overallRankChange
+        currentImprovementStreak
+        longestImprovementStreak
+        formations { formation gameweeks }
+        positionPoints { goalkeeper defender midfielder forward assistantManager total }
+        chips {
+          chip
+          eventId
+          status
+          eventNetPoints
+          otherGameweeksAverageNetPoints
+          differenceFromOtherGameweeks
+          overallRankDelta
+        }
+      }
+      holdings {
+        element
+        webName
+        teamShortName
+        elementTypeName
+        startedEventId
+        endedEventId
+        gameweeksHeld
+        starts
+        captaincies
+        pointsWhileOwned
+        scoringContribution
+      }
       transfers {
         eventId
         eventTransfers
         eventTransfersCost
-        transfers {${MANAGER_TRANSFER_FIELDS}}
+        transfers {${TRANSFER_FIELDS}}
       }
-      currentGameweek {
-        state
-        context {${REVIEW_CONTEXT_FIELDS}}
-        eventId
-        entry {${ENTRY_FIELDS}}
-        result {
-          eventId
-          eventPoints
-          eventRank
-          overallPoints
-          overallRank
-          eventTransfers
-          eventTransfersCost
-          eventNetPoints
-          eventBenchPoints
-          eventAutoSubPoints
-          eventChip
-          eventCaptainPoints
-          playedCaptainWebName
-          playedCaptainTeamShortName
-          teamValue
-          bank
-          picks {${MANAGER_PICK_FIELDS}}
-        }
+      pastSeasons { season totalPoints overallRank }
+      pastSeasonsState
+      currentGameweek {${MANAGER_GAMEWEEK_FIELDS}}
+      rules {
+        squadSize
+        startingSize
+        budget
+        maxPlayersPerTeam
+        currencyMultiplier
+        positions { id name shortName squadSelect minPlay maxPlay }
+        chips { id name number startEvent stopEvent chipType }
       }
       snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
@@ -553,46 +814,7 @@ export const GET_MY_FPL_MANAGER_REVIEW = `
 export const GET_MY_FPL_MANAGER_GAMEWEEK = `
   query GetMyFplManagerGameweek($eventId: Int!, $snapshotRevision: String) {
     myFplManagerGameweek(eventId: $eventId, snapshotRevision: $snapshotRevision) {
-      state
-      context {${REVIEW_CONTEXT_FIELDS}}
-      eventId
-      entry {${ENTRY_FIELDS}}
-      result {
-        eventId
-        eventPoints
-        eventRank
-        overallPoints
-        overallRank
-        eventTransfers
-        eventTransfersCost
-        eventNetPoints
-        eventBenchPoints
-        eventAutoSubPoints
-        eventChip
-        eventCaptainPoints
-        playedCaptainWebName
-        playedCaptainTeamShortName
-        teamValue
-        bank
-        picks {${MANAGER_PICK_FIELDS}}
-      }
-      snapshotMeta {${SNAPSHOT_META_FIELDS}}
-    }
-  }
-`
-
-export const GET_MY_FPL_MANAGER_TRANSFERS = `
-  query GetMyFplManagerTransfers($snapshotRevision: String) {
-    myFplManagerReview(snapshotRevision: $snapshotRevision) {
-      state
-      context {${REVIEW_CONTEXT_FIELDS}}
-      transfers {
-        eventId
-        eventTransfers
-        eventTransfersCost
-        transfers {${MANAGER_TRANSFER_FIELDS}}
-      }
-      snapshotMeta {${SNAPSHOT_META_FIELDS}}
+      ${MANAGER_GAMEWEEK_FIELDS}
     }
   }
 `
