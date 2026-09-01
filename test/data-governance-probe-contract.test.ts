@@ -56,7 +56,10 @@ describe('data governance consumer probe contract', () => {
 
 	it('keeps entry readiness independent from publication-wide MyFPL coverage', async () => {
 		const source = await read('lib/data-governance-probe.ts')
-		assert.match(source, /complete: result\.complete && result\.coverageState === 'COMPLETE'/)
+		assert.match(
+			source,
+			/complete: result\.complete && result\.coverageState === 'COMPLETE'/
+		)
 		assert.doesNotMatch(
 			source,
 			/gameweek\.state === 'READY'[\s\S]*meta\.coverageState === 'COMPLETE'/
