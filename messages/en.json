@@ -2382,6 +2382,7 @@
 		"reviewFutureDirection": "Analysis roadmap",
 		"reviewFutureDirectionHint": "This foundation supports deeper tournament data analysis and retrospectives.",
 		"reviewPayloadMissing": "The finalized publication has no format payload.",
+		"reviewRetryPhase": "Retry this phase",
 		"reviewClientUpgrade": "Please refresh to use the current tournament review.",
 		"reviewAdminAllScope": "Admin: show all tournaments",
 		"reviewAdminAccessibleScope": "Admin: show my tournaments",

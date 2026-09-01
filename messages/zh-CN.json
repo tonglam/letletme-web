@@ -2378,6 +2378,7 @@
 		"reviewFutureDirection": "数据分析路线",
 		"reviewFutureDirectionHint": "在这套快照基础上继续扩展赛事数据分析与复盘能力。",
 		"reviewPayloadMissing": "已结算发布缺少对应赛制数据。",
+		"reviewRetryPhase": "重试此阶段",
 		"reviewClientUpgrade": "请刷新页面以使用当前赛事复盘版本。",
 		"reviewAdminAllScope": "管理员：查看全部赛事",
 		"reviewAdminAccessibleScope": "管理员：只看我的赛事",

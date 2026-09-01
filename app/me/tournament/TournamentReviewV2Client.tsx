@@ -304,25 +304,48 @@ function combineSeasonSections(
 	const h2hMatches = h2hPages.flatMap(section => section.h2h?.matches ?? [])
 	const h2hSource = h2hPages.find(section => section.h2h) ?? null
 	const hasH2HNextPage = h2hPages.some(section => section.h2h?.hasNextPage)
+	const h2hSectionsComplete =
+		!h2hPages.length ||
+		(Boolean(pages.H2H_STANDINGS?.h2h) && Boolean(pages.H2H_FIXTURES?.h2h))
+	const combinedState =
+		review.phases.find(phase => phase.phaseId === phaseId)?.format === 'H2H' &&
+		!h2hSectionsComplete
+			? 'DEGRADED'
+			: review.state
 	return normalizeSeason(
 		{
 			...review,
+			state: combinedState,
 			points: pointsPage ?? null,
 			trajectoryPoints:
 				trajectoryPage?.points ?? review.trajectoryPoints ?? null,
-			h2h: h2hSource?.h2h
-				? {
-						...h2hSource.h2h,
-						matches: h2hMatches,
-						standings: h2hStandings,
-						hasNextPage: hasH2HNextPage,
-						nextCursor: null
-					}
-				: null,
+			h2h:
+				h2hSectionsComplete && h2hSource?.h2h
+					? {
+							...h2hSource.h2h,
+							matches: h2hMatches,
+							standings: h2hStandings,
+							hasNextPage: hasH2HNextPage,
+							nextCursor: null
+						}
+					: null,
 			knockout: pages.KNOCKOUT_BRACKET?.knockout ?? null
 		},
 		phaseId
 	)
+}
+
+function phaseSectionsReady(
+	format: MyTournamentReviewFormat,
+	pages: SeasonSectionPages
+): boolean {
+	if (format === 'POINTS')
+		return Boolean(
+			pages.POINTS_STANDINGS?.points && pages.POINTS_TRAJECTORIES?.points
+		)
+	if (format === 'H2H')
+		return Boolean(pages.H2H_STANDINGS?.h2h && pages.H2H_FIXTURES?.h2h)
+	return Boolean(pages.KNOCKOUT_BRACKET?.knockout)
 }
 
 function ReviewStateBanner({
@@ -788,6 +811,7 @@ export default function TournamentReviewV2Client({
 	const [catalogSearch, setCatalogSearch] = useState('')
 	const [catalogSearchInput, setCatalogSearchInput] = useState('')
 	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
+	const [retryPhaseId, setRetryPhaseId] = useState<string | null>(null)
 	const requestSequence = useRef(0)
 	const catalogRequestSequence = useRef(0)
 	// A replacement (search/scope switch) advances this generation. Page
@@ -899,6 +923,7 @@ export default function TournamentReviewV2Client({
 		// catalog replacement must never be followed by an old page append.
 		++catalogRequestSequence.current
 		++catalogQueryGeneration.current
+		setCatalogLoadingMore(false)
 		const requestId = ++requestSequence.current
 		setLoading(true)
 		setLoadingMore(false)
@@ -960,6 +985,8 @@ export default function TournamentReviewV2Client({
 		setGameweekReview(null)
 		setSeasonReview(null)
 		seasonSectionPages.current = {}
+		setRetryPhaseId(null)
+		let attemptedPhaseId: string | null = null
 		try {
 			const [gameweek, season] = await Promise.all([
 				executeQuery<MyTournamentGameweekReviewResponse>(
@@ -979,6 +1006,33 @@ export default function TournamentReviewV2Client({
 			)
 			const normalizedSeason = normalizeSeason(season.myTournamentSeasonReview)
 			const nextPhase = normalizedSeason.phases.at(-1) ?? null
+			attemptedPhaseId = nextPhase?.phaseId ?? null
+			// Publish the two successful overview reads before loading optional
+			// section pages. A section failure must not erase a valid Gameweek
+			// result, and a Season summary must remain explicitly non-ready until
+			// its format sections have been verified.
+			if (requestId !== requestSequence.current) return
+			setSelectedPhaseId(nextPhase?.phaseId ?? null)
+			setGameweekReview(normalizedGameweek)
+			setSeasonReview(
+				nextPhase
+					? {
+							...normalizedSeason,
+							state: 'PENDING',
+							points: null,
+							h2h: null,
+							knockout: null
+						}
+					: normalizedSeason
+			)
+			setFinalizedEventIds(previous =>
+				replaceAvailableEvents
+					? (normalizedSeason.finalizedEventIds ?? previous)
+					: mergeTournamentReviewEventIds(
+							previous,
+							normalizedSeason.finalizedEventIds ?? []
+						)
+			)
 			let seasonWithSection = normalizedSeason
 			if (nextPhase) {
 				const sectionRequests: Promise<SeasonSectionData | null>[] = [
@@ -1029,19 +1083,12 @@ export default function TournamentReviewV2Client({
 						pages,
 						nextPhase.phaseId
 					)
+				setRetryPhaseId(
+					phaseSectionsReady(nextPhase.format, pages) ? null : nextPhase.phaseId
+				)
 			}
 			if (requestId !== requestSequence.current) return
-			setSelectedPhaseId(nextPhase?.phaseId ?? null)
-			setGameweekReview(normalizedGameweek)
 			setSeasonReview(seasonWithSection)
-			setFinalizedEventIds(previous =>
-				replaceAvailableEvents
-					? (normalizedSeason.finalizedEventIds ?? previous)
-					: mergeTournamentReviewEventIds(
-							previous,
-							normalizedSeason.finalizedEventIds ?? []
-						)
-			)
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
@@ -1050,6 +1097,7 @@ export default function TournamentReviewV2Client({
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
 			)
+			setRetryPhaseId(attemptedPhaseId)
 		} finally {
 			if (requestId === requestSequence.current) setLoading(false)
 		}
@@ -1188,6 +1236,7 @@ export default function TournamentReviewV2Client({
 	const switchScope = async () => {
 		++catalogRequestSequence.current
 		++catalogQueryGeneration.current
+		setCatalogLoadingMore(false)
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
 			scope === 'ALL' ? 'ACCESSIBLE' : 'ALL'
@@ -1319,8 +1368,12 @@ export default function TournamentReviewV2Client({
 		replaceRoute({ view: nextView })
 	}
 
-	const choosePhase = (phaseId: string) => {
-		if (view !== 'season' || !seasonReview || phaseId === selectedPhaseId)
+	const choosePhase = (phaseId: string, force = false) => {
+		if (
+			view !== 'season' ||
+			!seasonReview ||
+			(!force && phaseId === selectedPhaseId)
+		)
 			return
 		const phase = seasonReview.phases.find(
 			candidate => candidate.phaseId === phaseId
@@ -1392,6 +1445,9 @@ export default function TournamentReviewV2Client({
 						.map(section => [section.section, section])
 				) as SeasonSectionPages
 				seasonSectionPages.current = pages
+				setRetryPhaseId(
+					phaseSectionsReady(phase.format, pages) ? null : phaseId
+				)
 				const sectionData = sections.find(Boolean) ?? null
 				setSeasonReview(previous =>
 					previous
@@ -1413,6 +1469,7 @@ export default function TournamentReviewV2Client({
 						? t('reviewClientUpgrade')
 						: t('loadFailed')
 				)
+				setRetryPhaseId(phaseId)
 			} finally {
 				if (requestId === requestSequence.current) setLoading(false)
 			}
@@ -1728,6 +1785,15 @@ export default function TournamentReviewV2Client({
 										>
 											{t('reviewLiveLink')}
 										</Link>
+									) : null}
+									{retryPhaseId && view === 'season' && !loading ? (
+										<button
+											type="button"
+											onClick={() => choosePhase(retryPhaseId, true)}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewRetryPhase')}
+										</button>
 									) : null}
 								</div>
 								{activeReview && state === 'READY' && format && (
