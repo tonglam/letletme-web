@@ -405,7 +405,7 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 		mobileMenu.getByRole('link', { name: 'Browse competitions', exact: true })
 	).toHaveAttribute('href', '/competitions/browse')
 	await expect(
-		mobileMenu.getByRole('link', { name: 'My Competitions', exact: true })
+		mobileMenu.getByRole('link', { name: 'Competition Review', exact: true })
 	).toHaveAttribute('href', '/my-fpl/competitions')
 	await expect(
 		mobileMenu.getByRole('link', { name: 'New Competition', exact: true })
@@ -450,7 +450,7 @@ test('Simplified Chinese mobile navigation uses the same competition vocabulary'
 	const mobileMenu = page.locator('details[data-navigation-mobile]')
 	await mobileMenu.locator(':scope > summary').click()
 	await expect(mobileMenu).toHaveAttribute('open', '')
-	for (const label of ['实时', '我的 FPL', '赛事', '探索', '数据']) {
+	for (const label of ['实时', 'My FPL', '赛事', '探索', '数据']) {
 		await expect(
 			mobileMenu.locator('section > p').filter({ hasText: label })
 		).toBeVisible()
@@ -458,7 +458,7 @@ test('Simplified Chinese mobile navigation uses the same competition vocabulary'
 
 	await expect(
 		mobileMenu.locator('a[href="/zh-CN/my-fpl/competitions"]')
-	).toHaveText('赛事')
+	).toHaveText('赛事复盘')
 	await expect(
 		mobileMenu.locator('a[href="/zh-CN/competitions/create"]')
 	).toHaveText('新建赛事')
