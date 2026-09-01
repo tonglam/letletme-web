@@ -545,7 +545,10 @@ describe('data freshness timestamp precision', () => {
 		assert.match(team, /<MyFplSnapshotStatus/)
 		assert.match(snapshotStatus, /timeStyle: 'medium'/)
 		assert.match(tournament, /settledAt/)
-		assert.match(tournament, /toLocaleString\('en-US'\)/)
+		assert.match(
+			tournament,
+			/function SettlementMeta[\s\S]*?new Date\(settledAt\)\.toLocaleString\(locale\)/
+		)
 	})
 })
 

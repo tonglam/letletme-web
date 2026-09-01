@@ -32,8 +32,21 @@ import {
 } from './_lib/tournament-review-v2'
 
 type Catalog = MyTournamentReviewCatalogResponse['myTournamentReviewCatalog']
+type CatalogEdge = Catalog['edges'][number]
 
 const catalogItems = (catalog: Catalog) => catalog.edges.map(edge => edge.node)
+
+const mergeCatalogEdges = (
+	previousEdges: CatalogEdge[],
+	nextEdges: CatalogEdge[]
+) => {
+	const byTournamentId = new Map<number, CatalogEdge>()
+	for (const edge of [...previousEdges, ...nextEdges]) {
+		if (!byTournamentId.has(edge.node.tournamentId))
+			byTournamentId.set(edge.node.tournamentId, edge)
+	}
+	return Array.from(byTournamentId.values())
+}
 
 function normalizeGameweek(
 	review: MyTournamentGameweekReview
@@ -808,6 +821,7 @@ export default function TournamentReviewV2Client({
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
+	const [seasonError, setSeasonError] = useState<string | null>(null)
 	const [catalogSearch, setCatalogSearch] = useState('')
 	const [catalogSearchInput, setCatalogSearchInput] = useState('')
 	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
@@ -887,12 +901,13 @@ export default function TournamentReviewV2Client({
 			)
 				return
 			const nextCatalog = response.myTournamentReviewCatalog
+			setError(null)
 			setCatalog(previous =>
 				replace
 					? nextCatalog
 					: {
 							...nextCatalog,
-							edges: [...previous.edges, ...nextCatalog.edges]
+							edges: mergeCatalogEdges(previous.edges, nextCatalog.edges)
 						}
 			)
 			setCatalogSearch(search.trim())
@@ -928,6 +943,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setSeasonError(null)
 		setGameweekReview(null)
 		setSeasonReview(null)
 		seasonSectionPages.current = {}
@@ -982,11 +998,13 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setSeasonError(null)
 		setGameweekReview(null)
 		setSeasonReview(null)
 		seasonSectionPages.current = {}
 		setRetryPhaseId(null)
 		let attemptedPhaseId: string | null = null
+		let overviewPublished = false
 		try {
 			const [gameweek, season] = await Promise.all([
 				executeQuery<MyTournamentGameweekReviewResponse>(
@@ -1033,6 +1051,7 @@ export default function TournamentReviewV2Client({
 							normalizedSeason.finalizedEventIds ?? []
 						)
 			)
+			overviewPublished = true
 			let seasonWithSection = normalizedSeason
 			if (nextPhase) {
 				const sectionRequests: Promise<SeasonSectionData | null>[] = [
@@ -1092,11 +1111,12 @@ export default function TournamentReviewV2Client({
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
-			setError(
+			const message =
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
-			)
+			if (overviewPublished) setSeasonError(message)
+			else setError(message)
 			setRetryPhaseId(attemptedPhaseId)
 		} finally {
 			if (requestId === requestSequence.current) setLoading(false)
@@ -1141,7 +1161,8 @@ export default function TournamentReviewV2Client({
 			return
 		const requestId = ++requestSequence.current
 		setLoadingMore(true)
-		setError(null)
+		if (requestView === 'season') setSeasonError(null)
+		else setError(null)
 		try {
 			if (requestView === 'gameweek') {
 				const response = await executeQuery<MyTournamentGameweekReviewResponse>(
@@ -1212,11 +1233,12 @@ export default function TournamentReviewV2Client({
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
-			setError(
+			const message =
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
-			)
+			if (requestView === 'season') setSeasonError(message)
+			else setError(message)
 		} finally {
 			if (requestId === requestSequence.current) setLoadingMore(false)
 		}
@@ -1243,6 +1265,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setSeasonError(null)
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -1319,6 +1342,7 @@ export default function TournamentReviewV2Client({
 			setLoading(false)
 			setLoadingMore(false)
 			setError(null)
+			setSeasonError(null)
 			replaceRoute({ tournamentId: null, eventId: null })
 			return
 		}
@@ -1338,6 +1362,7 @@ export default function TournamentReviewV2Client({
 		setLoading(false)
 		setLoadingMore(false)
 		setError(null)
+		setSeasonError(null)
 		replaceRoute({ tournamentId: nextId, eventId: nextEventId })
 		if (nextEventId) void loadReview(nextId, nextEventId, true)
 	}
@@ -1384,6 +1409,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setSeasonError(null)
 		seasonSectionPages.current = {}
 		// Remove the previous phase's rows immediately. A settled phase is an
 		// immutable bundle, so showing rows from another phase while the selected
@@ -1464,11 +1490,11 @@ export default function TournamentReviewV2Client({
 			} catch (loadError) {
 				if (requestId !== requestSequence.current) return
 				const requestError = loadError as GraphQLRequestError
-				setError(
+				const message =
 					requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 						? t('reviewClientUpgrade')
 						: t('loadFailed')
-				)
+				setSeasonError(message)
 				setRetryPhaseId(phaseId)
 			} finally {
 				if (requestId === requestSequence.current) setLoading(false)
@@ -1494,8 +1520,9 @@ export default function TournamentReviewV2Client({
 				selectedTournament?.phaseSummaries.at(-1)?.format ??
 				null)
 			: (selectedPhase?.format ?? seasonReview?.phases.at(-1)?.format ?? null)
+	const visibleError = view === 'season' ? (seasonError ?? error) : error
 	const state: MyTournamentReviewState =
-		error && !activeReview
+		visibleError && !activeReview
 			? 'UNAVAILABLE'
 			: (activeReview?.state ?? selectedTournament?.state ?? 'UNAVAILABLE')
 	return (
@@ -1648,11 +1675,11 @@ export default function TournamentReviewV2Client({
 					</aside>
 
 					<main className="min-w-0">
-						{error && (
+						{visibleError && (
 							<div className="mb-4">
 								<ReviewStateBanner
 									state="UNAVAILABLE"
-									message={error}
+									message={visibleError}
 								/>
 							</div>
 						)}
