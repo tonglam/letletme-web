@@ -51,6 +51,7 @@ export interface MyFplManagerPositionPoints {
 	defender: number
 	midfielder: number
 	forward: number
+	assistantManager: number
 	total: number
 }
 
@@ -525,6 +526,7 @@ const MANAGER_GAMEWEEK_REVIEW_FIELDS = `
           defender
           midfielder
           forward
+		  assistantManager
           total
         }
         captain {
@@ -762,7 +764,7 @@ export const GET_MY_FPL_MANAGER_REVIEW = `
         currentImprovementStreak
         longestImprovementStreak
         formations { formation gameweeks }
-        positionPoints { goalkeeper defender midfielder forward total }
+        positionPoints { goalkeeper defender midfielder forward assistantManager total }
         chips {
           chip
           eventId

@@ -345,6 +345,7 @@ const mockTimeline: MyFplManagerReview['timeline'] =
 					defender: 18 + (row.eventId % 5),
 					midfielder: 24 + (row.eventId % 7),
 					forward: 15 + (row.eventId % 6),
+					assistantManager: 0,
 					total: row.eventPoints
 				},
 				captain: {
@@ -454,6 +455,7 @@ export const MOCK_MANAGER_REVIEW: MyFplManagerReview = {
 			defender: 412,
 			midfielder: 527,
 			forward: 353,
+			assistantManager: 0,
 			total: 1420
 		},
 		chips: [

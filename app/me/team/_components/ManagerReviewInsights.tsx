@@ -27,7 +27,8 @@ const POSITION_KEYS = [
 	['goalkeeper', 'reviewPositionGoalkeeper'],
 	['defender', 'reviewPositionDefender'],
 	['midfielder', 'reviewPositionMidfielder'],
-	['forward', 'reviewPositionForward']
+	['forward', 'reviewPositionForward'],
+	['assistantManager', 'assistantManager']
 ] as const
 
 function compactNumber(
