@@ -13,10 +13,9 @@ import {
 	type MyFplManagerGameweekResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
-	GET_TOURNAMENT_DETAIL_DESK,
+	GET_ENTRY_LIVE_COMPETITION_BOARD,
 	GET_TOURNAMENT_OFFICIAL_H2H,
-	type TournamentDetailDeskResponse
-	,
+	type EntryLiveCompetitionBoardResponse,
 	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
@@ -424,30 +423,35 @@ async function probeTournament(
 				official.matches.every(match => match.availability === 'READY')
 		}
 	}
-	const response =
-		await executeServerQueryWithSession<TournamentDetailDeskResponse>(
-			canarySession(config),
-			GET_TOURNAMENT_DETAIL_DESK,
-			{
-				tournamentId: config.tournamentId,
-				entryId: config.entryId,
-				eventId
-			},
-			{ cache: 'no-store', timeoutMs: 5_000 }
-		)
-	const detail = response.tournamentDetailDesk
-	if (!detail || detail.context.requestedEventId !== eventId) {
+	const response = await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+		canarySession(config),
+		GET_ENTRY_LIVE_COMPETITION_BOARD,
+		{
+			entryId: config.entryId,
+			tournamentId: config.tournamentId,
+			eventId,
+			input: { first: 1 }
+		},
+		{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+	)
+	const board = response.entryLiveCompetitionBoard
+	if (
+		!board ||
+		board.head.eventId !== eventId ||
+		board.head.tournamentId !== config.tournamentId
+	) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
-			'tournament business loader returned no matching event'
+			'live league board returned no matching event'
 		)
 	}
 	return {
-		revision: revision(detail.revision),
+		revision: revision(board.head.contentRevision),
 		complete:
-			detail.tournament.state !== 'INACTIVE' &&
-			detail.participants.length > 0 &&
-			detail.participants.length > 0
+			board.head.availability === 'READY' &&
+			board.totalEntries > 0 &&
+			board.viewerRow?.entry === config.entryId &&
+			board.viewerRow.availability === 'READY'
 	}
 }
 
