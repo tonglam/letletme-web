@@ -109,7 +109,13 @@ async function fetchSeasonSection(
 	throughEventId: number,
 	phase: MyTournamentSeasonReview['phases'][number],
 	first = 100,
-	after: string | null = null
+	after: string | null = null,
+	sectionOverride?:
+		| 'POINTS_STANDINGS'
+		| 'POINTS_TRAJECTORIES'
+		| 'H2H_STANDINGS'
+		| 'H2H_FIXTURES'
+		| 'KNOCKOUT_BRACKET'
 ): Promise<SeasonSectionData | null> {
 	if (!phase.revision || !phase.semanticSha256) return null
 	const section = await executeQuery<MyTournamentSeasonSectionResponse>(
@@ -118,7 +124,7 @@ async function fetchSeasonSection(
 			tournamentId,
 			throughEventId,
 			phaseId: phase.phaseId,
-			section: sectionForFormat(phase.format),
+			section: sectionOverride ?? sectionForFormat(phase.format),
 			first,
 			after,
 			revision: phase.revision,
@@ -306,16 +312,21 @@ function SettlementMeta({
 	settledAt: string | null | undefined
 	publishedAt: string | null | undefined
 }) {
+	const t = useTranslations('TournamentStats')
 	const [hydrated, setHydrated] = useState(false)
 	useEffect(() => setHydrated(true), [])
 	if (!settledAt && !publishedAt) return null
 	return (
 		<div className="text-xs text-slate-500">
 			{settledAt
-				? `Settled ${hydrated ? new Date(settledAt).toLocaleString() : '—'}`
+				? t('reviewSettledAt', {
+						value: hydrated ? new Date(settledAt).toLocaleString() : '—'
+					})
 				: null}
 			{publishedAt
-				? ` · Published ${hydrated ? new Date(publishedAt).toLocaleString() : '—'}`
+				? ` · ${t('reviewPublishedAt', {
+						value: hydrated ? new Date(publishedAt).toLocaleString() : '—'
+					})}`
 				: null}
 		</div>
 	)
@@ -771,6 +782,9 @@ export default function TournamentReviewV2Client({
 
 	const searchCatalog = async (requestedSearch = catalogSearchInput) => {
 		const nextSearch = requestedSearch.trim()
+		// Invalidate an in-flight load-more response from the previous query. A
+		// catalog replacement must never be followed by an old page append.
+		++catalogRequestSequence.current
 		const requestId = ++requestSequence.current
 		setLoading(true)
 		setLoadingMore(false)
@@ -850,17 +864,40 @@ export default function TournamentReviewV2Client({
 			const nextPhase = normalizedSeason.phases.at(-1) ?? null
 			let seasonWithSection = normalizedSeason
 			if (nextPhase) {
-				const sectionData = await fetchSeasonSection(
-					tournamentId,
-					nextEventId,
-					nextPhase
-				)
-				if (sectionData) {
+				const [sectionData, fixtureSectionData] = await Promise.all([
+					fetchSeasonSection(tournamentId, nextEventId, nextPhase),
+					nextPhase.format === 'H2H'
+						? fetchSeasonSection(
+								tournamentId,
+								nextEventId,
+								nextPhase,
+								100,
+								null,
+								'H2H_FIXTURES'
+							)
+						: Promise.resolve(null)
+				])
+					if (sectionData) {
+						const h2h =
+							nextPhase.format === 'H2H'
+								? {
+										...(sectionData.h2h ?? {
+											matches: [],
+											standings: [],
+											nextCursor: null,
+											hasNextPage: false
+										}),
+									matches:
+										fixtureSectionData?.h2h?.matches ??
+										sectionData.h2h?.matches ??
+										[]
+								}
+							: sectionData.h2h
 					seasonWithSection = normalizeSeason(
 						{
 							...normalizedSeason,
 							points: sectionData.points,
-							h2h: sectionData.h2h,
+							h2h,
 							knockout: sectionData.knockout
 						},
 						nextPhase.phaseId
@@ -991,6 +1028,7 @@ export default function TournamentReviewV2Client({
 	}
 
 	const switchScope = async () => {
+		++catalogRequestSequence.current
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
 			scope === 'ALL' ? 'ACCESSIBLE' : 'ALL'
@@ -1145,12 +1183,35 @@ export default function TournamentReviewV2Client({
 		)
 		void (async () => {
 			try {
-				const sectionData = await fetchSeasonSection(
-					selectedTournamentId,
-					eventId,
-					phase
-				)
+				const [sectionData, fixtureSectionData] = await Promise.all([
+					fetchSeasonSection(selectedTournamentId, eventId, phase),
+					phase.format === 'H2H'
+						? fetchSeasonSection(
+								selectedTournamentId,
+								eventId,
+								phase,
+								100,
+								null,
+								'H2H_FIXTURES'
+							)
+						: Promise.resolve(null)
+				])
 				if (requestId !== requestSequence.current) return
+					const h2h =
+						phase.format === 'H2H' && sectionData
+							? {
+									...(sectionData.h2h ?? {
+										matches: [],
+										standings: [],
+										nextCursor: null,
+										hasNextPage: false
+									}),
+								matches:
+									fixtureSectionData?.h2h?.matches ??
+									sectionData.h2h?.matches ??
+									[]
+							}
+						: (sectionData?.h2h ?? null)
 				setSeasonReview(previous =>
 					previous
 						? normalizeSeason(
@@ -1158,7 +1219,7 @@ export default function TournamentReviewV2Client({
 									...previous,
 									state: sectionData?.state ?? phase.state,
 									points: sectionData?.points ?? null,
-									h2h: sectionData?.h2h ?? null,
+									h2h,
 									knockout: sectionData?.knockout ?? null
 								},
 								phaseId
@@ -1187,14 +1248,16 @@ export default function TournamentReviewV2Client({
 		[seasonReview, selectedPhaseId]
 	)
 
-	const format =
-		gameweekReview?.scope?.format ??
-		selectedPhase?.format ??
-		seasonReview?.format ??
-		selectedTournament?.latestFinalizedScope?.format ??
-		selectedTournament?.phaseSummaries.at(-1)?.format ??
-		null
 	const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
+	// Format is scoped to the active settled review. Do not let a previously
+	// loaded Gameweek (or the latest phase) leak into an earlier Season phase.
+	const format =
+		view === 'gameweek'
+			? (gameweekReview?.scope?.format ??
+				selectedTournament?.latestFinalizedScope?.format ??
+				selectedTournament?.phaseSummaries.at(-1)?.format ??
+				null)
+			: (selectedPhase?.format ?? seasonReview?.phases.at(-1)?.format ?? null)
 	const state: MyTournamentReviewState =
 		error && !activeReview
 			? 'UNAVAILABLE'

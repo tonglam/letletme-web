@@ -2331,6 +2331,8 @@
 		"belowAverageBy": "低于平均 {points} 分",
 		"chartHoverFieldContext": "你 {mine} · 榜首 {leader} · 平均 {avg}",
 		"reviewSettledOnlyHint": "这里是已结算快照复盘中心；未结算数据统一前往 Live。",
+		"reviewSettledAt": "结算于 {value}",
+		"reviewPublishedAt": "发布于 {value}",
 		"createTournament": "新建赛事",
 		"reviewFormatPoints": "积分赛",
 		"reviewFormatH2H": "H2H 对战",

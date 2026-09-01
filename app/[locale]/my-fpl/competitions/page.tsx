@@ -9,11 +9,13 @@ import {
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
+	GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
 	GET_MY_TOURNAMENT_SEASON_REVIEW,
 	type MyTournamentGameweekReviewResponse,
 	type MyTournamentReviewCatalogResponse,
 	type MyTournamentReviewScope,
-	type MyTournamentSeasonReviewResponse
+	type MyTournamentSeasonReviewResponse,
+	type MyTournamentSeasonSectionResponse
 } from '@/lib/graphql/operations/my-fpl'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
@@ -85,6 +87,85 @@ const eventIdsFromPhases = (
 		return values
 	})
 	return ids.length > 0 ? ids : latest ? [latest] : []
+}
+
+const sectionForFormat = (
+	format: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']['phases'][number]['format']
+) =>
+	format === 'POINTS'
+		? 'POINTS_STANDINGS'
+		: format === 'H2H'
+			? 'H2H_STANDINGS'
+			: 'KNOCKOUT_BRACKET'
+
+/** Attach the first settled section page to the server seed. The client can
+ * hydrate the initial Season view without immediately re-fetching the same
+ * immutable bundle after mount. H2H gets both independent projections because
+ * the review UI renders fixtures and standings together. */
+async function hydrateSeasonSeed(
+	session: NonNullable<
+		Awaited<ReturnType<typeof getVerifiedEntryContext>>['session']
+	>,
+	tournamentId: number,
+	throughEventId: number,
+	review: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']
+) {
+	const phase = review.phases.at(-1)
+	if (
+		!phase ||
+		phase.state !== 'READY' ||
+		!phase.revision ||
+		!phase.semanticSha256
+	)
+		return review
+	const fetchSection = async (
+		section:
+			| 'POINTS_STANDINGS'
+			| 'POINTS_TRAJECTORIES'
+			| 'H2H_STANDINGS'
+			| 'H2H_FIXTURES'
+			| 'KNOCKOUT_BRACKET'
+	) =>
+		executeServerQueryWithSession<MyTournamentSeasonSectionResponse>(
+			session,
+			GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
+			{
+				tournamentId,
+				throughEventId,
+				phaseId: phase.phaseId,
+				section,
+				first: 100,
+				after: null,
+				revision: phase.revision,
+				semanticSha256: phase.semanticSha256
+			},
+			{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
+		)
+	const primary = await fetchSection(sectionForFormat(phase.format))
+	const fixtures =
+		phase.format === 'H2H' ? await fetchSection('H2H_FIXTURES') : null
+	const section = primary.myTournamentSeasonReviewSection
+	const h2h =
+		phase.format === 'H2H'
+			? {
+					...(section.h2h ?? {
+						matches: [],
+						standings: [],
+						nextCursor: null,
+						hasNextPage: false
+					}),
+					matches:
+						fixtures?.myTournamentSeasonReviewSection.h2h?.matches ??
+						section.h2h?.matches ??
+						[]
+				}
+			: section.h2h
+	return {
+		...review,
+		points: section.points,
+		h2h,
+		knockout: section.knockout
+	}
 }
 
 const isScopeAuthorizationError = (error: unknown): boolean => {
@@ -193,6 +274,45 @@ export default async function TournamentStatsPage({
 			)
 		}
 		initialCatalog = catalogResponse.myTournamentReviewCatalog
+		// A deep link may target a tournament beyond the first catalog page. Walk
+		// the keyset pages only until that requested ID is found, preserving the
+		// server-side authorization scope and search-free cursor contract.
+		if (
+			requestedTournamentId !== null &&
+			!catalogNodes(initialCatalog).some(
+				item => item.tournamentId === requestedTournamentId
+			)
+		) {
+			let after = initialCatalog.pageInfo.endCursor
+			let pageCount = 0
+			while (after && initialCatalog.pageInfo.hasNextPage && pageCount < 1000) {
+				const nextPage = await timing.measure(
+					'my-tournament-review-v2.1-catalog-deep-link-page',
+					() =>
+						executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
+							session,
+							GET_MY_TOURNAMENT_REVIEW_CATALOG,
+							{ scope, first: 100, after },
+							{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
+						)
+				)
+				initialCatalog = {
+					...nextPage.myTournamentReviewCatalog,
+					edges: [
+						...initialCatalog.edges,
+						...nextPage.myTournamentReviewCatalog.edges
+					]
+				}
+				if (
+					catalogNodes(nextPage.myTournamentReviewCatalog).some(
+						item => item.tournamentId === requestedTournamentId
+					)
+				)
+					break
+				after = nextPage.myTournamentReviewCatalog.pageInfo.endCursor
+				pageCount += 1
+			}
+		}
 		const selected =
 			catalogNodes(initialCatalog).find(
 				item => item.tournamentId === requestedTournamentId
@@ -258,7 +378,12 @@ export default async function TournamentStatsPage({
 						])
 				)
 				initialGameweekReview = gameweekResponse.myTournamentGameweekReview
-				initialSeasonReview = seasonResponse.myTournamentSeasonReview
+				initialSeasonReview = await hydrateSeasonSeed(
+					session,
+					initialSelectedTournamentId,
+					initialEventId,
+					seasonResponse.myTournamentSeasonReview
+				)
 			}
 		}
 	} catch (error) {

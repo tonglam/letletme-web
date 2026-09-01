@@ -2335,6 +2335,8 @@
 		"belowAverageBy": "{points} pts below average",
 		"chartHoverFieldContext": "You {mine} · Leader {leader} · Avg {avg}",
 		"reviewSettledOnlyHint": "This is a finalized-snapshot review center. Unsettled data belongs in Live.",
+		"reviewSettledAt": "Settled {value}",
+		"reviewPublishedAt": "Published {value}",
 		"createTournament": "Create tournament",
 		"reviewFormatPoints": "Points",
 		"reviewFormatH2H": "Head-to-head",
