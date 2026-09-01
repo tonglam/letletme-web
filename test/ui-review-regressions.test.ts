@@ -1285,8 +1285,19 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.match(
 			client,
-			/if \(gameweekResult\.status === 'rejected'\)\s*setError\(/
+			/if \(gameweekResult\.status === 'rejected'\)\s*setGameweekError\(/
 		)
+		assert.match(client, /if \(normalizedGameweek\) setGameweekReview\(/)
+		assert.match(client, /const visibleError =\s*\n?\s*view === 'season'/)
+		assert.match(
+			page,
+			/state: optionalSectionFailed \? 'DEGRADED' : review\.state/
+		)
+		assert.match(
+			client,
+			/setCatalog\(nextCatalog\)[\s\S]*setGameweekReview\(null\)/
+		)
+		assert.match(client, /const \[gameweekError, setGameweekError\]/)
 	})
 
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {

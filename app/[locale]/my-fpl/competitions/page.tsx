@@ -159,6 +159,7 @@ async function hydrateSeasonSeed(
 	const primary = primaryResult.value
 	const optional =
 		optionalResult.status === 'fulfilled' ? optionalResult.value : null
+	const optionalSectionFailed = optionalResult.status === 'rejected'
 	const trajectories =
 		optionalSection === 'POINTS_TRAJECTORIES' ? optional : null
 	const fixtures = optionalSection === 'H2H_FIXTURES' ? optional : null
@@ -186,6 +187,7 @@ async function hydrateSeasonSeed(
 	return {
 		review: {
 			...review,
+			state: optionalSectionFailed ? 'DEGRADED' : review.state,
 			points: section.points,
 			trajectoryPoints:
 				trajectories?.myTournamentSeasonReviewSection.points ?? null,

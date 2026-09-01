@@ -821,11 +821,16 @@ export default function TournamentReviewV2Client({
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
+	const [gameweekError, setGameweekError] = useState<string | null>(null)
 	const [seasonError, setSeasonError] = useState<string | null>(null)
 	const [catalogSearch, setCatalogSearch] = useState('')
 	const [catalogSearchInput, setCatalogSearchInput] = useState('')
 	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
-	const [retryPhaseId, setRetryPhaseId] = useState<string | null>(null)
+	const [retryPhaseId, setRetryPhaseId] = useState<string | null>(
+		initialSeasonReview?.state === 'DEGRADED'
+			? (initialSeasonReview.phases.at(-1)?.phaseId ?? null)
+			: null
+	)
 	const requestSequence = useRef(0)
 	const catalogRequestSequence = useRef(0)
 	// A replacement (search/scope switch) advances this generation. Page
@@ -943,10 +948,8 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setGameweekError(null)
 		setSeasonError(null)
-		setGameweekReview(null)
-		setSeasonReview(null)
-		seasonSectionPages.current = {}
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -962,6 +965,11 @@ export default function TournamentReviewV2Client({
 				null
 			setCatalog(nextCatalog)
 			setCatalogSearch(nextSearch)
+			setGameweekReview(null)
+			setSeasonReview(null)
+			seasonSectionPages.current = {}
+			setGameweekError(null)
+			setSeasonError(null)
 			setSelectedTournamentId(nextSelected?.tournamentId ?? null)
 			const nextEventId = nextSelected?.latestFinalizedEventId ?? null
 			setEventId(nextEventId)
@@ -998,6 +1006,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setGameweekError(null)
 		setSeasonError(null)
 		setGameweekReview(null)
 		setSeasonReview(null)
@@ -1034,19 +1043,14 @@ export default function TournamentReviewV2Client({
 					? normalizeSeason(seasonResult.value.myTournamentSeasonReview)
 					: null
 			if (gameweekResult.status === 'rejected')
-				setError(requestMessage(gameweekResult))
+				setGameweekError(requestMessage(gameweekResult))
+			if (normalizedGameweek) setGameweekReview(normalizedGameweek)
 			overviewPublished = Boolean(normalizedGameweek || normalizedSeason)
 			if (!normalizedSeason) {
 				if (seasonResult.status === 'rejected')
 					setSeasonError(requestMessage(seasonResult))
 				setRetryPhaseId(null)
 				return
-			}
-			if (!normalizedGameweek && seasonResult.status === 'fulfilled') {
-				// Keep the successfully loaded Season overview usable even when the
-				// independent Gameweek request failed. The Gameweek error remains in
-				// the Gameweek-scoped banner through `error`.
-				setError(requestMessage(gameweekResult as PromiseRejectedResult))
 			}
 			const nextPhase = normalizedSeason.phases.at(-1) ?? null
 			attemptedPhaseId = nextPhase?.phaseId ?? null
@@ -1056,7 +1060,6 @@ export default function TournamentReviewV2Client({
 			// its format sections have been verified.
 			if (requestId !== requestSequence.current) return
 			setSelectedPhaseId(nextPhase?.phaseId ?? null)
-			if (normalizedGameweek) setGameweekReview(normalizedGameweek)
 			setSeasonReview(
 				nextPhase
 					? {
@@ -1176,7 +1179,7 @@ export default function TournamentReviewV2Client({
 				)
 			: []
 		if (requestView === 'gameweek' && (!gameweekCursor || !requestRevision)) {
-			setError(t('loadFailed'))
+			setGameweekError(t('loadFailed'))
 			return
 		}
 		if (
@@ -1187,7 +1190,7 @@ export default function TournamentReviewV2Client({
 		const requestId = ++requestSequence.current
 		setLoadingMore(true)
 		if (requestView === 'season') setSeasonError(null)
-		else setError(null)
+		else setGameweekError(null)
 		try {
 			if (requestView === 'gameweek') {
 				const response = await executeQuery<MyTournamentGameweekReviewResponse>(
@@ -1263,7 +1266,7 @@ export default function TournamentReviewV2Client({
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
 			if (requestView === 'season') setSeasonError(message)
-			else setError(message)
+			else setGameweekError(message)
 		} finally {
 			if (requestId === requestSequence.current) setLoadingMore(false)
 		}
@@ -1290,6 +1293,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setGameweekError(null)
 		setSeasonError(null)
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
@@ -1367,6 +1371,7 @@ export default function TournamentReviewV2Client({
 			setLoading(false)
 			setLoadingMore(false)
 			setError(null)
+			setGameweekError(null)
 			setSeasonError(null)
 			replaceRoute({ tournamentId: null, eventId: null })
 			return
@@ -1387,6 +1392,7 @@ export default function TournamentReviewV2Client({
 		setLoading(false)
 		setLoadingMore(false)
 		setError(null)
+		setGameweekError(null)
 		setSeasonError(null)
 		replaceRoute({ tournamentId: nextId, eventId: nextEventId })
 		if (nextEventId) void loadReview(nextId, nextEventId, true)
@@ -1434,6 +1440,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setGameweekError(null)
 		setSeasonError(null)
 		seasonSectionPages.current = {}
 		// Remove the previous phase's rows immediately. A settled phase is an
@@ -1545,7 +1552,8 @@ export default function TournamentReviewV2Client({
 				selectedTournament?.phaseSummaries.at(-1)?.format ??
 				null)
 			: (selectedPhase?.format ?? seasonReview?.phases.at(-1)?.format ?? null)
-	const visibleError = view === 'season' ? (seasonError ?? error) : error
+	const visibleError =
+		view === 'season' ? (seasonError ?? error) : (gameweekError ?? error)
 	const state: MyTournamentReviewState =
 		visibleError && !activeReview
 			? 'UNAVAILABLE'
