@@ -6,7 +6,7 @@ import {
 	buildTournamentSeasonMe,
 	compareTournamentSeasonRows
 } from '../app/me/tournament/_lib/tournament-stats-model'
-import { aggregateToSeasonSnapshot } from '../app/me/tournament/_lib/my-fpl-adapters'
+import { aggregateToSeasonSnapshot } from '../app/me/tournament/_lib/competition-review-projection'
 import type {
 	MyFplCompetitionAggregate,
 	MyFplCompetitionBoardPage

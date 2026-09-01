@@ -8,6 +8,7 @@ import {
 	UserRound,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import type { MyFplSelectionRules } from '@/lib/graphql/operations/my-fpl'
 import type { TeamSeasonLogs } from '../_lib/team-stats-model'
 import { TeamBenchTab } from './TeamBenchTab'
 import { TeamCaptainsTab } from './TeamCaptainsTab'
@@ -21,19 +22,20 @@ import { TeamTransfersTab } from './TeamTransfersTab'
 /**
  * Season detail sections in the order used by the My FPL team view.
  *
- * The second section is backed by FPL's season-level bench-points history.
- * The team-history payload does not expose a historical auto-substitution
- * ledger, so it must not be presented as one.
+ * The legacy charts remain useful presentation surfaces, while manager-only
+ * decision analysis is rendered from the strict review contract above them.
  */
 export function TeamStatsDeepDive({
 	logs,
 	currentSeason,
 	transfersLoading = false,
+	rules,
 }: {
 	logs: TeamSeasonLogs
 	currentSeason: string | null
 	/** Move-level transfer details load after paint (counts already on rows). */
 	transfersLoading?: boolean
+	rules: MyFplSelectionRules | null
 }) {
 	const t = useTranslations('TeamStats')
 
@@ -67,7 +69,7 @@ export function TeamStatsDeepDive({
 			</StatsSectionCard>
 
 			<StatsSectionCard icon={Star} title={t('chipUsage')}>
-				<TeamChipsTab stats={logs} />
+				<TeamChipsTab stats={logs} rules={rules} />
 			</StatsSectionCard>
 
 			<StatsSectionCard

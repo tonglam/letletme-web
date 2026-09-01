@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	canCommitSnapshotResponse,
+	reviewRevisionForGameweek,
 	seedEntrySnapshotMeta
 } from '@/app/me/team/_lib/team-stats-model'
 import type { MyFplSnapshotMeta } from '@/lib/graphql/operations/my-fpl'
@@ -44,5 +45,11 @@ describe('My FPL snapshot revision rollover', () => {
 	it('rejects an obsolete response after another request changed the session pin', () => {
 		seedEntrySnapshotMeta(900_004, meta('102'))
 		assert.equal(canCommitSnapshotResponse(900_004, '100', '103'), false)
+	})
+
+	it('never reuses a through-event revision for historical replay', () => {
+		const reviewMeta = { ...meta('104'), eventId: 2 }
+		assert.equal(reviewRevisionForGameweek(reviewMeta, 2), '104')
+		assert.equal(reviewRevisionForGameweek(reviewMeta, 1), null)
 	})
 })

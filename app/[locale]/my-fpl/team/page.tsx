@@ -1,16 +1,19 @@
 import TeamStatsClient from '@/app/me/team/TeamStatsClient'
 import {
-	eventResultFromMyFplGameweek,
-	historyFromMyFplDesk,
-	identityFromMyFplEntry
-} from '@/app/me/team/_lib/my-fpl-adapters'
+	eventResultFromManagerGameweek,
+	historyFromManagerReview,
+	identityFromMyFplEntry,
+	transfersFromManagerReview
+} from '@/app/me/team/_lib/manager-review-projection'
 import {
+	MOCK_MANAGER_REVIEW,
 	MOCK_TEAM_ENTRY_ID,
 	MOCK_TEAM_EVENT_ID,
 	MOCK_TEAM_EVENT_RESULT,
 	MOCK_TEAM_HISTORY,
 	MOCK_TEAM_IDENTITY
 } from '@/app/me/team/_lib/team-stats-mock'
+import { reviewRevisionForGameweek } from '@/app/me/team/_lib/team-stats-model'
 import {
 	parseTeamStatsGw,
 	parseTeamStatsView
@@ -18,10 +21,13 @@ import {
 import { getCoreEventContext } from '@/lib/events'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
-	GET_MY_FPL_TEAM_DESK,
+	GET_MY_FPL_MANAGER_GAMEWEEK,
+	GET_MY_FPL_MANAGER_REVIEW,
+	type MyFplManagerGameweekResponse,
+	type MyFplManagerReview,
+	type MyFplManagerReviewResponse,
 	type MyFplReviewState,
-	type MyFplSnapshotMeta,
-	type MyFplTeamDeskResponse
+	type MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { resolveSeasonPresentation } from '@/lib/season-presentation'
@@ -70,8 +76,10 @@ function TeamStatsFallback() {
 }
 
 /**
- * My Team is a review page — do NOT hard-fail when isCurrent is missing.
- * Live calc still uses getCurrentEventId() only.
+ * Manager Review is snapshot-based and does not require a live current-event
+ * marker. Its revision is scoped to the through-event publication. Historical
+ * replay reads the selected event's own immutable FINAL publication; only the
+ * through-event detail is pinned to the review revision.
  *
  * Critical path (Season default):
  *   gate once + events + history + entry identity
@@ -118,12 +126,17 @@ export default async function TeamStatsPage({
 					initialEntryEventResult={mockEventResult}
 					initialEntryHistory={MOCK_TEAM_HISTORY}
 					initialEntryIdentity={MOCK_TEAM_IDENTITY}
-					initialEntryTransfers={[]}
+					initialEntryTransfers={transfersFromManagerReview(
+						MOCK_MANAGER_REVIEW
+					)}
+					initialManagerReview={MOCK_MANAGER_REVIEW}
+					initialReviewState="READY"
+					initialPastSeasonsState="READY"
 					initialError={null}
 					initialRequestComplete
 					initialSeasonPhase="SETTLED"
 					currentSeason="2627"
-					initialSnapshotMeta={null}
+					initialSnapshotMeta={MOCK_MANAGER_REVIEW.snapshotMeta}
 				/>
 			</Suspense>
 		)
@@ -154,13 +167,14 @@ export default async function TeamStatsPage({
 	const seasonPresentation = resolveSeasonPresentation(coreEventContext)
 
 	let initialEntryEventResult = null as ReturnType<
-		typeof eventResultFromMyFplGameweek
+		typeof eventResultFromManagerGameweek
 	>
 	let initialEntryHistory = null as ReturnType<
-		typeof historyFromMyFplDesk
+		typeof historyFromManagerReview
 	> | null
 	let initialEntryIdentity = null as ReturnType<typeof identityFromMyFplEntry>
-	let initialDeskState: MyFplReviewState = 'EMPTY'
+	let initialReview: MyFplManagerReview | null = null
+	let initialReviewState: MyFplReviewState = 'EMPTY'
 	let initialEntryGameweekState: MyFplReviewState | undefined
 	let initialPastSeasonsState: MyFplReviewState | undefined
 	let initialSnapshotMeta: MyFplSnapshotMeta | null = null
@@ -177,41 +191,40 @@ export default async function TeamStatsPage({
 	let initialSelectedGameweek: number | undefined
 
 	try {
-		const response = await timing.measure('my-fpl-desk', () =>
-			executeServerQueryWithSession<MyFplTeamDeskResponse>(
+		const response = await timing.measure('my-fpl-manager-review', () =>
+			executeServerQueryWithSession<MyFplManagerReviewResponse>(
 				session,
-				GET_MY_FPL_TEAM_DESK,
-				{ eventId: requestedEventId },
+				GET_MY_FPL_MANAGER_REVIEW,
+				{},
 				{ cache: 'no-store' }
 			)
 		)
-		const desk = response.myFplTeamDesk
-		initialDeskState = desk.state
-		initialEntryHistory =
-			desk.state === 'READY' ? historyFromMyFplDesk(desk) : null
-		initialEntryIdentity = identityFromMyFplEntry(desk.entry)
-		initialEntryEventResult =
-			desk.state === 'READY'
-				? eventResultFromMyFplGameweek(desk.gameweek)
-				: null
-		initialEntryGameweekState =
-			desk.state === 'READY' ? desk.gameweek?.state : desk.state
-		initialPastSeasonsState = desk.pastSeasonsState
-		initialSnapshotMeta = desk.snapshotMeta ?? null
+		const review = response.myFplManagerReview
+		initialReview = review
+		initialReviewState = review.state
+		initialEntryHistory = historyFromManagerReview(review)
+		initialEntryIdentity = identityFromMyFplEntry(review.entry)
+		initialPastSeasonsState = review.pastSeasonsState
+		initialSnapshotMeta = review.snapshotMeta ?? null
 		currentGameweek =
-			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
-		const latestFinalized = desk.context.latestFinalizedEventId ?? 0
-		const currentEvent = desk.context.currentEventId ?? 0
-		const latestPublished = desk.context.latestPublishedEventId ?? 0
+			review.context.currentEventId ??
+			review.context.latestFinalizedEventId ??
+			0
+		const latestFinalized = review.context.latestFinalizedEventId ?? 0
+		const currentEvent = review.context.currentEventId ?? 0
+		const latestPublished = review.context.latestPublishedEventId ?? 0
 		const maxKnownEvent = Math.max(currentEvent, latestFinalized)
-		maxKnownPublishedEvent = Math.max(maxKnownEvent, latestPublished)
+		maxKnownPublishedEvent = Math.max(
+			maxKnownEvent,
+			latestPublished,
+			review.throughEventId ?? 0
+		)
 		const safeRequestedEvent =
 			requestedEventId !== null && requestedEventId <= maxKnownPublishedEvent
 				? requestedEventId
 				: null
 		initialSelectedGameweek =
 			safeRequestedEvent ??
-			desk.selectedEventId ??
 			(latestPublished > 0
 				? latestPublished
 				: latestFinalized > 0
@@ -219,32 +232,62 @@ export default async function TeamStatsPage({
 					: currentEvent > 0
 						? currentEvent
 						: undefined)
-		const deskGameweekMatchesSelection =
-			desk.gameweek?.eventId === (initialSelectedGameweek ?? 0)
-		if (!deskGameweekMatchesSelection) {
-			initialEntryEventResult = null
-			initialEntryGameweekState = undefined
+		let selectedGameweek = review.currentGameweek
+		if (
+			initialView === 'gameweek' &&
+			initialSelectedGameweek &&
+			selectedGameweek?.eventId !== initialSelectedGameweek
+		) {
+			const selectedEventId = initialSelectedGameweek
+			const gameweekResponse = await timing.measure(
+				'my-fpl-manager-gameweek',
+				() =>
+					executeServerQueryWithSession<MyFplManagerGameweekResponse>(
+						session,
+						GET_MY_FPL_MANAGER_GAMEWEEK,
+						{
+							eventId: selectedEventId,
+							snapshotRevision: reviewRevisionForGameweek(
+								review.snapshotMeta,
+								selectedEventId
+							)
+						},
+						{ cache: 'no-store' }
+					)
+			)
+			selectedGameweek = gameweekResponse.myFplManagerGameweek
 		}
+		if (
+			initialSelectedGameweek !== undefined &&
+			selectedGameweek?.eventId !== initialSelectedGameweek
+		) {
+			// A Season render keeps the selected GW in the URL for the next tab,
+			// but must not seed that key with a different current-GW result.
+			selectedGameweek = null
+		}
+		initialEntryEventResult = eventResultFromManagerGameweek(selectedGameweek)
+		initialEntryGameweekState = selectedGameweek?.state
 
 		initialRequestComplete = true
 
 		console.info('[team stats] ssr seed', {
 			view: initialView,
 			requestedEventId,
-			currentGw: desk.context.currentEventId,
-			latestFinalizedGw: desk.context.latestFinalizedEventId,
+			currentGw: review.context.currentEventId,
+			latestFinalizedGw: review.context.latestFinalizedEventId,
 			hasHistory: Boolean(initialEntryHistory?.results?.length),
 			historyRows: initialEntryHistory?.results?.length ?? 0,
 			hasIdentity: Boolean(initialEntryIdentity),
 			hasEvent: Boolean(initialEntryEventResult),
 			gameweekState: initialEntryGameweekState,
-			pastSeasonsState: desk.pastSeasonsState
+			pastSeasonsState: review.pastSeasonsState,
+			snapshotRevision: review.snapshotMeta?.revision ?? null
 		})
 
 		if (
 			!initialEntryIdentity &&
 			!initialEntryHistory?.results?.length &&
-			initialDeskState !== 'PENDING'
+			initialReviewState !== 'PENDING'
 		) {
 			initialError = t('teamStatsUnavailable')
 		}
@@ -263,11 +306,15 @@ export default async function TeamStatsPage({
 				initialSelectedGameweek={initialSelectedGameweek}
 				initialEntryEventResult={initialEntryEventResult}
 				initialEntryGameweekState={initialEntryGameweekState}
-				initialDeskState={initialDeskState}
+				initialReviewState={initialReviewState}
 				initialPastSeasonsState={initialPastSeasonsState}
 				initialEntryHistory={initialEntryHistory}
 				initialEntryIdentity={initialEntryIdentity}
-				initialEntryTransfers={null}
+				initialEntryTransfers={
+					initialReview ? transfersFromManagerReview(initialReview) : null
+				}
+				initialEntryTransfersState={initialReview?.state}
+				initialManagerReview={initialReview}
 				initialError={initialError}
 				initialRequestComplete={initialRequestComplete}
 				initialSeasonPhase={seasonPresentation.phase}

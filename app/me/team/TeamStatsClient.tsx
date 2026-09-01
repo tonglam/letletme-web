@@ -12,6 +12,7 @@ import type {
 	EntryGameweekTransfers
 } from '@/lib/graphql/operations/entries'
 import type {
+	MyFplManagerReview,
 	MyFplReviewState,
 	MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
@@ -23,6 +24,7 @@ import { useFormatter, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TeamGameweekOverall } from './_components/TeamGameweekOverall'
+import { ManagerReviewInsights } from './_components/ManagerReviewInsights'
 import { TeamSeasonCharts } from './_components/TeamSeasonCharts'
 import { TeamSeasonOverall } from './_components/TeamSeasonOverall'
 import { TeamSquadSection } from './_components/TeamSquadSection'
@@ -47,12 +49,14 @@ interface TeamStatsClientProps {
 	initialSelectedGameweek?: number
 	initialEntryEventResult: EntryEventResult | null
 	initialEntryGameweekState?: MyFplReviewState
-	initialDeskState?: MyFplReviewState
+	initialReviewState?: MyFplReviewState
 	initialPastSeasonsState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: SeasonIdentity | null
 	/** null = deferred client fetch; array = SSR complete */
 	initialEntryTransfers?: EntryGameweekTransfers[] | null
+	initialEntryTransfersState?: MyFplReviewState
+	initialManagerReview: MyFplManagerReview | null
 	initialError: string | null
 	initialRequestComplete: boolean
 	initialSeasonPhase: SeasonPresentationPhase
@@ -84,7 +88,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 
 	const {
 		currentGameweek,
-		deskState,
+		reviewState,
 		emptyStateMessage,
 		error,
 		gameweekState,
@@ -93,6 +97,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		pastSeasonsState,
 		seasonLogs,
 		seasonOverall,
+		managerReview,
 		selectedGameweek,
 		setSelectedGameweek,
 		teamStats,
@@ -149,8 +154,12 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		}
 	}, [maxGw, replaceQuery, searchParams, setSelectedGameweek, view])
 
-	const hasAnyContent = Boolean(seasonOverall || teamStats || seasonLogs)
-	const showSwitch = Boolean(seasonOverall || seasonLogs || currentGameweek > 0)
+	const hasAnyContent = Boolean(
+		seasonOverall || teamStats || seasonLogs || managerReview
+	)
+	const showSwitch = Boolean(
+		seasonOverall || seasonLogs || managerReview || currentGameweek > 0
+	)
 
 	const seedGw =
 		initialSelectedGameweek > 0 ? initialSelectedGameweek : maxGw || 1
@@ -159,16 +168,37 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<StatsPageHeader title={t('title')} />
+				<p className="-mt-5 mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:-mt-7 sm:mb-8">
+					{t('subtitle')}
+				</p>
 
 				{snapshotMeta ? (
 					<Alert className="mb-6">
 						<AlertDescription>
 							{snapshotMeta.kind === 'FINAL'
 								? t('snapshotFinal', {
-										date: formatSnapshotDate(snapshotMeta, format)
+										cutoff: formatSnapshotDate(
+											snapshotMeta.sourceMaxCheckedAt,
+											snapshotMeta.snapshotDate,
+											format
+										),
+										published: formatSnapshotDate(
+											snapshotMeta.publishedAt,
+											snapshotMeta.snapshotDate,
+											format
+										)
 									})
 								: t('snapshotProvisional', {
-										date: formatSnapshotDate(snapshotMeta, format)
+										cutoff: formatSnapshotDate(
+											snapshotMeta.sourceMaxCheckedAt,
+											snapshotMeta.snapshotDate,
+											format
+										),
+										published: formatSnapshotDate(
+											snapshotMeta.publishedAt,
+											snapshotMeta.snapshotDate,
+											format
+										)
 									})}{' '}
 							{snapshotMeta.freshness === 'STALE'
 								? t('snapshotStale')
@@ -218,13 +248,14 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							isLoading={isLoading}
 							isTransfersLoading={isTransfersLoading}
 							gameweekState={gameweekState}
-							deskState={deskState}
+							reviewState={reviewState}
 							teamStats={teamStats}
 							seasonOverall={seasonOverall}
 							preseason={props.initialSeasonPhase === 'PRESEASON'}
 							currentSeason={props.currentSeason}
 							pastSeasonsState={pastSeasonsState}
 							seasonLogs={seasonLogs}
+							managerReview={managerReview}
 							emptyStateMessage={emptyStateMessage}
 							hasAnyContent={hasAnyContent}
 							searchParamsGw={searchParams.get('gw')}
@@ -256,29 +287,31 @@ interface TeamStatsViewsProps {
 	isLoading: boolean
 	isTransfersLoading: boolean
 	gameweekState?: MyFplReviewState
-	deskState: ReturnType<typeof useTeamStats>['deskState']
+	reviewState: ReturnType<typeof useTeamStats>['reviewState']
 	teamStats: ReturnType<typeof useTeamStats>['teamStats']
 	seasonOverall: ReturnType<typeof useTeamStats>['seasonOverall']
 	preseason: boolean
 	currentSeason: string | null
 	pastSeasonsState?: MyFplReviewState
 	seasonLogs: ReturnType<typeof useTeamStats>['seasonLogs']
+	managerReview: ReturnType<typeof useTeamStats>['managerReview']
 	emptyStateMessage: string | null
 	hasAnyContent: boolean
 	searchParamsGw: string | null
 }
 
 function formatSnapshotDate(
-	meta: MyFplSnapshotMeta,
+	raw: string,
+	fallback: string,
 	format: ReturnType<typeof useFormatter>
 ): string {
-	const value = new Date(meta.publishedAt)
+	const value = new Date(raw)
 	return Number.isFinite(value.getTime())
 		? format.dateTime(value, {
 				dateStyle: 'medium',
 				timeStyle: 'medium'
 			})
-		: meta.snapshotDate
+		: fallback
 }
 
 function TeamStatsViews({
@@ -291,13 +324,14 @@ function TeamStatsViews({
 	isLoading,
 	isTransfersLoading,
 	gameweekState,
-	deskState,
+	reviewState,
 	teamStats,
 	seasonOverall,
 	preseason,
 	currentSeason,
 	pastSeasonsState,
 	seasonLogs,
+	managerReview,
 	emptyStateMessage,
 	hasAnyContent,
 	searchParamsGw
@@ -416,7 +450,7 @@ function TeamStatsViews({
 
 			{view === 'season' ? (
 				<div className="space-y-6 sm:space-y-8">
-					{deskState === 'UNAVAILABLE' ? (
+					{reviewState === 'UNAVAILABLE' ? (
 						<Alert
 							variant="destructive"
 							className="shadow-sm"
@@ -447,11 +481,16 @@ function TeamStatsViews({
 
 					{seasonLogs ? <TeamSeasonCharts logs={seasonLogs} /> : null}
 
+					{managerReview ? (
+						<ManagerReviewInsights review={managerReview} />
+					) : null}
+
 					{seasonLogs ? (
 						<TeamStatsDeepDive
 							logs={seasonLogs}
 							currentSeason={currentSeason}
 							transfersLoading={isTransfersLoading}
+							rules={managerReview?.rules ?? null}
 						/>
 					) : !seasonOverall && !hasAnyContent ? (
 						<Card className="p-6 shadow-sm">
@@ -463,7 +502,7 @@ function TeamStatsViews({
 				</div>
 			) : (
 				<div>
-					{deskState === 'UNAVAILABLE' ? (
+					{reviewState === 'UNAVAILABLE' ? (
 						<Alert
 							variant="destructive"
 							className="mb-5 shadow-sm"

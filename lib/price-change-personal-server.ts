@@ -3,12 +3,8 @@ import 'server-only'
 import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery, executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
-	GET_ENTRY_HISTORY,
-	type EntryHistoryResponse,
-} from '@/lib/graphql/operations/entries'
-import {
-	GET_MY_FPL_TEAM_TRANSFERS,
-	type MyFplTeamTransfersResponse,
+	GET_MY_FPL_MANAGER_REVIEW,
+	type MyFplManagerReviewResponse,
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	GET_PLAYER_START_PRICE,
@@ -72,7 +68,6 @@ async function loadStartPrice({ elementId, eventId }: PriceStartEvent): Promise<
 
 export async function loadPersonalPriceContext(params: {
 	session: Session
-	entryId: number
 	picks: SquadPickSeed[]
 	eventId: number | null
 }): Promise<PersonalPriceContext> {
@@ -81,23 +76,13 @@ export async function loadPersonalPriceContext(params: {
 		return { state: 'UNAVAILABLE', purchasePrices: {} }
 	}
 
-	const transfersPromise = executeServerQueryWithSession<MyFplTeamTransfersResponse>(
+	const reviewPromise = executeServerQueryWithSession<MyFplManagerReviewResponse>(
 		params.session,
-		GET_MY_FPL_TEAM_TRANSFERS,
+		GET_MY_FPL_MANAGER_REVIEW,
 		undefined,
 		{ cache: 'no-store' },
 	).catch(error => {
-		console.warn('[price-changes] personal transfer history failed:', error)
-		return null
-	})
-
-	const historyPromise = executeServerQueryWithSession<EntryHistoryResponse>(
-		params.session,
-		GET_ENTRY_HISTORY,
-		{ entryId: params.entryId },
-		{ cache: 'no-store' },
-	).catch(error => {
-		console.warn('[price-changes] entry history for price rules failed:', error)
+		console.warn('[price-changes] manager review failed:', error)
 		return null
 	})
 
@@ -111,28 +96,20 @@ export async function loadPersonalPriceContext(params: {
 			),
 		)
 
-	const [transfersResponse, historyResponse, startPrices] = await Promise.all([
-		transfersPromise,
-		historyPromise,
+	const [reviewResponse, startPrices] = await Promise.all([
+		reviewPromise,
 		startPricesPromise,
 	])
-
-	const historyChips = new Map<number, string>()
-	for (const row of historyResponse?.entryHistory?.results ?? []) {
-		if (Number.isSafeInteger(row.eventId) && row.eventId > 0) {
-			historyChips.set(row.eventId, row.eventChip)
-		}
-	}
+	const review = reviewResponse?.myFplManagerReview ?? null
 
 	const personalPrices = buildPersonalPurchasePrices({
 		picks: params.picks,
 		startPrices,
-		transfers: transfersResponse?.myFplTeamTransfers ?? null,
-		historyChips,
+		review,
 	})
-	const transferState = transfersResponse?.myFplTeamTransfers?.state
+	const transferState = review?.state
 	if (
-		transfersResponse == null ||
+		review == null ||
 		transferState === 'PENDING' ||
 		transferState === 'UNAVAILABLE'
 	) {
@@ -140,9 +117,6 @@ export async function loadPersonalPriceContext(params: {
 			state: 'UNAVAILABLE',
 			purchasePrices: {},
 		}
-	}
-	if (historyResponse == null && personalPrices.state === 'READY') {
-		return { ...personalPrices, state: 'PARTIAL' }
 	}
 	return personalPrices
 }

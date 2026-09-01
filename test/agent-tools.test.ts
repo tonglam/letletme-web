@@ -22,6 +22,7 @@ import {
 	MARKET_PULSE_MOVERS_DOCUMENT,
 	MARKET_PULSE_UPDATES_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
+	OWN_ENTRY_GAMEWEEK_DOCUMENT,
 	PLAYER_CATALOG_DOCUMENT,
 	PLAYERS_DOCUMENT,
 	SELECTION_CONTEXT_DOCUMENT
@@ -656,16 +657,47 @@ test('verified-entry extensions must declare the same core revision', async () =
 			assert.equal(document, OWN_ENTRY_DOCUMENT)
 			return {
 				coreEventContext: contextResult.coreEventContext,
-				myFplTeamDesk: {
+				myFplManagerReview: {
 					state: 'READY',
 					context: { season: '2627', coreRevision: 'core-6' },
-					history: []
+					timeline: []
 				}
 			}
 		})
 	)
 	assert.equal(response.status, 503)
 	assert.equal((await response.json()).code, 'UPSTREAM_UNAVAILABLE')
+})
+
+test('verified-entry Gameweek extensions preserve the requested event', async () => {
+	const response = await handleAgentToolRequest(
+		request({ eventId: 5 }),
+		'letletme_entry',
+		dependencies(verified, async (document, variables) => {
+			if (document === ENTRY_SNAPSHOT_DOCUMENT) {
+				return {
+					coreEventContext: contextResult.coreEventContext,
+					entrySnapshot: { id: 123 }
+				}
+			}
+			assert.equal(document, OWN_ENTRY_GAMEWEEK_DOCUMENT)
+			assert.deepEqual(variables, { eventId: 5 })
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				myFplManagerGameweek: {
+					state: 'READY',
+					eventId: 5,
+					context: { season: '2627', coreRevision: 'core-7' },
+					result: { eventId: 5, picks: [] }
+				}
+			}
+		})
+	)
+	assert.equal(response.status, 200)
+	const body = await response.json()
+	assert.equal(body.data.accessScope, 'self')
+	assert.equal(body.data.extensions.eventId, 5)
+	assert.deepEqual(body.data.extensions.result.picks, [])
 })
 
 test('all saved GraphQL operations are queries and never use the side-effectful entry field', () => {

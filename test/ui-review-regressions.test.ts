@@ -977,7 +977,14 @@ describe('My FPL hydration', () => {
 		)
 
 		assert.match(source, /const format = useFormatter\(\)/)
-		assert.match(source, /formatSnapshotDate\(snapshotMeta, format\)/)
+		assert.match(
+			source,
+			/formatSnapshotDate\(\s*snapshotMeta\.sourceMaxCheckedAt,[\s\S]*?format\s*\)/
+		)
+		assert.match(
+			source,
+			/formatSnapshotDate\(\s*snapshotMeta\.publishedAt,[\s\S]*?format\s*\)/
+		)
 		assert.match(source, /format\.dateTime\(value, \{/)
 		assert.doesNotMatch(source, /value\.toLocaleString\(locale/)
 	})
@@ -1212,7 +1219,7 @@ describe('asynchronous selection safety', () => {
 			),
 			readFile(
 				new URL(
-					'../app/me/tournament/_lib/my-fpl-adapters.ts',
+					'../app/me/tournament/_lib/competition-review-projection.ts',
 					import.meta.url
 				),
 				'utf8'
@@ -1297,7 +1304,7 @@ describe('asynchronous selection safety', () => {
 		assert.match(teamSource, /setTransferRetryNonce\(value => value \+ 1\)/)
 		assert.match(
 			teamSource,
-			/cachedDeskState === 'PENDING' \|\| cachedState === 'PENDING'/
+			/cachedReviewState === 'PENDING' \|\| cachedHistoryState === 'PENDING'/
 		)
 		assert.match(teamSource, /force: forceHistoryFetch/)
 	})
