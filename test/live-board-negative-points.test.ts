@@ -7,7 +7,7 @@ const revision = 'a'.repeat(64)
 
 describe('Live Board V2 score contract', () => {
 	it('accepts negative event points and an unknown overall rank', () => {
-		const page = parseEntryLiveCompetitionBoardPage({
+		const payload = {
 			season: '2627',
 			eventId: 1,
 			tournamentId: 10,
@@ -118,9 +118,18 @@ describe('Live Board V2 score contract', () => {
 				}
 			],
 			viewerRow: null
-		})
+		}
+		const page = parseEntryLiveCompetitionBoardPage(payload)
 
 		assert.equal(page.rows[0]?.score.eventPoints, -2)
 		assert.equal(page.rows[0]?.overallRank, null)
+
+		const fractionalRankPayload = structuredClone(payload) as {
+			rows: Array<{ overallRank: number | null }>
+		}
+		fractionalRankPayload.rows[0]!.overallRank = 1.5
+		assert.throws(() =>
+			parseEntryLiveCompetitionBoardPage(fractionalRankPayload)
+		)
 	})
 })
