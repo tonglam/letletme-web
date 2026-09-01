@@ -407,12 +407,13 @@ async function probeTournament(
 		)
 	}
 	if (contractKey === 'official-h2h') {
-		const response = await executeServerQueryWithSession<TournamentOfficialH2HResponse>(
-			canarySession(config),
-			GET_TOURNAMENT_OFFICIAL_H2H,
-			{ tournamentId: config.tournamentId, eventId },
-			{ cache: 'no-store', timeoutMs: 5_000 }
-		)
+		const response =
+			await executeServerQueryWithSession<TournamentOfficialH2HResponse>(
+				canarySession(config),
+				GET_TOURNAMENT_OFFICIAL_H2H,
+				{ tournamentId: config.tournamentId, eventId },
+				{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+			)
 		const official = response.tournamentOfficialH2H
 		return {
 			revision: revision(official.revisions?.content ?? 'unavailable'),
@@ -423,17 +424,18 @@ async function probeTournament(
 				official.matches.every(match => match.availability === 'READY')
 		}
 	}
-	const response = await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
-		canarySession(config),
-		GET_ENTRY_LIVE_COMPETITION_BOARD,
-		{
-			entryId: config.entryId,
-			tournamentId: config.tournamentId,
-			eventId,
-			input: { first: 1 }
-		},
-		{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
-	)
+	const response =
+		await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+			canarySession(config),
+			GET_ENTRY_LIVE_COMPETITION_BOARD,
+			{
+				entryId: config.entryId,
+				tournamentId: config.tournamentId,
+				eventId,
+				input: { first: 1 }
+			},
+			{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+		)
 	const board = response.entryLiveCompetitionBoard
 	if (
 		!board ||

@@ -239,6 +239,7 @@ export function TournamentTable({
 		if (entry.chips.bench) chips.push('BB')
 		if (entry.chips.wildcard) chips.push('WC')
 		if (entry.chips.freeHit) chips.push('FH')
+		if (entry.chips.manager) chips.push('AM')
 		return chips.length ? chips.join(' · ') : null
 	}
 

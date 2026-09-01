@@ -887,7 +887,10 @@ export type EntryLiveCompetitionBoardScore = Pick<
 	| 'calculationMode'
 > & {
 	revisions: Pick<LiveRevisionVector, 'input'>
-	times: Pick<LiveTimes, 'sourceCheckedAt' | 'contentUpdatedAt' | 'nextRefreshAt'>
+	times: Pick<
+		LiveTimes,
+		'sourceCheckedAt' | 'contentUpdatedAt' | 'nextRefreshAt'
+	>
 	delivery: Pick<LiveDelivery, 'state'>
 }
 
@@ -1125,6 +1128,44 @@ export const GET_TOURNAMENT_OFFICIAL_H2H = `${LIVE_H2H_MATCH_FIELDS}
   }
 `
 
+export const GET_TOURNAMENT_OFFICIAL_H2H_HISTORY = `
+  query GetTournamentOfficialH2HHistory($tournamentId: Int!, $eventId: Int!, $limit: Int = 100) {
+    tournamentOfficialH2HHistory(tournamentId: $tournamentId, eventId: $eventId, limit: $limit) {
+      eventId
+      availability
+      matches {
+        officialMatchId
+        eventId
+        groupId
+        sourceOrder
+        phase
+        knockoutName
+        tiebreak
+        isBye
+        availability
+        home {
+          availability
+          entryId
+          entryName
+          playerName
+          isAverage
+          points
+          netPoints
+        }
+        away {
+          availability
+          entryId
+          entryName
+          playerName
+          isAverage
+          points
+          netPoints
+        }
+      }
+    }
+  }
+`
+
 export interface TournamentOfficialH2H {
 	eventId: number
 	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
@@ -1174,7 +1215,10 @@ export interface TournamentOfficialH2HLiveMatch {
 	isBye: boolean
 	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
 	delivery: Pick<LiveDelivery, 'state'>
-	revisions: Pick<LeagueLiveRevisionVector, 'publicationId' | 'generation' | 'scoreCore' | 'content'>
+	revisions: Pick<
+		LeagueLiveRevisionVector,
+		'publicationId' | 'generation' | 'scoreCore' | 'content'
+	>
 	times: Pick<LiveTimes, 'contentUpdatedAt' | 'nextRefreshAt'>
 	home: TournamentOfficialH2HLiveMatchSide
 	away: TournamentOfficialH2HLiveMatchSide
@@ -1182,6 +1226,30 @@ export interface TournamentOfficialH2HLiveMatch {
 
 export interface TournamentOfficialH2HResponse {
 	tournamentOfficialH2H: TournamentOfficialH2H
+}
+
+export interface TournamentOfficialH2HHistory {
+	eventId: number
+	availability: 'READY'
+	matches: TournamentOfficialH2HHistoryMatch[]
+}
+
+export interface TournamentOfficialH2HHistoryMatch {
+	officialMatchId: number
+	eventId: number
+	groupId: number
+	sourceOrder: number
+	phase: 'REGULAR' | 'KNOCKOUT'
+	knockoutName: string | null
+	tiebreak: string | null
+	isBye: boolean
+	availability: 'READY' | 'PENDING'
+	home: TournamentOfficialH2HLiveMatchSide
+	away: TournamentOfficialH2HLiveMatchSide
+}
+
+export interface TournamentOfficialH2HHistoryResponse {
+	tournamentOfficialH2HHistory: TournamentOfficialH2HHistory
 }
 
 // Query to fetch entry result for a specific event

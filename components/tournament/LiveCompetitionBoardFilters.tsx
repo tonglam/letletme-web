@@ -44,7 +44,8 @@ const chipOptions = [
 	'TRIPLE_CAPTAIN',
 	'BENCH_BOOST',
 	'WILDCARD',
-	'FREE_HIT'
+	'FREE_HIT',
+	'MANAGER'
 ] as const
 
 function isSelectionIndexRow(
@@ -300,7 +301,9 @@ export function LiveCompetitionBoardFilters({
 									? liveT('benchBoost')
 									: chip === 'WILDCARD'
 										? liveT('wildcard')
-										: liveT('freeHit')
+										: chip === 'FREE_HIT'
+											? liveT('freeHit')
+											: liveT('assistantManager')
 						return (
 							<Button
 								key={chip}

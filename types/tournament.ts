@@ -46,6 +46,7 @@ export interface TournamentEntry {
 		triple: boolean
 		wildcard: boolean
 		freeHit: boolean
+		manager: boolean
 	}
 	/** True when this row was retained from a previous failed calc batch. */
 	stale?: boolean

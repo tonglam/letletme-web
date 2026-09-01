@@ -520,12 +520,20 @@ export const resolveAnchoredGameweek = (input: {
 export const resolveUrlGameweekSelection = (input: {
 	currentEvent: number
 	requestedGameweek: number | null
+	preserveFutureGameweek?: boolean
 }): { selectedGameweek: number; followsAnchor: boolean } =>
-	resolveAnchoredGameweek({
-		nextEvent: input.currentEvent,
-		requestedGameweek: input.requestedGameweek,
-		followsAnchor: true
-	})
+	input.preserveFutureGameweek &&
+	input.requestedGameweek !== null &&
+	input.requestedGameweek > input.currentEvent
+		? {
+				selectedGameweek: input.requestedGameweek,
+				followsAnchor: false
+			}
+		: resolveAnchoredGameweek({
+				nextEvent: input.currentEvent,
+				requestedGameweek: input.requestedGameweek,
+				followsAnchor: true
+			})
 
 const scopePart = (value: string | number): string =>
 	encodeURIComponent(String(value).trim())
@@ -544,17 +552,7 @@ export const liveBoardLastGoodKey = (scope: LastGoodScope): string =>
 const liveBoardHasUsableLastGoodRows = (
 	page: EntryLiveCompetitionBoardPage
 ): boolean => {
-	const visibleRows = page.viewerRow
-		? [...page.rows, page.viewerRow]
-		: page.rows
-	if (page.head.availability !== 'READY') return false
-	if (page.head.delivery.state === 'UNAVAILABLE') return false
-	return visibleRows.some(
-		row =>
-			row.availability === 'READY' &&
-			row.score?.source !== 'UNAVAILABLE' &&
-			typeof row.score?.eventPoints === 'number'
-	)
+	return isCompleteLiveBoardPage(page)
 }
 
 export const readLiveBoardLastGood = (
@@ -644,7 +642,8 @@ const chipFlags = (chip: string) => ({
 	bench: chip === 'BENCH_BOOST',
 	triple: chip === 'TRIPLE_CAPTAIN',
 	wildcard: chip === 'WILDCARD',
-	freeHit: chip === 'FREE_HIT'
+	freeHit: chip === 'FREE_HIT',
+	manager: chip === 'MANAGER'
 })
 
 export const boardRowToTournamentEntry = (
@@ -673,7 +672,7 @@ export const boardRowToTournamentEntry = (
 		totalPoints: score.totalScope === 'OVERALL' ? score.totalPoints : null,
 		playersPlayed: row.played ?? 0,
 		playersToPlay: row.toPlay ?? 0,
-		teamValue: row.teamValue ?? 0,
+		teamValue: row.teamValue ?? undefined,
 		picks: [],
 		chips: chipFlags(row.chip ?? 'NONE'),
 		stale:

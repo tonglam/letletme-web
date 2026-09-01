@@ -335,8 +335,7 @@ async function main() {
 				entryId,
 				eventId,
 				tournamentId,
-				first: 20,
-				after: null
+				input: { first: 20, after: null }
 			},
 			skip: tournamentId === null,
 			requiresPublishedPicks: true

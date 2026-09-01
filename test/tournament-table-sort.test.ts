@@ -19,7 +19,13 @@ function entry(id: string, gwPoints: number, rank: number): TournamentEntry {
 		playersPlayed: 0,
 		playersToPlay: 0,
 		picks: [],
-		chips: { bench: false, triple: false, wildcard: false, freeHit: false }
+		chips: {
+			bench: false,
+			triple: false,
+			wildcard: false,
+			freeHit: false,
+			manager: false
+		}
 	}
 }
 

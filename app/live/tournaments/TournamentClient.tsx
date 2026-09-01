@@ -18,6 +18,10 @@ import { usePageActive } from '@/hooks/use-page-active'
 import { Link, useRouter } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
 import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	type EventsResponse
+} from '@/lib/graphql/operations/events'
+import {
 	GET_ENTRY_TOURNAMENTS,
 	type EntryLiveCompetitionBoardPage,
 	type EntryLiveCompetitionBoardSort,
@@ -63,7 +67,8 @@ import type {
 	TournamentSortDirection
 } from '@/lib/tournament/table-sort'
 import type { Tournament, TournamentEntry } from '@/types/tournament'
-import { Filter, RefreshCw } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Check, Filter, RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -106,7 +111,7 @@ const tableSortToBoardSort = (
 		case 'totalPoints':
 			return 'TOTAL_POINTS'
 		case 'overallRank':
-			return 'RANK'
+			return 'OVERALL_RANK'
 		case 'teamValue':
 			return 'TEAM_VALUE'
 		case 'eventCost':
@@ -188,6 +193,7 @@ interface TournamentClientProps {
 	initialBoardPage?: EntryLiveCompetitionBoardPage | null
 	initialResultsLoaded?: boolean
 	initialResultsError?: string | null
+	initialCreated?: boolean
 	season: string
 	sessionCacheKey: string
 }
@@ -200,6 +206,7 @@ export default function TournamentClient({
 	initialBoardPage = null,
 	initialResultsLoaded = false,
 	initialResultsError = null,
+	initialCreated = false,
 	season,
 	sessionCacheKey
 }: TournamentClientProps) {
@@ -217,6 +224,23 @@ export default function TournamentClient({
 		const value = Number(raw)
 		return Number.isInteger(value) && value >= 1 && value <= 38 ? value : null
 	})()
+	const initialTournamentForGameweek =
+		initialTournaments.find(
+			tournament => tournament.id === initialSelectedTournamentId
+		) ??
+		initialTournaments[0] ??
+		null
+	const initialAllowsFutureGameweek = isOfficialH2HTournament(
+		initialTournamentForGameweek
+	)
+	const initialGameweekSelection =
+		gameweekFromUrl !== null &&
+		(gameweekFromUrl <= initialEventId || initialAllowsFutureGameweek)
+			? gameweekFromUrl
+			: initialEventId
+	const initialFollowsGameweekAnchor =
+		gameweekFromUrl === null ||
+		(gameweekFromUrl > initialEventId && !initialAllowsFutureGameweek)
 
 	const [tournaments, setTournaments] = useState(initialTournaments)
 	const [restoredTournamentId, setRestoredTournamentId] = useState<
@@ -230,14 +254,16 @@ export default function TournamentClient({
 	const [listError, setListError] = useState<string | null>(null)
 	const [currentGameweek, setCurrentGameweek] = useState(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] = useState(
-		gameweekFromUrl && gameweekFromUrl <= initialEventId
-			? gameweekFromUrl
-			: initialEventId
+		initialGameweekSelection
 	)
-	const followsAnchorRef = useRef(
-		gameweekFromUrl === null || gameweekFromUrl > initialEventId
+	const [followsGameweekAnchor, setFollowsGameweekAnchor] = useState(
+		initialFollowsGameweekAnchor
 	)
-	const lastUrlGameweekRef = useRef(gameweekFromUrl)
+	const followsAnchorRef = useRef(initialFollowsGameweekAnchor)
+	const lastUrlGameweekRef = useRef({
+		requestedGameweek: gameweekFromUrl,
+		preserveFutureGameweek: initialAllowsFutureGameweek
+	})
 	const selectionRestoreEntryIdRef = useRef<number | null>(null)
 	const cachedTournamentIdRef = useRef<string | null>(null)
 	const requestedTournamentId =
@@ -359,15 +385,79 @@ export default function TournamentClient({
 	}, [scopeKey])
 
 	useEffect(() => {
-		if (lastUrlGameweekRef.current === gameweekFromUrl) return
-		lastUrlGameweekRef.current = gameweekFromUrl
+		const preserveFutureGameweek = selectedTournamentIsOfficialH2H
+		if (
+			lastUrlGameweekRef.current.requestedGameweek === gameweekFromUrl &&
+			lastUrlGameweekRef.current.preserveFutureGameweek ===
+				preserveFutureGameweek
+		)
+			return
+		lastUrlGameweekRef.current = {
+			requestedGameweek: gameweekFromUrl,
+			preserveFutureGameweek
+		}
 		const next = resolveUrlGameweekSelection({
 			currentEvent: currentGameweek,
-			requestedGameweek: gameweekFromUrl
+			requestedGameweek: gameweekFromUrl,
+			preserveFutureGameweek
 		})
 		followsAnchorRef.current = next.followsAnchor
+		setFollowsGameweekAnchor(next.followsAnchor)
 		setSelectedGameweek(next.selectedGameweek)
-	}, [currentGameweek, gameweekFromUrl])
+	}, [currentGameweek, gameweekFromUrl, selectedTournamentIsOfficialH2H])
+
+	useEffect(() => {
+		if (!followsGameweekAnchor) return
+		setSelectedGameweek(currentGameweek)
+	}, [currentGameweek, followsGameweekAnchor])
+
+	useEffect(() => {
+		if (
+			!isPageActive ||
+			!selectedTournamentId ||
+			!standingsReady ||
+			!followsGameweekAnchor
+		)
+			return
+		let cancelled = false
+		let timer: number | null = null
+		const poll = async () => {
+			try {
+				const data = await executeQuery<EventsResponse>(
+					GET_CURRENT_AND_NEXT_EVENTS,
+					undefined,
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				)
+				const nextCurrentEvent = data.current[0]?.id
+				if (
+					!cancelled &&
+					typeof nextCurrentEvent === 'number' &&
+					Number.isSafeInteger(nextCurrentEvent) &&
+					nextCurrentEvent >= 1 &&
+					nextCurrentEvent <= 38 &&
+					followsAnchorRef.current
+				) {
+					setCurrentGameweek(nextCurrentEvent)
+					setSelectedGameweek(nextCurrentEvent)
+				}
+			} catch {
+				// Existing publication-backed content remains usable while the
+				// lifecycle anchor is temporarily unavailable.
+			} finally {
+				if (!cancelled) timer = window.setTimeout(poll, 30_000)
+			}
+		}
+		void poll()
+		return () => {
+			cancelled = true
+			if (timer !== null) window.clearTimeout(timer)
+		}
+	}, [
+		followsGameweekAnchor,
+		isPageActive,
+		selectedTournamentId,
+		standingsReady
+	])
 
 	useEffect(() => {
 		rateLimitSecondsRef.current = rateLimitSeconds
@@ -1073,7 +1163,11 @@ export default function TournamentClient({
 				eventId: observedHead.eventId,
 				contentRevision: observedHead.contentRevision
 			})
-			if (boardPage && observedHead.eventId === boardPage.head.eventId) {
+			if (
+				boardPage &&
+				observedHead.eventId === boardPage.head.eventId &&
+				!boardPublicationChanged
+			) {
 				setBoardPage(current =>
 					current ? { ...current, head: observedHead } : current
 				)
@@ -1243,6 +1337,16 @@ export default function TournamentClient({
 					badge={<GameweekBadge gameweek={selectedGameweek} />}
 				/>
 
+				{initialCreated ? (
+					<Alert
+						variant="success"
+						className="mb-6"
+					>
+						<Check aria-hidden="true" />
+						<AlertDescription>{lifecycleT('createdShell')}</AlertDescription>
+					</Alert>
+				) : null}
+
 				{listError ? (
 					<Card className="mb-6 border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
 						{listError}
@@ -1290,6 +1394,7 @@ export default function TournamentClient({
 					<GameweekSelector
 						onGameweekChange={gameweek => {
 							followsAnchorRef.current = false
+							setFollowsGameweekAnchor(false)
 							setSelectedGameweek(gameweek)
 						}}
 						currentGameweek={currentGameweek}

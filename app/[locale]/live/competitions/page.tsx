@@ -138,6 +138,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialBoardPage={null}
 			initialResultsLoaded={false}
 			initialResultsError={null}
+			initialCreated={resolvedSearchParams.created === '1'}
 			season={season}
 			sessionCacheKey={sessionCacheKey}
 		/>

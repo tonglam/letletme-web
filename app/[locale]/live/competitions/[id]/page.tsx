@@ -32,5 +32,6 @@ export default async function Page({ params, searchParams }: PageProps) {
 	if (requestedGameweek && /^([1-9]|[12]\d|3[0-8])$/.test(requestedGameweek)) {
 		target.set('gw', requestedGameweek)
 	}
+	if (query.created === '1') target.set('created', '1')
 	redirect(localizeHref(`/live/competitions?${target.toString()}`, locale))
 }
