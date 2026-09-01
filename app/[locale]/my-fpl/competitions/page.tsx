@@ -145,11 +145,23 @@ async function hydrateSeasonSeed(
 			},
 			{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 		)
-	const primary = await fetchSection(sectionForFormat(phase.format))
+	const optionalSection =
+		phase.format === 'POINTS'
+			? 'POINTS_TRAJECTORIES'
+			: phase.format === 'H2H'
+				? 'H2H_FIXTURES'
+				: null
+	const [primaryResult, optionalResult] = await Promise.allSettled([
+		fetchSection(sectionForFormat(phase.format)),
+		optionalSection ? fetchSection(optionalSection) : Promise.resolve(null)
+	])
+	if (primaryResult.status === 'rejected') throw primaryResult.reason
+	const primary = primaryResult.value
+	const optional =
+		optionalResult.status === 'fulfilled' ? optionalResult.value : null
 	const trajectories =
-		phase.format === 'POINTS' ? await fetchSection('POINTS_TRAJECTORIES') : null
-	const fixtures =
-		phase.format === 'H2H' ? await fetchSection('H2H_FIXTURES') : null
+		optionalSection === 'POINTS_TRAJECTORIES' ? optional : null
+	const fixtures = optionalSection === 'H2H_FIXTURES' ? optional : null
 	const section = primary.myTournamentSeasonReviewSection
 	const h2h =
 		phase.format === 'H2H'

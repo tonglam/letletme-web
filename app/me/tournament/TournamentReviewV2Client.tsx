@@ -1006,7 +1006,7 @@ export default function TournamentReviewV2Client({
 		let attemptedPhaseId: string | null = null
 		let overviewPublished = false
 		try {
-			const [gameweek, season] = await Promise.all([
+			const [gameweekResult, seasonResult] = await Promise.allSettled([
 				executeQuery<MyTournamentGameweekReviewResponse>(
 					GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 					{ tournamentId, eventId: nextEventId, first: 100 },
@@ -1019,10 +1019,35 @@ export default function TournamentReviewV2Client({
 				)
 			])
 			if (requestId !== requestSequence.current) return
-			const normalizedGameweek = normalizeGameweek(
-				gameweek.myTournamentGameweekReview
-			)
-			const normalizedSeason = normalizeSeason(season.myTournamentSeasonReview)
+			const requestMessage = (result: PromiseRejectedResult) => {
+				const requestError = result.reason as GraphQLRequestError
+				return requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+					? t('reviewClientUpgrade')
+					: t('loadFailed')
+			}
+			const normalizedGameweek =
+				gameweekResult.status === 'fulfilled'
+					? normalizeGameweek(gameweekResult.value.myTournamentGameweekReview)
+					: null
+			const normalizedSeason =
+				seasonResult.status === 'fulfilled'
+					? normalizeSeason(seasonResult.value.myTournamentSeasonReview)
+					: null
+			if (gameweekResult.status === 'rejected')
+				setError(requestMessage(gameweekResult))
+			overviewPublished = Boolean(normalizedGameweek || normalizedSeason)
+			if (!normalizedSeason) {
+				if (seasonResult.status === 'rejected')
+					setSeasonError(requestMessage(seasonResult))
+				setRetryPhaseId(null)
+				return
+			}
+			if (!normalizedGameweek && seasonResult.status === 'fulfilled') {
+				// Keep the successfully loaded Season overview usable even when the
+				// independent Gameweek request failed. The Gameweek error remains in
+				// the Gameweek-scoped banner through `error`.
+				setError(requestMessage(gameweekResult as PromiseRejectedResult))
+			}
 			const nextPhase = normalizedSeason.phases.at(-1) ?? null
 			attemptedPhaseId = nextPhase?.phaseId ?? null
 			// Publish the two successful overview reads before loading optional
@@ -1031,7 +1056,7 @@ export default function TournamentReviewV2Client({
 			// its format sections have been verified.
 			if (requestId !== requestSequence.current) return
 			setSelectedPhaseId(nextPhase?.phaseId ?? null)
-			setGameweekReview(normalizedGameweek)
+			if (normalizedGameweek) setGameweekReview(normalizedGameweek)
 			setSeasonReview(
 				nextPhase
 					? {

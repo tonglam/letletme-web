@@ -1253,6 +1253,42 @@ describe('asynchronous selection safety', () => {
 		assert.match(teamPage, /const safeRequestedEvent =/)
 	})
 
+	it('keeps the primary Season seed when an optional section read fails', async () => {
+		const [page, client] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/[locale]/my-fpl/competitions/page.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			page,
+			/const \[primaryResult, optionalResult\] = await Promise\.allSettled\(/
+		)
+		assert.match(
+			page,
+			/if \(primaryResult\.status === 'rejected'\) throw primaryResult\.reason/
+		)
+		assert.match(
+			client,
+			/const \[gameweekResult, seasonResult\] = await Promise\.allSettled\(/
+		)
+		assert.match(
+			client,
+			/if \(gameweekResult\.status === 'rejected'\)\s*setError\(/
+		)
+	})
+
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {
 		const [pickerSource, selectionsSource, teamSource] = await Promise.all([
 			readFile(
