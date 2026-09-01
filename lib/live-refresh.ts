@@ -242,6 +242,20 @@ export function liveMatchdayNeedsRefresh(
 	observed: LiveMatchdayStatus | null | undefined
 ): boolean {
 	if (!accepted || !observed) return true
+	// A previous Redis pointer or an in-flight fallback can be older than the
+	// full board already painted in this browser. It is a delivery observation,
+	// not a reason to issue another FULL request. Same-generation publication
+	// conflicts are ambiguous for the same reason; fail closed and retain the
+	// accepted board until a strictly newer desk is observed.
+	if (observed.revisions.deskGeneration < accepted.revisions.deskGeneration) {
+		return false
+	}
+	if (
+		observed.revisions.deskGeneration === accepted.revisions.deskGeneration &&
+		observed.revisions.deskPublicationId !== accepted.revisions.deskPublicationId
+	) {
+		return false
+	}
 	const detailObservationChanged =
 		observed.revisions.detailObservation !== null &&
 		observed.revisions.detailObservation !==
