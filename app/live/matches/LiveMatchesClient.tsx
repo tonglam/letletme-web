@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	liveMatchdayNeedsRefresh,
+	mergeLiveMatchdayHeadStatus,
 	shouldPollLiveMatchesTransition,
 	shouldPollLiveMatchday
 } from '@/lib/live-refresh'
@@ -341,8 +342,12 @@ export function LiveMatchesClient({
 					return
 				}
 				if (!liveMatchdayNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+					const snapshotForLkg = mergeLiveMatchdayHeadStatus(
+						snapshotRef.current,
+						observedSnapshot
+					)
 					if (canReplaceLiveMatchesLkg(observedData, snapshotRef.current)) {
-						acceptSnapshot(observedSnapshot)
+						acceptSnapshot(snapshotForLkg)
 					}
 					setError(null)
 					return

@@ -260,6 +260,54 @@ export function liveMatchdayNeedsRefresh(
 	)
 }
 
+/**
+ * A HEAD response validates only the detail manifest, so the server marks its
+ * detail delivery as DEGRADED even when the observed detail revision is the
+ * same. Once the browser already owns a complete same-event detail payload,
+ * keep that local detail state while accepting the newer heartbeat times and
+ * top-level delivery state. A changed revision or a previously degraded local
+ * payload remains authoritative and is returned unchanged.
+ */
+export function mergeLiveMatchdayHeadStatus(
+	accepted: LiveMatchdayStatus | null | undefined,
+	observed: LiveMatchdayStatus
+): LiveMatchdayStatus {
+	if (
+		!accepted ||
+		accepted.season !== observed.season ||
+		accepted.eventId !== observed.eventId
+	) {
+		return observed
+	}
+	if (
+		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
+		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
+		accepted.revisions.scoreState !== observed.revisions.scoreState ||
+		accepted.revisions.detailPublicationId !==
+			observed.revisions.detailPublicationId ||
+		accepted.revisions.detailGeneration !==
+			observed.revisions.detailGeneration ||
+		accepted.revisions.playerDetail !== observed.revisions.playerDetail
+	) {
+		return observed
+	}
+	const hasAcceptedDetailRevision =
+		accepted.revisions.detailPublicationId !== null &&
+		accepted.revisions.detailGeneration !== null &&
+		accepted.revisions.playerDetail !== null
+	const hasCompleteAcceptedDetailState =
+		hasAcceptedDetailRevision &&
+		(accepted.detailDelivery.state === 'FRESH' ||
+			accepted.detailDelivery.state === 'FINAL')
+	if (
+		!hasCompleteAcceptedDetailState ||
+		observed.detailDelivery.state !== 'DEGRADED'
+	) {
+		return observed
+	}
+	return { ...observed, detailDelivery: accepted.detailDelivery }
+}
+
 export function liveRefreshEventIdentityChanged(
 	acceptedCurrentEventId: number | undefined,
 	acceptedNextEventId: number | undefined,

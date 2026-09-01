@@ -17,6 +17,7 @@ import {
 	retainLiveMatchdayDetailRevision,
 	retainLiveMatchPlayerDetails,
 	shouldRetainAcceptedLiveMatchDetails,
+	type LiveMatchdayStatus,
 	type QueryExecutor,
 	type QueryExecutorOptions,
 	transformLiveMatchdayV3,
@@ -24,6 +25,7 @@ import {
 } from '../lib/live-matches'
 import {
 	liveMatchdayNeedsRefresh,
+	mergeLiveMatchdayHeadStatus,
 	shouldPollLiveMatchday
 } from '../lib/live-refresh'
 
@@ -750,6 +752,66 @@ describe('live matchday V3 publication', () => {
 			}),
 			true
 		)
+	})
+
+	it('keeps a complete local detail state across an unchanged HEAD heartbeat', () => {
+		const accepted = {
+			...snapshot(),
+			availability: 'READY' as const,
+			delivery: {
+				state: 'FRESH' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: []
+			}
+		} as LiveMatchdayStatus
+		const observed = {
+			...accepted,
+			times: {
+				...accepted.times,
+				servedAt: '2026-08-04T18:31:01.000Z',
+				deskSourceCheckedAt: '2026-08-04T18:31:00.000Z'
+			},
+			detailDelivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: ['DETAIL_METADATA_ONLY']
+			}
+		}
+
+		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
+
+		assert.deepEqual(merged.detailDelivery, accepted.detailDelivery)
+		assert.equal(merged.times.servedAt, observed.times.servedAt)
+		assert.equal(
+			merged.times.deskSourceCheckedAt,
+			observed.times.deskSourceCheckedAt
+		)
+	})
+
+	it('does not hide a changed detail revision behind the accepted local state', () => {
+		const accepted = {
+			...snapshot(),
+			availability: 'READY' as const,
+			delivery: {
+				state: 'FRESH' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: []
+			}
+		} as LiveMatchdayStatus
+		const observed = {
+			...accepted,
+			revisions: { ...accepted.revisions, playerDetail: 'players-2' },
+			detailDelivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: ['DETAIL_METADATA_ONLY']
+			}
+		}
+
+		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
+
+		assert.equal(merged.revisions.playerDetail, 'players-2')
+		assert.equal(merged.detailDelivery.state, 'DEGRADED')
 	})
 
 	it('stops Match polling for terminal state even with a residual refresh timestamp', () => {
