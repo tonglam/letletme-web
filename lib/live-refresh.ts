@@ -258,7 +258,8 @@ export function liveMatchdayNeedsRefresh(
 	}
 	if (
 		observed.revisions.deskGeneration === accepted.revisions.deskGeneration &&
-		observed.revisions.deskPublicationId !== accepted.revisions.deskPublicationId
+		observed.revisions.deskPublicationId !==
+			accepted.revisions.deskPublicationId
 	) {
 		return false
 	}

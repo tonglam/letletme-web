@@ -374,8 +374,11 @@ export function retainLiveMatchdayDetailRevision(
 	}
 }
 
+type LiveMatchdayValidationMode = 'FULL' | 'HEAD'
+
 export function validateLiveMatchdayV3(
-	payload: LiveMatchdayV3Payload
+	payload: LiveMatchdayV3Payload,
+	mode: LiveMatchdayValidationMode = 'FULL'
 ): LiveMatchdayV3Payload {
 	if (!payload || typeof payload !== 'object' || !payload.liveMatchday) {
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
@@ -464,6 +467,7 @@ export function validateLiveMatchdayV3(
 	) {
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
+	const terminalHead = mode === 'HEAD' && result.delivery.state === 'FINAL'
 	if (
 		detailTimesPresent !== detailObservationPresent ||
 		detailTimesAbsent !== !detailObservationPresent ||
@@ -473,15 +477,18 @@ export function validateLiveMatchdayV3(
 				!['PENDING', 'DEGRADED'].includes(snapshot.detailDelivery.state))) ||
 		(detailRevisionAbsent &&
 			detailObservationPresent &&
-			(snapshot.detailDelivery.servedFrom === null ||
-				!['PENDING', 'DEGRADED'].includes(snapshot.detailDelivery.state))) ||
+			(terminalHead
+				? snapshot.detailDelivery.servedFrom === null ||
+					snapshot.detailDelivery.state !== 'FINAL'
+				: snapshot.detailDelivery.servedFrom === null ||
+					!['PENDING', 'DEGRADED'].includes(snapshot.detailDelivery.state))) ||
 		(detailRevisionPresent &&
 			(snapshot.detailDelivery.servedFrom === null ||
 				['PENDING', 'UNAVAILABLE'].includes(snapshot.detailDelivery.state))) ||
 		(result.delivery.state === 'FINAL' &&
 			(snapshot.state !== 'FINALIZED' ||
 				snapshot.detailDelivery.state !== 'FINAL' ||
-				!detailRevisionPresent))
+				(mode === 'FULL' ? !detailRevisionPresent : !detailObservationPresent)))
 	) {
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
@@ -600,9 +607,9 @@ export function validateLiveMatchdayHeadV3(
 	}
 	if (!result.snapshot) throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	// The metadata-only response intentionally has no `matches` field. Reuse
-	// the complete validator for all publication, revision, timestamp and
-	// delivery invariants with an empty synthetic match list, then return the
-	// original head payload unchanged.
+	// the common validator for publication, timestamp, delivery, and terminal
+	// invariants with an empty synthetic match list. HEAD mode deliberately
+	// skips FULL-only terminal detail-body requirements.
 	const completeShape = {
 		liveMatchday: {
 			...result,
@@ -618,7 +625,7 @@ export function validateLiveMatchdayHeadV3(
 			}
 		}
 	} as unknown as LiveMatchdayV3Payload
-	validateLiveMatchdayV3(completeShape)
+	validateLiveMatchdayV3(completeShape, 'HEAD')
 	return payload
 }
 

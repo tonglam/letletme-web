@@ -17,10 +17,12 @@ import {
 	retainLiveMatchdayDetailRevision,
 	retainLiveMatchPlayerDetails,
 	shouldRetainAcceptedLiveMatchDetails,
+	type LiveMatchdayHeadV3Payload,
 	type LiveMatchdayStatus,
 	type QueryExecutor,
 	type QueryExecutorOptions,
 	transformLiveMatchdayV3,
+	validateLiveMatchdayHeadV3,
 	validateLiveMatchdayV3
 } from '../lib/live-matches'
 import {
@@ -213,6 +215,57 @@ describe('live matchday V3 publication', () => {
 		assert.doesNotMatch(calls[0] ?? '', /\bmatches\b|\bplayers\b|\bstats\b/)
 		assert.equal(data.snapshot?.eventId, 33)
 		assert.equal(data.snapshot?.revisions.scoreState, 'score-1')
+	})
+
+	it('accepts a terminal HEAD without requiring omitted FULL detail revisions', () => {
+		const full = response({
+			delivery: {
+				state: 'FINAL',
+				servedFrom: 'REDIS_CURRENT',
+				reasonCodes: []
+			},
+			snapshot: snapshot({
+				state: 'FINALIZED',
+				detailDelivery: {
+					state: 'FINAL',
+					servedFrom: 'REDIS_CURRENT',
+					reasonCodes: []
+				}
+			})
+		})
+		const { matches: _matches, ...headSnapshot } = full.liveMatchday.snapshot!
+		const headRevisions = { ...headSnapshot.revisions }
+		delete (headRevisions as Partial<typeof headRevisions>).detailPublicationId
+		delete (headRevisions as Partial<typeof headRevisions>).detailGeneration
+		delete (headRevisions as Partial<typeof headRevisions>).playerDetail
+		const head = {
+			liveMatchday: {
+				...full.liveMatchday,
+				snapshot: {
+					...headSnapshot,
+					revisions: headRevisions
+				}
+			}
+		} as LiveMatchdayHeadV3Payload
+
+		assert.doesNotThrow(() => validateLiveMatchdayHeadV3(head))
+		assert.throws(
+			() =>
+				validateLiveMatchdayHeadV3({
+					...head,
+					liveMatchday: {
+						...head.liveMatchday,
+						snapshot: {
+							...head.liveMatchday.snapshot!,
+							detailDelivery: {
+								...head.liveMatchday.snapshot!.detailDelivery,
+								state: 'DEGRADED'
+							}
+						}
+					}
+				} as LiveMatchdayHeadV3Payload),
+			/LIVE_MATCHDAY_INCOHERENT/
+		)
 	})
 
 	it('keeps the V3 full and HEAD documents on separate read contracts', () => {
@@ -881,10 +934,16 @@ describe('live matchday V3 publication', () => {
 		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
 
 		assert.equal(merged.revisions.playerDetail, 'players-1')
-		assert.equal(merged.times.detailPublishedAt, accepted.times.detailPublishedAt)
+		assert.equal(
+			merged.times.detailPublishedAt,
+			accepted.times.detailPublishedAt
+		)
 		assert.equal(merged.detailDelivery.state, 'DEGRADED')
 		assert.equal(merged.detailDelivery.servedFrom, 'PROCESS_LKG')
-		assert.match(merged.detailDelivery.reasonCodes.join(','), /DETAIL_LKG_RETAINED/)
+		assert.match(
+			merged.detailDelivery.reasonCodes.join(','),
+			/DETAIL_LKG_RETAINED/
+		)
 	})
 
 	it('does not hide a changed detail revision behind the accepted local state', () => {
