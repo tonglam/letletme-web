@@ -1,7 +1,9 @@
 import {
 	GET_LIVE_MATCHDAY,
+	GET_LIVE_MATCHDAY_HEAD,
 	type LiveMatchdayDelivery,
 	type LiveMatchdayFixture,
+	type LiveMatchdayHeadResponse,
 	type LiveMatchdayPlayer,
 	type LiveMatchdayResponse,
 	type LiveMatchdaySnapshot
@@ -23,10 +25,11 @@ export type QueryExecutor = <T>(
 	options?: QueryExecutorOptions
 ) => Promise<T>
 
-export type LiveMatchdayV2Payload = LiveMatchdayResponse
+export type LiveMatchdayV3Payload = LiveMatchdayResponse
+export type LiveMatchdayHeadV3Payload = LiveMatchdayHeadResponse
 
 /**
- * Client-owned metadata for one complete Match V2 publication. Keep the
+ * Client-owned metadata for one complete Match V3 publication. Keep the
  * producer's revision vector, timestamps, and delivery states intact: Match
  * publications are not Live Points snapshots and must never fabricate picks,
  * rules, algorithm, or checkpoint provenance.
@@ -82,8 +85,11 @@ const mapLiveMatchdayPlayer = (player: LiveMatchdayPlayer): PlayerStat => ({
 })
 
 const matchdaySnapshotToStatus = (
-	snapshot: LiveMatchdaySnapshot,
-	result: LiveMatchdayResponse['liveMatchday']
+	snapshot: Omit<LiveMatchdaySnapshot, 'matches'>,
+	result: Pick<
+		LiveMatchdayResponse['liveMatchday'],
+		'availability' | 'delivery'
+	>
 ): LiveMatchdayStatus => {
 	return {
 		season: snapshot.season,
@@ -124,6 +130,9 @@ const MATCH_SERVED_FROM = new Set([
 
 const isTimestamp = (value: unknown): value is string =>
 	typeof value === 'string' && Number.isFinite(Date.parse(value))
+
+const utf8ByteLength = (value: string): number =>
+	new TextEncoder().encode(value).byteLength
 
 const isOptionalTimestamp = (value: unknown): boolean =>
 	value === null || isTimestamp(value)
@@ -223,7 +232,7 @@ const mapLiveMatchdayFixture = (fixture: LiveMatchdayFixture): Match => {
 	}
 }
 
-export function transformLiveMatchdayV2(
+export function transformLiveMatchdayV3(
 	snapshot: LiveMatchdaySnapshot
 ): Match[] {
 	return snapshot.matches.map(mapLiveMatchdayFixture)
@@ -358,9 +367,9 @@ export function retainLiveMatchdayDetailRevision(
 	}
 }
 
-export function validateLiveMatchdayV2(
-	payload: LiveMatchdayV2Payload
-): LiveMatchdayV2Payload {
+export function validateLiveMatchdayV3(
+	payload: LiveMatchdayV3Payload
+): LiveMatchdayV3Payload {
 	if (!payload || typeof payload !== 'object' || !payload.liveMatchday) {
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
@@ -504,32 +513,92 @@ export function validateLiveMatchdayV2(
 				throw new Error('LIVE_MATCHDAY_INCOHERENT')
 			}
 			playerIds.add(player.id)
+			const statIdentifiers = new Set<string>()
 			for (const stat of player.stats) {
+				const identifier =
+					typeof stat.identifier === 'string'
+						? stat.identifier.trim().toLowerCase()
+						: ''
 				if (
-					!stat.identifier ||
+					!identifier ||
+					statIdentifiers.has(identifier) ||
 					!Number.isFinite(stat.value) ||
-					!Number.isFinite(stat.points) ||
-					(stat.pointsModification !== null &&
-						!Number.isFinite(stat.pointsModification))
+					(stat.awardedPoints !== undefined &&
+						!Number.isFinite(stat.awardedPoints))
 				) {
 					throw new Error('LIVE_MATCHDAY_INCOHERENT')
 				}
+				statIdentifiers.add(identifier)
 			}
 		}
 	}
 	return payload
 }
 
-export async function loadLiveMatchdayV2(
+export async function loadLiveMatchdayV3(
 	executor: QueryExecutor,
-	eventId?: number | null
-): Promise<LiveMatchdayV2Payload> {
-	const payload = await executor<LiveMatchdayV2Payload>(
+	eventId?: number | null,
+	options: Pick<QueryExecutorOptions, 'signal'> = {}
+): Promise<LiveMatchdayV3Payload> {
+	const payload = await executor<LiveMatchdayV3Payload>(
 		GET_LIVE_MATCHDAY,
 		{ eventId: eventId ?? null },
-		{ cache: 'no-store', timeoutMs: 5_000 }
+		{ cache: 'no-store', timeoutMs: 5_000, ...options }
 	)
-	return validateLiveMatchdayV2(payload)
+	return validateLiveMatchdayV3(payload)
+}
+
+export function validateLiveMatchdayHeadV3(
+	payload: LiveMatchdayHeadV3Payload
+): LiveMatchdayHeadV3Payload {
+	if (!payload || typeof payload !== 'object' || !payload.liveMatchday) {
+		throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	}
+	const result = payload.liveMatchday
+	if (
+		result.availability !== 'READY' &&
+		result.availability !== 'UNAVAILABLE'
+	) {
+		throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	}
+	if (!isMatchDelivery(result.delivery))
+		throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	if (result.availability === 'UNAVAILABLE') {
+		if (
+			result.snapshot !== null ||
+			result.delivery.state !== 'UNAVAILABLE' ||
+			result.delivery.servedFrom !== null
+		) {
+			throw new Error('LIVE_MATCHDAY_INCOHERENT')
+		}
+		return payload
+	}
+	if (!result.snapshot) throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	// The metadata-only response intentionally has no `matches` field. Reuse
+	// the complete validator for all publication, revision, timestamp and
+	// delivery invariants with an empty synthetic match list, then return the
+	// original head payload unchanged.
+	const completeShape = {
+		liveMatchday: {
+			...result,
+			snapshot: { ...result.snapshot, matches: [] }
+		}
+	} as unknown as LiveMatchdayV3Payload
+	validateLiveMatchdayV3(completeShape)
+	return payload
+}
+
+export async function loadLiveMatchdayHeadV3(
+	executor: QueryExecutor,
+	eventId?: number | null,
+	options: Pick<QueryExecutorOptions, 'signal'> = {}
+): Promise<LiveMatchdayHeadV3Payload> {
+	const payload = await executor<LiveMatchdayHeadV3Payload>(
+		GET_LIVE_MATCHDAY_HEAD,
+		{ eventId: eventId ?? null },
+		{ cache: 'no-store', timeoutMs: 5_000, ...options }
+	)
+	return validateLiveMatchdayHeadV3(payload)
 }
 
 export function getPreferredLiveMatchesTab(
@@ -555,16 +624,18 @@ export interface LiveMatchesSnapshot {
 	currentEventId: number | null
 	availability: LiveMatchdayResponse['liveMatchday']['availability']
 	delivery: LiveMatchdayDelivery
+	/** Decoded JSON bytes observed before mapping into the UI model. */
+	decodedBytes?: number
 }
 
 export interface LiveMatchesLoadOptions {
-	/** Browser refreshes use the V2 publication GET route. */
+	/** Browser FULL refreshes use the V3 publication GET route. */
 	preferHttp?: boolean
 	signal?: AbortSignal
 }
 
 /**
- * Only a complete same-event V2 publication may replace a browser LKG.
+ * Only a complete same-event V3 publication may replace a browser LKG.
  * UNAVAILABLE is a delivery observation, not an empty successful matchday.
  */
 export function canReplaceLiveMatchesLkg(
@@ -613,7 +684,7 @@ const validEventId = (value: unknown): number | null =>
 		: null
 
 const LIVE_MATCHES_CONTRACT_HEADER = 'X-LetLetMe-Contract'
-const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v2'
+const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v3'
 
 export type LiveMatchesRequestParams =
 	| { ok: true; eventId: number | undefined }
@@ -656,7 +727,8 @@ export async function getLiveMatchesSnapshot(
 	currentEventId: number | null = null,
 	options: LiveMatchesLoadOptions = {}
 ): Promise<LiveMatchesSnapshot> {
-	let payload: LiveMatchdayV2Payload
+	let payload: LiveMatchdayV3Payload
+	let decodedBytes: number
 	if (options.preferHttp) {
 		const params = new URLSearchParams()
 		if (currentEventId) params.set('eventId', String(currentEventId))
@@ -671,11 +743,12 @@ export async function getLiveMatchesSnapshot(
 		if (!response.ok) {
 			throw new Error(`Live matches request failed (${response.status})`)
 		}
-		payload = validateLiveMatchdayV2(
-			(await response.json()) as LiveMatchdayV2Payload
-		)
+		const body = await response.text()
+		decodedBytes = utf8ByteLength(body)
+		payload = validateLiveMatchdayV3(JSON.parse(body) as LiveMatchdayV3Payload)
 	} else {
-		payload = await loadLiveMatchdayV2(executor, currentEventId)
+		payload = await loadLiveMatchdayV3(executor, currentEventId, options)
+		decodedBytes = utf8ByteLength(JSON.stringify(payload))
 	}
 
 	const result = payload.liveMatchday
@@ -687,10 +760,49 @@ export async function getLiveMatchesSnapshot(
 	const snapshot = matchday ? matchdaySnapshotToStatus(matchday, result) : null
 
 	return {
-		matches: matchday ? transformLiveMatchdayV2(matchday) : [],
+		matches: matchday ? transformLiveMatchdayV3(matchday) : [],
 		snapshot,
 		currentEventId: current,
 		availability: result.availability,
-		delivery: result.delivery
+		delivery: result.delivery,
+		decodedBytes
 	}
+}
+
+/**
+ * Cheap revision/freshness observation. HEAD never goes through the full
+ * snapshot route because that route is deliberately reserved for an
+ * authoritative page replacement.
+ */
+export async function getLiveMatchesHead(
+	executor: QueryExecutor = executeQuery,
+	currentEventId: number | null = null,
+	options: Pick<LiveMatchesLoadOptions, 'signal'> = {}
+): Promise<LiveMatchesHeadSnapshotResult> {
+	const payload = await loadLiveMatchdayHeadV3(
+		executor,
+		currentEventId,
+		options
+	)
+	const result = payload.liveMatchday
+	const matchday = result.snapshot
+	if (currentEventId && matchday && matchday.eventId !== currentEventId) {
+		throw new Error('LIVE_MATCHDAY_EVENT_MISMATCH')
+	}
+	const current = validEventId(matchday?.eventId) ?? currentEventId
+	return {
+		snapshot: matchday ? matchdaySnapshotToStatus(matchday, result) : null,
+		currentEventId: current,
+		availability: result.availability,
+		delivery: result.delivery,
+		decodedBytes: utf8ByteLength(JSON.stringify(payload))
+	}
+}
+
+export interface LiveMatchesHeadSnapshotResult {
+	snapshot: LiveMatchdayStatus | null
+	currentEventId: number | null
+	availability: LiveMatchdayHeadResponse['liveMatchday']['availability']
+	delivery: LiveMatchdayDelivery
+	decodedBytes?: number
 }

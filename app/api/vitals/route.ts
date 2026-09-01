@@ -17,6 +17,7 @@ import type {
 	ClientSignalSurface,
 	ClientSignalMetric
 } from '@/lib/client-signal-contract'
+import { parseClientSignalBatch } from '@/lib/client-signal-contract'
 import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
 import { randomUUID } from 'node:crypto'
 import { after, NextResponse } from 'next/server'
@@ -43,9 +44,10 @@ export async function POST(request: Request) {
 		const input = await readBoundedJson(request, 4 * 1024)
 		const metric = parseWebVitalPayload(input)
 		const runtime = metric ? null : parseClientRuntimePayload(input)
-		if (!metric && !runtime) {
+		const clientBatch = metric || runtime ? null : parseClientSignalBatch(input)
+		if (!metric && !runtime && clientBatch?.client !== 'web') {
 			return NextResponse.json(
-				{ error: 'Invalid web vital payload' },
+				{ error: 'Invalid client telemetry payload' },
 				{ status: 400 }
 			)
 		}
@@ -83,7 +85,9 @@ export async function POST(request: Request) {
 
 		const signal = metric
 			? toClientSignal(metric)
-			: toRuntimeSignal(runtime as ClientRuntimePayload)
+			: runtime
+				? toRuntimeSignal(runtime)
+				: clientBatch
 		if (signal) after(() => forwardClientSignalBatch(signal))
 		if (metric) {
 			// Keep the existing validated metric log as a best-effort local
@@ -98,7 +102,7 @@ export async function POST(request: Request) {
 					forwarded: signal !== null
 				})
 			)
-		} else {
+		} else if (runtime) {
 			console.info(
 				JSON.stringify({
 					event: 'client_runtime_signal',
@@ -107,6 +111,17 @@ export async function POST(request: Request) {
 					surface: surfaceForPage(runtime?.page ?? ''),
 					deviceGroup: runtime?.device ?? 'unknown',
 					sampleSource: runtime?.source ?? 'unknown',
+					release: releaseName(),
+					recordedAt: new Date().toISOString(),
+					forwarded: signal !== null
+				})
+			)
+		} else {
+			console.info(
+				JSON.stringify({
+					event: 'client_telemetry_batch',
+					client: 'web',
+					sampleCount: clientBatch?.samples.length ?? 0,
 					release: releaseName(),
 					recordedAt: new Date().toISOString(),
 					forwarded: signal !== null
@@ -159,7 +174,7 @@ function metricForWebVital(name: string): ClientSignalMetric | null {
 }
 
 function signalSource(
-		source: WebVitalPayload['source'] | ClientRuntimePayload['source']
+	source: WebVitalPayload['source'] | ClientRuntimePayload['source']
 ): 'real' | 'synthetic' | null {
 	if (source === 'synthetic') return 'synthetic'
 	if (source === 'user') return 'real'
@@ -186,9 +201,9 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
 			{
 				observedAt: new Date().toISOString(),
 				surface: surfaceForPage(metric.page),
-					metric: metricName,
-					deviceGroup,
-					sampleSource,
+				metric: metricName,
+				deviceGroup,
+				sampleSource,
 				result: 'ok',
 				value: metric.value
 			}
@@ -196,7 +211,9 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
 	}
 }
 
-function toRuntimeSignal(runtime: ClientRuntimePayload): ClientSignalBatchV1 | null {
+function toRuntimeSignal(
+	runtime: ClientRuntimePayload
+): ClientSignalBatchV1 | null {
 	const sampleSource = signalSource(runtime.source)
 	if (!sampleSource) return null
 	return {
@@ -211,7 +228,7 @@ function toRuntimeSignal(runtime: ClientRuntimePayload): ClientSignalBatchV1 | n
 				surface: surfaceForPage(runtime.page),
 				metric: 'runtime_error',
 				deviceGroup: runtime.device,
-					sampleSource,
+				sampleSource,
 				result: 'error'
 			}
 		]

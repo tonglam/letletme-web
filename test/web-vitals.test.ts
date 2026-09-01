@@ -295,6 +295,40 @@ describe('privacy-safe web vitals', () => {
 		)
 	})
 
+	it('accepts the bounded Live Matches V3 client telemetry dimensions', () => {
+		const now = Date.parse('2026-08-27T00:00:00.000Z')
+		const sample = {
+			observedAt: '2026-08-26T23:59:00.000Z',
+			surface: 'live_matches',
+			deviceGroup: 'mobile',
+			sampleSource: 'real',
+			result: 'ok'
+		} as const
+		const metrics = [
+			['live_matches_head_ms', 120],
+			['live_matches_full_ms', 640],
+			['live_matches_head_bytes', 2048],
+			['live_matches_full_bytes', 68_000],
+			['live_matches_head_result', undefined],
+			['live_matches_full_result', undefined],
+			['live_matches_revision_changed', undefined]
+		] as const
+		const batch = {
+			schemaVersion: 1,
+			batchId: '2b37a101-8f28-47ce-8c83-d5749a2f3ce7',
+			client: 'web',
+			release: 'web-sha',
+			sentAt: '2026-08-27T00:00:00.000Z',
+			samples: metrics.map(([metric, value]) => ({
+				...sample,
+				metric,
+				...(value === undefined ? {} : { value })
+			}))
+		}
+
+		assert.equal(parseClientSignalBatch(batch, now)?.samples.length, 7)
+	})
+
 	it('does not accept runtime error text or identity fields', async () => {
 		const { parseClientRuntimePayload } =
 			await import('../lib/analytics/web-vitals')

@@ -402,7 +402,7 @@ export interface LiveSnapshotResponse {
 }
 
 export const GET_LIVE_MATCHDAY = `
-	query GetLiveMatchday($eventId: Int) {
+	query GetLiveMatchdayV3($eventId: Int) {
 		liveMatchday(eventId: $eventId) {
 			availability
 			delivery { state servedFrom reasonCodes }
@@ -456,9 +456,46 @@ export const GET_LIVE_MATCHDAY = `
 						teamId
 						price
 						totalPoints
-						stats { identifier value points pointsModification }
+						stats { identifier value }
 					}
 				}
+			}
+		}
+	}
+`
+
+export const GET_LIVE_MATCHDAY_HEAD = `
+	query GetLiveMatchdayHeadV3($eventId: Int) {
+		liveMatchday(eventId: $eventId) {
+			availability
+			delivery { state servedFrom reasonCodes }
+			snapshot {
+				season
+				eventId
+				state
+				revisions {
+					deskPublicationId
+					deskGeneration
+					lifecycle
+					fixtureIdentity
+					scoreState
+					detailPublicationId
+					detailGeneration
+					playerDetail
+				}
+				times {
+					deskSourceCheckedAt
+					deskContentUpdatedAt
+					deskPublishedAt
+					deskStaleAt
+					detailSourceCheckedAt
+					detailContentUpdatedAt
+					detailPublishedAt
+					detailStaleAt
+					servedAt
+					nextRefreshAt
+				}
+				detailDelivery { state servedFrom reasonCodes }
 			}
 		}
 	}
@@ -505,8 +542,8 @@ export interface LiveMatchdayTimes {
 export interface LiveMatchdayPlayerStat {
 	identifier: string
 	value: number
-	points: number
-	pointsModification: number | null
+	/** Requested by Mini; omitted from the Web FULL projection to save bytes. */
+	awardedPoints?: number
 }
 
 export interface LiveMatchdayPlayer {
@@ -567,9 +604,21 @@ export interface LiveMatchdayResponse {
 	liveMatchday: LiveMatchdayResult
 }
 
+export type LiveMatchdayHeadSnapshot = Omit<LiveMatchdaySnapshot, 'matches'>
+
+export interface LiveMatchdayHeadResult {
+	availability: LiveMatchdayAvailability
+	delivery: LiveMatchdayDelivery
+	snapshot: LiveMatchdayHeadSnapshot | null
+}
+
+export interface LiveMatchdayHeadResponse {
+	liveMatchday: LiveMatchdayHeadResult
+}
+
 /** Home only needs the immutable fixture identity and live score overlay. */
 export const GET_LIVE_MATCHDAY_FIXTURE_SUMMARY = `
-	query GetLiveMatchdayFixtureSummary($eventId: Int!) {
+		query GetLiveMatchdayDeskV3($eventId: Int!) {
 		liveMatchday(eventId: $eventId) {
 			availability
 			delivery { state servedFrom reasonCodes }

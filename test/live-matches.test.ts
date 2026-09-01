@@ -6,7 +6,12 @@ import type {
 	LiveMatchdaySnapshot
 } from '../lib/graphql/operations/live'
 import {
+	GET_LIVE_MATCHDAY,
+	GET_LIVE_MATCHDAY_HEAD
+} from '../lib/graphql/operations/live'
+import {
 	canReplaceLiveMatchesLkg,
+	getLiveMatchesHead,
 	getLiveMatchesSnapshot,
 	parseLiveMatchesRequestParams,
 	retainLiveMatchdayDetailRevision,
@@ -14,8 +19,8 @@ import {
 	shouldRetainAcceptedLiveMatchDetails,
 	type QueryExecutor,
 	type QueryExecutorOptions,
-	transformLiveMatchdayV2,
-	validateLiveMatchdayV2
+	transformLiveMatchdayV3,
+	validateLiveMatchdayV3
 } from '../lib/live-matches'
 import {
 	liveMatchdayNeedsRefresh,
@@ -78,19 +83,17 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 						position: 'MIDFIELDER',
 						teamId: 1,
 						price: 55,
-						totalPoints: 8,
+						totalPoints: 3,
 						stats: [
 							{
 								identifier: 'minutes',
 								value: 33,
-								points: 1,
-								pointsModification: null
+								awardedPoints: 1
 							},
 							{
 								identifier: 'bonus',
 								value: 2,
-								points: 2,
-								pointsModification: null
+								awardedPoints: 2
 							}
 						]
 					},
@@ -100,13 +103,12 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 						position: 'FORWARD',
 						teamId: 2,
 						price: 50,
-						totalPoints: 2,
+						totalPoints: 0,
 						stats: [
 							{
 								identifier: 'bps',
 								value: 45,
-								points: 0,
-								pointsModification: null
+								awardedPoints: 0
 							}
 						]
 					}
@@ -143,7 +145,7 @@ const unavailableResponse = () =>
 		snapshot: null
 	})
 
-describe('live matchday V2 publication', () => {
+describe('live matchday V3 publication', () => {
 	it('projects embedded players without a fixture detail fan-out', async () => {
 		const calls: string[] = []
 		const timeouts: Array<number | undefined> = []
@@ -161,6 +163,7 @@ describe('live matchday V2 publication', () => {
 		assert.equal(calls.length, 1)
 		assert.match(calls[0] ?? '', /liveMatchday\(eventId:/)
 		assert.doesNotMatch(calls[0] ?? '', /liveFixturePlayers|eventLive\(/)
+		assert.doesNotMatch(calls[0] ?? '', /awardedPoints|pointsModification/)
 		assert.doesNotMatch(calls[0] ?? '', /nextEventId/)
 		assert.deepEqual(timeouts, [5_000])
 		assert.equal(data.matches.length, 1)
@@ -172,6 +175,40 @@ describe('live matchday V2 publication', () => {
 		assert.equal(data.snapshot?.revisions.scoreState, 'score-1')
 		assert.equal('scoreCoreRevision' in (data.snapshot ?? {}), false)
 		assert.equal('checkpointedAt' in (data.snapshot?.times ?? {}), false)
+	})
+
+	it('uses a metadata-only HEAD without reading match or player fields', async () => {
+		const calls: string[] = []
+		const head = response()
+		const { matches: _matches, ...headSnapshot } = head.liveMatchday.snapshot!
+		const executor: QueryExecutor = async <T>(query: string): Promise<T> => {
+			calls.push(query)
+			return {
+				liveMatchday: {
+					...head.liveMatchday,
+					snapshot: headSnapshot
+				}
+			} as T
+		}
+
+		const data = await getLiveMatchesHead(executor, 33)
+
+		assert.equal(calls.length, 1)
+		assert.match(calls[0] ?? '', /GetLiveMatchdayHeadV3/)
+		assert.doesNotMatch(calls[0] ?? '', /\bmatches\b|\bplayers\b|\bstats\b/)
+		assert.equal(data.snapshot?.eventId, 33)
+		assert.equal(data.snapshot?.revisions.scoreState, 'score-1')
+	})
+
+	it('keeps the V3 full and HEAD documents on separate read contracts', () => {
+		assert.match(GET_LIVE_MATCHDAY, /query GetLiveMatchdayV3/)
+		assert.match(GET_LIVE_MATCHDAY, /matches\s*\{/)
+		assert.doesNotMatch(GET_LIVE_MATCHDAY, /awardedPoints|pointsModification/)
+		assert.match(GET_LIVE_MATCHDAY_HEAD, /query GetLiveMatchdayHeadV3/)
+		assert.doesNotMatch(
+			GET_LIVE_MATCHDAY_HEAD,
+			/\bmatches\b|\bplayers\b|\bstats\b/
+		)
 	})
 
 	it('accepts the active pointer or one event and hard-rejects legacy API parameters', () => {
@@ -202,7 +239,7 @@ describe('live matchday V2 publication', () => {
 		)
 	})
 
-	it('uses the V2 HTTP active pointer without legacy season or revision parameters', async () => {
+	it('uses the V3 HTTP active pointer without legacy season or revision parameters', async () => {
 		const originalFetch = globalThis.fetch
 		const requests: Array<{ url: string; contract: string | null }> = []
 		globalThis.fetch = (async (input, init) => {
@@ -226,10 +263,10 @@ describe('live matchday V2 publication', () => {
 			globalThis.fetch = originalFetch
 		}
 		assert.deepEqual(requests, [
-			{ url: '/api/live/matches', contract: 'live-matches-v2' },
+			{ url: '/api/live/matches', contract: 'live-matches-v3' },
 			{
 				url: '/api/live/matches?eventId=33',
-				contract: 'live-matches-v2'
+				contract: 'live-matches-v3'
 			}
 		])
 	})
@@ -244,7 +281,7 @@ describe('live matchday V2 publication', () => {
 			]
 		})
 		assert.throws(
-			() => validateLiveMatchdayV2(response({ snapshot: mixedEvent })),
+			() => validateLiveMatchdayV3(response({ snapshot: mixedEvent })),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 
@@ -253,19 +290,41 @@ describe('live matchday V2 publication', () => {
 			matches: [{ ...base, players: [...base.players, base.players[0]!] }]
 		})
 		assert.throws(
-			() => validateLiveMatchdayV2(response({ snapshot: duplicatePlayers })),
+			() => validateLiveMatchdayV3(response({ snapshot: duplicatePlayers })),
+			/LIVE_MATCHDAY_INCOHERENT/
+		)
+
+		const playerWithDuplicateStat = base.players[0]!
+		const duplicateStats = snapshot({
+			matches: [
+				{
+					...base,
+					players: [
+						{
+							...playerWithDuplicateStat,
+							stats: [
+								...playerWithDuplicateStat.stats,
+								{ identifier: 'MINUTES', value: 33 }
+							]
+						}
+					]
+				}
+			]
+		})
+		assert.throws(
+			() => validateLiveMatchdayV3(response({ snapshot: duplicateStats })),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 
 		const partialDetail = snapshot()
 		partialDetail.revisions.detailGeneration = null
 		assert.throws(
-			() => validateLiveMatchdayV2(response({ snapshot: partialDetail })),
+			() => validateLiveMatchdayV3(response({ snapshot: partialDetail })),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 		assert.throws(
 			() =>
-				validateLiveMatchdayV2(
+				validateLiveMatchdayV3(
 					response({
 						availability: 'UNAVAILABLE',
 						delivery: {
@@ -292,13 +351,13 @@ describe('live matchday V2 publication', () => {
 		assert.equal(canReplaceLiveMatchesLkg(data), false)
 	})
 
-	it('rejects a V2 payload without the required canonical player price', async () => {
+	it('rejects a V3 payload without the required canonical player price', async () => {
 		const data = response()
 		const player = data.liveMatchday.snapshot!.matches[0]!.players[0]!
 		delete (player as Partial<typeof player>).price
 
 		assert.throws(
-			() => validateLiveMatchdayV2(data),
+			() => validateLiveMatchdayV3(data),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 	})
@@ -449,7 +508,7 @@ describe('live matchday V2 publication', () => {
 		delete (player as Partial<typeof player>).price
 
 		assert.throws(
-			() => validateLiveMatchdayV2(data),
+			() => validateLiveMatchdayV3(data),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 	})
@@ -730,8 +789,8 @@ describe('live matchday V2 publication', () => {
 		)
 	})
 
-	it('transforms a V2 snapshot directly', () => {
-		const [match] = transformLiveMatchdayV2(snapshot())
+	it('transforms a V3 snapshot directly', () => {
+		const [match] = transformLiveMatchdayV3(snapshot())
 		assert.equal(match?.homeTeam.shortName, 'ARS')
 		assert.equal(match?.awayTeam.players[0]?.element, 20)
 		assert.equal(match?.status, 'LIVE')

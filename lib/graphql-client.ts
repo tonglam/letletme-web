@@ -74,7 +74,7 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 
 export const LIVE_POINTS_CONTRACT_HEADER = 'X-LetLetMe-Contract'
 export const LIVE_POINTS_CONTRACT_VERSION = 'live-points-v2'
-export const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v2'
+export const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v3'
 
 /**
  * Live Points is a breaking contract. Keep the gate in the shared request
@@ -86,11 +86,11 @@ export const requiresLivePointsV2Contract = (query: string): boolean =>
 		query
 	)
 
-export const requiresLiveMatchesV2Contract = (query: string): boolean =>
+export const requiresLiveMatchesV3Contract = (query: string): boolean =>
 	/\bliveMatchday\s*(?:\(|\{)/.test(query)
 
 export const liveContractVersionForQuery = (query: string): string | null => {
-	const matches = requiresLiveMatchesV2Contract(query)
+	const matches = requiresLiveMatchesV3Contract(query)
 	const points = requiresLivePointsV2Contract(query)
 	if (matches && points) throw new Error('LIVE_CONTRACT_MIXED_OPERATION')
 	if (matches) return LIVE_MATCHES_CONTRACT_VERSION

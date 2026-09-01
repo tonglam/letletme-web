@@ -56,7 +56,7 @@ export function shouldPollLiveMatchesTransition({
 	return isLiveRefreshTerminalState(snapshot.state)
 }
 
-/** Match V2 uses its own lifecycle and server cadence, never LP freshness. */
+/** Match V3 uses its own lifecycle and server cadence, never LP freshness. */
 export function shouldPollLiveMatchday({
 	isPageActive,
 	currentEventId,

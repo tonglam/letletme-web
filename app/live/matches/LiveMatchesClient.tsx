@@ -18,6 +18,7 @@ import {
 } from '@/lib/live-refresh'
 import {
 	canReplaceLiveMatchesLkg,
+	getLiveMatchesHead,
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
 	retainLiveMatchdayDetailRevision,
@@ -25,6 +26,7 @@ import {
 	shouldRetainAcceptedLiveMatchDetails,
 	type LiveMatchdayStatus
 } from '@/lib/live-matches'
+import { reportLiveMatchClientSignal } from '@/lib/analytics/client-vitals'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -59,6 +61,22 @@ const TAB_CONFIG: ReadonlyArray<{
 
 function isLiveMatchesTab(value: string): value is LiveMatchesTab {
 	return value === 'live' || value === 'finished' || value === 'not-started'
+}
+
+type LiveMatchTelemetryResult =
+	'ok' | 'error' | 'timeout' | 'auth_error' | 'stale' | 'unavailable'
+
+function liveMatchTelemetryResult(
+	availability: string,
+	deliveryState: string
+): LiveMatchTelemetryResult {
+	if (availability === 'UNAVAILABLE' || deliveryState === 'UNAVAILABLE') {
+		return 'unavailable'
+	}
+	if (deliveryState === 'STALE' || deliveryState === 'DEGRADED') {
+		return 'stale'
+	}
+	return 'ok'
 }
 
 export function LiveMatchesClient({
@@ -135,6 +153,7 @@ export function LiveMatchesClient({
 			}
 
 			isFetchInFlight.current = true
+			const fullRequestStartedAt = performance.now()
 
 			try {
 				if (isRefresh) {
@@ -154,6 +173,15 @@ export function LiveMatchesClient({
 							preferHttp: true
 						}
 					))
+				reportLiveMatchClientSignal({
+					view: 'FULL',
+					durationMs: performance.now() - fullRequestStartedAt,
+					decodedBytes: data.decodedBytes,
+					result: liveMatchTelemetryResult(
+						data.availability,
+						data.delivery.state
+					)
+				})
 				if (!mountedRef.current) return
 				const acceptedSnapshot = snapshotRef.current
 				const canRetainAcceptedDetails =
@@ -200,6 +228,11 @@ export function LiveMatchesClient({
 					setActiveTab(getPreferredLiveMatchesTab(matchesWithRetainedDetails))
 				}
 			} catch (err) {
+				reportLiveMatchClientSignal({
+					view: 'FULL',
+					durationMs: performance.now() - fullRequestStartedAt,
+					result: 'error'
+				})
 				console.error('Failed to fetch live matches:', err)
 				if (mountedRef.current) {
 					setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
@@ -232,6 +265,29 @@ export function LiveMatchesClient({
 		if (!eventId) return Promise.resolve()
 
 		const request = (async () => {
+			const probeHead = async (eventId: number | null) => {
+				const headRequestStartedAt = performance.now()
+				try {
+					const result = await getLiveMatchesHead(executeQuery, eventId)
+					reportLiveMatchClientSignal({
+						view: 'HEAD',
+						durationMs: performance.now() - headRequestStartedAt,
+						decodedBytes: result.decodedBytes,
+						result: liveMatchTelemetryResult(
+							result.availability,
+							result.delivery.state
+						)
+					})
+					return result
+				} catch (error) {
+					reportLiveMatchClientSignal({
+						view: 'HEAD',
+						durationMs: performance.now() - headRequestStartedAt,
+						result: 'error'
+					})
+					throw error
+				}
+			}
 			try {
 				const transitionProbe = shouldPollLiveMatchesTransition({
 					isPageActive,
@@ -239,47 +295,37 @@ export function LiveMatchesClient({
 					snapshot: snapshotRef.current
 				})
 				if (transitionProbe) {
-					// Match V2 owns the active-event pointer for this page. A Live
+					// Match V3 owns the active-event pointer for this page. A Live
 					// Points context probe can be stale or unavailable after the
 					// current event has moved on.
-					const observedData = await getLiveMatchesSnapshot(
-						executeQuery,
-						null,
-						{ preferHttp: true }
-					)
+					const observedData = await probeHead(null)
 					const observedCurrentEventId =
 						observedData.currentEventId ?? undefined
 					if (
 						observedCurrentEventId &&
 						observedCurrentEventId !== resolvedCurrentEventId
 					) {
-						await fetchMatches(
-							true,
-							{ currentEventId: observedCurrentEventId },
-							observedData
-						)
+						reportLiveMatchClientSignal({ revisionChanged: true })
+						await fetchMatches(true, { currentEventId: observedCurrentEventId })
 						return
 					}
 					if (
 						observedData.snapshot &&
 						liveMatchdayNeedsRefresh(snapshotRef.current, observedData.snapshot)
 					) {
-						await fetchMatches(true, undefined, observedData)
+						reportLiveMatchClientSignal({ revisionChanged: true })
+						await fetchMatches(true)
 						return
 					}
 					setError(null)
 					return
 				}
-				const observedData = await getLiveMatchesSnapshot(
-					executeQuery,
-					resolvedCurrentEventId,
-					{ preferHttp: true }
-				)
+				const observedData = await probeHead(resolvedCurrentEventId)
 				const observedSnapshot = observedData.snapshot
 				// An unavailable publication is an observation failure, not permission
 				// to erase or refetch the last complete board.
 				if (!observedSnapshot) {
-					// A valid V2 response without a snapshot is the normal post-deadline
+					// A valid V3 response without a snapshot is the normal post-deadline
 					// sync window. Keep the countdown armed and retain any LKG.
 					setError(null)
 					return
@@ -288,13 +334,10 @@ export function LiveMatchesClient({
 					observedData.currentEventId &&
 					observedData.currentEventId !== resolvedCurrentEventId
 				) {
-					await fetchMatches(
-						true,
-						{
-							currentEventId: observedData.currentEventId
-						},
-						observedData
-					)
+					reportLiveMatchClientSignal({ revisionChanged: true })
+					await fetchMatches(true, {
+						currentEventId: observedData.currentEventId
+					})
 					return
 				}
 				if (!liveMatchdayNeedsRefresh(snapshotRef.current, observedSnapshot)) {
@@ -304,7 +347,8 @@ export function LiveMatchesClient({
 					setError(null)
 					return
 				}
-				await fetchMatches(true, undefined, observedData)
+				reportLiveMatchClientSignal({ revisionChanged: true })
+				await fetchMatches(true)
 			} catch (probeError) {
 				console.error('Failed to check live match freshness:', probeError)
 				setError(t('refreshFailed'))

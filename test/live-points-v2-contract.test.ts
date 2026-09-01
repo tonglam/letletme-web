@@ -16,7 +16,7 @@ import {
 	LIVE_MATCHES_CONTRACT_VERSION,
 	LIVE_POINTS_CONTRACT_VERSION,
 	liveContractVersionForQuery,
-	requiresLiveMatchesV2Contract,
+	requiresLiveMatchesV3Contract,
 	requiresLivePointsV2Contract
 } from '../lib/graphql-client'
 import {
@@ -70,11 +70,11 @@ const score = (overrides: Record<string, unknown> = {}) => ({
 describe('Live Points V2 web contract', () => {
 	it('keeps live matches on their separate breaking contract', () => {
 		const matchdayQuery = 'query LiveMatchday { liveMatchday { availability } }'
-		assert.equal(requiresLiveMatchesV2Contract(matchdayQuery), true)
+		assert.equal(requiresLiveMatchesV3Contract(matchdayQuery), true)
 		assert.equal(requiresLivePointsV2Contract(matchdayQuery), false)
-		assert.equal(LIVE_MATCHES_CONTRACT_VERSION, 'live-matches-v2')
+		assert.equal(LIVE_MATCHES_CONTRACT_VERSION, 'live-matches-v3')
 		assert.equal(LIVE_POINTS_CONTRACT_VERSION, 'live-points-v2')
-		assert.equal(liveContractVersionForQuery(matchdayQuery), 'live-matches-v2')
+		assert.equal(liveContractVersionForQuery(matchdayQuery), 'live-matches-v3')
 		assert.throws(
 			() =>
 				liveContractVersionForQuery(
@@ -202,7 +202,10 @@ describe('Live Points V2 web contract', () => {
 			hook,
 			/await refreshOfficialSyncStateForCurrentEvent\(\s*gameweek\s*\)/
 		)
-		assert.match(hook, /officialSyncPendingRef\.current = shouldKeepSyncPending/)
+		assert.match(
+			hook,
+			/officialSyncPendingRef\.current = shouldKeepSyncPending/
+		)
 		assert.match(hook, /gameweekSelectionRef\.current/)
 	})
 

@@ -32,6 +32,7 @@ import {
 import {
 	GET_EVENT_LIVE_EXPLAIN,
 	GET_LIVE_MATCHDAY,
+	GET_LIVE_MATCHDAY_HEAD,
 	GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
@@ -344,6 +345,11 @@ async function main() {
 		{
 			name: 'GET_LIVE_MATCHDAY',
 			query: GET_LIVE_MATCHDAY,
+			variables: { eventId }
+		},
+		{
+			name: 'GET_LIVE_MATCHDAY_HEAD',
+			query: GET_LIVE_MATCHDAY_HEAD,
 			variables: { eventId }
 		},
 		{

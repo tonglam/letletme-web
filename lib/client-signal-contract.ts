@@ -22,6 +22,13 @@ export type ClientSignalMetric =
 	| 'runtime_error'
 	| 'update_failure'
 	| 'last_good_age_ms'
+	| 'live_matches_head_ms'
+	| 'live_matches_full_ms'
+	| 'live_matches_head_bytes'
+	| 'live_matches_full_bytes'
+	| 'live_matches_head_result'
+	| 'live_matches_full_result'
+	| 'live_matches_revision_changed'
 export type ClientSignalDeviceGroup =
 	| 'mobile'
 	| 'tablet'
@@ -74,7 +81,14 @@ const METRICS = new Set<ClientSignalMetric>([
 	'auth_result',
 	'runtime_error',
 	'update_failure',
-	'last_good_age_ms'
+	'last_good_age_ms',
+	'live_matches_head_ms',
+	'live_matches_full_ms',
+	'live_matches_head_bytes',
+	'live_matches_full_bytes',
+	'live_matches_head_result',
+	'live_matches_full_result',
+	'live_matches_revision_changed'
 ])
 const DEVICE_GROUPS = new Set<ClientSignalDeviceGroup>([
 	'mobile',
@@ -100,7 +114,11 @@ const NUMERIC_METRICS = new Set<ClientSignalMetric>([
 	'lcp_ms',
 	'inp_ms',
 	'cls',
-	'last_good_age_ms'
+	'last_good_age_ms',
+	'live_matches_head_ms',
+	'live_matches_full_ms',
+	'live_matches_head_bytes',
+	'live_matches_full_bytes'
 ])
 const MAX_NUMERIC_VALUES: Partial<Record<ClientSignalMetric, number>> = {
 	route_ready_ms: 10_000_000,
@@ -109,7 +127,11 @@ const MAX_NUMERIC_VALUES: Partial<Record<ClientSignalMetric, number>> = {
 	lcp_ms: 10_000_000,
 	inp_ms: 10_000_000,
 	cls: 10,
-	last_good_age_ms: 24 * 60 * 60 * 1_000
+	last_good_age_ms: 24 * 60 * 60 * 1_000,
+	live_matches_head_ms: 10_000_000,
+	live_matches_full_ms: 10_000_000,
+	live_matches_head_bytes: 512 * 1024,
+	live_matches_full_bytes: 8 * 1024 * 1024
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -207,12 +229,11 @@ export function parseClientSignalBatch(
 			!isFixedValue(sample.deviceGroup, DEVICE_GROUPS) ||
 			!isFixedValue(sample.sampleSource, SAMPLE_SOURCES) ||
 			!isFixedValue(sample.result, RESULTS) ||
-				(sample.value !== undefined &&
-					!NUMERIC_METRICS.has(sample.metric)) ||
-				(sample.value !== undefined &&
-					!isValidNumericValue(sample.metric, sample.value)) ||
-				(NUMERIC_METRICS.has(sample.metric) &&
-					!isValidNumericValue(sample.metric, sample.value))
+			(sample.value !== undefined && !NUMERIC_METRICS.has(sample.metric)) ||
+			(sample.value !== undefined &&
+				!isValidNumericValue(sample.metric, sample.value)) ||
+			(NUMERIC_METRICS.has(sample.metric) &&
+				!isValidNumericValue(sample.metric, sample.value))
 		)
 			return null
 		return {
