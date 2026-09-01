@@ -8,6 +8,9 @@ import {
 	GraphQLRequestError,
 	normalizeGraphQLTimeoutMs
 } from '@/lib/graphql-client'
+import { GET_GAMEWEEK_DESK } from '@/lib/graphql/operations/gameweek'
+import { GET_HOME_GAMEWEEK } from '@/lib/graphql/operations/home'
+import { GET_TOURNAMENT_DETAIL_DESK } from '@/lib/graphql/operations/tournaments'
 
 test('normalizeGraphQLTimeoutMs matches the request deadline fallback', () => {
 	assert.equal(normalizeGraphQLTimeoutMs(), 15_000)
@@ -80,6 +83,37 @@ test('executeQuery sends the named GraphQL operation', async () => {
 			operationName: 'NamedProbe',
 			query: 'query NamedProbe { __typename }'
 		})
+	} finally {
+		globalThis.fetch = originalFetch
+	}
+})
+
+test('executeQuery sends the Live Points V2 header for every affected desk request', async () => {
+	const originalFetch = globalThis.fetch
+	const contractHeaders: Array<string | null> = []
+	globalThis.fetch = (async (
+		_input: string | URL | Request,
+		init?: RequestInit
+	) => {
+		contractHeaders.push(
+			new Headers(init?.headers).get('X-LetLetMe-Contract')
+		)
+		return Response.json({ data: {} })
+	}) as typeof fetch
+
+	try {
+		await executeQuery(GET_GAMEWEEK_DESK, { eventId: 1 })
+		await executeQuery(GET_HOME_GAMEWEEK, { eventId: 1 })
+		await executeQuery(GET_TOURNAMENT_DETAIL_DESK, {
+			tournamentId: 1,
+			entryId: 1,
+			eventId: 1
+		})
+		assert.deepEqual(contractHeaders, [
+			'live-points-v2',
+			'live-points-v2',
+			'live-points-v2'
+		])
 	} finally {
 		globalThis.fetch = originalFetch
 	}

@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
+import { GET_GAMEWEEK_DESK } from '../lib/graphql/operations/gameweek'
+import { GET_HOME_GAMEWEEK } from '../lib/graphql/operations/home'
+import { GET_TOURNAMENT_DETAIL_DESK } from '../lib/graphql/operations/tournaments'
 import {
 	LIVE_AUTO_REFRESH_SECONDS,
 	canReplaceLivePointsSnapshot,
@@ -15,6 +18,7 @@ import {
 import {
 	LIVE_MATCHES_CONTRACT_VERSION,
 	LIVE_POINTS_CONTRACT_VERSION,
+	LIVE_POINTS_V2_ROOT_FIELDS,
 	liveContractVersionForQuery,
 	requiresLiveMatchesV2Contract,
 	requiresLivePointsV2Contract
@@ -68,6 +72,21 @@ const score = (overrides: Record<string, unknown> = {}) => ({
 })
 
 describe('Live Points V2 web contract', () => {
+	it('covers every GraphQL-gated root, including all three desk surfaces', () => {
+		assert.equal(LIVE_POINTS_V2_ROOT_FIELDS.length, 16)
+		for (const document of [
+			GET_GAMEWEEK_DESK,
+			GET_HOME_GAMEWEEK,
+			GET_TOURNAMENT_DETAIL_DESK
+		]) {
+			assert.equal(requiresLivePointsV2Contract(document), true)
+			assert.equal(
+				liveContractVersionForQuery(document),
+				LIVE_POINTS_CONTRACT_VERSION
+			)
+		}
+	})
+
 	it('keeps live matches on their separate breaking contract', () => {
 		const matchdayQuery = 'query LiveMatchday { liveMatchday { availability } }'
 		assert.equal(requiresLiveMatchesV2Contract(matchdayQuery), true)
