@@ -146,6 +146,8 @@ async function hydrateSeasonSeed(
 			{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 		)
 	const primary = await fetchSection(sectionForFormat(phase.format))
+	const trajectories =
+		phase.format === 'POINTS' ? await fetchSection('POINTS_TRAJECTORIES') : null
 	const fixtures =
 		phase.format === 'H2H' ? await fetchSection('H2H_FIXTURES') : null
 	const section = primary.myTournamentSeasonReviewSection
@@ -161,18 +163,28 @@ async function hydrateSeasonSeed(
 					matches:
 						fixtures?.myTournamentSeasonReviewSection.h2h?.matches ??
 						section.h2h?.matches ??
-						[]
+						[],
+					hasNextPage: Boolean(
+						section.h2h?.hasNextPage ||
+						fixtures?.myTournamentSeasonReviewSection.h2h?.hasNextPage
+					),
+					nextCursor: null
 				}
 			: section.h2h
 	return {
 		review: {
 			...review,
 			points: section.points,
+			trajectoryPoints:
+				trajectories?.myTournamentSeasonReviewSection.points ?? null,
 			h2h,
 			knockout: section.knockout
 		},
 		sections: [
 			section,
+			...(trajectories?.myTournamentSeasonReviewSection
+				? [trajectories.myTournamentSeasonReviewSection]
+				: []),
 			...(fixtures?.myTournamentSeasonReviewSection
 				? [fixtures.myTournamentSeasonReviewSection]
 				: [])

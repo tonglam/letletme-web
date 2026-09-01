@@ -1309,12 +1309,11 @@ export default function TournamentReviewV2Client({
 	}
 
 	const chooseView = (nextView: 'gameweek' | 'season') => {
-		// Invalidate an in-flight phase/section request. Its immutable response
-		// may still complete, but it must not mutate state after the visible view
-		// has changed.
-		++requestSequence.current
+		// View changes only alter presentation. Keep an in-flight tournament/GW
+		// load alive so switching tabs cannot cancel the only request that can
+		// populate the selected review. Tournament and phase changes still use
+		// requestSequence for stale-response fencing.
 		setLoadingMore(false)
-		setLoading(false)
 		viewRef.current = nextView
 		setView(nextView)
 		replaceRoute({ view: nextView })
@@ -1343,6 +1342,7 @@ export default function TournamentReviewV2Client({
 							...previous,
 							state: phase.state,
 							points: null,
+							trajectoryPoints: null,
 							h2h: null,
 							knockout: null
 						},
