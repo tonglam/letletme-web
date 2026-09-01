@@ -6,7 +6,7 @@ import { parseEntryLiveCompetitionBoardPage } from '../lib/tournament/live-board
 const revision = 'a'.repeat(64)
 
 describe('Live Board V2 score contract', () => {
-	it('accepts negative event points while retaining an official score', () => {
+	it('accepts negative event points and an unknown overall rank', () => {
 		const page = parseEntryLiveCompetitionBoardPage({
 			season: '2627',
 			eventId: 1,
@@ -67,7 +67,7 @@ describe('Live Board V2 score contract', () => {
 					entryName: 'Entry 6953',
 					playerName: 'Manager',
 					rank: 1,
-					overallRank: 100,
+					overallRank: null,
 					teamValue: 1000,
 					chip: 'NONE',
 					transferCost: 0,
@@ -121,5 +121,6 @@ describe('Live Board V2 score contract', () => {
 		})
 
 		assert.equal(page.rows[0]?.score.eventPoints, -2)
+		assert.equal(page.rows[0]?.overallRank, null)
 	})
 })
