@@ -7,7 +7,10 @@ import {
 	parseWebVitalPayload,
 	resolveWebVitalSource
 } from '../lib/analytics/web-vitals'
-import { parseClientSignalBatch } from '../lib/client-signal-contract'
+import {
+	parseClientSignalBatch,
+	withServerRelease
+} from '../lib/client-signal-contract'
 import { isTrustedSameSiteRequest } from '../lib/request-origin'
 
 const validMetric = {
@@ -327,6 +330,31 @@ describe('privacy-safe web vitals', () => {
 		}
 
 		assert.equal(parseClientSignalBatch(batch, now)?.samples.length, 7)
+	})
+
+	it('replaces the browser rollout label at the server forwarding boundary', () => {
+		const batch = {
+			schemaVersion: 1 as const,
+			batchId: '2b37a101-8f28-47ce-8c83-d5749a2f3ce7',
+			client: 'web' as const,
+			release: 'browser',
+			sentAt: '2026-08-27T00:00:00.000Z',
+			samples: [
+				{
+					observedAt: '2026-08-26T23:59:00.000Z',
+					surface: 'live_matches' as const,
+					metric: 'live_matches_head_ms' as const,
+					deviceGroup: 'desktop' as const,
+					sampleSource: 'real' as const,
+					result: 'ok' as const,
+					value: 120
+				}
+			]
+		}
+		const forwarded = withServerRelease(batch, 'web-sha-123')
+
+		assert.equal(forwarded.release, 'web-sha-123')
+		assert.deepEqual(forwarded.samples, batch.samples)
 	})
 
 	it('does not accept runtime error text or identity fields', async () => {

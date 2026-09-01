@@ -17,7 +17,10 @@ import type {
 	ClientSignalSurface,
 	ClientSignalMetric
 } from '@/lib/client-signal-contract'
-import { parseClientSignalBatch } from '@/lib/client-signal-contract'
+import {
+	parseClientSignalBatch,
+	withServerRelease
+} from '@/lib/client-signal-contract'
 import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
 import { randomUUID } from 'node:crypto'
 import { after, NextResponse } from 'next/server'
@@ -88,6 +91,8 @@ export async function POST(request: Request) {
 			: runtime
 				? toRuntimeSignal(runtime)
 				: clientBatch
+					? withServerRelease(clientBatch, releaseName())
+					: null
 		if (signal) after(() => forwardClientSignalBatch(signal))
 		if (metric) {
 			// Keep the existing validated metric log as a best-effort local

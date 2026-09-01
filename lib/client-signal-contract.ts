@@ -57,6 +57,14 @@ export type ClientSignalBatchV1 = {
 	}>
 }
 
+/** Replace the client-provided rollout label at a trusted server boundary. */
+export function withServerRelease(
+	batch: ClientSignalBatchV1,
+	release: string
+): ClientSignalBatchV1 {
+	return { ...batch, release }
+}
+
 const CLIENTS = new Set<ClientSignalClient>(['web', 'wechat_miniprogram'])
 const SURFACES = new Set<ClientSignalSurface>([
 	'home',
