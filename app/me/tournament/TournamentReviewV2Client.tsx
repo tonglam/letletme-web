@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
 import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
@@ -96,6 +96,7 @@ export interface TournamentReviewV2ClientProps {
 	initialFinalizedEventIds: number[]
 	initialGameweekReview: MyTournamentGameweekReview | null
 	initialSeasonReview: MyTournamentSeasonReview | null
+	initialSeasonSections?: SeasonSectionData[]
 	initialError: string | null
 }
 
@@ -291,7 +292,8 @@ function combineSeasonSections(
 		(section): section is SeasonSectionData => Boolean(section)
 	)
 	const standingsPage = pages.POINTS_STANDINGS
-	const pointsPage = standingsPage ?? pages.POINTS_TRAJECTORIES
+	const trajectoryPage = pages.POINTS_TRAJECTORIES
+	const pointsPage = standingsPage?.points ?? review.points
 	const h2hPages = sections.filter(
 		section =>
 			section.section === 'H2H_STANDINGS' || section.section === 'H2H_FIXTURES'
@@ -305,7 +307,9 @@ function combineSeasonSections(
 	return normalizeSeason(
 		{
 			...review,
-			points: pointsPage?.points ?? null,
+			points: pointsPage ?? null,
+			trajectoryPoints:
+				trajectoryPage?.points ?? review.trajectoryPoints ?? null,
 			h2h: h2hSource?.h2h
 				? {
 						...h2hSource.h2h,
@@ -354,6 +358,7 @@ function SettlementMeta({
 	settledAt: string | null | undefined
 	publishedAt: string | null | undefined
 }) {
+	const locale = useLocale()
 	const t = useTranslations('TournamentStats')
 	const [hydrated, setHydrated] = useState(false)
 	useEffect(() => setHydrated(true), [])
@@ -362,12 +367,12 @@ function SettlementMeta({
 		<div className="text-xs text-slate-500">
 			{settledAt
 				? t('reviewSettledAt', {
-						value: hydrated ? new Date(settledAt).toLocaleString() : '—'
+						value: hydrated ? new Date(settledAt).toLocaleString(locale) : '—'
 					})
 				: null}
 			{publishedAt
 				? ` · ${t('reviewPublishedAt', {
-						value: hydrated ? new Date(publishedAt).toLocaleString() : '—'
+						value: hydrated ? new Date(publishedAt).toLocaleString(locale) : '—'
 					})}`
 				: null}
 		</div>
@@ -401,11 +406,13 @@ function LoadMore({
 
 function PointsReview({
 	points,
+	trajectory,
 	view,
 	loadingMore,
 	onLoadMore
 }: {
 	points: MyTournamentReviewPoints
+	trajectory?: MyTournamentReviewPoints | null
 	view: TournamentReviewV2View
 	loadingMore: boolean
 	onLoadMore?: () => void
@@ -508,6 +515,43 @@ function PointsReview({
 					onLoadMore={onLoadMore}
 				/>
 			</div>
+			{view === 'season' && trajectory ? (
+				<section className="rounded-2xl border bg-white p-4 shadow-sm">
+					<div className="flex items-baseline justify-between gap-3">
+						<h3 className="font-semibold text-slate-950">
+							{t('reviewTrajectories')}
+						</h3>
+						<span className="text-xs text-slate-500">
+							{t('reviewTrajectoryHint')}
+						</span>
+					</div>
+					<div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+						{trajectory.rows.slice(0, 12).map(row => (
+							<div
+								key={`trajectory-${row.entryId}`}
+								className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+							>
+								<div className="flex items-center justify-between gap-2 text-sm">
+									<span className="truncate font-medium text-slate-950">
+										{row.entryName}
+									</span>
+									<span className="shrink-0 font-semibold tabular-nums text-slate-700">
+										{numberOrDash(row.seasonNetPoints)}
+									</span>
+								</div>
+								<div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+									<span>{t('reviewSeasonNet')}</span>
+									<span>
+										{row.previousRank !== null && row.rank !== null
+											? `${row.previousRank} → ${row.rank}`
+											: numberOrDash(row.rank)}
+									</span>
+								</div>
+							</div>
+						))}
+					</div>
+				</section>
+			) : null}
 		</div>
 	)
 }
@@ -685,6 +729,11 @@ function ReviewPayload({
 		return (
 			<PointsReview
 				points={review.points}
+				trajectory={
+					view === 'season' && 'trajectoryPoints' in review
+						? review.trajectoryPoints
+						: null
+				}
 				view={view}
 				loadingMore={loadingMore}
 				onLoadMore={onLoadMore}
@@ -704,6 +753,7 @@ export default function TournamentReviewV2Client({
 	initialFinalizedEventIds,
 	initialGameweekReview,
 	initialSeasonReview,
+	initialSeasonSections = [],
 	initialError
 }: TournamentReviewV2ClientProps) {
 	const t = useTranslations('TournamentStats')
@@ -740,7 +790,15 @@ export default function TournamentReviewV2Client({
 	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
 	const requestSequence = useRef(0)
 	const catalogRequestSequence = useRef(0)
-	const seasonSectionPages = useRef<SeasonSectionPages>({})
+	// A replacement (search/scope switch) advances this generation. Page
+	// appends capture it so an older load-more response can never append into a
+	// newly searched catalog, even if the network completes out of order.
+	const catalogQueryGeneration = useRef(0)
+	const seasonSectionPages = useRef<SeasonSectionPages>(
+		Object.fromEntries(
+			initialSeasonSections.map(section => [section.section, section])
+		) as SeasonSectionPages
+	)
 
 	const selectedTournament = useMemo(
 		() =>
@@ -785,6 +843,7 @@ export default function TournamentReviewV2Client({
 		replace?: boolean
 		nextScope?: MyTournamentReviewScope
 	} = {}) => {
+		const queryGeneration = catalogQueryGeneration.current
 		const requestId = ++catalogRequestSequence.current
 		setCatalogLoadingMore(true)
 		try {
@@ -798,7 +857,11 @@ export default function TournamentReviewV2Client({
 				},
 				{ cache: 'no-store', contract: CONTRACT }
 			)
-			if (requestId !== catalogRequestSequence.current) return
+			if (
+				requestId !== catalogRequestSequence.current ||
+				queryGeneration !== catalogQueryGeneration.current
+			)
+				return
 			const nextCatalog = response.myTournamentReviewCatalog
 			setCatalog(previous =>
 				replace
@@ -810,7 +873,11 @@ export default function TournamentReviewV2Client({
 			)
 			setCatalogSearch(search.trim())
 		} catch (loadError) {
-			if (requestId !== catalogRequestSequence.current) return
+			if (
+				requestId !== catalogRequestSequence.current ||
+				queryGeneration !== catalogQueryGeneration.current
+			)
+				return
 			const requestError = loadError as GraphQLRequestError
 			setError(
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
@@ -818,7 +885,10 @@ export default function TournamentReviewV2Client({
 					: t('loadFailed')
 			)
 		} finally {
-			if (requestId === catalogRequestSequence.current)
+			if (
+				requestId === catalogRequestSequence.current &&
+				queryGeneration === catalogQueryGeneration.current
+			)
 				setCatalogLoadingMore(false)
 		}
 	}
@@ -828,6 +898,7 @@ export default function TournamentReviewV2Client({
 		// Invalidate an in-flight load-more response from the previous query. A
 		// catalog replacement must never be followed by an old page append.
 		++catalogRequestSequence.current
+		++catalogQueryGeneration.current
 		const requestId = ++requestSequence.current
 		setLoading(true)
 		setLoadingMore(false)
@@ -857,7 +928,8 @@ export default function TournamentReviewV2Client({
 			setFinalizedEventIds([])
 			replaceRoute({
 				tournamentId: nextSelected?.tournamentId ?? null,
-				eventId: nextEventId
+				eventId: nextEventId,
+				view: viewRef.current
 			})
 			if (nextSelected && nextEventId) {
 				void loadReview(nextSelected.tournamentId, nextEventId, true)
@@ -936,12 +1008,20 @@ export default function TournamentReviewV2Client({
 						)
 					)
 				}
-				const sections = await Promise.all(sectionRequests)
+				const settledSections = await Promise.allSettled(sectionRequests)
+				const primarySection = settledSections[0]
+				if (!primarySection)
+					throw new Error('Season phase publication is not ready')
+				if (primarySection.status === 'rejected') throw primarySection.reason
+				const sections = settledSections.map(result =>
+					result.status === 'fulfilled' ? result.value : null
+				)
 				const pages = Object.fromEntries(
 					sections
 						.filter((section): section is SeasonSectionData => Boolean(section))
 						.map(section => [section.section, section])
 				) as SeasonSectionPages
+				if (requestId !== requestSequence.current) return
 				seasonSectionPages.current = pages
 				if (sections.some(Boolean))
 					seasonWithSection = combineSeasonSections(
@@ -1096,6 +1176,7 @@ export default function TournamentReviewV2Client({
 
 	const loadMoreCatalog = () => {
 		if (
+			loading ||
 			catalogLoadingMore ||
 			!catalog.pageInfo.hasNextPage ||
 			!catalog.pageInfo.endCursor
@@ -1106,6 +1187,7 @@ export default function TournamentReviewV2Client({
 
 	const switchScope = async () => {
 		++catalogRequestSequence.current
+		++catalogQueryGeneration.current
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
 			scope === 'ALL' ? 'ACCESSIBLE' : 'ALL'
@@ -1227,7 +1309,12 @@ export default function TournamentReviewV2Client({
 	}
 
 	const chooseView = (nextView: 'gameweek' | 'season') => {
+		// Invalidate an in-flight phase/section request. Its immutable response
+		// may still complete, but it must not mutate state after the visible view
+		// has changed.
+		++requestSequence.current
 		setLoadingMore(false)
+		setLoading(false)
 		viewRef.current = nextView
 		setView(nextView)
 		replaceRoute({ view: nextView })
@@ -1290,7 +1377,14 @@ export default function TournamentReviewV2Client({
 							'H2H_FIXTURES'
 						)
 					)
-				const sections = await Promise.all(sectionRequests)
+				const settledSections = await Promise.allSettled(sectionRequests)
+				const primarySection = settledSections[0]
+				if (!primarySection)
+					throw new Error('Season phase publication is not ready')
+				if (primarySection.status === 'rejected') throw primarySection.reason
+				const sections = settledSections.map(result =>
+					result.status === 'fulfilled' ? result.value : null
+				)
 				if (requestId !== requestSequence.current) return
 				const pages = Object.fromEntries(
 					sections

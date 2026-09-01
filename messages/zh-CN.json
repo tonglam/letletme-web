@@ -2353,6 +2353,8 @@
 		"reviewNetHint": "单独展示；本轮积分口径为 Gross。",
 		"reviewSeasonNetHint": "累计积分扣除累计转会成本后的结果。",
 		"reviewRows": "队伍数",
+		"reviewTrajectories": "排名走势",
+		"reviewTrajectoryHint": "上轮 → 当前排名",
 		"reviewFirstPage": "首屏",
 		"reviewComplete": "完整",
 		"reviewLoadMore": "加载更多",

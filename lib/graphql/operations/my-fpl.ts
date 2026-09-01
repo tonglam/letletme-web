@@ -815,6 +815,8 @@ export interface MyTournamentSeasonReview {
 	latestRevision?: string | null
 	format?: MyTournamentReviewFormat | null
 	points?: MyTournamentReviewPoints | null
+	/** Normalized client view of the independent Points trajectory section. */
+	trajectoryPoints?: MyTournamentReviewPoints | null
 	h2h?: MyTournamentReviewH2H | null
 	knockout?: MyTournamentReviewKnockout | null
 	finalizedEventIds?: number[]

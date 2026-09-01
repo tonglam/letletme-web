@@ -2357,6 +2357,8 @@
 		"reviewNetHint": "Shown separately; the round headline is gross points.",
 		"reviewSeasonNetHint": "Cumulative total after transfer costs.",
 		"reviewRows": "Rows",
+		"reviewTrajectories": "Rank trajectory",
+		"reviewTrajectoryHint": "Previous → current rank",
 		"reviewFirstPage": "First page",
 		"reviewComplete": "Complete",
 		"reviewLoadMore": "Load more",

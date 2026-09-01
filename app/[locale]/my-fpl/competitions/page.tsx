@@ -15,6 +15,7 @@ import {
 	type MyTournamentReviewCatalogResponse,
 	type MyTournamentReviewScope,
 	type MyTournamentSeasonReviewResponse,
+	type MyTournamentSeasonSection,
 	type MyTournamentSeasonSectionResponse
 } from '@/lib/graphql/operations/my-fpl'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -109,7 +110,10 @@ async function hydrateSeasonSeed(
 	tournamentId: number,
 	throughEventId: number,
 	review: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']
-) {
+): Promise<{
+	review: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']
+	sections: MyTournamentSeasonSection[]
+}> {
 	const phase = review.phases.at(-1)
 	if (
 		!phase ||
@@ -117,7 +121,7 @@ async function hydrateSeasonSeed(
 		!phase.revision ||
 		!phase.semanticSha256
 	)
-		return review
+		return { review, sections: [] }
 	const fetchSection = async (
 		section:
 			| 'POINTS_STANDINGS'
@@ -161,10 +165,18 @@ async function hydrateSeasonSeed(
 				}
 			: section.h2h
 	return {
-		...review,
-		points: section.points,
-		h2h,
-		knockout: section.knockout
+		review: {
+			...review,
+			points: section.points,
+			h2h,
+			knockout: section.knockout
+		},
+		sections: [
+			section,
+			...(fixtures?.myTournamentSeasonReviewSection
+				? [fixtures.myTournamentSeasonReviewSection]
+				: [])
+		]
 	}
 }
 
@@ -241,6 +253,7 @@ export default async function TournamentStatsPage({
 		null
 	let initialSeasonReview:
 		MyTournamentSeasonReviewResponse['myTournamentSeasonReview'] | null = null
+	let initialSeasonSections: MyTournamentSeasonSection[] = []
 	let initialError: string | null = null
 
 	try {
@@ -274,43 +287,38 @@ export default async function TournamentStatsPage({
 			)
 		}
 		initialCatalog = catalogResponse.myTournamentReviewCatalog
-		// A deep link may target a tournament beyond the first catalog page. Walk
-		// the keyset pages only until that requested ID is found, preserving the
-		// server-side authorization scope and search-free cursor contract.
+		// A deep link may target a tournament beyond the first catalog page. Ask
+		// the catalog's exact-ID search path once rather than walking an
+		// unbounded number of keyset pages on every server render.
 		if (
 			requestedTournamentId !== null &&
 			!catalogNodes(initialCatalog).some(
 				item => item.tournamentId === requestedTournamentId
 			)
 		) {
-			let after = initialCatalog.pageInfo.endCursor
-			let pageCount = 0
-			while (after && initialCatalog.pageInfo.hasNextPage && pageCount < 1000) {
-				const nextPage = await timing.measure(
-					'my-tournament-review-v2.1-catalog-deep-link-page',
-					() =>
-						executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
-							session,
-							GET_MY_TOURNAMENT_REVIEW_CATALOG,
-							{ scope, first: 100, after },
-							{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
-						)
-				)
-				initialCatalog = {
-					...nextPage.myTournamentReviewCatalog,
-					edges: [
-						...initialCatalog.edges,
-						...nextPage.myTournamentReviewCatalog.edges
-					]
-				}
-				if (
-					catalogNodes(nextPage.myTournamentReviewCatalog).some(
-						item => item.tournamentId === requestedTournamentId
+			const directLookup = await timing.measure(
+				'my-tournament-review-v2.1-catalog-deep-link-lookup',
+				() =>
+					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
+						session,
+						GET_MY_TOURNAMENT_REVIEW_CATALOG,
+						{
+							scope,
+							first: 100,
+							after: null,
+							search: String(requestedTournamentId)
+						},
+						{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 					)
-				)
-					break
-				after = nextPage.myTournamentReviewCatalog.pageInfo.endCursor
-				pageCount += 1
+			)
+			const directEdge = directLookup.myTournamentReviewCatalog.edges.find(
+				edge => edge.node.tournamentId === requestedTournamentId
+			)
+			if (directEdge) {
+				initialCatalog = {
+					...initialCatalog,
+					edges: [directEdge, ...initialCatalog.edges]
+				}
 			}
 		}
 		const selected =
@@ -378,12 +386,14 @@ export default async function TournamentStatsPage({
 						])
 				)
 				initialGameweekReview = gameweekResponse.myTournamentGameweekReview
-				initialSeasonReview = await hydrateSeasonSeed(
+				const seasonSeed = await hydrateSeasonSeed(
 					session,
 					initialSelectedTournamentId,
 					initialEventId,
 					seasonResponse.myTournamentSeasonReview
 				)
+				initialSeasonReview = seasonSeed.review
+				initialSeasonSections = seasonSeed.sections
 			}
 		}
 	} catch (error) {
@@ -409,6 +419,7 @@ export default async function TournamentStatsPage({
 				initialFinalizedEventIds={initialFinalizedEventIds}
 				initialGameweekReview={initialGameweekReview}
 				initialSeasonReview={initialSeasonReview}
+				initialSeasonSections={initialSeasonSections}
 				initialError={initialError}
 			/>
 		</Suspense>
