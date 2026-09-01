@@ -44,4 +44,13 @@ describe('data governance consumer probe contract', () => {
 		assert.match(source, /aggregate-only|aggregate metadata/)
 		assert.match(source, /new Date\(\)\.toISOString\(\)/)
 	})
+
+	it('keeps MyFPL consumer counts and revision sourced from GraphQL', async () => {
+		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /expectedCount = result\.expectedCount/)
+		assert.match(source, /observedCount = result\.observedCount/)
+		assert.match(source, /input\.producerRevision === result\.revision/)
+		assert.match(source, /input\.expectedCount === result\.expectedCount/)
+		assert.match(source, /input\.observedCount === result\.observedCount/)
+	})
 })

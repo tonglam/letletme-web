@@ -242,7 +242,7 @@ export const OWN_ENTRY_DOCUMENT = `
         totalBenchPoints totalAutoSubPoints totalCaptainPoints overallRankChange
         currentImprovementStreak longestImprovementStreak
       }
-      snapshotMeta { revision eventId sourceCheckedAt publishedAt kind freshness }
+      snapshotMeta { revision eventId sourceCheckedAt publishedAt settlementState coverageState timelinessState expectedEntryCount observedEntryCount finalizationStartedAt finalizationDueAt }
     }
   }
 `
@@ -265,7 +265,7 @@ export const OWN_ENTRY_GAMEWEEK_DOCUMENT = `
           totalPoints minutes againstShortName wasHome score isPlayed autoSub
         }
       }
-      snapshotMeta { revision eventId sourceCheckedAt publishedAt kind freshness }
+      snapshotMeta { revision eventId sourceCheckedAt publishedAt settlementState coverageState timelinessState expectedEntryCount observedEntryCount finalizationStartedAt finalizationDueAt }
     }
   }
 `

@@ -487,53 +487,64 @@ describe('gameweek update timestamp', () => {
 
 describe('data freshness timestamp precision', () => {
 	it('keeps seconds on market capture and snapshot/sync timestamps', async () => {
-		const [market, personal, playerState, team, tournament, tournamentHeader] =
-			await Promise.all([
-				readFile(
-					new URL('../components/data/MarketLocalUpdated.tsx', import.meta.url),
-					'utf8'
-				),
-				readFile(
-					new URL('../components/home/PersonalDesk.tsx', import.meta.url),
-					'utf8'
-				),
-				readFile(
-					new URL(
-						'../app/data/player-stats/_components/PlayerStateSections.tsx',
-						import.meta.url
-					),
-					'utf8'
-				),
-				readFile(
-					new URL('../app/me/team/TeamStatsClient.tsx', import.meta.url),
-					'utf8'
-				),
-				readFile(
-					new URL(
-						'../app/me/tournament/TournamentStatsClient.tsx',
-						import.meta.url
-					),
-					'utf8'
-				),
-				readFile(
-					new URL(
-						'../app/me/tournament/_components/TournamentStatsHeader.tsx',
-						import.meta.url
-					),
-					'utf8'
-				)
-			])
-
-		assert.match(market, /second: '2-digit'/)
-		for (const source of [
+		const [
+			market,
 			personal,
 			playerState,
 			team,
+			snapshotStatus,
 			tournament,
 			tournamentHeader
-		]) {
-			assert.match(source, /timeStyle: 'medium'/)
-		}
+		] = await Promise.all([
+			readFile(
+				new URL('../components/data/MarketLocalUpdated.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/home/PersonalDesk.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/data/player-stats/_components/PlayerStateSections.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../app/me/team/TeamStatsClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/_components/MyFplSnapshotStatus.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/TournamentStatsClient.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/_components/TournamentStatsHeader.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(market, /second: '2-digit'/)
+		assert.match(personal, /timeStyle: 'medium'/)
+		assert.match(playerState, /timeStyle: 'medium'/)
+		assert.match(team, /<MyFplSnapshotStatus/)
+		assert.match(tournament, /<MyFplSnapshotStatus/)
+		assert.match(tournamentHeader, /timeStyle: 'medium'/)
+		assert.match(snapshotStatus, /timeStyle: 'medium'/)
 		assert.match(tournament, /data-share-expand-width="true"/)
 		assert.doesNotMatch(tournament, /data-share-preserve-width="true"/)
 	})
@@ -953,36 +964,34 @@ describe('My FPL hydration', () => {
 
 	it('formats snapshot timestamps through the shared SSR formatter', async () => {
 		const source = await readFile(
-			new URL(
-				'../app/me/tournament/TournamentStatsClient.tsx',
-				import.meta.url
-			),
+			new URL('../app/me/_components/MyFplSnapshotStatus.tsx', import.meta.url),
 			'utf8'
 		)
 
 		assert.match(source, /const format = useFormatter\(\)/)
-		assert.match(source, /formatSnapshotDate\(snapshotMeta, format\)/)
+		assert.match(source, /formatDate\(/)
 		assert.match(source, /format\.dateTime\(value, \{/)
 		assert.doesNotMatch(source, /value\.toLocaleString\(locale/)
 	})
 
 	it('formats team snapshot timestamps through the shared SSR formatter', async () => {
-		const source = await readFile(
-			new URL('../app/me/team/TeamStatsClient.tsx', import.meta.url),
-			'utf8'
-		)
+		const [team, status] = await Promise.all([
+			readFile(
+				new URL('../app/me/team/TeamStatsClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/_components/MyFplSnapshotStatus.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
 
-		assert.match(source, /const format = useFormatter\(\)/)
-		assert.match(
-			source,
-			/formatSnapshotDate\(\s*snapshotMeta\.sourceMaxCheckedAt,[\s\S]*?format\s*\)/
-		)
-		assert.match(
-			source,
-			/formatSnapshotDate\(\s*snapshotMeta\.publishedAt,[\s\S]*?format\s*\)/
-		)
-		assert.match(source, /format\.dateTime\(value, \{/)
-		assert.doesNotMatch(source, /value\.toLocaleString\(locale/)
+		assert.match(team, /<MyFplSnapshotStatus/)
+		assert.match(status, /sourceMaxCheckedAt/)
+		assert.match(status, /publishedAt/)
 	})
 })
 

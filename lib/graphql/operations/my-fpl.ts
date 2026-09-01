@@ -4,8 +4,11 @@ import { TOURNAMENT_INFO_FIELDS } from './tournaments'
 export type MyFplReviewState =
 	'PRESEASON' | 'PENDING' | 'READY' | 'EMPTY' | 'UNAVAILABLE'
 
-export type MyFplSnapshotKind = 'PROVISIONAL' | 'FINAL'
-export type MyFplSnapshotFreshness = 'CURRENT' | 'GENERATING' | 'STALE'
+export type MyFplTimelineStatus = 'PROVISIONAL' | 'FINAL'
+export type MyFplSettlementState =
+	'PROVISIONAL' | 'FINALIZING' | 'FINAL' | 'DELAYED'
+export type MyFplCoverageState = 'COMPLETE' | 'CORRECTION_PENDING'
+export type MyFplTimelinessState = 'CURRENT' | 'STALE'
 export type MyFplScoreSource = 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT'
 
 export interface MyFplSnapshotMeta {
@@ -14,8 +17,13 @@ export interface MyFplSnapshotMeta {
 	snapshotDate: string
 	sourceCheckedAt: string
 	publishedAt: string
-	kind: MyFplSnapshotKind
-	freshness: MyFplSnapshotFreshness
+	settlementState: MyFplSettlementState
+	coverageState: MyFplCoverageState
+	timelinessState: MyFplTimelinessState
+	expectedEntryCount: number
+	observedEntryCount: number
+	finalizationStartedAt: string | null
+	finalizationDueAt: string | null
 	scoreSource: MyFplScoreSource
 	livePublicationId: string | null
 	liveRevision: string | null
@@ -90,7 +98,7 @@ export interface MyFplManagerGameweekReview {
 
 export interface MyFplManagerTimelineRow {
 	eventId: number
-	status: MyFplSnapshotKind
+	status: MyFplTimelineStatus
 	eventPoints: number
 	eventRank: number | null
 	overallPoints: number
@@ -189,7 +197,7 @@ export interface MyFplManagerFormationCount {
 export interface MyFplManagerChipReview {
 	chip: string
 	eventId: number
-	status: MyFplSnapshotKind
+	status: MyFplTimelineStatus
 	eventNetPoints: number
 	otherGameweeksAverageNetPoints: number | null
 	differenceFromOtherGameweeks: number | null
@@ -506,8 +514,13 @@ const SNAPSHOT_META_FIELDS = `
       snapshotDate
       sourceCheckedAt
       publishedAt
-      kind
-      freshness
+      settlementState
+      coverageState
+      timelinessState
+      expectedEntryCount
+      observedEntryCount
+      finalizationStartedAt
+      finalizationDueAt
       scoreSource
       livePublicationId
       liveRevision
