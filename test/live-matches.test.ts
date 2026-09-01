@@ -786,6 +786,18 @@ describe('live matchday V3 publication', () => {
 			}),
 			false
 		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				eventId: accepted.eventId + 1,
+				revisions: {
+					...heartbeat.revisions,
+					deskGeneration: accepted.revisions.deskGeneration - 1,
+					detailObservation: 'detail-observation-2'
+				}
+			}),
+			true
+		)
 	})
 
 	it('keeps a complete local detail state across an unchanged HEAD heartbeat', () => {

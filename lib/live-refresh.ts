@@ -242,6 +242,12 @@ export function liveMatchdayNeedsRefresh(
 	observed: LiveMatchdayStatus | null | undefined
 ): boolean {
 	if (!accepted || !observed) return true
+	if (
+		accepted.season !== observed.season ||
+		accepted.eventId !== observed.eventId
+	) {
+		return true
+	}
 	// A previous Redis pointer or an in-flight fallback can be older than the
 	// full board already painted in this browser. It is a delivery observation,
 	// not a reason to issue another FULL request. Same-generation publication
@@ -261,7 +267,6 @@ export function liveMatchdayNeedsRefresh(
 		observed.revisions.detailObservation !==
 			accepted.revisions.detailObservation
 	return (
-		accepted.eventId !== observed.eventId ||
 		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
 		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
 		accepted.revisions.scoreState !== observed.revisions.scoreState ||
