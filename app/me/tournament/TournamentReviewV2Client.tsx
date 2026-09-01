@@ -153,7 +153,7 @@ const stateLabel = (
 	if (state === 'WAITING_SOURCE') return t('reviewWaitingSource')
 	if (state === 'DEGRADED') return t('reviewDegraded')
 	if (state === 'PENDING') return t('reviewPending')
-	if (state === 'NOT_STARTED') return 'Not started'
+	if (state === 'NOT_STARTED') return t('reviewNotStarted')
 	return t('reviewUnavailable')
 }
 
@@ -258,25 +258,67 @@ function mergeGameweekPage(
 	}
 }
 
-function mergeSeasonPage(
-	previous: MyTournamentSeasonReview,
-	next: MyTournamentSeasonReview
-): MyTournamentSeasonReview {
+type SeasonSectionKey = SeasonSectionData['section']
+type SeasonSectionPages = Partial<Record<SeasonSectionKey, SeasonSectionData>>
+
+function mergeSeasonSectionPage(
+	previous: SeasonSectionData | undefined,
+	next: SeasonSectionData
+): SeasonSectionData {
 	return {
 		...next,
 		points:
-			previous.points && next.points
+			previous?.points && next.points
 				? mergePointsPage(previous.points, next.points)
-				: next.points,
+				: (next.points ?? previous?.points ?? null),
 		h2h:
-			previous.h2h && next.h2h
+			previous?.h2h && next.h2h
 				? mergeH2HPage(previous.h2h, next.h2h)
-				: next.h2h,
+				: (next.h2h ?? previous?.h2h ?? null),
 		knockout:
-			previous.knockout && next.knockout
+			previous?.knockout && next.knockout
 				? mergeKnockoutPage(previous.knockout, next.knockout)
-				: next.knockout
+				: (next.knockout ?? previous?.knockout ?? null)
 	}
+}
+
+function combineSeasonSections(
+	review: MyTournamentSeasonReview,
+	pages: SeasonSectionPages,
+	phaseId: string
+): MyTournamentSeasonReview {
+	const sections = Object.values(pages).filter(
+		(section): section is SeasonSectionData => Boolean(section)
+	)
+	const standingsPage = pages.POINTS_STANDINGS
+	const pointsPage = standingsPage ?? pages.POINTS_TRAJECTORIES
+	const h2hPages = sections.filter(
+		section =>
+			section.section === 'H2H_STANDINGS' || section.section === 'H2H_FIXTURES'
+	)
+	const h2hStandings =
+		h2hPages.find(section => (section.h2h?.standings.length ?? 0) > 0)?.h2h
+			?.standings ?? []
+	const h2hMatches = h2hPages.flatMap(section => section.h2h?.matches ?? [])
+	const h2hSource = h2hPages.find(section => section.h2h) ?? null
+	const hasH2HNextPage = h2hPages.some(section => section.h2h?.hasNextPage)
+	return normalizeSeason(
+		{
+			...review,
+			points: pointsPage?.points ?? null,
+			h2h: h2hSource?.h2h
+				? {
+						...h2hSource.h2h,
+						matches: h2hMatches,
+						standings: h2hStandings,
+						hasNextPage: hasH2HNextPage,
+						nextCursor: null
+					}
+				: null,
+			knockout: pages.KNOCKOUT_BRACKET?.knockout ?? null
+		},
+		phaseId
+	)
 }
 
 function ReviewStateBanner({
@@ -698,6 +740,7 @@ export default function TournamentReviewV2Client({
 	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
 	const requestSequence = useRef(0)
 	const catalogRequestSequence = useRef(0)
+	const seasonSectionPages = useRef<SeasonSectionPages>({})
 
 	const selectedTournament = useMemo(
 		() =>
@@ -791,6 +834,7 @@ export default function TournamentReviewV2Client({
 		setError(null)
 		setGameweekReview(null)
 		setSeasonReview(null)
+		seasonSectionPages.current = {}
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -843,6 +887,7 @@ export default function TournamentReviewV2Client({
 		setError(null)
 		setGameweekReview(null)
 		setSeasonReview(null)
+		seasonSectionPages.current = {}
 		try {
 			const [gameweek, season] = await Promise.all([
 				executeQuery<MyTournamentGameweekReviewResponse>(
@@ -864,45 +909,46 @@ export default function TournamentReviewV2Client({
 			const nextPhase = normalizedSeason.phases.at(-1) ?? null
 			let seasonWithSection = normalizedSeason
 			if (nextPhase) {
-				const [sectionData, fixtureSectionData] = await Promise.all([
-					fetchSeasonSection(tournamentId, nextEventId, nextPhase),
-					nextPhase.format === 'H2H'
-						? fetchSeasonSection(
-								tournamentId,
-								nextEventId,
-								nextPhase,
-								100,
-								null,
-								'H2H_FIXTURES'
-							)
-						: Promise.resolve(null)
-				])
-					if (sectionData) {
-						const h2h =
-							nextPhase.format === 'H2H'
-								? {
-										...(sectionData.h2h ?? {
-											matches: [],
-											standings: [],
-											nextCursor: null,
-											hasNextPage: false
-										}),
-									matches:
-										fixtureSectionData?.h2h?.matches ??
-										sectionData.h2h?.matches ??
-										[]
-								}
-							: sectionData.h2h
-					seasonWithSection = normalizeSeason(
-						{
-							...normalizedSeason,
-							points: sectionData.points,
-							h2h,
-							knockout: sectionData.knockout
-						},
-						nextPhase.phaseId
+				const sectionRequests: Promise<SeasonSectionData | null>[] = [
+					fetchSeasonSection(tournamentId, nextEventId, nextPhase)
+				]
+				if (nextPhase.format === 'POINTS') {
+					sectionRequests.push(
+						fetchSeasonSection(
+							tournamentId,
+							nextEventId,
+							nextPhase,
+							100,
+							null,
+							'POINTS_TRAJECTORIES'
+						)
 					)
 				}
+				if (nextPhase.format === 'H2H') {
+					sectionRequests.push(
+						fetchSeasonSection(
+							tournamentId,
+							nextEventId,
+							nextPhase,
+							100,
+							null,
+							'H2H_FIXTURES'
+						)
+					)
+				}
+				const sections = await Promise.all(sectionRequests)
+				const pages = Object.fromEntries(
+					sections
+						.filter((section): section is SeasonSectionData => Boolean(section))
+						.map(section => [section.section, section])
+				) as SeasonSectionPages
+				seasonSectionPages.current = pages
+				if (sections.some(Boolean))
+					seasonWithSection = combineSeasonSections(
+						normalizedSeason,
+						pages,
+						nextPhase.phaseId
+					)
 			}
 			if (requestId !== requestSequence.current) return
 			setSelectedPhaseId(nextPhase?.phaseId ?? null)
@@ -931,21 +977,40 @@ export default function TournamentReviewV2Client({
 
 	const loadMore = async () => {
 		if (loading || loadingMore || !selectedTournamentId || !eventId) return
-		const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
-		const nextCursor =
-			activeReview?.points?.nextCursor ??
-			activeReview?.h2h?.nextCursor ??
-			activeReview?.knockout?.nextCursor
-		if (!nextCursor) return
 		const requestView = view
 		const requestTournamentId = selectedTournamentId
 		const requestEventId = eventId
 		const requestRevision =
 			requestView === 'gameweek' ? gameweekReview?.scope?.revision : null
-		if (requestView === 'gameweek' && !requestRevision) {
+		const gameweekCursor =
+			requestView === 'gameweek'
+				? (gameweekReview?.points?.nextCursor ??
+					gameweekReview?.h2h?.nextCursor ??
+					gameweekReview?.knockout?.nextCursor)
+				: null
+		const seasonPhase =
+			requestView === 'season'
+				? (seasonReview?.phases.find(
+						candidate => candidate.phaseId === selectedPhaseId
+					) ?? seasonReview?.phases.at(-1))
+				: null
+		const seasonPages =
+			requestView === 'season' ? seasonSectionPages.current : null
+		const pendingSeasonSections = seasonPages
+			? Object.values(seasonPages).filter(
+					(section): section is SeasonSectionData =>
+						Boolean(section?.pageInfo.hasNextPage && section.pageInfo.endCursor)
+				)
+			: []
+		if (requestView === 'gameweek' && (!gameweekCursor || !requestRevision)) {
 			setError(t('loadFailed'))
 			return
 		}
+		if (
+			requestView === 'season' &&
+			(!seasonPhase || !pendingSeasonSections.length)
+		)
+			return
 		const requestId = ++requestSequence.current
 		setLoadingMore(true)
 		setError(null)
@@ -957,7 +1022,7 @@ export default function TournamentReviewV2Client({
 						tournamentId: requestTournamentId,
 						eventId: requestEventId,
 						first: 100,
-						after: nextCursor,
+						after: gameweekCursor,
 						revision: requestRevision
 					},
 					{ cache: 'no-store', contract: CONTRACT }
@@ -977,30 +1042,42 @@ export default function TournamentReviewV2Client({
 					previous ? mergeGameweekPage(previous, normalized) : normalized
 				)
 			} else {
-				const phase =
-					seasonReview?.phases.find(
-						candidate => candidate.phaseId === selectedPhaseId
-					) ?? seasonReview?.phases.at(-1)
+				const phase = seasonPhase
 				if (!phase?.revision || !phase.semanticSha256)
 					throw new Error('Season phase identity missing')
-				const response = await fetchSeasonSection(
-					requestTournamentId,
-					requestEventId,
-					phase,
-					100,
-					nextCursor
+				const responses = await Promise.all(
+					pendingSeasonSections.map(section =>
+						fetchSeasonSection(
+							requestTournamentId,
+							requestEventId,
+							phase,
+							100,
+							section.pageInfo.endCursor,
+							section.section
+						)
+					)
 				)
-				if (!response) throw new Error('Season phase publication is not ready')
+				if (responses.some(response => !response))
+					throw new Error('Season phase publication is not ready')
 				if (requestId !== requestSequence.current) return
+				const nextPages = { ...seasonSectionPages.current }
+				for (const response of responses) {
+					if (!response) continue
+					if (
+						response.phaseId !== phase.phaseId ||
+						response.revision !== phase.revision ||
+						response.semanticSha256 !== phase.semanticSha256
+					)
+						throw new Error('Season phase identity changed during pagination')
+					nextPages[response.section] = mergeSeasonSectionPage(
+						nextPages[response.section],
+						response
+					)
+				}
+				seasonSectionPages.current = nextPages
 				setSeasonReview(previous =>
 					previous
-						? mergeSeasonPage(previous, {
-								...previous,
-								state: response.state,
-								points: response.points,
-								h2h: response.h2h,
-								knockout: response.knockout
-							})
+						? combineSeasonSections(previous, nextPages, phase.phaseId)
 						: null
 				)
 			}
@@ -1062,6 +1139,7 @@ export default function TournamentReviewV2Client({
 			setFinalizedEventIds([])
 			setGameweekReview(null)
 			setSeasonReview(null)
+			seasonSectionPages.current = {}
 			replaceRoute({
 				tournamentId: nextSelected?.tournamentId ?? null,
 				eventId: nextEventId,
@@ -1088,7 +1166,8 @@ export default function TournamentReviewV2Client({
 		if (
 			gameweekReview &&
 			seasonReview &&
-			(seasonReview.points || seasonReview.h2h || seasonReview.knockout)
+			(seasonReview.points || seasonReview.h2h || seasonReview.knockout) &&
+			Object.keys(seasonSectionPages.current).length > 0
 		)
 			return
 		void loadReview(selectedTournamentId, eventId, true)
@@ -1105,6 +1184,7 @@ export default function TournamentReviewV2Client({
 			setFinalizedEventIds([])
 			setGameweekReview(null)
 			setSeasonReview(null)
+			seasonSectionPages.current = {}
 			setLoading(false)
 			setLoadingMore(false)
 			setError(null)
@@ -1123,6 +1203,7 @@ export default function TournamentReviewV2Client({
 		setFinalizedEventIds([])
 		setGameweekReview(null)
 		setSeasonReview(null)
+		seasonSectionPages.current = {}
 		setLoading(false)
 		setLoadingMore(false)
 		setError(null)
@@ -1164,6 +1245,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		seasonSectionPages.current = {}
 		// Remove the previous phase's rows immediately. A settled phase is an
 		// immutable bundle, so showing rows from another phase while the selected
 		// bundle loads would be a misleading cross-phase response.
@@ -1183,45 +1265,48 @@ export default function TournamentReviewV2Client({
 		)
 		void (async () => {
 			try {
-				const [sectionData, fixtureSectionData] = await Promise.all([
-					fetchSeasonSection(selectedTournamentId, eventId, phase),
-					phase.format === 'H2H'
-						? fetchSeasonSection(
-								selectedTournamentId,
-								eventId,
-								phase,
-								100,
-								null,
-								'H2H_FIXTURES'
-							)
-						: Promise.resolve(null)
-				])
+				const sectionRequests: Promise<SeasonSectionData | null>[] = [
+					fetchSeasonSection(selectedTournamentId, eventId, phase)
+				]
+				if (phase.format === 'POINTS')
+					sectionRequests.push(
+						fetchSeasonSection(
+							selectedTournamentId,
+							eventId,
+							phase,
+							100,
+							null,
+							'POINTS_TRAJECTORIES'
+						)
+					)
+				if (phase.format === 'H2H')
+					sectionRequests.push(
+						fetchSeasonSection(
+							selectedTournamentId,
+							eventId,
+							phase,
+							100,
+							null,
+							'H2H_FIXTURES'
+						)
+					)
+				const sections = await Promise.all(sectionRequests)
 				if (requestId !== requestSequence.current) return
-					const h2h =
-						phase.format === 'H2H' && sectionData
-							? {
-									...(sectionData.h2h ?? {
-										matches: [],
-										standings: [],
-										nextCursor: null,
-										hasNextPage: false
-									}),
-								matches:
-									fixtureSectionData?.h2h?.matches ??
-									sectionData.h2h?.matches ??
-									[]
-							}
-						: (sectionData?.h2h ?? null)
+				const pages = Object.fromEntries(
+					sections
+						.filter((section): section is SeasonSectionData => Boolean(section))
+						.map(section => [section.section, section])
+				) as SeasonSectionPages
+				seasonSectionPages.current = pages
+				const sectionData = sections.find(Boolean) ?? null
 				setSeasonReview(previous =>
 					previous
-						? normalizeSeason(
+						? combineSeasonSections(
 								{
 									...previous,
-									state: sectionData?.state ?? phase.state,
-									points: sectionData?.points ?? null,
-									h2h,
-									knockout: sectionData?.knockout ?? null
+									state: sectionData?.state ?? phase.state
 								},
+								pages,
 								phaseId
 							)
 						: previous

@@ -2343,6 +2343,7 @@
 		"reviewWaitingSource": "等待数据源结算",
 		"reviewDegraded": "快照延迟，已安排补偿",
 		"reviewPending": "正在生成已结算快照",
+		"reviewNotStarted": "尚未开始",
 		"reviewFreshness": "{seconds} 秒前发布",
 		"reviewGross": "本轮积分（Gross）",
 		"reviewSeasonGross": "赛季累计积分（Gross）",

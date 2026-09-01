@@ -2347,6 +2347,7 @@
 		"reviewWaitingSource": "Waiting for source finalization",
 		"reviewDegraded": "Snapshot delayed; repair is scheduled",
 		"reviewPending": "Preparing finalized snapshot",
+		"reviewNotStarted": "Not started",
 		"reviewFreshness": "Published {seconds}s ago",
 		"reviewGross": "Gross points",
 		"reviewSeasonGross": "Season gross points",
