@@ -23,8 +23,8 @@
 ## Change routing
 
 - For a normal Web feature or bug, use `$letletme-web-request-path`; a single-repository task needs no cross-repo Change ID.
-- If behavior requires a Data schema/publication, GraphQL field/resolver, Mini Program contract, or Ops release change, stop treating it as Web-only and use `$letletme-stack-audit` to register and trace the affected repositories.
-- Use `$letletme-web-dev-environment` for local servers, ports, environment profiles, Playwright, or stale-process diagnosis. Use `$gh-codex-review-loop` only for PR completion and `$letletme-release-acceptance` only for authorized release acceptance.
+- If behavior requires a Data schema/publication, GraphQL field/resolver, Mini Program contract, or Ops release change, stop treating it as Web-only and use the global `$letletme-stack-audit` to register and trace the affected repositories.
+- Use the global `$letletme-web-dev-environment` for local servers, ports, environment profiles, Playwright, or stale-process diagnosis. Use the global `$gh-codex-review-loop` only for PR completion and the global `$letletme-release-acceptance` only for authorized release acceptance.
 - Generic Next.js, React, accessibility, SEO, or design skills are opt-in for relevant work; they do not replace this repository's boundary rules.
 
 ## Verification
@@ -35,11 +35,3 @@
 - Auth/database changes require matching auth tests and, when database access is available, `npm run db:migrate:status`, `npm run db:runtime-contract`, and the migration/role checks relevant to the change.
 - Playwright requires an isolated `letletme_web_runtime` test database, a matching direct URL, task-owned Web/GraphQL ports, and the production-shaped standalone server configured in `playwright.config.ts`. Never reuse or kill an unowned listener.
 - Keep local, preview, and production evidence separate. A production claim needs the observed `X-Letletme-Release`/origin, a representative API result, and the rendered browser path.
-
-## Governance and review
-
-- Global routes in `.codex/global-skills.json` are provisioned from immutable `tonglam/codex-workspace-config@7e92336ec04d38f7bb95620e304ce6ec6567c896:registry/workspace-assets.json` with its recorded SHA-256 content digest into the host Codex mount. Provision that source before invoking a route; run `python3 .codex/provision_global_skills.py --manifest .codex/global-skills.json --apply` when the host mount is absent, or append `--allow-network` only when network access is explicitly approved and no authenticated local source is available. If provisioning or the mount is unavailable, stop and report the missing dependency rather than silently substituting it or fetching implicitly.
-- Use `$gh-codex-review-loop` for PR work. A review may be skipped only after two consecutive explicit quota-limit responses for the unchanged head; record both responses and the exact SHA. This never waives CI, findings, or cleanup.
-- Every P0-P3 finding must be dispositioned and its thread resolved. Only a finding confined to tests/scripts gets the time exception: implement P0/P1, and explain plus resolve P2/P3 without implementation time. P2/P3 anywhere else must be actually fixed and verified.
-- Keep a complete finding ledger for the exact head; merge is prohibited while any finding is undispositioned or any review thread is unresolved. A quota override can skip only a new review request and never finding resolution.
-- After merge, clean only the exact corresponding worktree, local branch, and remote branch after verifying identity; leave unrelated WIP untouched.
