@@ -345,14 +345,6 @@ async function probeEntryData(
 			'consumer response has no snapshot metadata'
 		)
 	}
-	const finalRanksPresent = [
-		gameweek.result?.eventRank,
-		gameweek.result?.overallRank,
-		gameweek.entry?.overallRank
-	].every(
-		value =>
-			typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-	)
 	return {
 		revision: snapshotRevision(meta),
 		settlementState: meta.settlementState,
@@ -364,9 +356,7 @@ async function probeEntryData(
 		complete:
 			gameweek.state === 'READY' &&
 			gameweek.result?.eventId === eventId &&
-			pickCountIsComplete(picks) &&
-			meta.coverageState === 'COMPLETE' &&
-			(meta.settlementState !== 'FINAL' || finalRanksPresent)
+			pickCountIsComplete(picks)
 	}
 }
 
@@ -464,7 +454,10 @@ async function probeMyFpl(
 ): Promise<Awaited<ReturnType<typeof probeEntryData>>> {
 	const { eventId } = await resolveProbeEvent(input)
 	const result = await probeEntryData({ ...input, eventId }, config)
-	return result
+	return {
+		...result,
+		complete: result.complete && result.coverageState === 'COMPLETE'
+	}
 }
 
 async function probePlayerStats(

@@ -2159,7 +2159,9 @@
 		"final": "Settled snapshot · data through {cutoff} · published {published}.",
 		"stale": "Showing the last successful snapshot.",
 		"finalizing": "Final rank generation is in progress; expected by {due}.",
+		"finalizingNoDue": "Final rank generation is in progress; no completion deadline has been published.",
 		"delayed": "Final rank generation is delayed; showing the last coherent snapshot (due {due}).",
+		"delayedNoDue": "Final rank generation is delayed; showing the last coherent snapshot. No completion deadline has been published.",
 		"coverageCorrection": "Filling the team scope: {observed}/{expected}."
 	},
 	"TournamentStats": {

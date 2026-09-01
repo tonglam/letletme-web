@@ -2159,7 +2159,9 @@
 		"final": "已结算快照 · 数据截至 {cutoff} · 发布于 {published}。",
 		"stale": "当前显示上一次成功快照。",
 		"finalizing": "最终排名生成中，预计最迟 {due} 完成。",
+		"finalizingNoDue": "最终排名生成中，暂未发布预计完成时间。",
 		"delayed": "最终排名延迟；当前仍展示最后一份一致快照（原定 {due}）。",
+		"delayedNoDue": "最终排名延迟；当前仍展示最后一份一致快照，暂未发布预计完成时间。",
 		"coverageCorrection": "正在补齐球队范围：{observed}/{expected}。"
 	},
 	"TournamentStats": {

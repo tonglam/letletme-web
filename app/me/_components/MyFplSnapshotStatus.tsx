@@ -36,6 +36,9 @@ export function MyFplSnapshotStatus({
 	const t = useTranslations('MyFplSnapshot')
 	const format = useFormatter()
 	const isDelayed = meta.settlementState === 'DELAYED'
+	const due = meta.finalizationDueAt
+		? formatDate(meta.finalizationDueAt, meta.snapshotDate, format)
+		: null
 	const message =
 		meta.settlementState === 'FINAL'
 			? t('final', {
@@ -47,21 +50,13 @@ export function MyFplSnapshotStatus({
 					published: formatDate(meta.publishedAt, meta.snapshotDate, format)
 				})
 			: meta.settlementState === 'FINALIZING'
-				? t('finalizing', {
-						due: formatDate(
-							meta.finalizationDueAt ?? '',
-							meta.snapshotDate,
-							format
-						)
-					})
+				? due
+					? t('finalizing', { due })
+					: t('finalizingNoDue')
 				: meta.settlementState === 'DELAYED'
-					? t('delayed', {
-							due: formatDate(
-								meta.finalizationDueAt ?? '',
-								meta.snapshotDate,
-								format
-							)
-						})
+					? due
+						? t('delayed', { due })
+						: t('delayedNoDue')
 					: t('provisional', {
 							cutoff: formatDate(
 								meta.sourceMaxCheckedAt,

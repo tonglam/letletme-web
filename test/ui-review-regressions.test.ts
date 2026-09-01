@@ -972,6 +972,10 @@ describe('My FPL hydration', () => {
 		assert.match(source, /formatDate\(/)
 		assert.match(source, /format\.dateTime\(value, \{/)
 		assert.doesNotMatch(source, /value\.toLocaleString\(locale/)
+		assert.match(source, /meta\.finalizationDueAt\s*\?/)
+		assert.match(source, /finalizingNoDue/)
+		assert.match(source, /delayedNoDue/)
+		assert.doesNotMatch(source, /finalizationDueAt \?\? ''/)
 	})
 
 	it('formats team snapshot timestamps through the shared SSR formatter', async () => {
