@@ -473,6 +473,8 @@ export function OfficialH2HCompetitionView({
 	const [matchupHistory, setMatchupHistory] = useState<
 		TournamentOfficialH2HHistoryMatch[] | null
 	>(null)
+	const [matchupHistoryLoadFailed, setMatchupHistoryLoadFailed] =
+		useState(false)
 	const [isMatchupHistoryRefreshing, setIsMatchupHistoryRefreshing] =
 		useState(false)
 	const inFlightRef = useRef<Promise<void> | null>(null)
@@ -483,6 +485,7 @@ export function OfficialH2HCompetitionView({
 
 	const loadMatchupHistory = useCallback(() => {
 		if (matchupHistory !== null) return Promise.resolve()
+		if (matchupHistoryLoadFailed) return Promise.resolve()
 		if (matchupHistoryInFlightRef.current)
 			return matchupHistoryInFlightRef.current
 		const request = (async () => {
@@ -494,9 +497,11 @@ export function OfficialH2HCompetitionView({
 					{ cache: 'no-store', contract: 'live-points-v2' }
 				)
 				setMatchupHistory(result.tournamentOfficialH2HHistory.matches)
+				setMatchupHistoryLoadFailed(false)
 			} catch {
 				// The current-event snapshot remains the usable fallback when the
 				// optional history read is unavailable.
+				setMatchupHistoryLoadFailed(true)
 			} finally {
 				setIsMatchupHistoryRefreshing(false)
 			}
@@ -507,7 +512,7 @@ export function OfficialH2HCompetitionView({
 				matchupHistoryInFlightRef.current = null
 		})
 		return request
-	}, [eventId, matchupHistory, tournamentId])
+	}, [eventId, matchupHistory, matchupHistoryLoadFailed, tournamentId])
 
 	const handleBoardSlideChange = useCallback(
 		(slideId: string) => {
@@ -617,15 +622,15 @@ export function OfficialH2HCompetitionView({
 			standings.find(standing => standing.entryId === viewerEntryId) ?? null,
 		[standings, viewerEntryId]
 	)
-	const visibleMatchupHistory: readonly MatchupHistoryMatch[] =
-		viewerEntryId == null
-			? EMPTY_MATCHUP_HISTORY
-			: (matchupHistory ??
-				matches.filter(
-					match =>
-						match.home.entryId === viewerEntryId ||
-						match.away.entryId === viewerEntryId
-				))
+	const visibleMatchupHistory = useMemo<readonly MatchupHistoryMatch[]>(() => {
+		if (viewerEntryId == null) return EMPTY_MATCHUP_HISTORY
+		const source = matchupHistory ?? matches
+		return source.filter(
+			match =>
+				match.home.entryId === viewerEntryId ||
+				match.away.entryId === viewerEntryId
+		)
+	}, [matchupHistory, matches, viewerEntryId])
 	const isMatchupInitialLoading =
 		viewerEntryId != null &&
 		matchupHistory === null &&
@@ -833,10 +838,11 @@ export function OfficialH2HCompetitionView({
 				) : visibleMatchupHistory.length > 0 ? (
 					<MatchupHistoryBoard
 						matches={visibleMatchupHistory}
-						currentEventId={eventId}
+						currentEventId={activeEventId}
 						isLive={
 							snapshot?.availability === 'READY' &&
-							snapshot.delivery.state !== 'FINAL'
+							eventId === activeEventId &&
+							snapshot.delivery.state === 'FRESH'
 						}
 						isFinal={snapshot?.delivery.state === 'FINAL'}
 					/>
@@ -854,6 +860,7 @@ export function OfficialH2HCompetitionView({
 			}
 		],
 		[
+			activeEventId,
 			eventId,
 			isInitialLoading,
 			isMatchupInitialLoading,

@@ -19,6 +19,7 @@ export interface TournamentEntryPick {
 
 export interface TournamentEntry {
 	id: string
+	availability?: 'READY' | 'MISSING'
 	rank: number
 	previousRank?: number
 	teamName: string

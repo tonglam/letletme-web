@@ -5,7 +5,7 @@ const port = Number(process.env.E2E_GRAPHQL_PORT ?? 4100)
 const liveHydrationFixtureEnabled = process.env.E2E_LIVE_HYDRATION === '1'
 
 const requiresLivePointsV2Contract = query =>
-	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|liveSnapshot|liveContext|entryLiveCompetitionBoard|entryLiveCompetitionsDesk|tournamentSelectionIndex|tournamentEntrySquads|tournamentDetailDesk|gameweekDesk|homeGameweek)\s*(?:\(|\{)/.test(
+	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|liveSnapshot|liveContext|entryLiveCompetitionBoard|leagueLiveHead|tournamentOfficialH2H|tournamentOfficialH2HHistory|entryLiveCompetitionsDesk|tournamentSelectionIndex|tournamentEntrySquads|tournamentDetailDesk|gameweekDesk|homeGameweek)\s*(?:\(|\{)/.test(
 		query
 	)
 

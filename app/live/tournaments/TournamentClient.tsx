@@ -128,18 +128,7 @@ const tableSortToBoardSort = (
 const pageRows = (
 	page: EntryLiveCompetitionBoardPage | null
 ): TournamentEntry[] =>
-	page
-		? page.rows
-				.filter(
-					(
-						row
-					): row is typeof row & {
-						availability: 'READY'
-						score: NonNullable<typeof row.score>
-					} => row.availability === 'READY' && row.score !== null
-				)
-				.map(boardRowToTournamentEntry)
-		: []
+	page ? page.rows.map(boardRowToTournamentEntry) : []
 
 const boardFreshnessMarker = (
 	page: EntryLiveCompetitionBoardPage | null
@@ -1153,9 +1142,12 @@ export default function TournamentClient({
 	const autoRefresh = useCallback(async (): Promise<void> => {
 		try {
 			if (!selectedTournamentId) return
+			const observedEventId = followsAnchorRef.current
+				? currentGameweek
+				: selectedGameweek
 			const observedHead = await fetchLeagueLiveHead(
 				Number(selectedTournamentId),
-				selectedGameweek,
+				observedEventId,
 				'CLASSIC'
 			)
 			const accepted = acceptedBoardFreshnessRef.current
@@ -1185,6 +1177,7 @@ export default function TournamentClient({
 		boardPage,
 		entries.length,
 		refresh,
+		currentGameweek,
 		selectedGameweek,
 		selectedTournamentId,
 		t
@@ -1398,6 +1391,7 @@ export default function TournamentClient({
 							setSelectedGameweek(gameweek)
 						}}
 						currentGameweek={currentGameweek}
+						maxGameweek={selectedTournamentIsOfficialH2H ? 38 : currentGameweek}
 						selectedGameweek={selectedGameweek}
 						disabled={
 							isLoadingInitial || Boolean(selectedTournament && !standingsReady)
@@ -1570,12 +1564,11 @@ export default function TournamentClient({
 										tournamentId={selectedTournament.id}
 										gameweek={selectedGameweek}
 										viewerEntryId={entryId}
-										pinnedViewerEntry={
-											boardPage.viewerRow?.availability === 'READY' &&
-											boardPage.viewerRow.score
-												? boardRowToTournamentEntry(boardPage.viewerRow)
-												: undefined
-										}
+						pinnedViewerEntry={
+							boardPage.viewerRow
+								? boardRowToTournamentEntry(boardPage.viewerRow)
+								: undefined
+						}
 										onVisibleEntriesChange={setTableEntriesForShare}
 										shareText={shareText}
 										shareImageRef={shareRef}

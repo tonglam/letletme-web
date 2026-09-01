@@ -68,6 +68,7 @@ import {
 	GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 	GET_TOURNAMENT_EVENT_RESULTS,
 	GET_TOURNAMENT_OFFICIAL_H2H,
+	GET_TOURNAMENT_OFFICIAL_H2H_HISTORY,
 	GET_TOURNAMENT_SELECTION_STATS
 } from '../lib/graphql/operations/tournaments'
 
@@ -117,6 +118,9 @@ const tournamentIdFromEnv = (() => {
 
 const entryIdDefault = Number(process.env.VERIFY_ENTRY_ID ?? '15702') || 15702
 
+const LIVE_POINTS_V2_ROOT_PATTERN =
+	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|liveSnapshot|liveContext|entryLiveCompetitionBoard|leagueLiveHead|tournamentOfficialH2H|tournamentOfficialH2HHistory|tournamentSelectionIndex|tournamentEntrySquads|tournamentDetailDesk|gameweekDesk|homeGameweek)\s*(?:\(|\{)/
+
 interface GraphqlPayload {
 	data?: Record<string, unknown>
 	errors?: Array<{ message: string }>
@@ -126,9 +130,13 @@ async function gql(
 	query: string,
 	variables?: Record<string, unknown>
 ): Promise<GraphqlPayload> {
+	const liveContract = LIVE_POINTS_V2_ROOT_PATTERN.test(query)
 	const res = await fetch(endpoint, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: {
+			'Content-Type': 'application/json',
+			...(liveContract ? { 'X-LetLetMe-Contract': 'live-points-v2' } : {})
+		},
 		body: JSON.stringify({ query, variables })
 	})
 	const raw = await res.text()
@@ -344,6 +352,13 @@ async function main() {
 			name: 'GET_TOURNAMENT_OFFICIAL_H2H',
 			query: GET_TOURNAMENT_OFFICIAL_H2H,
 			variables: { eventId, tournamentId },
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
+		},
+		{
+			name: 'GET_TOURNAMENT_OFFICIAL_H2H_HISTORY',
+			query: GET_TOURNAMENT_OFFICIAL_H2H_HISTORY,
+			variables: { eventId, tournamentId, limit: 100 },
 			skip: tournamentId === null,
 			requiresPublishedPicks: true
 		},

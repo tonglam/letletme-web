@@ -451,6 +451,18 @@ export const isCompleteLiveBoardPage = (
 	)
 		return false
 	const rows = page.viewerRow ? [...page.rows, page.viewerRow] : page.rows
+	if (new Set(rows.map(row => row.entry)).size !== rows.length) return false
+	if (page.rows.length > page.filteredEntries) return false
+	if (page.pageInfo.hasNextPage) {
+		if (!page.pageInfo.endCursor || page.rows.length >= page.filteredEntries) {
+			return false
+		}
+	} else if (
+		page.pageInfo.endCursor !== null ||
+		page.rows.length !== page.filteredEntries
+	) {
+		return false
+	}
 	return rows.every(
 		row =>
 			(row.availability === 'READY' && row.score !== null) ||
@@ -649,15 +661,37 @@ const chipFlags = (chip: string) => ({
 export const boardRowToTournamentEntry = (
 	row: EntryLiveCompetitionBoardRow
 ): TournamentEntry => {
-	// The renderer filters non-ready rows before calling this adapter. Keep the
-	// invariant local as well so a future caller cannot turn an unavailable row
-	// into a zero-point success state.
+	if (row.availability === 'MISSING' && row.score === null) {
+		return {
+			id: String(row.entry),
+			availability: 'MISSING',
+			rank: 0,
+			teamName: row.entryName,
+			managerName: row.playerName,
+			captainName: 'N/A',
+			captainTeam: 'N/A',
+			captainPoints: 0,
+			gwPoints: null,
+			gwNetPoints: null,
+			eventCost: undefined,
+			overallRank: row.overallRank ?? undefined,
+			livePoints: null,
+			totalPoints: null,
+			playersPlayed: 0,
+			playersToPlay: 0,
+			teamValue: row.teamValue ?? undefined,
+			picks: [],
+			chips: chipFlags('NONE'),
+			stale: true
+		}
+	}
 	if (row.availability !== 'READY' || !row.score) {
 		throw new LiveBoardInvalidResponseError(['row.score'])
 	}
 	const score = row.score
 	return {
 		id: String(row.entry),
+		availability: 'READY',
 		rank: row.liveRank ?? 0,
 		teamName: row.entryName,
 		managerName: row.playerName,

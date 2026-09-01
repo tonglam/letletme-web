@@ -411,6 +411,8 @@ export function TournamentTable({
 							const isMe = isViewerEntry(entry, viewerEntryId)
 							const gwPts = entry.gwPoints ?? entry.livePoints ?? '—'
 							const hits = entry.eventCost ?? 0
+							const hitsKnown =
+								entry.availability !== 'MISSING' && entry.eventCost != null
 							const net = entry.gwNetPoints
 							const playedTotal = getPlayedPlayerLimit(entry.chips)
 							const chips = chipLabel(entry)
@@ -476,7 +478,7 @@ export function TournamentTable({
 											<div className="font-mono text-base font-semibold tabular-nums text-primary-ink">
 												{gwPts}
 											</div>
-											{hits > 0 ? (
+							{hitsKnown && hits > 0 ? (
 												<div className="font-mono text-label text-destructive/90">
 													{t('netLabel')} {net ?? '—'}
 												</div>
@@ -505,7 +507,9 @@ export function TournamentTable({
 										<span className="font-mono tabular-nums">
 											{t('played')}{' '}
 											<span className="font-semibold text-foreground">
-												{entry.playersPlayed}/{playedTotal}
+											{entry.availability === 'MISSING'
+												? '—'
+												: `${entry.playersPlayed}/${playedTotal}`}
 											</span>
 										</span>
 										<span className="font-mono tabular-nums">
@@ -593,10 +597,16 @@ export function TournamentTable({
 										</span>
 
 										<span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
-											{entry.playersPlayed}
-											<span className="text-muted-foreground/50">
-												/{playedTotal}
-											</span>
+										{entry.availability === 'MISSING' ? (
+											'—'
+										) : (
+											<>
+												{entry.playersPlayed}
+												<span className="text-muted-foreground/50">
+													/{playedTotal}
+												</span>
+											</>
+										)}
 										</span>
 										<span className="text-right font-mono text-xs tabular-nums text-foreground/90">
 											{formatTeamMoney(entry.teamValue)}
@@ -613,7 +623,7 @@ export function TournamentTable({
 											<div className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink">
 												{gwPts}
 											</div>
-											{hits > 0 ? (
+							{hitsKnown && hits > 0 ? (
 												<div className="font-mono text-label tabular-nums text-destructive/90">
 													{t('netLabel')} {net}
 												</div>
