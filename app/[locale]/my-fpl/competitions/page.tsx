@@ -65,6 +65,28 @@ const positiveInteger = (value: string | undefined): number | null => {
 const requestedScope = (value: string | undefined): MyTournamentReviewScope =>
 	value?.toLowerCase() === 'all' ? 'ALL' : 'ACCESSIBLE'
 
+const catalogNodes = (
+	catalog: MyTournamentReviewCatalogResponse['myTournamentReviewCatalog']
+) => catalog.edges.map(edge => edge.node)
+
+const eventIdsFromPhases = (
+	phases: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']['phases'],
+	latest: number | null
+) => {
+	const ids = phases.flatMap(phase => {
+		const values: number[] = []
+		for (
+			let eventId = phase.startEventId;
+			eventId <= phase.endEventId;
+			eventId += 1
+		) {
+			values.push(eventId)
+		}
+		return values
+	})
+	return ids.length > 0 ? ids : latest ? [latest] : []
+}
+
 const isScopeAuthorizationError = (error: unknown): boolean => {
 	if (!error || typeof error !== 'object') return false
 	const candidate = error as { code?: unknown; status?: unknown }
@@ -127,7 +149,8 @@ export default async function TournamentStatsPage({
 			asOf: new Date().toISOString(),
 			viewerEntryId: entryId,
 			adminReadAll: false,
-			tournaments: []
+			edges: [],
+			pageInfo: { hasNextPage: false, endCursor: null }
 		}
 	let initialSelectedTournamentId: number | null = null
 	let initialEventId: number | null = null
@@ -143,13 +166,13 @@ export default async function TournamentStatsPage({
 		let catalogResponse: MyTournamentReviewCatalogResponse
 		try {
 			catalogResponse = await timing.measure(
-				'my-tournament-review-v2-catalog',
+				'my-tournament-review-v2.1-catalog',
 				() =>
 					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
 						session,
 						GET_MY_TOURNAMENT_REVIEW_CATALOG,
-						{ scope },
-						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+						{ scope, first: 50 },
+						{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 					)
 			)
 		} catch (error) {
@@ -159,48 +182,47 @@ export default async function TournamentStatsPage({
 			if (scope !== 'ALL' || !isScopeAuthorizationError(error)) throw error
 			scope = 'ACCESSIBLE'
 			catalogResponse = await timing.measure(
-				'my-tournament-review-v2-catalog-accessible-fallback',
+				'my-tournament-review-v2.1-catalog-accessible-fallback',
 				() =>
 					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
 						session,
 						GET_MY_TOURNAMENT_REVIEW_CATALOG,
-						{ scope },
-						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+						{ scope, first: 50 },
+						{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 					)
 			)
 		}
 		initialCatalog = catalogResponse.myTournamentReviewCatalog
 		const selected =
-			initialCatalog.tournaments.find(
+			catalogNodes(initialCatalog).find(
 				item => item.tournamentId === requestedTournamentId
 			) ??
-			initialCatalog.tournaments[0] ??
+			catalogNodes(initialCatalog)[0] ??
 			null
 		initialSelectedTournamentId = selected?.tournamentId ?? null
-		const latestSettledEventId =
-			selected?.latestAvailableEventId ??
-			selected?.latestFinalizedEventId ??
-			null
+		const latestSettledEventId = selected?.latestFinalizedEventId ?? null
 		if (initialSelectedTournamentId && latestSettledEventId) {
 			// Resolve the tournament's immutable event set before accepting a URL
 			// gameweek. A positive event below the latest one may still predate a
 			// custom tournament and therefore have no publication.
 			const latestSeasonResponse = await timing.measure(
-				'my-tournament-review-v2-event-index',
+				'my-tournament-review-v2.1-event-index',
 				() =>
 					executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
 						session,
 						GET_MY_TOURNAMENT_SEASON_REVIEW,
 						{
 							tournamentId: initialSelectedTournamentId,
-							throughEventId: latestSettledEventId,
-							first: 100
+							throughEventId: latestSettledEventId
 						},
-						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+						{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 					)
 			)
 			const latestSeasonReview = latestSeasonResponse.myTournamentSeasonReview
-			initialFinalizedEventIds = latestSeasonReview.finalizedEventIds
+			initialFinalizedEventIds = eventIdsFromPhases(
+				latestSeasonReview.phases,
+				latestSeasonReview.latestFinalizedEventId
+			)
 			initialEventId = selectTournamentReviewEventId(
 				requestedEventId,
 				latestSettledEventId,
@@ -209,7 +231,7 @@ export default async function TournamentStatsPage({
 
 			if (initialEventId) {
 				const [gameweekResponse, seasonResponse] = await timing.measure(
-					'my-tournament-review-v2-snapshots',
+					'my-tournament-review-v2.1-snapshots',
 					() =>
 						Promise.all([
 							executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
@@ -218,9 +240,9 @@ export default async function TournamentStatsPage({
 								{
 									tournamentId: initialSelectedTournamentId,
 									eventId: initialEventId,
-									first: 100
+									first: 50
 								},
-								{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+								{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 							),
 							initialEventId === latestSettledEventId
 								? Promise.resolve(latestSeasonResponse)
@@ -229,10 +251,9 @@ export default async function TournamentStatsPage({
 										GET_MY_TOURNAMENT_SEASON_REVIEW,
 										{
 											tournamentId: initialSelectedTournamentId,
-											throughEventId: initialEventId,
-											first: 100
+											throughEventId: initialEventId
 										},
-										{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+										{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 									)
 						])
 				)

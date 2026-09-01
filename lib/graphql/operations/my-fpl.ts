@@ -1,6 +1,3 @@
-import type { EntryTournament, TournamentSeasonMetricKey } from './tournaments'
-import { TOURNAMENT_INFO_FIELDS } from './tournaments'
-
 export type MyFplReviewState =
 	'PRESEASON' | 'PENDING' | 'READY' | 'EMPTY' | 'UNAVAILABLE'
 
@@ -325,165 +322,12 @@ export interface MyFplManagerReview {
 	snapshotMeta: MyFplSnapshotMeta | null
 }
 
-export interface MyFplCompetitionBoardRow {
-	eventId: number
-	groupId: number | null
-	entryId: number
-	entryName: string | null
-	playerName: string | null
-	rank: number | null
-	previousRank: number | null
-	fieldRank: number | null
-	eventPoints: number | null
-	eventCost: number | null
-	eventNetPoints: number | null
-	eventRank: number | null
-	overallPoints: number | null
-	overallRank: number | null
-	eventChip: string | null
-	captainId: number | null
-	captainWebName: string | null
-	captainTeamShortName: string | null
-	captainPoints: number | null
-	teamValue: number | null
-	bank: number | null
-}
-
-export interface MyFplCompetitionBoardPage {
-	state: MyFplReviewState
-	eventId: number
-	page: number
-	pageSize: number
-	totalRows: number
-	totalPages: number
-	fieldSize: number
-	rows: MyFplCompetitionBoardRow[]
-	viewerRow: MyFplCompetitionBoardRow | null
-	snapshotMeta?: MyFplSnapshotMeta | null
-}
-
-export interface MyFplCompetitionPerformance {
-	entryId: number
-	entryName: string | null
-	playerName: string | null
-	eventPoints: number
-	eventNetPoints: number
-	rank: number | null
-	previousRank: number | null
-	captainId: number | null
-	captainWebName: string | null
-	captainTeamShortName: string | null
-	captainPoints: number | null
-}
-
-export interface MyFplCompetitionDistribution {
-	key: string
-	label: string
-	teamShortName: string | null
-	count: number
-	percentage: number
-	averagePoints: number
-}
-
-export interface MyFplCompetitionMetric {
-	key: TournamentSeasonMetricKey
-	leaderValue: number | null
-	leaderEntryId: number | null
-	leaderEntryName: string | null
-	leaderPlayerName: string | null
-	averageValue: number | null
-	higherIsBetter: boolean
-}
-
-export interface MyFplCompetitionViewerSummary {
-	entryId: number
-	overallRank: number | null
-	tournamentOverallRank: number | null
-	teamValue: number | null
-	tournamentTeamValueRank: number | null
-	transfersNum: number | null
-	tournamentTransfersRank: number | null
-	totalCosts: number | null
-	tournamentCostsRank: number | null
-	totalBenchPoints: number | null
-	tournamentBenchPointsRank: number | null
-	autoSubPoints: number | null
-	tournamentAutoSubRank: number | null
-	overallPoints: number | null
-	leaderOverallPoints: number | null
-	gapToLeader: number | null
-	pointsBehindNext: number | null
-	pointsAheadOfPrev: number | null
-}
-
-export interface MyFplCompetitionAggregate {
-	eventId: number
-	entryCount: number
-	leaderOverallPoints: number | null
-	secondOverallPoints: number | null
-	gapFirstSecond: number | null
-	averageOverallPoints: number | null
-	metrics: MyFplCompetitionMetric[]
-	viewer: MyFplCompetitionViewerSummary | null
-	topPerformers: MyFplCompetitionPerformance[]
-	risers: MyFplCompetitionPerformance[]
-	fallers: MyFplCompetitionPerformance[]
-	captainDistribution: MyFplCompetitionDistribution[]
-	chipDistribution: MyFplCompetitionDistribution[]
-	snapshotMeta?: MyFplSnapshotMeta | null
-}
-
-export interface MyFplCompetitionsDesk {
-	state: MyFplReviewState
-	context: MyFplReviewContext
-	tournaments: EntryTournament[]
-	selectedTournamentId: number | null
-	selectedTournament: EntryTournament | null
-	eventId: number | null
-	/** Loaded by the dedicated board root after the desk/list request. */
-	board?: MyFplCompetitionBoardPage | null
-	aggregate: MyFplCompetitionAggregate | null
-	snapshotMeta: MyFplSnapshotMeta | null
-}
-
-export interface MyFplCompetitionSeasonPathPoint {
-	gameweek: number
-	tournamentRank: number | null
-	gapToLeader: number | null
-	pointsVsAverage: number | null
-	fieldSize: number
-	overallPoints: number | null
-	leaderOverallPoints: number | null
-	averageOverallPoints: number | null
-}
-
-export interface MyFplCompetitionSeasonPath {
-	state: MyFplReviewState
-	context: MyFplReviewContext
-	tournamentId: number
-	throughEventId: number
-	points: MyFplCompetitionSeasonPathPoint[]
-	snapshotMeta: MyFplSnapshotMeta | null
-}
-
 export interface MyFplManagerReviewResponse {
 	myFplManagerReview: MyFplManagerReview
 }
 
 export interface MyFplManagerGameweekResponse {
 	myFplManagerGameweek: MyFplManagerGameweek
-}
-
-export interface MyFplCompetitionsDeskResponse {
-	myFplCompetitionsDesk: MyFplCompetitionsDesk
-}
-
-export interface MyFplCompetitionBoardResponse {
-	myFplCompetitionBoard: MyFplCompetitionBoardPage
-}
-
-export interface MyFplCompetitionSeasonPathResponse {
-	myFplCompetitionSeasonPath: MyFplCompetitionSeasonPath
 }
 
 const ENTRY_FIELDS = `
@@ -672,73 +516,6 @@ const MANAGER_GAMEWEEK_FIELDS = `
       snapshotMeta {${SNAPSHOT_META_FIELDS}}
 `
 
-const BOARD_ROW_FIELDS = `
-          eventId
-          groupId
-          entryId
-          entryName
-          playerName
-          rank
-          previousRank
-          fieldRank
-          eventPoints
-          eventCost
-          eventNetPoints
-          eventRank
-          overallPoints
-          overallRank
-          eventChip
-          captainId
-          captainWebName
-          captainTeamShortName
-          captainPoints
-          teamValue
-          bank
-`
-
-const AGGREGATE_FIELDS = `
-        eventId
-        entryCount
-        leaderOverallPoints
-        secondOverallPoints
-        gapFirstSecond
-        averageOverallPoints
-        metrics {
-          key
-          leaderValue
-          leaderEntryId
-          leaderEntryName
-          leaderPlayerName
-          averageValue
-          higherIsBetter
-        }
-        viewer {
-          entryId
-          overallRank
-          tournamentOverallRank
-          teamValue
-          tournamentTeamValueRank
-          transfersNum
-          tournamentTransfersRank
-          totalCosts
-          tournamentCostsRank
-          totalBenchPoints
-          tournamentBenchPointsRank
-          autoSubPoints
-          tournamentAutoSubRank
-          overallPoints
-          leaderOverallPoints
-          gapToLeader
-          pointsBehindNext
-          pointsAheadOfPrev
-        }
-		topPerformers { entryId entryName playerName eventPoints eventNetPoints rank previousRank captainId captainWebName captainTeamShortName captainPoints }
-		risers { entryId entryName playerName eventPoints eventNetPoints rank previousRank captainId captainWebName captainTeamShortName captainPoints }
-		fallers { entryId entryName playerName eventPoints eventNetPoints rank previousRank captainId captainWebName captainTeamShortName captainPoints }
-		captainDistribution { key label teamShortName count percentage averagePoints }
-		chipDistribution { key label teamShortName count percentage averagePoints }
-`
-
 export const GET_MY_FPL_MANAGER_REVIEW = `
   query GetMyFplManagerReview($snapshotRevision: String) {
     myFplManagerReview(snapshotRevision: $snapshotRevision) {
@@ -832,82 +609,15 @@ export const GET_MY_FPL_MANAGER_GAMEWEEK = `
   }
 `
 
-export const GET_MY_FPL_COMPETITIONS_DESK = `${TOURNAMENT_INFO_FIELDS}
-  query GetMyFplCompetitionsDesk($tournamentId: Int, $eventId: Int, $snapshotRevision: String) {
-    myFplCompetitionsDesk(tournamentId: $tournamentId, eventId: $eventId, snapshotRevision: $snapshotRevision) {
-      state
-      context {${REVIEW_CONTEXT_FIELDS}}
-      tournaments { ...TournamentInfoFields }
-      selectedTournamentId
-      selectedTournament { ...TournamentInfoFields }
-      eventId
-      aggregate {${AGGREGATE_FIELDS}}
-      snapshotMeta {${SNAPSHOT_META_FIELDS}}
-    }
-  }
-`
-
-export const GET_MY_FPL_COMPETITION_BOARD = `
-  query GetMyFplCompetitionBoard(
-    $tournamentId: Int!
-    $eventId: Int!
-    $page: Int
-	$pageSize: Int
-		$search: String
-		$snapshotRevision: String
-  ) {
-    myFplCompetitionBoard(
-      tournamentId: $tournamentId
-      eventId: $eventId
-      page: $page
-		  pageSize: $pageSize
-		  search: $search
-		  snapshotRevision: $snapshotRevision
-    ) {
-      state
-      eventId
-      page
-      pageSize
-      totalRows
-      totalPages
-      fieldSize
-      rows {${BOARD_ROW_FIELDS}}
-		  viewerRow {${BOARD_ROW_FIELDS}}
-		  snapshotMeta {${SNAPSHOT_META_FIELDS}}
-    }
-  }
-`
-
-export const GET_MY_FPL_COMPETITION_SEASON_PATH = `
-  query GetMyFplCompetitionSeasonPath($tournamentId: Int!, $throughEventId: Int!, $snapshotRevision: String) {
-    myFplCompetitionSeasonPath(
-      tournamentId: $tournamentId
-      throughEventId: $throughEventId
-      snapshotRevision: $snapshotRevision
-    ) {
-      state
-      context {${REVIEW_CONTEXT_FIELDS}}
-      tournamentId
-      throughEventId
-      points {
-        gameweek
-        tournamentRank
-        gapToLeader
-        pointsVsAverage
-        fieldSize
-        overallPoints
-        leaderOverallPoints
-        averageOverallPoints
-      }
-      snapshotMeta {${SNAPSHOT_META_FIELDS}}
-    }
-  }
-`
-
-export type MyTournamentReviewScope = 'ACCESSIBLE' | 'ALL'
+export type MyTournamentReviewScope = 'ACCESSIBLE' | 'MANAGED' | 'ALL'
 export type MyTournamentReviewFormat = 'POINTS' | 'H2H' | 'KNOCKOUT'
 export type MyTournamentReviewState =
-	'PENDING' | 'WAITING_SOURCE' | 'READY' | 'DEGRADED' | 'UNAVAILABLE'
+	| 'NOT_STARTED'
+	| 'PENDING'
+	| 'WAITING_SOURCE'
+	| 'READY'
+	| 'DEGRADED'
+	| 'UNAVAILABLE'
 
 export interface MyTournamentReviewCatalogItem {
 	tournamentId: number
@@ -917,11 +627,36 @@ export interface MyTournamentReviewCatalogItem {
 	leagueType: string
 	totalTeamNum: number
 	latestFinalizedEventId: number | null
-	latestAvailableEventId: number | null
-	latestRevision: string | null
-	latestFormat: MyTournamentReviewFormat | null
+	previousReadyEventId: number | null
+	setupStatus: string
+	latestFinalizedScope: MyTournamentReviewEventStatus | null
+	phaseSummaries: MyTournamentReviewPhaseSummary[]
 	state: MyTournamentReviewState
+}
+
+export interface MyTournamentReviewPhaseSummary {
+	phaseId: string
+	format: MyTournamentReviewFormat
+	startEventId: number
+	endEventId: number | null
+	state: MyTournamentReviewState
+}
+
+export interface MyTournamentReviewEventStatus {
+	eventId: number
+	format: MyTournamentReviewFormat
+	state: MyTournamentReviewState
+	nextAttemptAt: string | null
+	executionAttempts: number
+	sourceRechecks: number
+	degradedAt: string | null
+	revision: string | null
 	publishedAt: string | null
+}
+
+export interface MyTournamentReviewPageInfo {
+	hasNextPage: boolean
+	endCursor: string | null
 }
 
 export interface MyTournamentReviewCatalogResponse {
@@ -930,16 +665,9 @@ export interface MyTournamentReviewCatalogResponse {
 		asOf: string
 		viewerEntryId: number | null
 		adminReadAll: boolean
-		tournaments: MyTournamentReviewCatalogItem[]
+		edges: Array<{ cursor: string; node: MyTournamentReviewCatalogItem }>
+		pageInfo: MyTournamentReviewPageInfo
 	}
-}
-
-export interface MyTournamentReviewFreshness {
-	eventDataCheckedAt: string
-	sourceMinCheckedAt: string
-	sourceMaxCheckedAt: string
-	publishedAt: string
-	ageSeconds: number
 }
 
 export interface MyTournamentReviewScopeMeta {
@@ -948,12 +676,14 @@ export interface MyTournamentReviewScopeMeta {
 	revision: string
 	format: MyTournamentReviewFormat
 	state: MyTournamentReviewState
-	freshness: MyTournamentReviewFreshness | null
+	settledAt: string
+	publishedAt: string
+	correctedAt: string | null
+	semanticSha256: string
 	rowCount: number
 	expectedSubjectCount: number
 	readySubjectCount: number
 	notApplicableSubjectCount: number
-	contentSha256: string | null
 }
 
 export interface MyTournamentReviewPointsRow {
@@ -1057,10 +787,18 @@ export interface MyTournamentReviewKnockout {
 export interface MyTournamentGameweekReview {
 	state: MyTournamentReviewState
 	scope: MyTournamentReviewScopeMeta | null
-	points: MyTournamentReviewPoints | null
-	h2h: MyTournamentReviewH2H | null
-	knockout: MyTournamentReviewKnockout | null
+	payload: MyTournamentReviewPayload | null
+	/** Normalized client view; populated from payload, never queried as a
+	 * sibling GraphQL field. */
+	points?: MyTournamentReviewPoints | null
+	h2h?: MyTournamentReviewH2H | null
+	knockout?: MyTournamentReviewKnockout | null
 }
+
+export type MyTournamentReviewPayload =
+	| { format: 'POINTS'; points: MyTournamentReviewPoints }
+	| { format: 'H2H'; h2h: MyTournamentReviewH2H }
+	| { format: 'KNOCKOUT'; knockout: MyTournamentReviewKnockout }
 
 export interface MyTournamentGameweekReviewResponse {
 	myTournamentGameweekReview: MyTournamentGameweekReview
@@ -1070,14 +808,52 @@ export interface MyTournamentSeasonReview {
 	state: MyTournamentReviewState
 	tournamentId: number
 	throughEventId: number
-	latestEventId: number | null
-	latestRevision: string | null
-	format: MyTournamentReviewFormat | null
-	freshness: MyTournamentReviewFreshness | null
-	finalizedEventIds: number[]
+	latestFinalizedEventId: number | null
+	phases: MyTournamentReviewPhase[]
+	/** Normalized section data attached by the client after the phase query. */
+	latestEventId?: number | null
+	latestRevision?: string | null
+	format?: MyTournamentReviewFormat | null
+	points?: MyTournamentReviewPoints | null
+	h2h?: MyTournamentReviewH2H | null
+	knockout?: MyTournamentReviewKnockout | null
+	finalizedEventIds?: number[]
+}
+
+export interface MyTournamentReviewPhase {
+	phaseId: string
+	format: MyTournamentReviewFormat
+	startEventId: number
+	endEventId: number
+	state: MyTournamentReviewState
+	settledAt: string | null
+	publishedAt: string | null
+	correctedAt: string | null
+	revision: string | null
+	semanticSha256: string | null
+}
+
+export interface MyTournamentSeasonSection {
+	state: MyTournamentReviewState
+	tournamentId: number
+	throughEventId: number
+	phaseId: string
+	section:
+		| 'POINTS_STANDINGS'
+		| 'POINTS_TRAJECTORIES'
+		| 'H2H_STANDINGS'
+		| 'H2H_FIXTURES'
+		| 'KNOCKOUT_BRACKET'
+	revision: string
+	semanticSha256: string
 	points: MyTournamentReviewPoints | null
 	h2h: MyTournamentReviewH2H | null
 	knockout: MyTournamentReviewKnockout | null
+	pageInfo: MyTournamentReviewPageInfo
+}
+
+export interface MyTournamentSeasonSectionResponse {
+	myTournamentSeasonReviewSection: MyTournamentSeasonSection
 }
 
 export interface MyTournamentSeasonReviewResponse {
@@ -1086,8 +862,8 @@ export interface MyTournamentSeasonReviewResponse {
 
 const REVIEW_SCOPE_META_FIELDS = `
   tournamentId eventId revision format state
-  freshness { eventDataCheckedAt sourceMinCheckedAt sourceMaxCheckedAt publishedAt ageSeconds }
-  rowCount expectedSubjectCount readySubjectCount notApplicableSubjectCount contentSha256
+  settledAt publishedAt correctedAt semanticSha256
+  rowCount expectedSubjectCount readySubjectCount notApplicableSubjectCount
 `
 const REVIEW_POINTS_FIELDS = `
   headlineMetric grossPointsTotal grossPointsAverage netPointsTotal
@@ -1119,13 +895,24 @@ const REVIEW_KNOCKOUT_FIELDS = `
 `
 
 export const GET_MY_TOURNAMENT_REVIEW_CATALOG = `
-  query GetMyTournamentReviewCatalog($scope: MyTournamentReviewScope = ACCESSIBLE) {
-    myTournamentReviewCatalog(scope: $scope) {
+  query GetMyTournamentReviewCatalog(
+    $scope: MyTournamentReviewScope = ACCESSIBLE
+    $first: Int = 50
+    $after: String
+    $search: String
+  ) {
+    myTournamentReviewCatalog(scope: $scope, first: $first, after: $after, search: $search) {
       state asOf viewerEntryId adminReadAll
-      tournaments {
-        tournamentId name creator leagueId leagueType totalTeamNum
-        latestFinalizedEventId latestAvailableEventId latestRevision latestFormat state publishedAt
+      edges {
+        cursor
+        node {
+          tournamentId name creator leagueId leagueType totalTeamNum
+          latestFinalizedEventId previousReadyEventId setupStatus state
+          latestFinalizedScope { eventId format state nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt }
+          phaseSummaries { phaseId format startEventId endEventId state }
+        }
       }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `
@@ -1143,29 +930,45 @@ export const GET_MY_TOURNAMENT_GAMEWEEK_REVIEW = `
     ) {
       state
       scope {${REVIEW_SCOPE_META_FIELDS}}
-      points {${REVIEW_POINTS_FIELDS}}
-      h2h {${REVIEW_H2H_FIELDS}}
-      knockout {${REVIEW_KNOCKOUT_FIELDS}}
+      payload {
+        format
+        ... on MyTournamentReviewPointsPayload { points {${REVIEW_POINTS_FIELDS}} }
+        ... on MyTournamentReviewH2HPayload { h2h {${REVIEW_H2H_FIELDS}} }
+        ... on MyTournamentReviewKnockoutPayload { knockout {${REVIEW_KNOCKOUT_FIELDS}} }
+      }
     }
   }
 `
 
 export const GET_MY_TOURNAMENT_SEASON_REVIEW = `
-  query GetMyTournamentSeasonReview(
-    $tournamentId: Int!
-    $throughEventId: Int!
-    $first: Int = 100
-    $after: String
-  ) {
+  query GetMyTournamentSeasonReview($tournamentId: Int!, $throughEventId: Int!) {
     myTournamentSeasonReview(
       tournamentId: $tournamentId
       throughEventId: $throughEventId
-      first: $first
-      after: $after
     ) {
-      state tournamentId throughEventId latestEventId latestRevision format
-      freshness { eventDataCheckedAt sourceMinCheckedAt sourceMaxCheckedAt publishedAt ageSeconds }
-      finalizedEventIds
+      state tournamentId throughEventId latestFinalizedEventId
+      phases { phaseId format startEventId endEventId state settledAt publishedAt correctedAt revision semanticSha256 }
+    }
+  }
+`
+
+export const GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION = `
+  query GetMyTournamentSeasonReviewSection(
+    $tournamentId: Int!
+    $throughEventId: Int!
+    $phaseId: String!
+    $section: MyTournamentReviewSeasonSection!
+    $first: Int = 50
+    $after: String
+    $revision: String!
+    $semanticSha256: String!
+  ) {
+    myTournamentSeasonReviewSection(
+      tournamentId: $tournamentId throughEventId: $throughEventId phaseId: $phaseId
+      section: $section first: $first after: $after revision: $revision semanticSha256: $semanticSha256
+    ) {
+      state tournamentId throughEventId phaseId section revision semanticSha256
+      pageInfo { hasNextPage endCursor }
       points {${REVIEW_POINTS_FIELDS}}
       h2h {${REVIEW_H2H_FIELDS}}
       knockout {${REVIEW_KNOCKOUT_FIELDS}}
@@ -1176,7 +979,7 @@ export const GET_MY_TOURNAMENT_SEASON_REVIEW = `
 export const GET_MY_TOURNAMENT_REVIEW_STATUS = `
   query GetMyTournamentReviewStatus($tournamentId: Int!) {
     myTournamentReviewStatus(tournamentId: $tournamentId) {
-      tournamentId latestFinalizedEventId latestAvailableEventId
+      tournamentId latestFinalizedEventId
       events { eventId format state nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt }
     }
   }

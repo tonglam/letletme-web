@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { usePathname, useRouter } from '@/i18n/navigation'
+import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
 import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
 	GET_MY_TOURNAMENT_SEASON_REVIEW,
+	GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
 	type MyTournamentGameweekReview,
 	type MyTournamentGameweekReviewResponse,
 	type MyTournamentReviewCatalogResponse,
@@ -16,9 +17,9 @@ import {
 	type MyTournamentReviewH2H,
 	type MyTournamentReviewKnockout,
 	type MyTournamentReviewPoints,
-	type MyTournamentReviewFreshness,
 	type MyTournamentReviewScope,
 	type MyTournamentReviewState,
+	type MyTournamentSeasonSectionResponse,
 	type MyTournamentSeasonReview,
 	type MyTournamentSeasonReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
@@ -31,6 +32,58 @@ import {
 } from './_lib/tournament-review-v2'
 
 type Catalog = MyTournamentReviewCatalogResponse['myTournamentReviewCatalog']
+
+const catalogItems = (catalog: Catalog) => catalog.edges.map(edge => edge.node)
+
+function normalizeGameweek(
+	review: MyTournamentGameweekReview
+): MyTournamentGameweekReview {
+	const payload = review.payload
+	return {
+		...review,
+		points: payload?.format === 'POINTS' ? payload.points : null,
+		h2h: payload?.format === 'H2H' ? payload.h2h : null,
+		knockout: payload?.format === 'KNOCKOUT' ? payload.knockout : null
+	}
+}
+
+function normalizeSeason(
+	review: MyTournamentSeasonReview,
+	phaseId?: string | null
+): MyTournamentSeasonReview {
+	const latest =
+		review.latestFinalizedEventId ?? review.phases.at(-1)?.endEventId ?? null
+	const phase =
+		(review.phases.find(candidate => candidate.phaseId === phaseId) ??
+			review.phases.at(-1)) ||
+		null
+	return {
+		...review,
+		latestEventId: latest,
+		latestRevision: phase?.revision ?? null,
+		format: phase?.format ?? null,
+		finalizedEventIds: review.phases.flatMap(current => {
+			const ids: number[] = []
+			for (
+				let eventId = current.startEventId;
+				eventId <= current.endEventId;
+				eventId += 1
+			)
+				ids.push(eventId)
+			return ids
+		}),
+		points: review.points ?? null,
+		h2h: review.h2h ?? null,
+		knockout: review.knockout ?? null
+	}
+}
+
+const sectionForFormat = (format: MyTournamentReviewFormat) =>
+	format === 'POINTS'
+		? 'POINTS_STANDINGS'
+		: format === 'H2H'
+			? 'H2H_STANDINGS'
+			: 'KNOCKOUT_BRACKET'
 
 export interface TournamentReviewV2ClientProps {
 	entryId: number
@@ -46,7 +99,35 @@ export interface TournamentReviewV2ClientProps {
 	initialError: string | null
 }
 
-const CONTRACT = 'my-tournament-review-v2' as const
+const CONTRACT = 'my-tournament-review-v2.1' as const
+
+type SeasonSectionData =
+	MyTournamentSeasonSectionResponse['myTournamentSeasonReviewSection']
+
+async function fetchSeasonSection(
+	tournamentId: number,
+	throughEventId: number,
+	phase: MyTournamentSeasonReview['phases'][number],
+	first = 100,
+	after: string | null = null
+): Promise<SeasonSectionData | null> {
+	if (!phase.revision || !phase.semanticSha256) return null
+	const section = await executeQuery<MyTournamentSeasonSectionResponse>(
+		GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
+		{
+			tournamentId,
+			throughEventId,
+			phaseId: phase.phaseId,
+			section: sectionForFormat(phase.format),
+			first,
+			after,
+			revision: phase.revision,
+			semanticSha256: phase.semanticSha256
+		},
+		{ cache: 'no-store', contract: CONTRACT }
+	)
+	return section.myTournamentSeasonReviewSection
+}
 
 const formatLabel = (
 	format: MyTournamentReviewFormat | null | undefined,
@@ -66,6 +147,7 @@ const stateLabel = (
 	if (state === 'WAITING_SOURCE') return t('reviewWaitingSource')
 	if (state === 'DEGRADED') return t('reviewDegraded')
 	if (state === 'PENDING') return t('reviewPending')
+	if (state === 'NOT_STARTED') return 'Not started'
 	return t('reviewUnavailable')
 }
 
@@ -217,19 +299,24 @@ function ReviewStateBanner({
 	)
 }
 
-function Freshness({
-	freshness
+function SettlementMeta({
+	settledAt,
+	publishedAt
 }: {
-	freshness: MyTournamentReviewFreshness | null | undefined
+	settledAt: string | null | undefined
+	publishedAt: string | null | undefined
 }) {
-	const t = useTranslations('TournamentStats')
 	const [hydrated, setHydrated] = useState(false)
 	useEffect(() => setHydrated(true), [])
-	if (!freshness) return null
+	if (!settledAt && !publishedAt) return null
 	return (
 		<div className="text-xs text-slate-500">
-			{t('reviewFreshness', { seconds: freshness.ageSeconds })} ·{' '}
-			{hydrated ? new Date(freshness.publishedAt).toLocaleString() : '—'}
+			{settledAt
+				? `Settled ${hydrated ? new Date(settledAt).toLocaleString() : '—'}`
+				: null}
+			{publishedAt
+				? ` · Published ${hydrated ? new Date(publishedAt).toLocaleString() : '—'}`
+				: null}
 		</div>
 	)
 }
@@ -583,19 +670,30 @@ export default function TournamentReviewV2Client({
 	useEffect(() => {
 		viewRef.current = view
 	}, [view])
-	const [gameweekReview, setGameweekReview] = useState(initialGameweekReview)
-	const [seasonReview, setSeasonReview] = useState(initialSeasonReview)
+	const [gameweekReview, setGameweekReview] = useState(
+		initialGameweekReview ? normalizeGameweek(initialGameweekReview) : null
+	)
+	const [seasonReview, setSeasonReview] = useState(
+		initialSeasonReview ? normalizeSeason(initialSeasonReview) : null
+	)
+	const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(
+		initialSeasonReview?.phases.at(-1)?.phaseId ?? null
+	)
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
+	const [catalogSearch, setCatalogSearch] = useState('')
+	const [catalogSearchInput, setCatalogSearchInput] = useState('')
+	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
 	const requestSequence = useRef(0)
+	const catalogRequestSequence = useRef(0)
 
 	const selectedTournament = useMemo(
 		() =>
-			catalog.tournaments.find(
+			catalogItems(catalog).find(
 				tournament => tournament.tournamentId === selectedTournamentId
 			) ?? null,
-		[catalog.tournaments, selectedTournamentId]
+		[catalog, selectedTournamentId]
 	)
 
 	const replaceRoute = useCallback(
@@ -605,6 +703,7 @@ export default function TournamentReviewV2Client({
 			view?: TournamentReviewV2View
 			scope?: MyTournamentReviewScope
 		}) => {
+			const nextScope = next.scope ?? scope
 			const query = buildTournamentStatsQueryString({
 				tournamentId:
 					next.tournamentId === undefined
@@ -612,7 +711,7 @@ export default function TournamentReviewV2Client({
 						: next.tournamentId,
 				view: next.view ?? view,
 				gw: next.eventId === undefined ? eventId : next.eventId,
-				scope: next.scope ?? scope
+				scope: nextScope === 'MANAGED' ? 'ALL' : nextScope
 			})
 			router.replace(query ? `${pathname}?${query}` : pathname, {
 				scroll: false
@@ -620,6 +719,104 @@ export default function TournamentReviewV2Client({
 		},
 		[eventId, pathname, router, scope, selectedTournamentId, view]
 	)
+
+	const loadCatalogPage = async ({
+		after = null,
+		search = catalogSearch,
+		replace = false,
+		nextScope = scope
+	}: {
+		after?: string | null
+		search?: string
+		replace?: boolean
+		nextScope?: MyTournamentReviewScope
+	} = {}) => {
+		const requestId = ++catalogRequestSequence.current
+		setCatalogLoadingMore(true)
+		try {
+			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
+				GET_MY_TOURNAMENT_REVIEW_CATALOG,
+				{
+					scope: nextScope,
+					first: 100,
+					after,
+					search: search.trim() || null
+				},
+				{ cache: 'no-store', contract: CONTRACT }
+			)
+			if (requestId !== catalogRequestSequence.current) return
+			const nextCatalog = response.myTournamentReviewCatalog
+			setCatalog(previous =>
+				replace
+					? nextCatalog
+					: {
+							...nextCatalog,
+							edges: [...previous.edges, ...nextCatalog.edges]
+						}
+			)
+			setCatalogSearch(search.trim())
+		} catch (loadError) {
+			if (requestId !== catalogRequestSequence.current) return
+			const requestError = loadError as GraphQLRequestError
+			setError(
+				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+					? t('reviewClientUpgrade')
+					: t('loadFailed')
+			)
+		} finally {
+			if (requestId === catalogRequestSequence.current)
+				setCatalogLoadingMore(false)
+		}
+	}
+
+	const searchCatalog = async (requestedSearch = catalogSearchInput) => {
+		const nextSearch = requestedSearch.trim()
+		const requestId = ++requestSequence.current
+		setLoading(true)
+		setLoadingMore(false)
+		setError(null)
+		setGameweekReview(null)
+		setSeasonReview(null)
+		try {
+			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
+				GET_MY_TOURNAMENT_REVIEW_CATALOG,
+				{ scope, first: 100, after: null, search: nextSearch || null },
+				{ cache: 'no-store', contract: CONTRACT }
+			)
+			if (requestId !== requestSequence.current) return
+			const nextCatalog = response.myTournamentReviewCatalog
+			const nextItems = catalogItems(nextCatalog)
+			const nextSelected =
+				nextItems.find(item => item.tournamentId === selectedTournamentId) ??
+				nextItems[0] ??
+				null
+			setCatalog(nextCatalog)
+			setCatalogSearch(nextSearch)
+			setSelectedTournamentId(nextSelected?.tournamentId ?? null)
+			const nextEventId = nextSelected?.latestFinalizedEventId ?? null
+			setEventId(nextEventId)
+			setSelectedPhaseId(null)
+			setFinalizedEventIds([])
+			replaceRoute({
+				tournamentId: nextSelected?.tournamentId ?? null,
+				eventId: nextEventId
+			})
+			if (nextSelected && nextEventId) {
+				void loadReview(nextSelected.tournamentId, nextEventId, true)
+			} else {
+				setLoading(false)
+			}
+		} catch (loadError) {
+			if (requestId !== requestSequence.current) return
+			const requestError = loadError as GraphQLRequestError
+			setError(
+				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+					? t('reviewClientUpgrade')
+					: t('loadFailed')
+			)
+			setLoading(false)
+		}
+	}
 
 	const loadReview = async (
 		tournamentId: number,
@@ -641,19 +838,45 @@ export default function TournamentReviewV2Client({
 				),
 				executeQuery<MyTournamentSeasonReviewResponse>(
 					GET_MY_TOURNAMENT_SEASON_REVIEW,
-					{ tournamentId, throughEventId: nextEventId, first: 100 },
+					{ tournamentId, throughEventId: nextEventId },
 					{ cache: 'no-store', contract: CONTRACT }
 				)
 			])
 			if (requestId !== requestSequence.current) return
-			setGameweekReview(gameweek.myTournamentGameweekReview)
-			setSeasonReview(season.myTournamentSeasonReview)
+			const normalizedGameweek = normalizeGameweek(
+				gameweek.myTournamentGameweekReview
+			)
+			const normalizedSeason = normalizeSeason(season.myTournamentSeasonReview)
+			const nextPhase = normalizedSeason.phases.at(-1) ?? null
+			let seasonWithSection = normalizedSeason
+			if (nextPhase) {
+				const sectionData = await fetchSeasonSection(
+					tournamentId,
+					nextEventId,
+					nextPhase
+				)
+				if (sectionData) {
+					seasonWithSection = normalizeSeason(
+						{
+							...normalizedSeason,
+							points: sectionData.points,
+							h2h: sectionData.h2h,
+							knockout: sectionData.knockout
+						},
+						nextPhase.phaseId
+					)
+				}
+			}
+			if (requestId !== requestSequence.current) return
+			setSelectedPhaseId(nextPhase?.phaseId ?? null)
+			setGameweekReview(normalizedGameweek)
+			setSeasonReview(seasonWithSection)
 			setFinalizedEventIds(previous =>
 				replaceAvailableEvents
-					? season.myTournamentSeasonReview.finalizedEventIds
+					? (normalizedSeason.finalizedEventIds ?? previous)
 					: mergeTournamentReviewEventIds(
 							previous,
-							season.myTournamentSeasonReview.finalizedEventIds
+							normalizedSeason.finalizedEventIds ?? []
 						)
 			)
 		} catch (loadError) {
@@ -710,27 +933,38 @@ export default function TournamentReviewV2Client({
 					throw new Error(
 						'Tournament review revision changed during pagination'
 					)
+				const normalized = normalizeGameweek(
+					response.myTournamentGameweekReview
+				)
 				setGameweekReview(previous =>
-					previous
-						? mergeGameweekPage(previous, response.myTournamentGameweekReview)
-						: response.myTournamentGameweekReview
+					previous ? mergeGameweekPage(previous, normalized) : normalized
 				)
 			} else {
-				const response = await executeQuery<MyTournamentSeasonReviewResponse>(
-					GET_MY_TOURNAMENT_SEASON_REVIEW,
-					{
-						tournamentId: requestTournamentId,
-						throughEventId: requestEventId,
-						first: 100,
-						after: nextCursor
-					},
-					{ cache: 'no-store', contract: CONTRACT }
+				const phase =
+					seasonReview?.phases.find(
+						candidate => candidate.phaseId === selectedPhaseId
+					) ?? seasonReview?.phases.at(-1)
+				if (!phase?.revision || !phase.semanticSha256)
+					throw new Error('Season phase identity missing')
+				const response = await fetchSeasonSection(
+					requestTournamentId,
+					requestEventId,
+					phase,
+					100,
+					nextCursor
 				)
+				if (!response) throw new Error('Season phase publication is not ready')
 				if (requestId !== requestSequence.current) return
 				setSeasonReview(previous =>
 					previous
-						? mergeSeasonPage(previous, response.myTournamentSeasonReview)
-						: response.myTournamentSeasonReview
+						? mergeSeasonPage(previous, {
+								...previous,
+								state: response.state,
+								points: response.points,
+								h2h: response.h2h,
+								knockout: response.knockout
+							})
+						: null
 				)
 			}
 		} catch (loadError) {
@@ -746,6 +980,16 @@ export default function TournamentReviewV2Client({
 		}
 	}
 
+	const loadMoreCatalog = () => {
+		if (
+			catalogLoadingMore ||
+			!catalog.pageInfo.hasNextPage ||
+			!catalog.pageInfo.endCursor
+		)
+			return
+		void loadCatalogPage({ after: catalog.pageInfo.endCursor })
+	}
+
 	const switchScope = async () => {
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
@@ -756,24 +1000,26 @@ export default function TournamentReviewV2Client({
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
-				{ scope: nextScope },
+				{
+					scope: nextScope,
+					first: 100,
+					after: null,
+					search: catalogSearch || null
+				},
 				{ cache: 'no-store', contract: CONTRACT }
 			)
 			if (requestId !== requestSequence.current) return
 			const nextCatalog = response.myTournamentReviewCatalog
+			const nextItems = catalogItems(nextCatalog)
 			const nextSelected =
-				nextCatalog.tournaments.find(
-					item => item.tournamentId === selectedTournamentId
-				) ??
-				nextCatalog.tournaments[0] ??
+				nextItems.find(item => item.tournamentId === selectedTournamentId) ??
+				nextItems[0] ??
 				null
 			setScope(nextScope)
 			setCatalog(nextCatalog)
+			setCatalogSearchInput(catalogSearch)
 			setSelectedTournamentId(nextSelected?.tournamentId ?? null)
-			const nextEventId =
-				nextSelected?.latestAvailableEventId ??
-				nextSelected?.latestFinalizedEventId ??
-				null
+			const nextEventId = nextSelected?.latestFinalizedEventId ?? null
 			setEventId(nextEventId)
 			setFinalizedEventIds([])
 			setGameweekReview(null)
@@ -801,7 +1047,12 @@ export default function TournamentReviewV2Client({
 
 	useEffect(() => {
 		if (!selectedTournamentId || !eventId) return
-		if (gameweekReview || seasonReview) return
+		if (
+			gameweekReview &&
+			seasonReview &&
+			(seasonReview.points || seasonReview.h2h || seasonReview.knockout)
+		)
+			return
 		void loadReview(selectedTournamentId, eventId, true)
 		// Initial server data is intentionally used once; subsequent changes load explicitly.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -812,6 +1063,7 @@ export default function TournamentReviewV2Client({
 		if (!value) {
 			setSelectedTournamentId(null)
 			setEventId(null)
+			setSelectedPhaseId(null)
 			setFinalizedEventIds([])
 			setGameweekReview(null)
 			setSeasonReview(null)
@@ -822,14 +1074,14 @@ export default function TournamentReviewV2Client({
 			return
 		}
 		const nextId = Number(value)
-		const tournament = catalog.tournaments.find(
+		const tournament = catalogItems(catalog).find(
 			item => item.tournamentId === nextId
 		)
 		if (!tournament) return
-		const nextEventId =
-			tournament.latestAvailableEventId ?? tournament.latestFinalizedEventId
+		const nextEventId = tournament.latestFinalizedEventId
 		setSelectedTournamentId(nextId)
 		setEventId(nextEventId)
+		setSelectedPhaseId(null)
 		setFinalizedEventIds([])
 		setGameweekReview(null)
 		setSeasonReview(null)
@@ -850,6 +1102,7 @@ export default function TournamentReviewV2Client({
 		)
 			return
 		setEventId(nextEventId)
+		setSelectedPhaseId(null)
 		replaceRoute({ eventId: nextEventId })
 		void loadReview(selectedTournamentId, nextEventId)
 	}
@@ -861,10 +1114,85 @@ export default function TournamentReviewV2Client({
 		replaceRoute({ view: nextView })
 	}
 
+	const choosePhase = (phaseId: string) => {
+		if (view !== 'season' || !seasonReview || phaseId === selectedPhaseId)
+			return
+		const phase = seasonReview.phases.find(
+			candidate => candidate.phaseId === phaseId
+		)
+		if (!phase || !selectedTournamentId || !eventId) return
+		const requestId = ++requestSequence.current
+		setSelectedPhaseId(phaseId)
+		setLoading(true)
+		setLoadingMore(false)
+		setError(null)
+		// Remove the previous phase's rows immediately. A settled phase is an
+		// immutable bundle, so showing rows from another phase while the selected
+		// bundle loads would be a misleading cross-phase response.
+		setSeasonReview(previous =>
+			previous
+				? normalizeSeason(
+						{
+							...previous,
+							state: phase.state,
+							points: null,
+							h2h: null,
+							knockout: null
+						},
+						phaseId
+					)
+				: previous
+		)
+		void (async () => {
+			try {
+				const sectionData = await fetchSeasonSection(
+					selectedTournamentId,
+					eventId,
+					phase
+				)
+				if (requestId !== requestSequence.current) return
+				setSeasonReview(previous =>
+					previous
+						? normalizeSeason(
+								{
+									...previous,
+									state: sectionData?.state ?? phase.state,
+									points: sectionData?.points ?? null,
+									h2h: sectionData?.h2h ?? null,
+									knockout: sectionData?.knockout ?? null
+								},
+								phaseId
+							)
+						: previous
+				)
+			} catch (loadError) {
+				if (requestId !== requestSequence.current) return
+				const requestError = loadError as GraphQLRequestError
+				setError(
+					requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+						? t('reviewClientUpgrade')
+						: t('loadFailed')
+				)
+			} finally {
+				if (requestId === requestSequence.current) setLoading(false)
+			}
+		})()
+	}
+
+	const selectedPhase = useMemo(
+		() =>
+			seasonReview?.phases.find(phase => phase.phaseId === selectedPhaseId) ??
+			seasonReview?.phases.at(-1) ??
+			null,
+		[seasonReview, selectedPhaseId]
+	)
+
 	const format =
 		gameweekReview?.scope?.format ??
+		selectedPhase?.format ??
 		seasonReview?.format ??
-		selectedTournament?.latestFormat ??
+		selectedTournament?.latestFinalizedScope?.format ??
+		selectedTournament?.phaseSummaries.at(-1)?.format ??
 		null
 	const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
 	const state: MyTournamentReviewState =
@@ -885,6 +1213,12 @@ export default function TournamentReviewV2Client({
 						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+						<Link
+							href="/competitions/create"
+							className="rounded-full bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-700"
+						>
+							{t('createTournament')}
+						</Link>
 						<span className="rounded-full border bg-white px-3 py-1.5">
 							{t('reviewViewerEntry', { entryId })}
 						</span>
@@ -909,7 +1243,7 @@ export default function TournamentReviewV2Client({
 							className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500"
 						>
 							<option value="">{t('selectTournament')}</option>
-							{catalog.tournaments.map(tournament => (
+							{catalogItems(catalog).map(tournament => (
 								<option
 									key={tournament.tournamentId}
 									value={tournament.tournamentId}
@@ -927,6 +1261,62 @@ export default function TournamentReviewV2Client({
 								{scope === 'ALL'
 									? t('reviewAdminAccessibleScope')
 									: t('reviewAdminAllScope')}
+							</button>
+						)}
+						{catalog.adminReadAll && (
+							<form
+								className="space-y-2 pt-1"
+								onSubmit={event => {
+									event.preventDefault()
+									void searchCatalog()
+								}}
+							>
+								<label
+									htmlFor="tournament-review-search"
+									className="sr-only"
+								>
+									{t('reviewSearchPlaceholder')}
+								</label>
+								<input
+									id="tournament-review-search"
+									value={catalogSearchInput}
+									onChange={event => setCatalogSearchInput(event.target.value)}
+									placeholder={t('reviewSearchPlaceholder')}
+									className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500"
+								/>
+								<div className="flex gap-2">
+									<button
+										type="submit"
+										disabled={loading || catalogLoadingMore}
+										className="flex-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
+									>
+										{t('reviewSearch')}
+									</button>
+									{catalogSearch && (
+										<button
+											type="button"
+											onClick={() => {
+												setCatalogSearchInput('')
+												void searchCatalog('')
+											}}
+											className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+										>
+											{t('reviewClearSearch')}
+										</button>
+									)}
+								</div>
+							</form>
+						)}
+						{catalog.pageInfo.hasNextPage && (
+							<button
+								type="button"
+								onClick={loadMoreCatalog}
+								disabled={catalogLoadingMore}
+								className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+							>
+								{catalogLoadingMore
+									? t('reviewLoadingTournaments')
+									: t('reviewLoadMoreTournaments')}
 							</button>
 						)}
 						{selectedTournament && finalizedEventIds.length > 0 && (
@@ -994,11 +1384,16 @@ export default function TournamentReviewV2Client({
 													? t('viewGameweek')
 													: t('viewSeason')}
 											</div>
-											<Freshness
-												freshness={
+											<SettlementMeta
+												settledAt={
 													view === 'gameweek'
-														? gameweekReview?.scope?.freshness
-														: seasonReview?.freshness
+														? gameweekReview?.scope?.settledAt
+														: selectedPhase?.settledAt
+												}
+												publishedAt={
+													view === 'gameweek'
+														? gameweekReview?.scope?.publishedAt
+														: selectedPhase?.publishedAt
 												}
 											/>
 										</div>
@@ -1027,6 +1422,29 @@ export default function TournamentReviewV2Client({
 											{t('viewSeason')}
 										</button>
 									</div>
+									{view === 'season' && seasonReview?.phases.length ? (
+										<div
+											className="mt-3 flex flex-wrap gap-2"
+											role="tablist"
+											aria-label={t('reviewPhaseTimeline')}
+										>
+											{seasonReview.phases.map(phase => (
+												<button
+													key={phase.phaseId}
+													type="button"
+													role="tab"
+													aria-selected={
+														selectedPhase?.phaseId === phase.phaseId
+													}
+													onClick={() => choosePhase(phase.phaseId)}
+													className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${selectedPhase?.phaseId === phase.phaseId ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300'}`}
+												>
+													{formatLabel(phase.format, t)} · GW
+													{phase.startEventId}–{phase.endEventId}
+												</button>
+											))}
+										</div>
+									) : null}
 								</div>
 
 								<div className="mt-4">
@@ -1038,6 +1456,37 @@ export default function TournamentReviewV2Client({
 									) : (
 										<ReviewStateBanner state={state} />
 									)}
+									{!loading &&
+									state !== 'READY' &&
+									selectedTournament.previousReadyEventId &&
+									selectedTournament.previousReadyEventId !== eventId ? (
+										<div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+											<div className="text-xs text-slate-500">
+												{t('reviewPreviousReadyHint')}
+											</div>
+											<button
+												type="button"
+												onClick={() =>
+													chooseEvent(
+														String(selectedTournament.previousReadyEventId)
+													)
+												}
+												className="mt-2 text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+											>
+												{t('reviewPreviousReady', {
+													gameweek: selectedTournament.previousReadyEventId
+												})}
+											</button>
+										</div>
+									) : null}
+									{!loading && state !== 'READY' && eventId ? (
+										<Link
+											href={`/live/competitions/${selectedTournament.tournamentId}?gw=${eventId}`}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewLiveLink')}
+										</Link>
+									) : null}
 								</div>
 								{activeReview && state === 'READY' && format && (
 									<div className="mt-5">
