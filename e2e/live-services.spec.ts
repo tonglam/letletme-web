@@ -495,7 +495,9 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			const score = fullRequestCount === 0 ? 1 : 2
 			await route.fulfill({
 				status: 200,
-				json: liveResponse(score, revision, fullRequestCount === 0 ? 2 : 3).data
+				json: {
+					data: liveResponse(score, revision, fullRequestCount === 0 ? 2 : 3).data
+				}
 			})
 			return
 		}
