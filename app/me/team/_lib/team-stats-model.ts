@@ -7,19 +7,18 @@ import {
 	type EntrySeasonHistoryItem
 } from '@/lib/graphql/operations/entries'
 import {
-	GET_MY_FPL_TEAM_DESK,
-	GET_MY_FPL_TEAM_GAMEWEEK,
-	GET_MY_FPL_TEAM_TRANSFERS,
+	GET_MY_FPL_MANAGER_GAMEWEEK,
+	GET_MY_FPL_MANAGER_REVIEW,
+	GET_MY_FPL_MANAGER_TRANSFERS,
 	type MyFplReviewState,
 	type MyFplSnapshotMeta,
-	type MyFplTeamDeskResponse,
-	type MyFplTeamGameweekResponse,
-	type MyFplTeamTransfersResponse
+	type MyFplManagerGameweekResponse,
+	type MyFplManagerReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
-	eventResultFromMyFplGameweek,
-	historyFromMyFplDesk,
-	transfersFromMyFpl
+	eventResultFromMyFplManagerGameweek,
+	historyFromMyFplReview,
+	transfersFromMyFplManagerReview
 } from './my-fpl-adapters'
 
 export interface EventPickViewModel {
@@ -499,7 +498,10 @@ const normalizeSnapshotRevision = (value: string | null): string | null => {
 	return candidate.replace(/^0+(?=\d)/, '')
 }
 
-const isNewerSnapshotRevision = (candidate: string, current: string): boolean => {
+const isNewerSnapshotRevision = (
+	candidate: string,
+	current: string
+): boolean => {
 	const normalizedCandidate = normalizeSnapshotRevision(candidate)
 	const normalizedCurrent = normalizeSnapshotRevision(current)
 	if (!normalizedCandidate || !normalizedCurrent) return false
@@ -517,7 +519,8 @@ export const canCommitSnapshotResponse = (
 ): boolean => {
 	const currentRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
 	if (currentRevision !== requestedRevision) return false
-	if (requestedRevision === null || responseRevision === requestedRevision) return true
+	if (requestedRevision === null || responseRevision === requestedRevision)
+		return true
 	return (
 		responseRevision !== null &&
 		isNewerSnapshotRevision(responseRevision, requestedRevision)
@@ -808,13 +811,13 @@ export const getEntryHistoryCached = async (
 		? entryHistoryInFlight.get(snapshotRequestKey(entryId, requestRevision))
 		: undefined
 	if (inflight) return inflight
-	const request = executeQuery<MyFplTeamDeskResponse>(
-		GET_MY_FPL_TEAM_DESK,
-		{ eventId: null, snapshotRevision: opts?.snapshotRevision ?? null },
+	const request = executeQuery<MyFplManagerReviewResponse>(
+		GET_MY_FPL_MANAGER_REVIEW,
+		{ snapshotRevision: opts?.snapshotRevision ?? null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const snapshot = response.myFplTeamDesk
+			const snapshot = response.myFplManagerReview
 			if (
 				!canCommitSnapshotResponse(
 					entryId,
@@ -826,7 +829,7 @@ export const getEntryHistoryCached = async (
 			}
 			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
 			seedEntryDeskState(entryId, snapshot.state)
-			const history = historyFromMyFplDesk(snapshot)
+			const history = historyFromMyFplReview(snapshot)
 			seedEntryHistoryCache(entryId, history, snapshot.pastSeasonsState)
 			return history
 		})
@@ -865,25 +868,21 @@ export const getEntryEventResultCached = async (
 	const ttl = opts?.isCurrentGameweek
 		? ENTRY_EVENT_CURRENT_CACHE_TTL_MS
 		: ENTRY_EVENT_CACHE_TTL_MS
-	const request = executeQuery<MyFplTeamGameweekResponse>(
-		GET_MY_FPL_TEAM_GAMEWEEK,
+	const request = executeQuery<MyFplManagerGameweekResponse>(
+		GET_MY_FPL_MANAGER_GAMEWEEK,
 		{ eventId, snapshotRevision: opts?.snapshotRevision ?? null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const gameweek = response.myFplTeamGameweek
+			const gameweek = response.myFplManagerGameweek
 			const responseRevision = gameweek.snapshotMeta?.revision ?? null
 			if (
-				!canCommitSnapshotResponse(
-					entryId,
-					requestRevision,
-					responseRevision
-				)
+				!canCommitSnapshotResponse(entryId, requestRevision, responseRevision)
 			) {
 				throw new SnapshotRequestSupersededError()
 			}
 			seedEntrySnapshotMeta(entryId, gameweek.snapshotMeta ?? null)
-			const result = eventResultFromMyFplGameweek(gameweek)
+			const result = eventResultFromMyFplManagerGameweek(gameweek)
 			const responseCacheKey = entryEventCacheKey(
 				entryId,
 				eventId,
@@ -917,13 +916,13 @@ export const getTransferHistoryCached = async (
 		? transferHistoryInFlight.get(snapshotRequestKey(entryId, requestRevision))
 		: undefined
 	if (inflight) return inflight
-	const request = executeQuery<MyFplTeamTransfersResponse>(
-		GET_MY_FPL_TEAM_TRANSFERS,
+	const request = executeQuery<MyFplManagerReviewResponse>(
+		GET_MY_FPL_MANAGER_TRANSFERS,
 		{ snapshotRevision: opts?.snapshotRevision ?? null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const snapshot = response.myFplTeamTransfers
+			const snapshot = response.myFplManagerReview
 			if (
 				!canCommitSnapshotResponse(
 					entryId,
@@ -935,7 +934,7 @@ export const getTransferHistoryCached = async (
 			}
 			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
 			const state = snapshot.state
-			const transfers = transfersFromMyFpl(snapshot)
+			const transfers = transfersFromMyFplManagerReview(snapshot)
 			setCacheValue(
 				transferHistoryStateCache,
 				entryId,

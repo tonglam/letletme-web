@@ -9,8 +9,8 @@ import {
 	type LiveCalcDataResponse
 } from '@/lib/graphql/operations/live'
 import {
-	GET_MY_FPL_TEAM_GAMEWEEK,
-	type MyFplTeamGameweekResponse
+	GET_MY_FPL_MANAGER_GAMEWEEK,
+	type MyFplManagerGameweekResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	GET_TOURNAMENT_DETAIL_DESK,
@@ -45,9 +45,7 @@ export type DataGovernanceProbeResponse = {
 
 export class DataGovernanceProbeError extends Error {
 	readonly code:
-		| 'INVALID_REQUEST'
-		| 'UNSUPPORTED_CONTRACT'
-		| 'BUSINESS_DATA_UNAVAILABLE'
+		'INVALID_REQUEST' | 'UNSUPPORTED_CONTRACT' | 'BUSINESS_DATA_UNAVAILABLE'
 
 	constructor(code: DataGovernanceProbeError['code'], message: string) {
 		super(message)
@@ -313,13 +311,13 @@ async function probeEntryData(
 ): Promise<{ revision: string; complete: boolean }> {
 	const { eventId } = await resolveProbeEvent(input)
 	const response =
-		await executeServerQueryWithSession<MyFplTeamGameweekResponse>(
+		await executeServerQueryWithSession<MyFplManagerGameweekResponse>(
 			canarySession(config),
-			GET_MY_FPL_TEAM_GAMEWEEK,
+			GET_MY_FPL_MANAGER_GAMEWEEK,
 			{ eventId, snapshotRevision: null },
 			{ cache: 'no-store', timeoutMs: 5_000 }
 		)
-	const gameweek = response.myFplTeamGameweek
+	const gameweek = response.myFplManagerGameweek
 	if (!gameweek || gameweek.eventId !== eventId) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',

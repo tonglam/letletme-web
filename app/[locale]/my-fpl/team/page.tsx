@@ -1,7 +1,7 @@
 import TeamStatsClient from '@/app/me/team/TeamStatsClient'
 import {
-	eventResultFromMyFplGameweek,
-	historyFromMyFplDesk,
+	eventResultFromMyFplManagerGameweek,
+	historyFromMyFplReview,
 	identityFromMyFplEntry
 } from '@/app/me/team/_lib/my-fpl-adapters'
 import {
@@ -18,10 +18,12 @@ import {
 import { getCoreEventContext } from '@/lib/events'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
-	GET_MY_FPL_TEAM_DESK,
+	GET_MY_FPL_MANAGER_GAMEWEEK,
+	GET_MY_FPL_MANAGER_REVIEW,
 	type MyFplReviewState,
 	type MyFplSnapshotMeta,
-	type MyFplTeamDeskResponse
+	type MyFplManagerGameweekResponse,
+	type MyFplManagerReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { resolveSeasonPresentation } from '@/lib/season-presentation'
@@ -154,10 +156,10 @@ export default async function TeamStatsPage({
 	const seasonPresentation = resolveSeasonPresentation(coreEventContext)
 
 	let initialEntryEventResult = null as ReturnType<
-		typeof eventResultFromMyFplGameweek
+		typeof eventResultFromMyFplManagerGameweek
 	>
 	let initialEntryHistory = null as ReturnType<
-		typeof historyFromMyFplDesk
+		typeof historyFromMyFplReview
 	> | null
 	let initialEntryIdentity = null as ReturnType<typeof identityFromMyFplEntry>
 	let initialDeskState: MyFplReviewState = 'EMPTY'
@@ -177,32 +179,26 @@ export default async function TeamStatsPage({
 	let initialSelectedGameweek: number | undefined
 
 	try {
-		const response = await timing.measure('my-fpl-desk', () =>
-			executeServerQueryWithSession<MyFplTeamDeskResponse>(
+		const response = await timing.measure('my-fpl-review', () =>
+			executeServerQueryWithSession<MyFplManagerReviewResponse>(
 				session,
-				GET_MY_FPL_TEAM_DESK,
-				{ eventId: requestedEventId },
+				GET_MY_FPL_MANAGER_REVIEW,
+				{ snapshotRevision: null },
 				{ cache: 'no-store' }
 			)
 		)
-		const desk = response.myFplTeamDesk
-		initialDeskState = desk.state
+		const review = response.myFplManagerReview
+		initialDeskState = review.state
 		initialEntryHistory =
-			desk.state === 'READY' ? historyFromMyFplDesk(desk) : null
-		initialEntryIdentity = identityFromMyFplEntry(desk.entry)
-		initialEntryEventResult =
-			desk.state === 'READY'
-				? eventResultFromMyFplGameweek(desk.gameweek)
-				: null
-		initialEntryGameweekState =
-			desk.state === 'READY' ? desk.gameweek?.state : desk.state
-		initialPastSeasonsState = desk.pastSeasonsState
-		initialSnapshotMeta = desk.snapshotMeta ?? null
+			review.state === 'READY' ? historyFromMyFplReview(review) : null
+		initialEntryIdentity = identityFromMyFplEntry(review.entry)
 		currentGameweek =
-			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
-		const latestFinalized = desk.context.latestFinalizedEventId ?? 0
-		const currentEvent = desk.context.currentEventId ?? 0
-		const latestPublished = desk.context.latestPublishedEventId ?? 0
+			review.context.currentEventId ??
+			review.context.latestFinalizedEventId ??
+			0
+		const latestFinalized = review.context.latestFinalizedEventId ?? 0
+		const currentEvent = review.context.currentEventId ?? 0
+		const latestPublished = review.context.latestPublishedEventId ?? 0
 		const maxKnownEvent = Math.max(currentEvent, latestFinalized)
 		maxKnownPublishedEvent = Math.max(maxKnownEvent, latestPublished)
 		const safeRequestedEvent =
@@ -211,7 +207,7 @@ export default async function TeamStatsPage({
 				: null
 		initialSelectedGameweek =
 			safeRequestedEvent ??
-			desk.selectedEventId ??
+			review.currentGameweek?.eventId ??
 			(latestPublished > 0
 				? latestPublished
 				: latestFinalized > 0
@@ -219,26 +215,44 @@ export default async function TeamStatsPage({
 					: currentEvent > 0
 						? currentEvent
 						: undefined)
-		const deskGameweekMatchesSelection =
-			desk.gameweek?.eventId === (initialSelectedGameweek ?? 0)
-		if (!deskGameweekMatchesSelection) {
-			initialEntryEventResult = null
-			initialEntryGameweekState = undefined
+		let selectedGameweek = review.currentGameweek
+		if (
+			review.state === 'READY' &&
+			initialSelectedGameweek != null &&
+			selectedGameweek?.eventId !== initialSelectedGameweek
+		) {
+			const gameweekResponse = await timing.measure('my-fpl-gameweek', () =>
+				executeServerQueryWithSession<MyFplManagerGameweekResponse>(
+					session,
+					GET_MY_FPL_MANAGER_GAMEWEEK,
+					{ eventId: initialSelectedGameweek, snapshotRevision: null },
+					{ cache: 'no-store' }
+				)
+			)
+			selectedGameweek = gameweekResponse.myFplManagerGameweek
 		}
+		initialEntryEventResult =
+			review.state === 'READY'
+				? eventResultFromMyFplManagerGameweek(selectedGameweek)
+				: null
+		initialEntryGameweekState =
+			review.state === 'READY' ? selectedGameweek?.state : review.state
+		initialPastSeasonsState = review.pastSeasonsState
+		initialSnapshotMeta = review.snapshotMeta ?? null
 
 		initialRequestComplete = true
 
 		console.info('[team stats] ssr seed', {
 			view: initialView,
 			requestedEventId,
-			currentGw: desk.context.currentEventId,
-			latestFinalizedGw: desk.context.latestFinalizedEventId,
+			currentGw: review.context.currentEventId,
+			latestFinalizedGw: review.context.latestFinalizedEventId,
 			hasHistory: Boolean(initialEntryHistory?.results?.length),
 			historyRows: initialEntryHistory?.results?.length ?? 0,
 			hasIdentity: Boolean(initialEntryIdentity),
 			hasEvent: Boolean(initialEntryEventResult),
 			gameweekState: initialEntryGameweekState,
-			pastSeasonsState: desk.pastSeasonsState
+			pastSeasonsState: review.pastSeasonsState
 		})
 
 		if (

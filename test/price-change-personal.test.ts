@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	buildPersonalPurchasePrices,
-	calculateSellingPrice,
+	calculateSellingPrice
 } from '../lib/price-change-personal'
-import type { MyFplTeamTransfers } from '../lib/graphql/operations/my-fpl'
+import type { MyFplManagerReview } from '../lib/graphql/operations/my-fpl'
 import type { SquadPickSeed } from '../lib/squad-picks'
 
 const pick: SquadPickSeed = {
@@ -15,20 +15,11 @@ const pick: SquadPickSeed = {
 	position: 1,
 	multiplier: 1,
 	isCaptain: false,
-	isViceCaptain: false,
+	isViceCaptain: false
 }
 
-const transfers: MyFplTeamTransfers = {
-	state: 'READY',
-	context: {
-		season: '2026/27',
-		coreRevision: 'test',
-		currentEventId: 2,
-		nextEventId: 3,
-		latestFinalizedEventId: 2,
-		latestPublishedEventId: 2,
-	},
-	gameweeks: [
+const transfers: Pick<MyFplManagerReview, 'transfers'> = {
+	transfers: [
 		{
 			eventId: 1,
 			eventTransfers: 1,
@@ -44,9 +35,9 @@ const transfers: MyFplTeamTransfers = {
 					elementOutTypeName: 'MIDFIELDER',
 					elementOutTeamShortName: 'OTH',
 					elementOutCost: 60,
-					time: '2026-08-01T10:00:00.000Z',
-				},
-			],
+					time: '2026-08-01T10:00:00.000Z'
+				}
+			]
 		},
 		{
 			eventId: 2,
@@ -63,12 +54,11 @@ const transfers: MyFplTeamTransfers = {
 					elementOutTypeName: 'MIDFIELDER',
 					elementOutTeamShortName: 'OTH',
 					elementOutCost: 60,
-					time: '2026-08-08T10:00:00.000Z',
-				},
-			],
-		},
-	],
-	snapshotMeta: null,
+					time: '2026-08-08T10:00:00.000Z'
+				}
+			]
+		}
+	]
 }
 
 describe('calculateSellingPrice', () => {
@@ -85,7 +75,7 @@ describe('buildPersonalPurchasePrices', () => {
 			picks: [pick],
 			startPrices: [{ elementId: 101, startPrice: 60 }],
 			transfers,
-			historyChips: new Map(),
+			historyChips: new Map()
 		})
 		assert.equal(result.state, 'READY')
 		assert.equal(result.purchasePrices['101'], 75)
@@ -96,7 +86,7 @@ describe('buildPersonalPurchasePrices', () => {
 			picks: [pick],
 			startPrices: [{ elementId: 101, startPrice: 60 }],
 			transfers,
-			historyChips: new Map([[1, 'FREE_HIT']]),
+			historyChips: new Map([[1, 'FREE_HIT']])
 		})
 		assert.equal(result.purchasePrices['101'], 75)
 	})
@@ -104,7 +94,7 @@ describe('buildPersonalPurchasePrices', () => {
 	it('uses the start price when no transfer is available', () => {
 		const result = buildPersonalPurchasePrices({
 			picks: [pick],
-			startPrices: [{ elementId: 101, startPrice: 60 }],
+			startPrices: [{ elementId: 101, startPrice: 60 }]
 		})
 		assert.equal(result.state, 'READY')
 		assert.equal(result.purchasePrices['101'], 60)

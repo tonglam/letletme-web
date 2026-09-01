@@ -1,23 +1,30 @@
 import 'server-only'
 
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
-import { executePublicServerQuery, executeServerQueryWithSession } from '@/lib/graphql-server'
+import {
+	CacheTag,
+	publicFetchOptions,
+	RevalidateSeconds
+} from '@/lib/cache-policy'
+import {
+	executePublicServerQuery,
+	executeServerQueryWithSession
+} from '@/lib/graphql-server'
 import {
 	GET_ENTRY_HISTORY,
-	type EntryHistoryResponse,
+	type EntryHistoryResponse
 } from '@/lib/graphql/operations/entries'
 import {
-	GET_MY_FPL_TEAM_TRANSFERS,
-	type MyFplTeamTransfersResponse,
+	GET_MY_FPL_MANAGER_TRANSFERS,
+	type MyFplManagerReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	GET_PLAYER_START_PRICE,
-	type PlayerStartPriceResponse,
+	type PlayerStartPriceResponse
 } from '@/lib/graphql/operations/players'
 import {
 	buildPersonalPurchasePrices,
 	type PersonalPriceContext,
-	type SquadStartPrice,
+	type SquadStartPrice
 } from '@/lib/price-change-personal'
 import type { Session } from '@/lib/auth'
 import type { SquadPickSeed } from '@/lib/squad-picks'
@@ -36,13 +43,16 @@ function uniqueElementIds(picks: readonly SquadPickSeed[]): number[] {
 					(elementId): elementId is number =>
 						typeof elementId === 'number' &&
 						Number.isSafeInteger(elementId) &&
-						elementId > 0,
-				),
-		),
+						elementId > 0
+				)
+		)
 	)
 }
 
-async function loadStartPrice({ elementId, eventId }: PriceStartEvent): Promise<SquadStartPrice> {
+async function loadStartPrice({
+	elementId,
+	eventId
+}: PriceStartEvent): Promise<SquadStartPrice> {
 	try {
 		const response = await executePublicServerQuery<PlayerStartPriceResponse>(
 			'player-stats',
@@ -50,8 +60,8 @@ async function loadStartPrice({ elementId, eventId }: PriceStartEvent): Promise<
 			{ playerId: elementId, eventId },
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.publicStats,
-				tags: [CacheTag.market],
-			}),
+				tags: [CacheTag.market]
+			})
 		)
 		const startPrice = response.playerDetail?.startPrice
 		return {
@@ -59,12 +69,12 @@ async function loadStartPrice({ elementId, eventId }: PriceStartEvent): Promise<
 			startPrice:
 				typeof startPrice === 'number' && Number.isFinite(startPrice)
 					? startPrice
-					: null,
+					: null
 		}
 	} catch (error) {
 		console.warn('[price-changes] player start price failed:', {
 			elementId,
-			error,
+			error
 		})
 		return { elementId, startPrice: null }
 	}
@@ -81,40 +91,42 @@ export async function loadPersonalPriceContext(params: {
 		return { state: 'UNAVAILABLE', purchasePrices: {} }
 	}
 
-	const transfersPromise = executeServerQueryWithSession<MyFplTeamTransfersResponse>(
-		params.session,
-		GET_MY_FPL_TEAM_TRANSFERS,
-		undefined,
-		{ cache: 'no-store' },
-	).catch(error => {
-		console.warn('[price-changes] personal transfer history failed:', error)
-		return null
-	})
+	const transfersPromise =
+		executeServerQueryWithSession<MyFplManagerReviewResponse>(
+			params.session,
+			GET_MY_FPL_MANAGER_TRANSFERS,
+			undefined,
+			{ cache: 'no-store' }
+		).catch(error => {
+			console.warn('[price-changes] personal transfer history failed:', error)
+			return null
+		})
 
 	const historyPromise = executeServerQueryWithSession<EntryHistoryResponse>(
 		params.session,
 		GET_ENTRY_HISTORY,
 		{ entryId: params.entryId },
-		{ cache: 'no-store' },
+		{ cache: 'no-store' }
 	).catch(error => {
 		console.warn('[price-changes] entry history for price rules failed:', error)
 		return null
 	})
 
-	const startPricesPromise = params.eventId == null
-		? Promise.resolve<SquadStartPrice[]>(
-			elementIds.map(elementId => ({ elementId, startPrice: null })),
-		)
-		: Promise.all(
-			elementIds.map(elementId =>
-				loadStartPrice({ elementId, eventId: params.eventId as number }),
-			),
-		)
+	const startPricesPromise =
+		params.eventId == null
+			? Promise.resolve<SquadStartPrice[]>(
+					elementIds.map(elementId => ({ elementId, startPrice: null }))
+				)
+			: Promise.all(
+					elementIds.map(elementId =>
+						loadStartPrice({ elementId, eventId: params.eventId as number })
+					)
+				)
 
 	const [transfersResponse, historyResponse, startPrices] = await Promise.all([
 		transfersPromise,
 		historyPromise,
-		startPricesPromise,
+		startPricesPromise
 	])
 
 	const historyChips = new Map<number, string>()
@@ -127,10 +139,10 @@ export async function loadPersonalPriceContext(params: {
 	const personalPrices = buildPersonalPurchasePrices({
 		picks: params.picks,
 		startPrices,
-		transfers: transfersResponse?.myFplTeamTransfers ?? null,
-		historyChips,
+		transfers: transfersResponse?.myFplManagerReview ?? null,
+		historyChips
 	})
-	const transferState = transfersResponse?.myFplTeamTransfers?.state
+	const transferState = transfersResponse?.myFplManagerReview?.state
 	if (
 		transfersResponse == null ||
 		transferState === 'PENDING' ||
@@ -138,7 +150,7 @@ export async function loadPersonalPriceContext(params: {
 	) {
 		return {
 			state: 'UNAVAILABLE',
-			purchasePrices: {},
+			purchasePrices: {}
 		}
 	}
 	if (historyResponse == null && personalPrices.state === 'READY') {

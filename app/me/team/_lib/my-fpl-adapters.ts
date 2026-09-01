@@ -9,10 +9,9 @@ import type {
 } from '@/lib/graphql/operations/entries'
 import type {
 	MyFplEntryIdentity,
-	MyFplTeamDesk,
-	MyFplTeamGameweek,
-	MyFplTeamPick,
-	MyFplTeamTransfers
+	MyFplManagerGameweek,
+	MyFplManagerPick,
+	MyFplManagerReview
 } from '@/lib/graphql/operations/my-fpl'
 import type { SeasonIdentity } from './team-stats-model'
 
@@ -34,16 +33,16 @@ export function identityFromMyFplEntry(
 	}
 }
 
-export function historyFromMyFplDesk(
-	desk: MyFplTeamDesk
+export function historyFromMyFplReview(
+	review: MyFplManagerReview
 ): EntryHistoryResponse['entryHistory'] {
-	const results: EntryHistoryItem[] = desk.history.map(row => ({
+	const results: EntryHistoryItem[] = review.timeline.map(row => ({
 		eventId: row.eventId,
 		eventChip: row.eventChip,
 		eventPoints: row.eventPoints,
 		eventRank: row.eventRank,
 		overallPoints: row.overallPoints,
-		overallRank: row.overallRank,
+		overallRank: row.overallRank ?? 0,
 		eventTransfers: row.eventTransfers,
 		eventTransfersCost: row.eventTransfersCost,
 		eventNetPoints: row.eventNetPoints,
@@ -62,8 +61,8 @@ export function historyFromMyFplDesk(
 	}))
 
 	const history: EntrySeasonHistoryItem[] =
-		desk.pastSeasonsState === 'READY'
-			? desk.pastSeasons.map(row => ({
+		review.pastSeasonsState === 'READY'
+			? review.pastSeasons.map(row => ({
 					season: row.season,
 					totalPoints: row.totalPoints,
 					overallRank: row.overallRank
@@ -73,7 +72,7 @@ export function historyFromMyFplDesk(
 	return { results, history }
 }
 
-function mapPick(pick: MyFplTeamPick): EntryEventPick {
+function mapPick(pick: MyFplManagerPick): EntryEventPick {
 	return {
 		element: pick.element,
 		webName: pick.webName,
@@ -110,8 +109,8 @@ function mapPick(pick: MyFplTeamPick): EntryEventPick {
 	}
 }
 
-export function eventResultFromMyFplGameweek(
-	gameweek: MyFplTeamGameweek | null | undefined
+export function eventResultFromMyFplManagerGameweek(
+	gameweek: MyFplManagerGameweek | null | undefined
 ): EntryEventResult | null {
 	if (!gameweek?.result || !gameweek.entry) return null
 	const result = gameweek.result
@@ -119,7 +118,7 @@ export function eventResultFromMyFplGameweek(
 		eventId: result.eventId,
 		eventPoints: result.eventPoints,
 		overallPoints: result.overallPoints,
-		overallRank: result.overallRank,
+		overallRank: result.overallRank ?? 0,
 		eventTransfers: result.eventTransfers,
 		eventTransfersCost: result.eventTransfersCost,
 		eventNetPoints: result.eventNetPoints,
@@ -142,10 +141,10 @@ export function eventResultFromMyFplGameweek(
 	}
 }
 
-export function transfersFromMyFpl(
-	transfers: MyFplTeamTransfers | null | undefined
+export function transfersFromMyFplManagerReview(
+	review: MyFplManagerReview | null | undefined
 ): EntryGameweekTransfers[] {
-	return (transfers?.gameweeks ?? []).map(gameweek => ({
+	return (review?.transfers ?? []).map(gameweek => ({
 		eventId: gameweek.eventId,
 		eventTransfers: gameweek.eventTransfers,
 		eventTransfersCost: gameweek.eventTransfersCost,

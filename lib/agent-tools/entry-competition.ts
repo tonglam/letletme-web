@@ -5,7 +5,8 @@ import {
 	COMPETITION_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	ENTRY_SNAPSHOT_DOCUMENT,
-	OWN_ENTRY_DOCUMENT
+	OWN_ENTRY_DOCUMENT,
+	OWN_ENTRY_EVENT_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
 	coreEventId,
@@ -46,23 +47,31 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 
 	if (input.entryId === undefined) {
 		const entryId = requireVerifiedEntryId(options.session)
-		const [snapshot, deskResult] = await Promise.all([
+		const [snapshot, reviewResult] = await Promise.all([
 			executeDocument<{
 				coreEventContext: CoreContext
 				entrySnapshot: unknown | null
 			}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId }),
 			executeDocument<{
 				coreEventContext: CoreContext
-				myFplTeamDesk: {
+				myFplManagerReview: {
 					state: string
 					context: {
 						season: string
 						coreRevision: string
 					}
-					history: unknown[]
+					timeline: unknown[]
+					currentGameweek?: unknown
 					[key: string]: unknown
 				}
-			}>(options, OWN_ENTRY_DOCUMENT, { eventId: input.eventId })
+				myFplManagerGameweek?: unknown
+			}>(
+				options,
+				input.eventId === undefined
+					? OWN_ENTRY_DOCUMENT
+					: OWN_ENTRY_EVENT_DOCUMENT,
+				input.eventId === undefined ? {} : { eventId: input.eventId }
+			)
 		])
 		if (!snapshot.entrySnapshot) {
 			throw new AgentToolError(
@@ -73,12 +82,13 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 			)
 		}
 		if (
-			snapshot.coreEventContext.season !== deskResult.coreEventContext.season ||
+			snapshot.coreEventContext.season !==
+				reviewResult.coreEventContext.season ||
 			snapshot.coreEventContext.revision !==
-				deskResult.coreEventContext.revision ||
-			deskResult.myFplTeamDesk.context.season !==
+				reviewResult.coreEventContext.revision ||
+			reviewResult.myFplManagerReview.context.season !==
 				snapshot.coreEventContext.season ||
-			deskResult.myFplTeamDesk.context.coreRevision !==
+			reviewResult.myFplManagerReview.context.coreRevision !==
 				snapshot.coreEventContext.revision
 		) {
 			throw new AgentToolError(
@@ -88,11 +98,11 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				true
 			)
 		}
-		const desk = deskResult.myFplTeamDesk
+		const review = reviewResult.myFplManagerReview
 		const warnings: AgentWarning[] = []
-		if (desk.state !== 'READY') {
+		if (review.state !== 'READY') {
 			warnings.push({
-				code: `ENTRY_EXTENSION_${desk.state}`,
+				code: `ENTRY_EXTENSION_${review.state}`,
 				message: 'Some verified-entry analysis is not ready for this period.'
 			})
 		}
@@ -102,14 +112,17 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				accessScope: 'self',
 				entry: snapshot.entrySnapshot,
 				extensions: {
-					...desk,
-					history: desk.history.slice(-input.historyLimit)
+					...review,
+					history: review.timeline.slice(-input.historyLimit),
+					...(reviewResult.myFplManagerGameweek
+						? { gameweek: reviewResult.myFplManagerGameweek }
+						: {})
 				}
 			},
-			coreRevisions(deskResult.coreEventContext),
+			coreRevisions(reviewResult.coreEventContext),
 			warnings,
 			undefined,
-			deskResult.coreEventContext.sourceCheckedAt
+			reviewResult.coreEventContext.sourceCheckedAt
 		)
 	}
 
@@ -127,7 +140,10 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 	}
 	return toolResponse(
 		options,
-		{ accessScope: 'public', entry: result.entrySnapshot },
+		{
+			accessScope: 'public',
+			entry: result.entrySnapshot
+		},
 		coreRevisions(result.coreEventContext),
 		[],
 		undefined,
@@ -166,7 +182,11 @@ type CompetitionLiveSnapshot = {
 	eventId: number
 	state: string
 	revisions: { scoreCore: string }
-	times: { sourceCheckedAt: string; contentUpdatedAt: string; publishedAt: string }
+	times: {
+		sourceCheckedAt: string
+		contentUpdatedAt: string
+		publishedAt: string
+	}
 	delivery: { state: string; servedFrom: string; reasonCodes: string[] }
 } | null
 
@@ -386,6 +406,7 @@ export async function runCompetition(
 		coreRevisions(result.coreEventContext),
 		[],
 		{ nextCursor },
-		result.liveSnapshot?.times.sourceCheckedAt ?? result.coreEventContext.sourceCheckedAt
+		result.liveSnapshot?.times.sourceCheckedAt ??
+			result.coreEventContext.sourceCheckedAt
 	)
 }

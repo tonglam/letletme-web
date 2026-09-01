@@ -1,5 +1,5 @@
 import { squadMatchKey } from '@/lib/fixtures-fdr'
-import type { MyFplTeamTransfers } from '@/lib/graphql/operations/my-fpl'
+import type { MyFplManagerReview } from '@/lib/graphql/operations/my-fpl'
 import type { SquadPickSeed } from '@/lib/squad-picks'
 
 export type PersonalPriceState = 'READY' | 'PARTIAL' | 'UNAVAILABLE'
@@ -34,7 +34,7 @@ const nameAndPositionKey = (webName: string, elementTypeName: string): string =>
 function addUnique(
 	map: Map<string, number | null>,
 	key: string,
-	elementId: number,
+	elementId: number
 ): void {
 	if (!key) return
 	const existing = map.get(key)
@@ -55,17 +55,17 @@ function buildIdentityIndex(picks: SquadPickSeed[]): IdentityIndex {
 			elementId: pick.elementId,
 			webName: pick.webName,
 			teamShortName: pick.teamShortName,
-			elementTypeName: pick.elementTypeName,
+			elementTypeName: pick.elementTypeName
 		}
 		addUnique(
 			byExactKey,
 			squadMatchKey(identity.webName, identity.teamShortName),
-			identity.elementId,
+			identity.elementId
 		)
 		addUnique(
 			byNameAndPosition,
 			nameAndPositionKey(identity.webName, identity.elementTypeName),
-			identity.elementId,
+			identity.elementId
 		)
 	}
 
@@ -76,7 +76,7 @@ function resolveTransferElementId(
 	webName: string,
 	teamShortName: string,
 	elementTypeName: string,
-	index: IdentityIndex,
+	index: IdentityIndex
 ): number | null {
 	const exact = index.byExactKey.get(squadMatchKey(webName, teamShortName))
 	if (exact != null) return exact
@@ -84,7 +84,7 @@ function resolveTransferElementId(
 	// A player can change club after the transfer. The position-qualified name
 	// fallback still resolves to the existing element id when it is unique.
 	const byNameAndPosition = index.byNameAndPosition.get(
-		nameAndPositionKey(webName, elementTypeName),
+		nameAndPositionKey(webName, elementTypeName)
 	)
 	return byNameAndPosition ?? null
 }
@@ -95,7 +95,7 @@ function resolveTransferElementId(
  */
 export function calculateSellingPrice(
 	purchasePrice: number,
-	currentPrice: number,
+	currentPrice: number
 ): number {
 	if (currentPrice <= purchasePrice) return currentPrice
 	return purchasePrice + Math.floor((currentPrice - purchasePrice) / 2)
@@ -104,11 +104,11 @@ export function calculateSellingPrice(
 export function buildPersonalPurchasePrices(params: {
 	picks: SquadPickSeed[]
 	startPrices: readonly SquadStartPrice[]
-	transfers?: MyFplTeamTransfers | null
+	transfers?: Pick<MyFplManagerReview, 'transfers'> | null
 	historyChips?: ReadonlyMap<number, string>
 }): PersonalPriceContext {
 	const validPicks = params.picks.filter(
-		pick => pick.elementId != null && pick.elementId > 0,
+		pick => pick.elementId != null && pick.elementId > 0
 	)
 	if (validPicks.length === 0) {
 		return { state: 'UNAVAILABLE', purchasePrices: {} }
@@ -117,7 +117,7 @@ export function buildPersonalPurchasePrices(params: {
 	const startPriceByElementId = new Map(
 		params.startPrices
 			.filter(row => row.elementId > 0 && row.startPrice != null)
-			.map(row => [row.elementId, row.startPrice as number]),
+			.map(row => [row.elementId, row.startPrice as number])
 	)
 	const purchasePriceByElementId = new Map<number, number>()
 
@@ -130,8 +130,8 @@ export function buildPersonalPurchasePrices(params: {
 
 	const identityIndex = buildIdentityIndex(validPicks)
 	const chips = params.historyChips ?? new Map<number, string>()
-	const gameweeks = Array.from(params.transfers?.gameweeks ?? []).sort(
-		(left, right) => left.eventId - right.eventId,
+	const gameweeks = Array.from(params.transfers?.transfers ?? []).sort(
+		(left, right) => left.eventId - right.eventId
 	)
 
 	for (const gameweek of gameweeks) {
@@ -153,7 +153,7 @@ export function buildPersonalPurchasePrices(params: {
 				move.elementInWebName,
 				move.elementInTeamShortName,
 				move.elementInTypeName,
-				identityIndex,
+				identityIndex
 			)
 			if (elementId == null) continue
 			if (!Number.isFinite(move.elementInCost) || move.elementInCost < 0) {
@@ -176,17 +176,17 @@ export function buildPersonalPurchasePrices(params: {
 				: purchasePriceByElementId.size > 0
 					? 'PARTIAL'
 					: 'UNAVAILABLE',
-		purchasePrices,
+		purchasePrices
 	}
 }
 
 function purchasePricesByCoverage(
 	picks: SquadPickSeed[],
-	prices: ReadonlyMap<number, number>,
+	prices: ReadonlyMap<number, number>
 ): number {
 	return picks.reduce(
 		(count, pick) =>
 			count + (pick.elementId != null && prices.has(pick.elementId) ? 1 : 0),
-		0,
+		0
 	)
 }
