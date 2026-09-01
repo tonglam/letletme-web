@@ -365,9 +365,7 @@ test('official-sync live points auto-refreshes without a polling label', async (
 	// The official post-deadline sync is expected lifecycle work.  It should
 	// recover through the cheap refresh loop without asking the user to retry.
 	await page.clock.runFor(30_000)
-	await expect
-		.poll(() => clientLivePointsRequests)
-		.toBeGreaterThan(1)
+	await expect.poll(() => clientLivePointsRequests).toBeGreaterThan(1)
 	// Flush the React update queued by the second network response while the
 	// browser fake clock is installed.
 	await page.clock.runFor(1)
@@ -391,7 +389,8 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
 	let probeCount = 0
-	let heavyRequestCount = 0
+	let headRequestCount = 0
+	let fullRequestCount = 0
 	let releaseFirstResponse: (() => void) | undefined
 	const firstResponseGate = new Promise<void>(resolve => {
 		releaseFirstResponse = resolve
@@ -416,6 +415,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 						lifecycle: revision,
 						fixtureIdentity: revision,
 						scoreState: revision,
+						detailObservation: null,
 						detailPublicationId: null,
 						detailGeneration: null,
 						playerDetail: null
@@ -461,10 +461,37 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			}
 		}
 	})
+	const liveHeadResponse = (
+		score: number,
+		revision: string,
+		deskGeneration: number
+	) => {
+		const full = liveResponse(score, revision, deskGeneration).data
+		const snapshot = full.liveMatchday.snapshot
+		const {
+			matches: _matches,
+			revisions,
+			...headSnapshot
+		} = snapshot
+		const {
+			detailPublicationId: _detailPublicationId,
+			detailGeneration: _detailGeneration,
+			playerDetail: _playerDetail,
+			...headRevisions
+		} = revisions
+		return {
+			data: {
+				liveMatchday: {
+					...full.liveMatchday,
+					snapshot: { ...headSnapshot, revisions: headRevisions }
+				}
+			}
+		}
+	}
 
 	await page.route('**/api/live/matches**', async route => {
-		heavyRequestCount += 1
-		if (heavyRequestCount === 1) {
+		fullRequestCount += 1
+		if (fullRequestCount === 1) {
 			await firstResponseGate
 			await route.fulfill({
 				status: 200,
@@ -472,7 +499,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			})
 			return
 		}
-		if (heavyRequestCount === 2) {
+		if (fullRequestCount === 2) {
 			await route.fulfill({
 				status: 503,
 				json: { errors: [{ message: 'Temporary upstream failure' }] }
@@ -487,6 +514,25 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as { query?: string }
+		if (payload.query?.includes('GetLiveMatchdayHead')) {
+			headRequestCount += 1
+			// The first freshness observation sees the newly published score. Once
+			// the full response is accepted, the next observation sees a newer
+			// revision and exercises the failed FULL/LKG path.
+			const revision = fullRequestCount === 0 ? 'b'.repeat(24) : 'c'.repeat(24)
+			const score = fullRequestCount === 0 ? 1 : 2
+			await route.fulfill({
+				status: 200,
+				json: {
+					data: liveHeadResponse(
+						score,
+						revision,
+						fullRequestCount === 0 ? 2 : 3
+					).data
+				}
+			})
+			return
+		}
 		if (payload.query?.includes('GetLiveContext')) {
 			probeCount += 1
 			const revision = probeCount === 1 ? 'b'.repeat(24) : 'c'.repeat(24)
@@ -548,7 +594,8 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(page.getByText(/Auto refresh in \d+s/)).toHaveCount(0)
 
 	await page.clock.fastForward(90_000)
-	await expect.poll(() => heavyRequestCount).toBe(1)
+	await expect.poll(() => headRequestCount).toBeGreaterThan(0)
+	await expect.poll(() => fullRequestCount).toBe(1)
 	expect(probeCount).toBe(0)
 	releaseFirstResponse?.()
 	await expect(page.getByRole('tab', { name: 'Live Now' })).toHaveAttribute(
@@ -558,7 +605,8 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
 
 	await page.clock.fastForward(30_000)
-	await expect.poll(() => heavyRequestCount).toBe(2)
+	await expect.poll(() => headRequestCount).toBeGreaterThan(1)
+	await expect.poll(() => fullRequestCount).toBe(2)
 	expect(probeCount).toBe(0)
 	await expect(
 		page.getByRole('alert').filter({
@@ -570,11 +618,12 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await context.setOffline(true)
 	await expect(page.getByText(/Auto refresh in/)).toHaveCount(0)
 	await page.clock.fastForward(60_000)
-	expect(heavyRequestCount).toBe(2)
+	expect(fullRequestCount).toBe(2)
 	expect(probeCount).toBe(0)
 
 	await context.setOffline(false)
-	await expect.poll(() => heavyRequestCount).toBe(3)
+	await expect.poll(() => headRequestCount).toBeGreaterThan(2)
+	await expect.poll(() => fullRequestCount).toBe(3)
 	expect(probeCount).toBe(0)
 	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
 })

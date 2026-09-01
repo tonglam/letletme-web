@@ -43,6 +43,7 @@ import {
 	GET_EVENT_LIVE_EXPLAIN,
 	GET_EVENT_LIVE_EXPLAINS,
 	GET_LIVE_MATCHDAY,
+	GET_LIVE_MATCHDAY_HEAD,
 	GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
 	GET_GAMEWEEK_BOARDS,
 	GET_LIVE_POINTS,
@@ -241,6 +242,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_ENTRY_HISTORY', GET_ENTRY_HISTORY],
 	['GET_ENTRY_TRANSFER_HISTORY', GET_ENTRY_TRANSFER_HISTORY],
 	['GET_LIVE_MATCHDAY', GET_LIVE_MATCHDAY],
+	['GET_LIVE_MATCHDAY_HEAD', GET_LIVE_MATCHDAY_HEAD],
 	['GET_LIVE_MATCHDAY_FIXTURE_SUMMARY', GET_LIVE_MATCHDAY_FIXTURE_SUMMARY],
 	['GET_MY_FPL_MANAGER_REVIEW', GET_MY_FPL_MANAGER_REVIEW],
 	['GET_MY_FPL_MANAGER_GAMEWEEK', GET_MY_FPL_MANAGER_GAMEWEEK],
@@ -260,7 +262,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 
 type PinnedTransportContracts = {
 	requiresLivePointsV2Contract: (rootFields: readonly string[]) => boolean
-	requiresLiveMatchesV2Contract: (rootFields: readonly string[]) => boolean
+	requiresLiveMatchesV3Contract: (rootFields: readonly string[]) => boolean
 	livePointsValue: string
 	liveMatchesValue: string
 }
@@ -327,7 +329,7 @@ async function loadPinnedTransportContracts(): Promise<PinnedTransportContracts 
 	])
 	if (
 		typeof points.requiresLivePointsV2Contract !== 'function' ||
-		typeof matches.requiresLiveMatchesV2Contract !== 'function' ||
+		typeof matches.requiresLiveMatchesV3Contract !== 'function' ||
 		typeof points.LIVE_POINTS_CONTRACT_VALUE !== 'string' ||
 		typeof matches.LIVE_MATCHES_CONTRACT_VALUE !== 'string'
 	) {
@@ -335,7 +337,7 @@ async function loadPinnedTransportContracts(): Promise<PinnedTransportContracts 
 	}
 	return {
 		requiresLivePointsV2Contract: points.requiresLivePointsV2Contract,
-		requiresLiveMatchesV2Contract: matches.requiresLiveMatchesV2Contract,
+		requiresLiveMatchesV3Contract: matches.requiresLiveMatchesV3Contract,
 		livePointsValue: points.LIVE_POINTS_CONTRACT_VALUE,
 		liveMatchesValue: matches.LIVE_MATCHES_CONTRACT_VALUE
 	}
@@ -362,7 +364,7 @@ async function discoverVersionGatedOperations(
 			}
 			if (
 				contracts.requiresLivePointsV2Contract(rootFields) ||
-				contracts.requiresLiveMatchesV2Contract(rootFields)
+				contracts.requiresLiveMatchesV3Contract(rootFields)
 			) {
 				discovered.push([`${filename}:${exportName}`, value])
 			}
@@ -507,7 +509,7 @@ async function main(): Promise<void> {
 			const requiresPoints =
 				transportContracts.requiresLivePointsV2Contract(rootFields)
 			const requiresMatches =
-				transportContracts.requiresLiveMatchesV2Contract(rootFields)
+				transportContracts.requiresLiveMatchesV3Contract(rootFields)
 			if (requiresPoints && requiresMatches) {
 				console.log(
 					`[CONTRACT_FAIL] ${name}: mixes Live Points and Live Matches roots`
@@ -540,7 +542,7 @@ async function main(): Promise<void> {
 		const astNodeLimit =
 			name === 'GET_ENTRY_LIVE_COMPETITION_BOARD'
 				? 400
-				: name === 'GET_LIVE_MATCHDAY'
+				: name === 'GET_LIVE_MATCHDAY' || name === 'GET_LIVE_MATCHDAY_HEAD'
 					? 200
 					: null
 		if (astNodeLimit !== null) {

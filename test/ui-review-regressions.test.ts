@@ -866,10 +866,9 @@ describe('live match share card', () => {
 		)
 		assert.match(navigation, /data-match-navigation="true"/)
 		assert.doesNotMatch(liveMatches, /GET_LIVE_CONTEXT/)
-		assert.match(
-			liveMatches,
-			/getLiveMatchesSnapshot\([\s\S]*?\n\s*null,\n\s*\{ preferHttp: true \}/
-		)
+		assert.match(liveMatches, /getLiveMatchesHead\(/)
+		assert.match(liveMatches, /getLiveMatchesSnapshot\(/)
+		assert.match(liveMatches, /preferHttp: true/)
 		assert.match(liveMatches, /activeMatches\.length < 2/)
 		assert.match(liveMatches, /event\.key === 'ArrowLeft'/)
 		assert.match(liveMatches, /event\.key === 'ArrowRight'/)
@@ -887,10 +886,7 @@ describe('live match share card', () => {
 describe('live match active-event fallback', () => {
 	it('corroborates fallback snapshots before seeding the client', async () => {
 		const source = await readFile(
-			new URL(
-				'../app/[locale]/live/matches/page.tsx',
-				import.meta.url
-			),
+			new URL('../app/[locale]/live/matches/page.tsx', import.meta.url),
 			'utf8'
 		)
 

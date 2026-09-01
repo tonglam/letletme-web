@@ -470,6 +470,7 @@ const liveMatchdaySnapshot = ({ match, state, revision }) => ({
 		lifecycle: revision,
 		fixtureIdentity: revision,
 		scoreState: revision,
+		detailObservation: state === 'PRE_DEADLINE' ? null : revision,
 		detailPublicationId:
 			state === 'PRE_DEADLINE'
 				? null

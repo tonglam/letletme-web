@@ -125,7 +125,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			initialError = t('matchesFailed')
 		}
 	}
-	// A valid V2 response without a snapshot is the expected official sync
+	// A valid V3 response without a snapshot is the expected official sync
 	// window, not a page error. The client keeps polling until it is published.
 	if (!live) initialError ??= t('matchesFailed')
 

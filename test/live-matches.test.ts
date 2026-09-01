@@ -6,19 +6,28 @@ import type {
 	LiveMatchdaySnapshot
 } from '../lib/graphql/operations/live'
 import {
+	GET_LIVE_MATCHDAY,
+	GET_LIVE_MATCHDAY_HEAD
+} from '../lib/graphql/operations/live'
+import {
 	canReplaceLiveMatchesLkg,
+	getLiveMatchesHead,
 	getLiveMatchesSnapshot,
 	parseLiveMatchesRequestParams,
 	retainLiveMatchdayDetailRevision,
 	retainLiveMatchPlayerDetails,
 	shouldRetainAcceptedLiveMatchDetails,
+	type LiveMatchdayHeadV3Payload,
+	type LiveMatchdayStatus,
 	type QueryExecutor,
 	type QueryExecutorOptions,
-	transformLiveMatchdayV2,
-	validateLiveMatchdayV2
+	transformLiveMatchdayV3,
+	validateLiveMatchdayHeadV3,
+	validateLiveMatchdayV3
 } from '../lib/live-matches'
 import {
 	liveMatchdayNeedsRefresh,
+	mergeLiveMatchdayHeadStatus,
 	shouldPollLiveMatchday
 } from '../lib/live-refresh'
 
@@ -33,6 +42,7 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 			lifecycle: 'life-1',
 			fixtureIdentity: 'fixture-1',
 			scoreState: 'score-1',
+			detailObservation: 'detail-observation-1',
 			detailPublicationId: 'detail-1',
 			detailGeneration: 1,
 			playerDetail: 'players-1'
@@ -78,19 +88,17 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 						position: 'MIDFIELDER',
 						teamId: 1,
 						price: 55,
-						totalPoints: 8,
+						totalPoints: 3,
 						stats: [
 							{
 								identifier: 'minutes',
 								value: 33,
-								points: 1,
-								pointsModification: null
+								awardedPoints: 1
 							},
 							{
 								identifier: 'bonus',
 								value: 2,
-								points: 2,
-								pointsModification: null
+								awardedPoints: 2
 							}
 						]
 					},
@@ -100,13 +108,12 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 						position: 'FORWARD',
 						teamId: 2,
 						price: 50,
-						totalPoints: 2,
+						totalPoints: 0,
 						stats: [
 							{
 								identifier: 'bps',
 								value: 45,
-								points: 0,
-								pointsModification: null
+								awardedPoints: 0
 							}
 						]
 					}
@@ -143,7 +150,7 @@ const unavailableResponse = () =>
 		snapshot: null
 	})
 
-describe('live matchday V2 publication', () => {
+describe('live matchday V3 publication', () => {
 	it('projects embedded players without a fixture detail fan-out', async () => {
 		const calls: string[] = []
 		const timeouts: Array<number | undefined> = []
@@ -161,6 +168,7 @@ describe('live matchday V2 publication', () => {
 		assert.equal(calls.length, 1)
 		assert.match(calls[0] ?? '', /liveMatchday\(eventId:/)
 		assert.doesNotMatch(calls[0] ?? '', /liveFixturePlayers|eventLive\(/)
+		assert.doesNotMatch(calls[0] ?? '', /awardedPoints|pointsModification/)
 		assert.doesNotMatch(calls[0] ?? '', /nextEventId/)
 		assert.deepEqual(timeouts, [5_000])
 		assert.equal(data.matches.length, 1)
@@ -172,6 +180,104 @@ describe('live matchday V2 publication', () => {
 		assert.equal(data.snapshot?.revisions.scoreState, 'score-1')
 		assert.equal('scoreCoreRevision' in (data.snapshot ?? {}), false)
 		assert.equal('checkpointedAt' in (data.snapshot?.times ?? {}), false)
+	})
+
+	it('uses a metadata-only HEAD without reading match or player fields', async () => {
+		const calls: string[] = []
+		const head = response()
+		const { matches: _matches, ...headSnapshot } = head.liveMatchday.snapshot!
+		const headRevisions = { ...headSnapshot.revisions }
+		delete (headRevisions as Partial<typeof headRevisions>).detailPublicationId
+		delete (headRevisions as Partial<typeof headRevisions>).detailGeneration
+		delete (headRevisions as Partial<typeof headRevisions>).playerDetail
+		const executor: QueryExecutor = async <T>(query: string): Promise<T> => {
+			calls.push(query)
+			return {
+				liveMatchday: {
+					...head.liveMatchday,
+					snapshot: {
+						...headSnapshot,
+						revisions: headRevisions,
+						detailDelivery: {
+							state: 'DEGRADED',
+							servedFrom: 'REDIS_CURRENT',
+							reasonCodes: ['DETAIL_METADATA_ONLY']
+						}
+					}
+				}
+			} as T
+		}
+
+		const data = await getLiveMatchesHead(executor, 33)
+
+		assert.equal(calls.length, 1)
+		assert.match(calls[0] ?? '', /GetLiveMatchdayHeadV3/)
+		assert.doesNotMatch(calls[0] ?? '', /\bmatches\b|\bplayers\b|\bstats\b/)
+		assert.equal(data.snapshot?.eventId, 33)
+		assert.equal(data.snapshot?.revisions.scoreState, 'score-1')
+	})
+
+	it('accepts a terminal HEAD without requiring omitted FULL detail revisions', () => {
+		const full = response({
+			delivery: {
+				state: 'FINAL',
+				servedFrom: 'REDIS_CURRENT',
+				reasonCodes: []
+			},
+			snapshot: snapshot({
+				state: 'FINALIZED',
+				detailDelivery: {
+					state: 'FINAL',
+					servedFrom: 'REDIS_CURRENT',
+					reasonCodes: []
+				}
+			})
+		})
+		const { matches: _matches, ...headSnapshot } = full.liveMatchday.snapshot!
+		const headRevisions = { ...headSnapshot.revisions }
+		delete (headRevisions as Partial<typeof headRevisions>).detailPublicationId
+		delete (headRevisions as Partial<typeof headRevisions>).detailGeneration
+		delete (headRevisions as Partial<typeof headRevisions>).playerDetail
+		const head = {
+			liveMatchday: {
+				...full.liveMatchday,
+				snapshot: {
+					...headSnapshot,
+					revisions: headRevisions
+				}
+			}
+		} as LiveMatchdayHeadV3Payload
+
+		assert.doesNotThrow(() => validateLiveMatchdayHeadV3(head))
+		assert.throws(
+			() =>
+				validateLiveMatchdayHeadV3({
+					...head,
+					liveMatchday: {
+						...head.liveMatchday,
+						snapshot: {
+							...head.liveMatchday.snapshot!,
+							detailDelivery: {
+								...head.liveMatchday.snapshot!.detailDelivery,
+								state: 'DEGRADED'
+							}
+						}
+					}
+				} as LiveMatchdayHeadV3Payload),
+			/LIVE_MATCHDAY_INCOHERENT/
+		)
+	})
+
+	it('keeps the V3 full and HEAD documents on separate read contracts', () => {
+		assert.match(GET_LIVE_MATCHDAY, /query GetLiveMatchdayV3/)
+		assert.match(GET_LIVE_MATCHDAY, /matches\s*\{/)
+		assert.doesNotMatch(GET_LIVE_MATCHDAY, /awardedPoints|pointsModification/)
+		assert.match(GET_LIVE_MATCHDAY_HEAD, /query GetLiveMatchdayHeadV3/)
+		assert.match(GET_LIVE_MATCHDAY_HEAD, /detailObservation/)
+		assert.doesNotMatch(
+			GET_LIVE_MATCHDAY_HEAD,
+			/\bmatches\b|\bplayers\b|\bstats\b|detailPublicationId|detailGeneration|playerDetail/
+		)
 	})
 
 	it('accepts the active pointer or one event and hard-rejects legacy API parameters', () => {
@@ -202,7 +308,7 @@ describe('live matchday V2 publication', () => {
 		)
 	})
 
-	it('uses the V2 HTTP active pointer without legacy season or revision parameters', async () => {
+	it('uses the V3 HTTP active pointer without legacy season or revision parameters', async () => {
 		const originalFetch = globalThis.fetch
 		const requests: Array<{ url: string; contract: string | null }> = []
 		globalThis.fetch = (async (input, init) => {
@@ -226,10 +332,10 @@ describe('live matchday V2 publication', () => {
 			globalThis.fetch = originalFetch
 		}
 		assert.deepEqual(requests, [
-			{ url: '/api/live/matches', contract: 'live-matches-v2' },
+			{ url: '/api/live/matches', contract: 'live-matches-v3' },
 			{
 				url: '/api/live/matches?eventId=33',
-				contract: 'live-matches-v2'
+				contract: 'live-matches-v3'
 			}
 		])
 	})
@@ -244,7 +350,7 @@ describe('live matchday V2 publication', () => {
 			]
 		})
 		assert.throws(
-			() => validateLiveMatchdayV2(response({ snapshot: mixedEvent })),
+			() => validateLiveMatchdayV3(response({ snapshot: mixedEvent })),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 
@@ -253,19 +359,41 @@ describe('live matchday V2 publication', () => {
 			matches: [{ ...base, players: [...base.players, base.players[0]!] }]
 		})
 		assert.throws(
-			() => validateLiveMatchdayV2(response({ snapshot: duplicatePlayers })),
+			() => validateLiveMatchdayV3(response({ snapshot: duplicatePlayers })),
+			/LIVE_MATCHDAY_INCOHERENT/
+		)
+
+		const playerWithDuplicateStat = base.players[0]!
+		const duplicateStats = snapshot({
+			matches: [
+				{
+					...base,
+					players: [
+						{
+							...playerWithDuplicateStat,
+							stats: [
+								...playerWithDuplicateStat.stats,
+								{ identifier: 'MINUTES', value: 33 }
+							]
+						}
+					]
+				}
+			]
+		})
+		assert.throws(
+			() => validateLiveMatchdayV3(response({ snapshot: duplicateStats })),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 
 		const partialDetail = snapshot()
 		partialDetail.revisions.detailGeneration = null
 		assert.throws(
-			() => validateLiveMatchdayV2(response({ snapshot: partialDetail })),
+			() => validateLiveMatchdayV3(response({ snapshot: partialDetail })),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 		assert.throws(
 			() =>
-				validateLiveMatchdayV2(
+				validateLiveMatchdayV3(
 					response({
 						availability: 'UNAVAILABLE',
 						delivery: {
@@ -292,13 +420,13 @@ describe('live matchday V2 publication', () => {
 		assert.equal(canReplaceLiveMatchesLkg(data), false)
 	})
 
-	it('rejects a V2 payload without the required canonical player price', async () => {
+	it('rejects a V3 payload without the required canonical player price', async () => {
 		const data = response()
 		const player = data.liveMatchday.snapshot!.matches[0]!.players[0]!
 		delete (player as Partial<typeof player>).price
 
 		assert.throws(
-			() => validateLiveMatchdayV2(data),
+			() => validateLiveMatchdayV3(data),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 	})
@@ -449,7 +577,7 @@ describe('live matchday V2 publication', () => {
 		delete (player as Partial<typeof player>).price
 
 		assert.throws(
-			() => validateLiveMatchdayV2(data),
+			() => validateLiveMatchdayV3(data),
 			/LIVE_MATCHDAY_INCOHERENT/
 		)
 	})
@@ -516,6 +644,7 @@ describe('live matchday V2 publication', () => {
 							...snapshot().revisions,
 							deskGeneration: 2,
 							deskPublicationId: 'desk-2',
+							detailObservation: null,
 							detailGeneration: null,
 							detailPublicationId: null,
 							playerDetail: null
@@ -644,7 +773,13 @@ describe('live matchday V2 publication', () => {
 		assert.equal(
 			liveMatchdayNeedsRefresh(accepted, {
 				...heartbeat,
-				revisions: { ...heartbeat.revisions, playerDetail: 'players-2' }
+				revisions: {
+					...heartbeat.revisions,
+					detailObservation: 'detail-observation-2',
+					detailPublicationId: null,
+					detailGeneration: null,
+					playerDetail: null
+				}
 			}),
 			true
 		)
@@ -653,6 +788,7 @@ describe('live matchday V2 publication', () => {
 				...heartbeat,
 				revisions: {
 					...heartbeat.revisions,
+					detailObservation: null,
 					detailPublicationId: null,
 					detailGeneration: null,
 					playerDetail: null
@@ -672,9 +808,22 @@ describe('live matchday V2 publication', () => {
 				...heartbeat,
 				revisions: {
 					...heartbeat.revisions,
-					detailPublicationId: 'detail-0',
-					detailGeneration: 0,
-					playerDetail: 'players-0'
+					detailObservation: 'detail-observation-2',
+					detailPublicationId: null,
+					detailGeneration: null,
+					playerDetail: null
+				}
+			}),
+			true
+		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				revisions: {
+					...heartbeat.revisions,
+					deskGeneration: accepted.revisions.deskGeneration - 1,
+					deskPublicationId: 'desk-older',
+					detailObservation: 'detail-observation-2'
 				}
 			}),
 			false
@@ -684,13 +833,150 @@ describe('live matchday V2 publication', () => {
 				...heartbeat,
 				revisions: {
 					...heartbeat.revisions,
-					detailPublicationId: 'detail-2',
-					detailGeneration: 2,
-					playerDetail: 'players-2'
+					deskPublicationId: 'desk-conflict',
+					detailObservation: 'detail-observation-2'
+				}
+			}),
+			false
+		)
+		assert.equal(
+			liveMatchdayNeedsRefresh(accepted, {
+				...heartbeat,
+				eventId: accepted.eventId + 1,
+				revisions: {
+					...heartbeat.revisions,
+					deskGeneration: accepted.revisions.deskGeneration - 1,
+					detailObservation: 'detail-observation-2'
 				}
 			}),
 			true
 		)
+	})
+
+	it('keeps a complete local detail state across an unchanged HEAD heartbeat', () => {
+		const accepted = {
+			...snapshot(),
+			availability: 'READY' as const,
+			delivery: {
+				state: 'FRESH' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: []
+			}
+		} as LiveMatchdayStatus
+		const observed = {
+			...accepted,
+			revisions: {
+				...accepted.revisions,
+				detailPublicationId: null,
+				detailGeneration: null,
+				playerDetail: null
+			},
+			times: {
+				...accepted.times,
+				servedAt: '2026-08-04T18:31:01.000Z',
+				deskSourceCheckedAt: '2026-08-04T18:31:00.000Z'
+			},
+			detailDelivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: ['DETAIL_METADATA_ONLY']
+			}
+		}
+
+		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
+
+		assert.deepEqual(merged.detailDelivery, accepted.detailDelivery)
+		assert.equal(merged.times.servedAt, observed.times.servedAt)
+		assert.equal(
+			merged.times.deskSourceCheckedAt,
+			observed.times.deskSourceCheckedAt
+		)
+	})
+
+	it('retains degraded local detail when HEAD cannot observe a detail manifest', () => {
+		const accepted = {
+			...snapshot(),
+			availability: 'READY' as const,
+			detailDelivery: {
+				state: 'STALE' as const,
+				servedFrom: 'PROCESS_LKG' as const,
+				reasonCodes: ['DESK_FALLBACK']
+			},
+			delivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: 'PROCESS_LKG' as const,
+				reasonCodes: ['DESK_FALLBACK']
+			}
+		} as LiveMatchdayStatus
+		const observed = {
+			...accepted,
+			revisions: {
+				...accepted.revisions,
+				detailObservation: null,
+				detailPublicationId: null,
+				detailGeneration: null,
+				playerDetail: null
+			},
+			times: {
+				...accepted.times,
+				detailSourceCheckedAt: null,
+				detailContentUpdatedAt: null,
+				detailPublishedAt: null,
+				detailStaleAt: null
+			},
+			detailDelivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: null,
+				reasonCodes: ['DETAIL_UNAVAILABLE']
+			}
+		}
+
+		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
+
+		assert.equal(merged.revisions.playerDetail, 'players-1')
+		assert.equal(
+			merged.times.detailPublishedAt,
+			accepted.times.detailPublishedAt
+		)
+		assert.equal(merged.detailDelivery.state, 'DEGRADED')
+		assert.equal(merged.detailDelivery.servedFrom, 'PROCESS_LKG')
+		assert.match(
+			merged.detailDelivery.reasonCodes.join(','),
+			/DETAIL_LKG_RETAINED/
+		)
+	})
+
+	it('does not hide a changed detail revision behind the accepted local state', () => {
+		const accepted = {
+			...snapshot(),
+			availability: 'READY' as const,
+			delivery: {
+				state: 'FRESH' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: []
+			}
+		} as LiveMatchdayStatus
+		const observed = {
+			...accepted,
+			revisions: {
+				...accepted.revisions,
+				detailObservation: 'detail-observation-2',
+				detailPublicationId: null,
+				detailGeneration: null,
+				playerDetail: null
+			},
+			detailDelivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: 'REDIS_CURRENT' as const,
+				reasonCodes: ['DETAIL_METADATA_ONLY']
+			}
+		}
+
+		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
+
+		assert.equal(merged.revisions.detailObservation, 'detail-observation-2')
+		assert.equal(merged.revisions.playerDetail, null)
+		assert.equal(merged.detailDelivery.state, 'DEGRADED')
 	})
 
 	it('stops Match polling for terminal state even with a residual refresh timestamp', () => {
@@ -730,8 +1016,8 @@ describe('live matchday V2 publication', () => {
 		)
 	})
 
-	it('transforms a V2 snapshot directly', () => {
-		const [match] = transformLiveMatchdayV2(snapshot())
+	it('transforms a V3 snapshot directly', () => {
+		const [match] = transformLiveMatchdayV3(snapshot())
 		assert.equal(match?.homeTeam.shortName, 'ARS')
 		assert.equal(match?.awayTeam.players[0]?.element, 20)
 		assert.equal(match?.status, 'LIVE')

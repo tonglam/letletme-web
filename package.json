@@ -98,6 +98,7 @@
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"autoprefixer": "^10.4.23",
+		"browserslist": "^4.28.8",
 		"drizzle-kit": "^0.31.10",
 		"eslint": "^9",
 		"eslint-config-next": "^16.2.4",

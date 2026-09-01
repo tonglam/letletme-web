@@ -45,9 +45,7 @@ export type DataGovernanceProbeResponse = {
 
 export class DataGovernanceProbeError extends Error {
 	readonly code:
-		| 'INVALID_REQUEST'
-		| 'UNSUPPORTED_CONTRACT'
-		| 'BUSINESS_DATA_UNAVAILABLE'
+		'INVALID_REQUEST' | 'UNSUPPORTED_CONTRACT' | 'BUSINESS_DATA_UNAVAILABLE'
 
 	constructor(code: DataGovernanceProbeError['code'], message: string) {
 		super(message)
