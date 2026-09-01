@@ -420,6 +420,8 @@ async function probeTournament(
 			complete:
 				official.eventId === eventId &&
 				official.availability === 'READY' &&
+				official.standings?.state === 'READY' &&
+				official.standings.rows.length > 0 &&
 				official.matches.length > 0 &&
 				official.matches.every(match => match.availability === 'READY')
 		}
@@ -436,7 +438,7 @@ async function probeTournament(
 			},
 			{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
 		)
-	const board = response.entryLiveCompetitionBoard
+	let board = response.entryLiveCompetitionBoard
 	if (
 		!board ||
 		board.head.eventId !== eventId ||
@@ -447,13 +449,94 @@ async function probeTournament(
 			'live league board returned no matching event'
 		)
 	}
+	const expectedRevision = revision(board.head.contentRevision)
+	const seenEntries = new Set<number>()
+	let after: string | null = null
+	let pageCount = 0
+	while (true) {
+		if (
+			board.head.eventId !== eventId ||
+			board.head.tournamentId !== config.tournamentId ||
+			revision(board.head.contentRevision) !== expectedRevision ||
+			board.head.availability !== 'READY'
+		) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board changed while the canary was paged'
+			)
+		}
+		if (board.totalEntries <= 0 || board.totalEntries > 5_000) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board has an invalid bounded row count'
+			)
+		}
+		for (const row of board.rows) {
+			if (seenEntries.has(row.entry)) {
+				throw new DataGovernanceProbeError(
+					'BUSINESS_DATA_UNAVAILABLE',
+					'live league board contains a duplicate entry'
+				)
+			}
+			seenEntries.add(row.entry)
+			if (
+				(row.availability === 'READY' && row.score === null) ||
+				(row.availability === 'MISSING' && row.score !== null) ||
+				(row.availability !== 'READY' && row.availability !== 'MISSING')
+			) {
+				throw new DataGovernanceProbeError(
+					'BUSINESS_DATA_UNAVAILABLE',
+					'live league board contains an incomplete row'
+				)
+			}
+		}
+		pageCount += 1
+		if (pageCount > 100) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board pagination exceeded the safety bound'
+			)
+		}
+		if (!board.pageInfo.hasNextPage) {
+			if (
+				board.pageInfo.endCursor !== null ||
+				seenEntries.size !== board.filteredEntries ||
+				board.filteredEntries !== board.totalEntries
+			) {
+				throw new DataGovernanceProbeError(
+					'BUSINESS_DATA_UNAVAILABLE',
+					'live league board pagination is incomplete'
+				)
+			}
+			break
+		}
+		if (!board.pageInfo.endCursor || board.pageInfo.endCursor === after) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board pagination did not advance'
+			)
+		}
+		after = board.pageInfo.endCursor
+		const next =
+			await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+				canarySession(config),
+				GET_ENTRY_LIVE_COMPETITION_BOARD,
+				{
+					entryId: config.entryId,
+					tournamentId: config.tournamentId,
+					eventId,
+					input: { first: 50, after }
+				},
+				{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+			)
+		board = next.entryLiveCompetitionBoard
+	}
 	return {
-		revision: revision(board.head.contentRevision),
+		revision: expectedRevision,
 		complete:
-			board.head.availability === 'READY' &&
-			board.totalEntries > 0 &&
-			board.viewerRow?.entry === config.entryId &&
-			board.viewerRow.availability === 'READY'
+			seenEntries.size === board.totalEntries &&
+			response.entryLiveCompetitionBoard.viewerRow?.entry === config.entryId &&
+			response.entryLiveCompetitionBoard.viewerRow.availability === 'READY'
 	}
 }
 
