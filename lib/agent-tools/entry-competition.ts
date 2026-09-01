@@ -5,7 +5,8 @@ import {
 	COMPETITION_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	ENTRY_SNAPSHOT_DOCUMENT,
-	OWN_ENTRY_DOCUMENT
+	OWN_ENTRY_DOCUMENT,
+	OWN_ENTRY_GAMEWEEK_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
 	coreEventId,
@@ -46,11 +47,74 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 
 	if (input.entryId === undefined) {
 		const entryId = requireVerifiedEntryId(options.session)
+		const snapshotPromise = executeDocument<{
+			coreEventContext: CoreContext
+			entrySnapshot: unknown | null
+		}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId })
+		if (input.eventId !== undefined) {
+			const [snapshot, gameweekResult] = await Promise.all([
+				snapshotPromise,
+				executeDocument<{
+					coreEventContext: CoreContext
+					myFplManagerGameweek: {
+						state: string
+						eventId: number
+						context: {
+							season: string
+							coreRevision: string
+						}
+						[key: string]: unknown
+					}
+				}>(options, OWN_ENTRY_GAMEWEEK_DOCUMENT, { eventId: input.eventId })
+			])
+			if (!snapshot.entrySnapshot) {
+				throw new AgentToolError(
+					'NOT_FOUND',
+					'The verified entry has not been persisted by LetLetMe yet.',
+					404,
+					false
+				)
+			}
+			const gameweek = gameweekResult.myFplManagerGameweek
+			if (
+				snapshot.coreEventContext.season !==
+					gameweekResult.coreEventContext.season ||
+				snapshot.coreEventContext.revision !==
+					gameweekResult.coreEventContext.revision ||
+				gameweek.context.season !== snapshot.coreEventContext.season ||
+				gameweek.context.coreRevision !== snapshot.coreEventContext.revision ||
+				gameweek.eventId !== input.eventId
+			) {
+				throw new AgentToolError(
+					'UPSTREAM_UNAVAILABLE',
+					'The published entry revision or requested Gameweek changed during this request. Retry the tool.',
+					502,
+					true
+				)
+			}
+			const warnings: AgentWarning[] = []
+			if (gameweek.state !== 'READY') {
+				warnings.push({
+					code: `ENTRY_EXTENSION_${gameweek.state}`,
+					message:
+						'Some verified-entry analysis is not ready for this Gameweek.'
+				})
+			}
+			return toolResponse(
+				options,
+				{
+					accessScope: 'self',
+					entry: snapshot.entrySnapshot,
+					extensions: gameweek
+				},
+				coreRevisions(gameweekResult.coreEventContext),
+				warnings,
+				undefined,
+				gameweekResult.coreEventContext.sourceCheckedAt
+			)
+		}
 		const [snapshot, deskResult] = await Promise.all([
-			executeDocument<{
-				coreEventContext: CoreContext
-				entrySnapshot: unknown | null
-			}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId }),
+			snapshotPromise,
 			executeDocument<{
 				coreEventContext: CoreContext
 				myFplManagerReview: {

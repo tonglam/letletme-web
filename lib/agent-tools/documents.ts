@@ -247,6 +247,29 @@ export const OWN_ENTRY_DOCUMENT = `
   }
 `
 
+export const OWN_ENTRY_GAMEWEEK_DOCUMENT = `
+  query AgentOwnEntryGameweek($eventId: Int!) {
+    coreEventContext { season revision sourceCheckedAt }
+    myFplManagerGameweek(eventId: $eventId) {
+      state
+      context { season coreRevision }
+      eventId
+      entry {
+        id entryName playerName region startedEvent overallPoints overallRank bank teamValue totalTransfers
+      }
+      result {
+        eventId eventPoints overallPoints overallRank eventTransfers eventTransfersCost eventNetPoints
+        eventBenchPoints eventChip eventCaptainPoints playedCaptainWebName teamValue bank
+        picks {
+          element position webName teamShortName elementTypeName isCaptain isViceCaptain multiplier
+          totalPoints minutes againstShortName wasHome score isPlayed autoSub
+        }
+      }
+      snapshotMeta { revision eventId sourceCheckedAt publishedAt kind freshness }
+    }
+  }
+`
+
 export const COMPETITION_AVAILABILITY_DOCUMENT = `
   query AgentCompetitionAvailability {
     coreEventContext {
@@ -356,6 +379,7 @@ export const AGENT_GRAPHQL_DOCUMENTS = Object.freeze({
 	ENTRY_SNAPSHOT_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
+	OWN_ENTRY_GAMEWEEK_DOCUMENT,
 	COMPETITION_AVAILABILITY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,

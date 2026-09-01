@@ -153,7 +153,10 @@ export function TeamChipsTab({
 			const gameweek = Number(row.gameweek)
 			if (!family || !Number.isFinite(gameweek) || gameweek <= 0) continue
 			const window = windows.find(
-				item => gameweek >= item.startEvent && gameweek <= item.stopEvent
+				item =>
+					gameweek >= item.startEvent &&
+					gameweek <= item.stopEvent &&
+					(item.allowances[family] ?? 0) > 0
 			)
 			if (window) {
 				const used = usedByWindow.get(window.key)!
@@ -321,11 +324,14 @@ export function TeamChipsTab({
 						<tbody>
 							{stats.chipUsageRows.map(row => {
 								const gameweek = Number(row.gameweek)
+								const family = normalizeChipFamily(row.chip)
 								const window = windows.find(
 									item =>
-										gameweek >= item.startEvent && gameweek <= item.stopEvent
+										family !== null &&
+										gameweek >= item.startEvent &&
+										gameweek <= item.stopEvent &&
+										(item.allowances[family] ?? 0) > 0
 								)
-								const family = normalizeChipFamily(row.chip)
 								return (
 									<DataTr key={`${row.gameweek}-${row.chip}`}>
 										<DataTd

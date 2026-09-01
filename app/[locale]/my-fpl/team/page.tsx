@@ -234,6 +234,7 @@ export default async function TeamStatsPage({
 						: undefined)
 		let selectedGameweek = review.currentGameweek
 		if (
+			initialView === 'gameweek' &&
 			initialSelectedGameweek &&
 			selectedGameweek?.eventId !== initialSelectedGameweek
 		) {
@@ -256,8 +257,16 @@ export default async function TeamStatsPage({
 			)
 			selectedGameweek = gameweekResponse.myFplManagerGameweek
 		}
+		if (
+			initialSelectedGameweek !== undefined &&
+			selectedGameweek?.eventId !== initialSelectedGameweek
+		) {
+			// A Season render keeps the selected GW in the URL for the next tab,
+			// but must not seed that key with a different current-GW result.
+			selectedGameweek = null
+		}
 		initialEntryEventResult = eventResultFromManagerGameweek(selectedGameweek)
-		initialEntryGameweekState = selectedGameweek?.state ?? review.state
+		initialEntryGameweekState = selectedGameweek?.state
 
 		initialRequestComplete = true
 
