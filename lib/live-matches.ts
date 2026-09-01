@@ -3,6 +3,7 @@ import {
 	GET_LIVE_MATCHDAY_HEAD,
 	type LiveMatchdayDelivery,
 	type LiveMatchdayFixture,
+	type LiveMatchdayHeadSnapshot,
 	type LiveMatchdayHeadResponse,
 	type LiveMatchdayPlayer,
 	type LiveMatchdayResponse,
@@ -85,7 +86,7 @@ const mapLiveMatchdayPlayer = (player: LiveMatchdayPlayer): PlayerStat => ({
 })
 
 const matchdaySnapshotToStatus = (
-	snapshot: Omit<LiveMatchdaySnapshot, 'matches'>,
+	snapshot: Omit<LiveMatchdaySnapshot, 'matches'> | LiveMatchdayHeadSnapshot,
 	result: Pick<
 		LiveMatchdayResponse['liveMatchday'],
 		'availability' | 'delivery'
@@ -95,7 +96,12 @@ const matchdaySnapshotToStatus = (
 		season: snapshot.season,
 		eventId: snapshot.eventId,
 		state: snapshot.state,
-		revisions: snapshot.revisions,
+		revisions: {
+			...snapshot.revisions,
+			detailPublicationId: snapshot.revisions.detailPublicationId ?? null,
+			detailGeneration: snapshot.revisions.detailGeneration ?? null,
+			playerDetail: snapshot.revisions.playerDetail ?? null
+		},
 		times: snapshot.times,
 		detailDelivery: snapshot.detailDelivery,
 		availability: result.availability,
@@ -343,6 +349,7 @@ export function retainLiveMatchdayDetailRevision(
 		...candidate,
 		revisions: {
 			...candidate.revisions,
+			detailObservation: accepted.revisions.detailObservation,
 			detailPublicationId: accepted.revisions.detailPublicationId,
 			detailGeneration: accepted.revisions.detailGeneration,
 			playerDetail: accepted.revisions.playerDetail
@@ -414,6 +421,20 @@ export function validateLiveMatchdayV3(
 		snapshot.revisions.detailPublicationId === null &&
 		snapshot.revisions.detailGeneration === null &&
 		snapshot.revisions.playerDetail === null
+	const detailObservationPresent =
+		typeof snapshot.revisions.detailObservation === 'string' &&
+		snapshot.revisions.detailObservation.length > 0
+	const detailObservationAbsent = snapshot.revisions.detailObservation === null
+	const detailTimesPresent =
+		isTimestamp(snapshot.times.detailSourceCheckedAt) &&
+		isTimestamp(snapshot.times.detailContentUpdatedAt) &&
+		isTimestamp(snapshot.times.detailPublishedAt) &&
+		isOptionalTimestamp(snapshot.times.detailStaleAt)
+	const detailTimesAbsent =
+		snapshot.times.detailSourceCheckedAt === null &&
+		snapshot.times.detailContentUpdatedAt === null &&
+		snapshot.times.detailPublishedAt === null &&
+		snapshot.times.detailStaleAt === null
 	if (
 		!snapshot.season ||
 		!Number.isSafeInteger(snapshot.eventId) ||
@@ -426,6 +447,8 @@ export function validateLiveMatchdayV3(
 		!snapshot.revisions.fixtureIdentity ||
 		!snapshot.revisions.scoreState ||
 		(!detailRevisionPresent && !detailRevisionAbsent) ||
+		(!detailObservationPresent && !detailObservationAbsent) ||
+		(detailRevisionPresent && !detailObservationPresent) ||
 		!isTimestamp(snapshot.times.deskSourceCheckedAt) ||
 		!isTimestamp(snapshot.times.deskContentUpdatedAt) ||
 		!isTimestamp(snapshot.times.deskPublishedAt) ||
@@ -442,13 +465,15 @@ export function validateLiveMatchdayV3(
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
 	if (
-		detailRevisionAbsent !==
-			(snapshot.times.detailSourceCheckedAt === null &&
-				snapshot.times.detailContentUpdatedAt === null &&
-				snapshot.times.detailPublishedAt === null &&
-				snapshot.times.detailStaleAt === null) ||
+		detailTimesPresent !== detailObservationPresent ||
+		detailTimesAbsent !== !detailObservationPresent ||
 		(detailRevisionAbsent &&
+			detailObservationAbsent &&
 			(snapshot.detailDelivery.servedFrom !== null ||
+				!['PENDING', 'DEGRADED'].includes(snapshot.detailDelivery.state))) ||
+		(detailRevisionAbsent &&
+			detailObservationPresent &&
+			(snapshot.detailDelivery.servedFrom === null ||
 				!['PENDING', 'DEGRADED'].includes(snapshot.detailDelivery.state))) ||
 		(detailRevisionPresent &&
 			(snapshot.detailDelivery.servedFrom === null ||
@@ -581,7 +606,16 @@ export function validateLiveMatchdayHeadV3(
 	const completeShape = {
 		liveMatchday: {
 			...result,
-			snapshot: { ...result.snapshot, matches: [] }
+			snapshot: {
+				...result.snapshot,
+				revisions: {
+					...result.snapshot.revisions,
+					detailPublicationId: null,
+					detailGeneration: null,
+					playerDetail: null
+				},
+				matches: []
+			}
 		}
 	} as unknown as LiveMatchdayV3Payload
 	validateLiveMatchdayV3(completeShape)
@@ -668,6 +702,26 @@ export function canReplaceLiveMatchesLkg(
 	if (candidate.deskGeneration < current.deskGeneration) return false
 	if (candidate.deskGeneration > current.deskGeneration) return true
 	if (candidate.deskPublicationId !== current.deskPublicationId) return false
+
+	// HEAD/DESK deliberately omit authoritative detail fields. A matching
+	// descriptor observation can advance heartbeat metadata while the accepted
+	// FULL detail remains the browser LKG. An absent observation is unknown, not
+	// permission to erase the accepted detail.
+	const candidateHasFullDetail =
+		candidate.detailPublicationId !== null &&
+		candidate.detailGeneration !== null &&
+		candidate.playerDetail !== null
+	const currentHasFullDetail =
+		current.detailPublicationId !== null &&
+		current.detailGeneration !== null &&
+		current.playerDetail !== null
+	if (!candidateHasFullDetail) {
+		if (!currentHasFullDetail) return true
+		return (
+			candidate.detailObservation === null ||
+			candidate.detailObservation === current.detailObservation
+		)
+	}
 
 	if (current.detailGeneration === null) return true
 	if (candidate.detailGeneration === null) return false

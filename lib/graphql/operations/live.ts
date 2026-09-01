@@ -416,6 +416,7 @@ export const GET_LIVE_MATCHDAY = `
 						lifecycle
 						fixtureIdentity
 						scoreState
+						detailObservation
 						detailPublicationId
 						detailGeneration
 						playerDetail
@@ -479,9 +480,7 @@ export const GET_LIVE_MATCHDAY_HEAD = `
 					lifecycle
 					fixtureIdentity
 					scoreState
-					detailPublicationId
-					detailGeneration
-					playerDetail
+					detailObservation
 				}
 				times {
 					deskSourceCheckedAt
@@ -521,6 +520,7 @@ export interface LiveMatchdayRevisionVector {
 	lifecycle: string
 	fixtureIdentity: string
 	scoreState: string
+	detailObservation: string | null
 	detailPublicationId: string | null
 	detailGeneration: number | null
 	playerDetail: string | null
@@ -604,7 +604,25 @@ export interface LiveMatchdayResponse {
 	liveMatchday: LiveMatchdayResult
 }
 
-export type LiveMatchdayHeadSnapshot = Omit<LiveMatchdaySnapshot, 'matches'>
+export type LiveMatchdayHeadSnapshot = Omit<
+	LiveMatchdaySnapshot,
+	'matches' | 'revisions'
+> & {
+	revisions: Pick<
+		LiveMatchdayRevisionVector,
+		| 'deskPublicationId'
+		| 'deskGeneration'
+		| 'lifecycle'
+		| 'fixtureIdentity'
+		| 'scoreState'
+		| 'detailObservation'
+	> & {
+		/** FULL-only fields are not selected by the HEAD operation. */
+		detailPublicationId?: null
+		detailGeneration?: null
+		playerDetail?: null
+	}
+}
 
 export interface LiveMatchdayHeadResult {
 	availability: LiveMatchdayAvailability

@@ -40,6 +40,7 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 			lifecycle: 'life-1',
 			fixtureIdentity: 'fixture-1',
 			scoreState: 'score-1',
+			detailObservation: 'detail-observation-1',
 			detailPublicationId: 'detail-1',
 			detailGeneration: 1,
 			playerDetail: 'players-1'
@@ -183,12 +184,24 @@ describe('live matchday V3 publication', () => {
 		const calls: string[] = []
 		const head = response()
 		const { matches: _matches, ...headSnapshot } = head.liveMatchday.snapshot!
+		const headRevisions = { ...headSnapshot.revisions }
+		delete (headRevisions as Partial<typeof headRevisions>).detailPublicationId
+		delete (headRevisions as Partial<typeof headRevisions>).detailGeneration
+		delete (headRevisions as Partial<typeof headRevisions>).playerDetail
 		const executor: QueryExecutor = async <T>(query: string): Promise<T> => {
 			calls.push(query)
 			return {
 				liveMatchday: {
 					...head.liveMatchday,
-					snapshot: headSnapshot
+					snapshot: {
+						...headSnapshot,
+						revisions: headRevisions,
+						detailDelivery: {
+							state: 'DEGRADED',
+							servedFrom: 'REDIS_CURRENT',
+							reasonCodes: ['DETAIL_METADATA_ONLY']
+						}
+					}
 				}
 			} as T
 		}
@@ -207,9 +220,10 @@ describe('live matchday V3 publication', () => {
 		assert.match(GET_LIVE_MATCHDAY, /matches\s*\{/)
 		assert.doesNotMatch(GET_LIVE_MATCHDAY, /awardedPoints|pointsModification/)
 		assert.match(GET_LIVE_MATCHDAY_HEAD, /query GetLiveMatchdayHeadV3/)
+		assert.match(GET_LIVE_MATCHDAY_HEAD, /detailObservation/)
 		assert.doesNotMatch(
 			GET_LIVE_MATCHDAY_HEAD,
-			/\bmatches\b|\bplayers\b|\bstats\b/
+			/\bmatches\b|\bplayers\b|\bstats\b|detailPublicationId|detailGeneration|playerDetail/
 		)
 	})
 
@@ -577,6 +591,7 @@ describe('live matchday V3 publication', () => {
 							...snapshot().revisions,
 							deskGeneration: 2,
 							deskPublicationId: 'desk-2',
+							detailObservation: null,
 							detailGeneration: null,
 							detailPublicationId: null,
 							playerDetail: null
@@ -705,7 +720,13 @@ describe('live matchday V3 publication', () => {
 		assert.equal(
 			liveMatchdayNeedsRefresh(accepted, {
 				...heartbeat,
-				revisions: { ...heartbeat.revisions, playerDetail: 'players-2' }
+				revisions: {
+					...heartbeat.revisions,
+					detailObservation: 'detail-observation-2',
+					detailPublicationId: null,
+					detailGeneration: null,
+					playerDetail: null
+				}
 			}),
 			true
 		)
@@ -714,6 +735,7 @@ describe('live matchday V3 publication', () => {
 				...heartbeat,
 				revisions: {
 					...heartbeat.revisions,
+					detailObservation: null,
 					detailPublicationId: null,
 					detailGeneration: null,
 					playerDetail: null
@@ -733,21 +755,10 @@ describe('live matchday V3 publication', () => {
 				...heartbeat,
 				revisions: {
 					...heartbeat.revisions,
-					detailPublicationId: 'detail-0',
-					detailGeneration: 0,
-					playerDetail: 'players-0'
-				}
-			}),
-			false
-		)
-		assert.equal(
-			liveMatchdayNeedsRefresh(accepted, {
-				...heartbeat,
-				revisions: {
-					...heartbeat.revisions,
-					detailPublicationId: 'detail-2',
-					detailGeneration: 2,
-					playerDetail: 'players-2'
+					detailObservation: 'detail-observation-2',
+					detailPublicationId: null,
+					detailGeneration: null,
+					playerDetail: null
 				}
 			}),
 			true
@@ -766,6 +777,12 @@ describe('live matchday V3 publication', () => {
 		} as LiveMatchdayStatus
 		const observed = {
 			...accepted,
+			revisions: {
+				...accepted.revisions,
+				detailPublicationId: null,
+				detailGeneration: null,
+				playerDetail: null
+			},
 			times: {
 				...accepted.times,
 				servedAt: '2026-08-04T18:31:01.000Z',
@@ -788,6 +805,53 @@ describe('live matchday V3 publication', () => {
 		)
 	})
 
+	it('retains degraded local detail when HEAD cannot observe a detail manifest', () => {
+		const accepted = {
+			...snapshot(),
+			availability: 'READY' as const,
+			detailDelivery: {
+				state: 'STALE' as const,
+				servedFrom: 'PROCESS_LKG' as const,
+				reasonCodes: ['DESK_FALLBACK']
+			},
+			delivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: 'PROCESS_LKG' as const,
+				reasonCodes: ['DESK_FALLBACK']
+			}
+		} as LiveMatchdayStatus
+		const observed = {
+			...accepted,
+			revisions: {
+				...accepted.revisions,
+				detailObservation: null,
+				detailPublicationId: null,
+				detailGeneration: null,
+				playerDetail: null
+			},
+			times: {
+				...accepted.times,
+				detailSourceCheckedAt: null,
+				detailContentUpdatedAt: null,
+				detailPublishedAt: null,
+				detailStaleAt: null
+			},
+			detailDelivery: {
+				state: 'DEGRADED' as const,
+				servedFrom: null,
+				reasonCodes: ['DETAIL_UNAVAILABLE']
+			}
+		}
+
+		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
+
+		assert.equal(merged.revisions.playerDetail, 'players-1')
+		assert.equal(merged.times.detailPublishedAt, accepted.times.detailPublishedAt)
+		assert.equal(merged.detailDelivery.state, 'DEGRADED')
+		assert.equal(merged.detailDelivery.servedFrom, 'PROCESS_LKG')
+		assert.match(merged.detailDelivery.reasonCodes.join(','), /DETAIL_LKG_RETAINED/)
+	})
+
 	it('does not hide a changed detail revision behind the accepted local state', () => {
 		const accepted = {
 			...snapshot(),
@@ -800,7 +864,13 @@ describe('live matchday V3 publication', () => {
 		} as LiveMatchdayStatus
 		const observed = {
 			...accepted,
-			revisions: { ...accepted.revisions, playerDetail: 'players-2' },
+			revisions: {
+				...accepted.revisions,
+				detailObservation: 'detail-observation-2',
+				detailPublicationId: null,
+				detailGeneration: null,
+				playerDetail: null
+			},
 			detailDelivery: {
 				state: 'DEGRADED' as const,
 				servedFrom: 'REDIS_CURRENT' as const,
@@ -810,7 +880,8 @@ describe('live matchday V3 publication', () => {
 
 		const merged = mergeLiveMatchdayHeadStatus(accepted, observed)
 
-		assert.equal(merged.revisions.playerDetail, 'players-2')
+		assert.equal(merged.revisions.detailObservation, 'detail-observation-2')
+		assert.equal(merged.revisions.playerDetail, null)
 		assert.equal(merged.detailDelivery.state, 'DEGRADED')
 	})
 

@@ -415,6 +415,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 						lifecycle: revision,
 						fixtureIdentity: revision,
 						scoreState: revision,
+						detailObservation: null,
 						detailPublicationId: null,
 						detailGeneration: null,
 						playerDetail: null
@@ -460,6 +461,33 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			}
 		}
 	})
+	const liveHeadResponse = (
+		score: number,
+		revision: string,
+		deskGeneration: number
+	) => {
+		const full = liveResponse(score, revision, deskGeneration).data
+		const snapshot = full.liveMatchday.snapshot
+		const {
+			matches: _matches,
+			revisions,
+			...headSnapshot
+		} = snapshot
+		const {
+			detailPublicationId: _detailPublicationId,
+			detailGeneration: _detailGeneration,
+			playerDetail: _playerDetail,
+			...headRevisions
+		} = revisions
+		return {
+			data: {
+				liveMatchday: {
+					...full.liveMatchday,
+					snapshot: { ...headSnapshot, revisions: headRevisions }
+				}
+			}
+		}
+	}
 
 	await page.route('**/api/live/matches**', async route => {
 		fullRequestCount += 1
@@ -496,7 +524,11 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			await route.fulfill({
 				status: 200,
 				json: {
-					data: liveResponse(score, revision, fullRequestCount === 0 ? 2 : 3).data
+					data: liveHeadResponse(
+						score,
+						revision,
+						fullRequestCount === 0 ? 2 : 3
+					).data
 				}
 			})
 			return
