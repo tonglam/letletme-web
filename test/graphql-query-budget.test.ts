@@ -31,13 +31,12 @@ import {
 	GET_HOME_PUBLIC_BOOTSTRAP
 } from '../lib/graphql/operations/home'
 import {
-	GET_ENTRY_OFFICIAL_H2H_DESK,
-	GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
+	GET_ENTRY_LIVE_COMPETITION_BOARD,
+	GET_LEAGUE_LIVE_HEAD,
 	GET_TOURNAMENT_DETAIL_DESK,
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_OFFICIAL_H2H,
-	GET_TOURNAMENT_PARTICIPANTS,
-	GET_TOURNAMENT_LIVE_DESK
+	GET_TOURNAMENT_PARTICIPANTS
 } from '../lib/graphql/operations/tournaments'
 import { GET_MY_FPL_COMPETITIONS_DESK } from '../lib/graphql/operations/my-fpl'
 
@@ -248,11 +247,11 @@ describe('GraphQL request budget', () => {
 		assert.doesNotMatch(GET_TOURNAMENT_PARTICIPANTS, /\btournament\s*\(/)
 	})
 
-	it('keeps official H2H detail and Team Desk queries below the production guard', () => {
+	it('keeps live league head, board and H2H queries below the production guard', () => {
 		for (const [name, query] of [
+			['GET_LEAGUE_LIVE_HEAD', GET_LEAGUE_LIVE_HEAD],
+			['GET_ENTRY_LIVE_COMPETITION_BOARD', GET_ENTRY_LIVE_COMPETITION_BOARD],
 			['GET_TOURNAMENT_OFFICIAL_H2H', GET_TOURNAMENT_OFFICIAL_H2H],
-			['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK],
-			['GET_ENTRY_OFFICIAL_H2H_MATCHUPS', GET_ENTRY_OFFICIAL_H2H_MATCHUPS]
 		] as const) {
 			const document = parse(query)
 			let astNodes = 0
@@ -271,13 +270,4 @@ describe('GraphQL request budget', () => {
 		)
 	})
 
-	it('keeps the live tournament desk below the production guard', () => {
-		const document = parse(GET_TOURNAMENT_LIVE_DESK)
-		let astNodes = 0
-		visit(document, { enter: () => void (astNodes += 1) })
-		assert.ok(
-			astNodes <= 200,
-			`GET_TOURNAMENT_LIVE_DESK has ${astNodes} AST nodes; backend limit is 200`
-		)
-	})
 })

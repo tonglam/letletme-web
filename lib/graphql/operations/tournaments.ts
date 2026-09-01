@@ -373,7 +373,6 @@ const TOURNAMENT_DETAIL_INFO_FIELDS = `
 `
 
 export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
-${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
   query GetTournamentDetailDesk($tournamentId: Int!, $entryId: Int!, $eventId: Int) {
     tournamentDetailDesk(tournamentId: $tournamentId, entryId: $entryId, eventId: $eventId) {
       revision
@@ -382,33 +381,9 @@ ${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
       viewerEntryId
       tournament { ...TournamentDetailInfoFields }
       unavailableSections
-      participants { entryId entryName playerName }
+		participants { entryId entryName playerName }
 		setup { status phase completedUnits totalUnits hasWarnings progressMode attempt maxAttempts nextRetryAt warningSummaries { category affectedCount repairExhausted } }
-      officialH2H {
-        eventId
-        awaitingSchedule
-		scoreSource
-		scoreRevision
-		scoreCheckedAt
-        standings { entryId entryName playerName rank matchPoints played won drawn lost pointsFor }
-        matches {
-          officialMatchId eventId sourceOrder phase knockoutName isBye winnerEntryId tiebreak sourceCheckedAt
-          home { entryId entryName playerName isAverage points matchPoints }
-          away { entryId entryName playerName isAverage points matchPoints }
-        }
-      }
-      live {
-        eventId scoreCoreRevision state partial failedEntryIds
-        times { sourceCheckedAt contentUpdatedAt publishedAt nextRefreshAt }
-        rows {
-          entry entryName playerName teamValue bank chip played toPlay captainName
-          score { ...LivePointsScoreSummaryFields }
-          rank { eventRank overallRank }
-          activeCaptain { name points }
-          pickList { element webName elementTypeName position multiplier isCaptain isViceCaptain teamShortName teamName totalPoints }
-        }
-      }
-    }
+	    }
   }
 `
 
@@ -437,19 +412,6 @@ export interface TournamentDetailDeskResponse {
 			maxAttempts?: number
 			nextRetryAt?: string | null
 			warningSummaries?: TournamentSetupWarningSummary[]
-		} | null
-		officialH2H: TournamentOfficialH2H | null
-		live: {
-			eventId: number
-			scoreCoreRevision: string | null
-			state: string
-			partial: boolean
-			failedEntryIds: number[]
-			totalEntries: number
-			revisions: LiveRevisionVector | null
-			times: LiveTimes | null
-			delivery: LiveDelivery | null
-			rows: TournamentLiveCalcData[]
 		} | null
 	} | null
 }
@@ -794,70 +756,6 @@ export const LIVE_TOURNAMENT_INFO_FIELDS = `
   }
 `
 
-export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
-  query GetEntryLiveCompetitionsDesk($entryId: Int!, $selectedTournamentId: Int, $ref: LivePublicationRefInput) {
-	    entryLiveCompetitionsDesk(entryId: $entryId, selectedTournamentId: $selectedTournamentId, ref: $ref) {
-	      eventId
-	      scoreCoreRevision
-      state
-      windowState
-      dataAvailability
-      revisions {
-        publicationId generation lifecycle fixtureIdentity scoreCore
-        displayStats explain picksBase officialAdjustment previousTotals
-        finalResult rules algorithm input
-      }
-      times {
-        sourceCheckedAt contentUpdatedAt publishedAt nextRefreshAt
-      }
-      delivery { state servedFrom reasonCodes }
-      unavailableEntryIds
-      failedEntryIds
-      board {
-		        entry
-		        entryName
-		        playerName
-		        teamValue
-		        bank
-        chip
-        score { ...LivePointsScoreSummaryFields }
-	        rank { overallRank }
-		        played
-        toPlay
-        captainName
-        activeCaptain {
-          name
-          points
-        }
-        pickList {
-          element
-          webName
-          elementTypeName
-          position
-          multiplier
-          isCaptain
-          isViceCaptain
-          teamShortName
-          teamName
-          totalPoints
-        }
-      }
-    }
-  }
-`
-
-export interface BatchCalcError {
-	entryId: number
-	message: string
-}
-
-export interface BatchCalcMeta {
-	eventId: number
-	totalEntries: number
-	succeededCount: number
-	failedCount: number
-}
-
 export interface TournamentLiveCalcData {
 	entry: number
 	provisional?: boolean
@@ -909,29 +807,6 @@ export interface TournamentLiveCalcData {
 	}>
 }
 
-export interface TournamentLivePointsResponse {
-	entryLiveCompetitionsDesk: {
-		eventId: number
-		scoreCoreRevision: string | null
-		state: string
-		windowState?: string
-		dataAvailability?: string
-		nextRefreshAt?: string | null
-		tournaments: LiveEntryTournament[]
-		selectedTournamentId: number | null
-		revisions: import('./live').LiveRevisionVector | null
-		times: import('./live').LiveTimes | null
-		delivery: import('./live').LiveDelivery | null
-		officialCoverage?: number
-		unavailableEntryIds?: number[]
-		partial: boolean
-		failedEntryIds: number[]
-		deferredEntryCount: number
-		totalEntries: number
-		board: TournamentLiveCalcData[]
-	}
-}
-
 export type EntryLiveCompetitionBoardSort =
 	| 'EVENT_POINTS'
 	| 'NET_EVENT_POINTS'
@@ -963,9 +838,12 @@ export interface EntryLiveCompetitionBoardVariables {
 	entryId: number
 	tournamentId: number
 	eventId: number
-	ref?: { season: string; eventId: number; scoreCoreRevision: string } | null
-	page?: number
-	pageSize?: number
+	input?: EntryLiveCompetitionBoardInput | null
+}
+
+export interface EntryLiveCompetitionBoardInput {
+	first?: number
+	after?: string | null
 	sort?: EntryLiveCompetitionBoardSort
 	direction?: EntryLiveCompetitionBoardSortDirection
 	search?: string | null
@@ -973,51 +851,99 @@ export interface EntryLiveCompetitionBoardVariables {
 	captainPlayerIds?: number[]
 	ownership?: EntryLiveCompetitionOwnershipFilter | null
 	teamCountRules?: EntryLiveCompetitionTeamCountRule[]
-	expectedBoardRevision?: string | null
 }
 
 export interface EntryLiveCompetitionBoardRow {
+	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
 	entry: number
 	entryName: string
 	playerName: string
-	rank: number
+	liveRank: number | null
 	overallRank: number | null
-	teamValue: number
-	chip: string
-	transferCost: number
-	played: number
-	toPlay: number
-	captainId: number
-	captainName: string
-	captainPoints: number
-	score: NonNullable<TournamentLiveCalcData['score']>
+	teamValue: number | null
+	chip: string | null
+	transferCost: number | null
+	played: number | null
+	toPlay: number | null
+	captainId: number | null
+	captainName: string | null
+	captainPoints: number | null
+	score: EntryLiveCompetitionBoardScore | null
 }
 
-export interface EntryLiveCompetitionBoardPage {
+/**
+ * The board deliberately selects only the score fields needed to render and
+ * rank rows. Keeping this separate from the canonical LiveScore contract
+ * prevents a full revision vector from being repeated for every participant.
+ */
+export type EntryLiveCompetitionBoardScore = Pick<
+	LivePointsScore,
+	| 'eventPoints'
+	| 'netEventPoints'
+	| 'totalPoints'
+	| 'totalScope'
+	| 'transferCost'
+	| 'source'
+	| 'calculationMode'
+> & {
+	revisions: Pick<LiveRevisionVector, 'input'>
+	times: Pick<LiveTimes, 'sourceCheckedAt' | 'contentUpdatedAt' | 'nextRefreshAt'>
+	delivery: Pick<LiveDelivery, 'state'>
+}
+
+export interface LeagueLiveRevisionVector {
+	publicationId: string
+	generation: number
+	roster: string
+	scoreCore: string
+	fixtureIdentity: string
+	entryInputSet: string
+	identity: string
+	officialRank: string | null
+	rules: string
+	algorithm: string
+	content: string
+}
+
+export interface LeagueLiveHead {
 	season: string
 	eventId: number
 	tournamentId: number
-	boardRevision: string
-	scoreCoreRevision: string | null
-	dataAvailability: string
-	revisions: import('./live').LiveRevisionVector
-	times: import('./live').LiveTimes
-	delivery: import('./live').LiveDelivery
-	coverageState: 'WARMING' | 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE'
-	rankScope: 'FULL_FIELD' | 'AVAILABLE_ROWS'
-	computedEntries: number
-	deferredEntryCount: number
-	failedEntryCount: number
-	unavailableEntryCount: number
-	officialCoverage: number
-	unavailableEntryIds: number[]
-	failedEntryIds: number[]
-	partial: boolean
+	mode: 'CLASSIC' | 'H2H'
+	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
+	contentRevision: string | null
+	publication: {
+		revisions: LeagueLiveRevisionVector
+		times: LiveTimes
+	} | null
+	delivery: LiveDelivery
+	nextRefreshAt: string | null
+}
+
+export interface EntryLiveCompetitionBoardHead {
+	season: string
+	eventId: number
+	tournamentId: number
+	mode: 'CLASSIC' | 'H2H'
+	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
+	contentRevision: string | null
+	publication: {
+		revisions: {
+			publicationId: string
+			generation: number
+			scoreCore: string
+		}
+		times: Pick<LiveTimes, 'contentUpdatedAt' | 'nextRefreshAt'>
+	} | null
+	delivery: Pick<LiveDelivery, 'state'>
+	nextRefreshAt: string | null
+}
+
+export interface EntryLiveCompetitionBoardPage {
+	head: EntryLiveCompetitionBoardHead
 	totalEntries: number
 	filteredEntries: number
-	page: number
-	pageSize: number
-	hasMore: boolean
+	pageInfo: { hasNextPage: boolean; endCursor: string | null }
 	highestEventPoints: number | null
 	averageEventPoints: number | null
 	rows: EntryLiveCompetitionBoardRow[]
@@ -1028,46 +954,45 @@ export interface EntryLiveCompetitionBoardResponse {
 	entryLiveCompetitionBoard: EntryLiveCompetitionBoardPage
 }
 
-export const GET_ENTRY_LIVE_COMPETITION_BOARD = `${LIVE_POINTS_SCORE_FRAGMENT}
+export const GET_LEAGUE_LIVE_HEAD = `
+  query GetLeagueLiveHead($entryId: Int!, $tournamentId: Int!, $eventId: Int!, $mode: LeagueLiveMode!) {
+    leagueLiveHead(entryId: $entryId, tournamentId: $tournamentId, eventId: $eventId, mode: $mode) {
+      season eventId tournamentId mode availability contentRevision nextRefreshAt
+      publication {
+        revisions { publicationId generation roster scoreCore fixtureIdentity entryInputSet identity officialRank rules algorithm content }
+        times { sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt servedAt staleAt nextRefreshAt }
+      }
+      delivery { state servedFrom reasonCodes }
+    }
+  }
+`
+
+export interface LeagueLiveHeadResponse {
+	leagueLiveHead: LeagueLiveHead
+}
+
+export const GET_ENTRY_LIVE_COMPETITION_BOARD = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
   query GetEntryLiveCompetitionBoard(
     $entryId: Int!
     $tournamentId: Int!
     $eventId: Int!
-    $ref: LivePublicationRefInput
-    $page: Int
-    $pageSize: Int
-    $sort: EntryLiveCompetitionBoardSort
-    $direction: EntryLiveCompetitionBoardSortDirection
-    $search: String
-    $chips: [String!]
-    $captainPlayerIds: [Int!]
-    $ownership: EntryLiveCompetitionOwnershipFilterInput
-    $teamCountRules: [EntryLiveCompetitionTeamCountRuleInput!]
-    $expectedBoardRevision: String
+    $input: EntryLiveCompetitionBoardInput
   ) {
     entryLiveCompetitionBoard(
       entryId: $entryId
       tournamentId: $tournamentId
       eventId: $eventId
-      ref: $ref
-      page: $page
-      pageSize: $pageSize
-      sort: $sort
-      direction: $direction
-      search: $search
-      chips: $chips
-      captainPlayerIds: $captainPlayerIds
-      ownership: $ownership
-      teamCountRules: $teamCountRules
-      expectedBoardRevision: $expectedBoardRevision
+      input: $input
     ) {
-	      season eventId tournamentId boardRevision scoreCoreRevision dataAvailability
-	      revisions { publicationId generation lifecycle fixtureIdentity scoreCore displayStats explain picksBase officialAdjustment previousTotals finalResult rules algorithm input }
-	      times { sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt servedAt staleAt nextRefreshAt }
-	      delivery { state servedFrom reasonCodes }
-	      coverageState rankScope computedEntries
-      deferredEntryCount failedEntryCount unavailableEntryCount officialCoverage
-      unavailableEntryIds failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
+	      head {
+	        season eventId tournamentId mode availability contentRevision nextRefreshAt
+	        publication {
+	          revisions { publicationId generation scoreCore }
+	          times { contentUpdatedAt nextRefreshAt }
+	        }
+	        delivery { state }
+	      }
+	      totalEntries filteredEntries pageInfo { hasNextPage endCursor }
       highestEventPoints averageEventPoints
       rows { ...EntryLiveCompetitionBoardRowFields }
       viewerRow { ...EntryLiveCompetitionBoardRowFields }
@@ -1075,15 +1000,11 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `${LIVE_POINTS_SCORE_FRAGMENT}
   }
 
 	fragment EntryLiveCompetitionBoardRowFields on EntryLiveCompetitionBoardRow {
-	    entry entryName playerName rank overallRank teamValue chip
+	    availability entry entryName playerName liveRank overallRank teamValue chip
 	    transferCost played toPlay captainId
 	    captainName captainPoints
-	    score { ...EntryLiveCompetitionScoreFields }
+	    score { ...LivePointsScoreSummaryFields }
 	  }
-
-  fragment EntryLiveCompetitionScoreFields on LiveScore {
-    ...LivePointsScoreFields
-  }
 `
 
 export const GET_TOURNAMENT_SELECTION_INDEX = `
@@ -1148,185 +1069,119 @@ export const GET_TOURNAMENT_LIVE_PARTICIPANTS = `
   }
 `
 
-const OFFICIAL_H2H_MATCH_FIELDS = `
-  fragment OfficialH2HMatchFields on OfficialH2HMatch {
+const LIVE_H2H_MATCH_FIELDS = `
+  fragment LiveH2HMatchFields on TournamentOfficialH2HLiveMatch {
     officialMatchId
     eventId
+    groupId
     sourceOrder
     phase
     knockoutName
-    isBye
-    winnerEntryId
     tiebreak
-    sourceCheckedAt
+    isBye
+    availability
+    delivery { state }
+    revisions { publicationId generation scoreCore content }
+    times { contentUpdatedAt nextRefreshAt }
     home {
+      availability
       entryId
       entryName
       playerName
       isAverage
       points
-      matchPoints
+      netPoints
     }
     away {
+      availability
       entryId
       entryName
       playerName
       isAverage
       points
-      matchPoints
+      netPoints
     }
   }
 `
 
-export const GET_TOURNAMENT_OFFICIAL_H2H = `${OFFICIAL_H2H_MATCH_FIELDS}
+export const GET_TOURNAMENT_OFFICIAL_H2H = `${LIVE_H2H_MATCH_FIELDS}
   query GetTournamentOfficialH2H($tournamentId: Int!, $eventId: Int!) {
     tournamentOfficialH2H(tournamentId: $tournamentId, eventId: $eventId) {
       eventId
-      awaitingSchedule
-	  scoreSource
-	  scoreRevision
-	  scoreCheckedAt
+      availability
+      delivery { state servedFrom reasonCodes }
+      revisions { publicationId generation roster scoreCore fixtureIdentity entryInputSet identity officialRank rules algorithm content }
+      times { sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt servedAt staleAt nextRefreshAt }
       standings {
-        entryId
-        entryName
-        playerName
-        rank
-        matchPoints
-        played
-        won
-        drawn
-        lost
-        pointsFor
+        throughEventId
+        state
+        sourceCheckedAt
+        rows { entryId entryName playerName rank matchPoints played won drawn lost pointsFor }
       }
       matches {
-        ...OfficialH2HMatchFields
+        ...LiveH2HMatchFields
       }
     }
   }
 `
 
-export const GET_ENTRY_OFFICIAL_H2H_DESK = `${OFFICIAL_H2H_MATCH_FIELDS}
-  query GetEntryOfficialH2HDesk($entryId: Int!) {
-    entryOfficialH2HDesk(entryId: $entryId) {
-      tournamentId
-      tournamentName
-      totalTeams
-      eventId
-      awaitingSchedule
-      isLive
-      isFinal
-	  scoreSource
-	  scoreRevision
-	  scoreCheckedAt
-      rank
-      lastRank
-      matchPoints
-      match {
-        ...OfficialH2HMatchFields
-      }
-      matches {
-        ...OfficialH2HMatchFields
-      }
-    }
-  }
-`
-
-export interface OfficialH2HStanding {
-	entryId: number
-	entryName: string | null
-	playerName: string | null
-	rank: number | null
-	matchPoints: number
-	played: number
-	won: number
-	drawn: number
-	lost: number
-	pointsFor: number
+export interface TournamentOfficialH2H {
+	eventId: number
+	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
+	delivery: LiveDelivery
+	revisions: LeagueLiveRevisionVector | null
+	times: LiveTimes | null
+	standings: {
+		throughEventId: number
+		state: 'READY' | 'STALE' | 'UPDATING' | 'UNAVAILABLE'
+		sourceCheckedAt: string | null
+		rows: TournamentOfficialH2HStanding[]
+	} | null
+	matches: TournamentOfficialH2HLiveMatch[]
 }
 
-export interface OfficialH2HMatchSide {
+export interface TournamentOfficialH2HStanding {
+	entryId: number
+	entryName: string
+	playerName: string | null
+	rank: number | null
+	matchPoints: number | null
+	played: number | null
+	won: number | null
+	drawn: number | null
+	lost: number | null
+	pointsFor: number | null
+}
+
+export interface TournamentOfficialH2HLiveMatchSide {
+	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
 	entryId: number | null
 	entryName: string
 	playerName: string | null
 	isAverage: boolean
 	points: number | null
-	matchPoints: number | null
+	netPoints: number | null
 }
 
-export interface OfficialH2HMatch {
+export interface TournamentOfficialH2HLiveMatch {
 	officialMatchId: number
 	eventId: number
+	groupId: number
 	sourceOrder: number
 	phase: 'REGULAR' | 'KNOCKOUT'
 	knockoutName: string | null
-	isBye: boolean
-	winnerEntryId: number | null
 	tiebreak: string | null
-	sourceCheckedAt: string | null
-	home: OfficialH2HMatchSide
-	away: OfficialH2HMatchSide
-}
-
-export interface TournamentOfficialH2H {
-	eventId: number
-	awaitingSchedule: boolean
-	scoreSource: 'FPL_EVENT_LIVE' | 'FPL_H2H_FINAL' | 'UNAVAILABLE'
-	scoreRevision: string | null
-	scoreCheckedAt: string | null
-	standings: OfficialH2HStanding[]
-	matches: OfficialH2HMatch[]
+	isBye: boolean
+	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
+	delivery: Pick<LiveDelivery, 'state'>
+	revisions: Pick<LeagueLiveRevisionVector, 'publicationId' | 'generation' | 'scoreCore' | 'content'>
+	times: Pick<LiveTimes, 'contentUpdatedAt' | 'nextRefreshAt'>
+	home: TournamentOfficialH2HLiveMatchSide
+	away: TournamentOfficialH2HLiveMatchSide
 }
 
 export interface TournamentOfficialH2HResponse {
 	tournamentOfficialH2H: TournamentOfficialH2H
-}
-
-export interface EntryOfficialH2HDeskItem {
-	tournamentId: number
-	tournamentName: string
-	totalTeams: number
-	eventId: number
-	awaitingSchedule: boolean
-	isLive: boolean
-	isFinal: boolean
-	scoreSource: TournamentOfficialH2H['scoreSource']
-	scoreRevision: string | null
-	scoreCheckedAt: string | null
-	rank: number | null
-	lastRank: number | null
-	matchPoints: number
-	match: OfficialH2HMatch | null
-	matches?: OfficialH2HMatch[]
-}
-
-export interface EntryOfficialH2HDeskResponse {
-	entryOfficialH2HDesk: EntryOfficialH2HDeskItem[]
-}
-
-export const GET_ENTRY_OFFICIAL_H2H_MATCHUPS = `${OFFICIAL_H2H_MATCH_FIELDS}
-  query GetEntryOfficialH2HMatchups($entryId: Int!) {
-    entryOfficialH2HDesk(entryId: $entryId) {
-      tournamentId
-      eventId
-      isLive
-      isFinal
-      matches {
-        ...OfficialH2HMatchFields
-      }
-    }
-  }
-`
-
-export interface EntryOfficialH2HMatchupsItem {
-	tournamentId: number
-	eventId: number
-	isLive: boolean
-	isFinal: boolean
-	matches: OfficialH2HMatch[]
-}
-
-export interface EntryOfficialH2HMatchupsResponse {
-	entryOfficialH2HDesk: EntryOfficialH2HMatchupsItem[]
 }
 
 // Query to fetch entry result for a specific event

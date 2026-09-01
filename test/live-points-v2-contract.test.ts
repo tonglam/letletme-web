@@ -255,21 +255,20 @@ describe('Live Points V2 web contract', () => {
 		)
 		const tournament = readFileSync(
 			new URL(
-				'../app/live/tournaments/[id]/TournamentDetailClient.tsx',
+				'../app/live/tournaments/TournamentClient.tsx',
 				import.meta.url
 			),
 			'utf8'
 		)
 		assert.doesNotMatch(hook, /liveScoreDue/)
-		assert.doesNotMatch(tournament, /const liveScoreDue/)
+		assert.doesNotMatch(tournament, /liveScoreDue/)
 		assert.match(
 			hook,
 			/if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/
 		)
-		assert.match(
-			tournament,
-			/if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/
-		)
+		assert.match(tournament, /fetchLeagueLiveHead/)
+		assert.match(tournament, /liveBoardPublicationChanged/)
+		assert.match(tournament, /shouldAutoRefreshLiveBoardPage\(boardPage\)/)
 	})
 
 	it('preserves the same event while polling only the active event', () => {

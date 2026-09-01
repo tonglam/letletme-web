@@ -14,7 +14,10 @@ import {
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	GET_TOURNAMENT_DETAIL_DESK,
+	GET_TOURNAMENT_OFFICIAL_H2H,
 	type TournamentDetailDeskResponse
+	,
+	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
@@ -404,6 +407,23 @@ async function probeTournament(
 			`${contractKey} canary is not configured`
 		)
 	}
+	if (contractKey === 'official-h2h') {
+		const response = await executeServerQueryWithSession<TournamentOfficialH2HResponse>(
+			canarySession(config),
+			GET_TOURNAMENT_OFFICIAL_H2H,
+			{ tournamentId: config.tournamentId, eventId },
+			{ cache: 'no-store', timeoutMs: 5_000 }
+		)
+		const official = response.tournamentOfficialH2H
+		return {
+			revision: revision(official.revisions?.content ?? 'unavailable'),
+			complete:
+				official.eventId === eventId &&
+				official.availability === 'READY' &&
+				official.matches.length > 0 &&
+				official.matches.every(match => match.availability === 'READY')
+		}
+	}
 	const response =
 		await executeServerQueryWithSession<TournamentDetailDeskResponse>(
 			canarySession(config),
@@ -422,29 +442,12 @@ async function probeTournament(
 			'tournament business loader returned no matching event'
 		)
 	}
-	if (contractKey === 'official-h2h') {
-		const official = detail.officialH2H
-		if (!official) {
-			throw new DataGovernanceProbeError(
-				'BUSINESS_DATA_UNAVAILABLE',
-				'official H2H business loader has no payload'
-			)
-		}
-		return {
-			revision: revision(official.scoreRevision ?? detail.revision),
-			complete:
-				!official.awaitingSchedule &&
-				official.eventId === eventId &&
-				official.scoreRevision !== null &&
-				official.matches.some(match => match.eventId === eventId)
-		}
-	}
 	return {
 		revision: revision(detail.revision),
 		complete:
 			detail.tournament.state !== 'INACTIVE' &&
 			detail.participants.length > 0 &&
-			(detail.live === null || !detail.live.partial)
+			detail.participants.length > 0
 	}
 }
 

@@ -62,10 +62,12 @@ import {
 	GET_TOP_TRANSFERS_OUT
 } from '../lib/graphql/operations/prices'
 import {
+	GET_ENTRY_LIVE_COMPETITION_BOARD,
 	GET_ENTRY_TOURNAMENTS,
+	GET_LEAGUE_LIVE_HEAD,
 	GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 	GET_TOURNAMENT_EVENT_RESULTS,
-	GET_TOURNAMENT_LIVE_DESK,
+	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_SELECTION_STATS
 } from '../lib/graphql/operations/tournaments'
 
@@ -320,8 +322,28 @@ async function main() {
 			requiresPublishedPicks: true
 		},
 		{
-			name: 'GET_TOURNAMENT_LIVE_DESK',
-			query: GET_TOURNAMENT_LIVE_DESK,
+			name: 'GET_LEAGUE_LIVE_HEAD',
+			query: GET_LEAGUE_LIVE_HEAD,
+			variables: { entryId, eventId, tournamentId, mode: 'CLASSIC' },
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
+		},
+		{
+			name: 'GET_ENTRY_LIVE_COMPETITION_BOARD',
+			query: GET_ENTRY_LIVE_COMPETITION_BOARD,
+			variables: {
+				entryId,
+				eventId,
+				tournamentId,
+				first: 20,
+				after: null
+			},
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
+		},
+		{
+			name: 'GET_TOURNAMENT_OFFICIAL_H2H',
+			query: GET_TOURNAMENT_OFFICIAL_H2H,
 			variables: { eventId, tournamentId },
 			skip: tournamentId === null,
 			requiresPublishedPicks: true

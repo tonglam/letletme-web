@@ -14,7 +14,7 @@ export interface ExecuteQueryOptions {
 	next?: { revalidate?: number | false; tags?: string[] }
 	headers?: Record<string, string>
 	/** Explicit consumer contract required by version-gated GraphQL roots. */
-	contract?: 'my-tournament-review-v2'
+	contract?: 'my-tournament-review-v2' | 'live-points-v2'
 	timeoutMs?: number
 	signal?: AbortSignal
 	/** Error codes the immediate caller deliberately catches and recovers from. */
@@ -87,6 +87,9 @@ export const LIVE_POINTS_V2_ROOT_FIELDS = [
 	'liveSnapshot',
 	'liveContext',
 	'entryLiveCompetitionBoard',
+	'leagueLiveHead',
+	'tournamentOfficialH2H',
+	'tournamentOfficialH2HHistory',
 	'entryLiveCompetitionsDesk',
 	'tournamentSelectionIndex',
 	'tournamentEntrySquads',

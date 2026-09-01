@@ -420,7 +420,7 @@ test('Home league ranks never start an H2H polling request', async ({
 		await page.clock.fastForward(61_000)
 		expect(
 			clientGraphqlOperations.some(operation =>
-				operation.includes('entryOfficialH2HDesk')
+				operation.includes('tournamentOfficialH2H')
 			)
 		).toBe(false)
 	} finally {

@@ -10,17 +10,15 @@ import { usePageActive } from '@/hooks/use-page-active'
 import { Link, useRouter } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
 	GET_TOURNAMENT_OFFICIAL_H2H,
-	type EntryOfficialH2HMatchupsItem,
-	type EntryOfficialH2HMatchupsResponse,
-	type OfficialH2HMatch,
-	type OfficialH2HMatchSide,
-	type OfficialH2HStanding,
+	type LeagueLiveHead,
+	type TournamentOfficialH2HLiveMatch,
+	type TournamentOfficialH2HLiveMatchSide,
+	type TournamentOfficialH2HStanding,
 	type TournamentOfficialH2H,
 	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
-import { traceableH2HScore } from '@/lib/live-score-v2'
+import { fetchLeagueLiveHead } from '@/lib/tournament/live-board'
 import { shouldShowOfficialH2HStandings } from '@/lib/tournament/official-h2h-presentation'
 import { cn, formatInteger } from '@/lib/utils'
 import {
@@ -36,19 +34,22 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const REFRESH_INTERVAL_MS = 60_000
-const EMPTY_OFFICIAL_H2H_MATCHES: readonly OfficialH2HMatch[] = []
+const EMPTY_OFFICIAL_H2H_MATCHES: readonly TournamentOfficialH2HLiveMatch[] = []
 const H2H_STANDING_COLUMNS =
 	'2.5rem minmax(0,1fr) 2.75rem 2.75rem 2.75rem 3.75rem 4.5rem 5.5rem'
 
-function sideLabel(side: OfficialH2HMatchSide, averageLabel: string): string {
+function sideLabel(
+	side: TournamentOfficialH2HLiveMatchSide,
+	averageLabel: string
+): string {
 	return side.isAverage ? averageLabel : side.entryName
 }
-function scoreLabel(side: OfficialH2HMatchSide): string {
+function scoreLabel(side: TournamentOfficialH2HLiveMatchSide): string {
 	return side.points == null ? '—' : formatInteger(side.points)
 }
 
 function shareMatchLabel(
-	match: OfficialH2HMatch,
+	match: TournamentOfficialH2HLiveMatch,
 	averageLabel: string,
 	versusLabel: string
 ): string {
@@ -60,34 +61,13 @@ function shareMatchLabel(
 	return `${home} ${scoreLabel(match.home)} — ${scoreLabel(match.away)} ${away}`
 }
 
-function scoreSourceLabel(
-	scoreSource: TournamentOfficialH2H['scoreSource'],
-	t: ReturnType<typeof useTranslations<'LiveTournament'>>
-): string {
-	if (scoreSource === 'FPL_EVENT_LIVE') return t('live')
-	if (scoreSource === 'FPL_H2H_FINAL') return t('completed')
-	return t('pending')
-}
-
-function scoreSourceClass(
-	scoreSource: TournamentOfficialH2H['scoreSource']
-): string {
-	if (scoreSource === 'FPL_EVENT_LIVE') {
-		return 'border-primary/35 bg-primary/10 text-primary-ink'
-	}
-	if (scoreSource === 'FPL_H2H_FINAL') {
-		return 'border-border/80 bg-muted/60 text-muted-foreground'
-	}
-	return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-}
-
 function StandingBoard({
 	standings,
 	tournamentId,
 	eventId,
 	viewerEntryId
 }: {
-	standings: OfficialH2HStanding[]
+	standings: TournamentOfficialH2HStanding[]
 	tournamentId: number
 	eventId: number
 	viewerEntryId?: number
@@ -246,7 +226,7 @@ function MatchCard({
 	match,
 	viewerEntryId
 }: {
-	match: OfficialH2HMatch
+	match: TournamentOfficialH2HLiveMatch
 	viewerEntryId?: number
 }) {
 	const t = useTranslations('LiveTournament')
@@ -255,14 +235,7 @@ function MatchCard({
 		(match.home.entryId === viewerEntryId ||
 			match.away.entryId === viewerEntryId)
 	const hasScore = match.home.points != null && match.away.points != null
-	const homeWon =
-		hasScore &&
-		match.winnerEntryId != null &&
-		match.winnerEntryId === match.home.entryId
-	const awayWon =
-		hasScore &&
-		match.winnerEntryId != null &&
-		match.winnerEntryId === match.away.entryId
+	const scoreAvailable = hasScore && match.availability === 'READY'
 
 	return (
 		<li>
@@ -303,7 +276,7 @@ function MatchCard({
 						<p
 							className={cn(
 								'break-words text-sm font-semibold leading-tight',
-								homeWon && 'text-primary-ink'
+								scoreAvailable && 'text-primary-ink'
 							)}
 							title={sideLabel(match.home, t('officialH2HAverageTeam'))}
 						>
@@ -317,13 +290,13 @@ function MatchCard({
 					</div>
 					<div className="flex min-w-[4.75rem] flex-col items-center gap-1">
 						<div className="rounded-lg border border-border/80 bg-background px-2.5 py-1.5 font-mono text-base font-bold tabular-nums shadow-sm">
-							{hasScore ? (
+							{scoreAvailable ? (
 								<span className="flex items-center gap-1.5">
-									<span className={homeWon ? 'text-primary-ink' : undefined}>
+									<span className="text-primary-ink">
 										{scoreLabel(match.home)}
 									</span>
 									<span className="text-muted-foreground">—</span>
-									<span className={awayWon ? 'text-primary-ink' : undefined}>
+									<span className="text-primary-ink">
 										{scoreLabel(match.away)}
 									</span>
 								</span>
@@ -338,7 +311,7 @@ function MatchCard({
 						<p
 							className={cn(
 								'break-words text-sm font-semibold leading-tight',
-								awayWon && 'text-primary-ink'
+								scoreAvailable && 'text-primary-ink'
 							)}
 							title={sideLabel(match.away, t('officialH2HAverageTeam'))}
 						>
@@ -367,7 +340,7 @@ function MatchupHistoryBoard({
 	isLive,
 	isFinal
 }: {
-	matches: readonly OfficialH2HMatch[]
+	matches: readonly TournamentOfficialH2HLiveMatch[]
 	currentEventId?: number
 	isLive?: boolean
 	isFinal?: boolean
@@ -479,15 +452,10 @@ export function OfficialH2HCompetitionView({
 	const router = useRouter()
 	const isPageActive = usePageActive()
 	const [snapshot, setSnapshot] = useState(initialSnapshot)
+	const [head, setHead] = useState<LeagueLiveHead | null>(null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [refreshFailed, setRefreshFailed] = useState(false)
 	const [hasLoaded, setHasLoaded] = useState(Boolean(initialSnapshot))
-	const [entryDesk, setEntryDesk] =
-		useState<EntryOfficialH2HMatchupsItem | null>(null)
-	const [entryDeskFailed, setEntryDeskFailed] = useState(false)
-	const [hasLoadedEntryDesk, setHasLoadedEntryDesk] = useState(
-		viewerEntryId == null
-	)
 	const inFlightRef = useRef<Promise<void> | null>(null)
 	const boardsShareRef = useRef<HTMLElement | null>(null)
 	const isCurrentEvent = activeEventId === eventId
@@ -501,31 +469,35 @@ export function OfficialH2HCompetitionView({
 					value => ({ ok: true as const, value }),
 					error => ({ ok: false as const, error })
 				)
-			const matchupRequest =
-				viewerEntryId == null
-					? Promise.resolve(null)
-					: settle(
-							executeQuery<EntryOfficialH2HMatchupsResponse>(
-								GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
-								{ entryId: viewerEntryId },
-								{ cache: 'no-store' }
-							)
-						)
 			try {
 				setIsRefreshing(true)
-				const [snapshotResult, matchupResult] = await Promise.all([
-					settle(
-						executeQuery<TournamentOfficialH2HResponse>(
-							GET_TOURNAMENT_OFFICIAL_H2H,
-							{ tournamentId, eventId },
-							{ cache: 'no-store' }
-						)
-					),
-					matchupRequest
-				])
+				const snapshotResult = await settle(
+					executeQuery<TournamentOfficialH2HResponse>(
+						GET_TOURNAMENT_OFFICIAL_H2H,
+						{ tournamentId, eventId },
+						{ cache: 'no-store', contract: 'live-points-v2' }
+					)
+				)
 				if (snapshotResult.ok) {
-					setSnapshot(snapshotResult.value.tournamentOfficialH2H)
-					setRefreshFailed(false)
+					const next = snapshotResult.value.tournamentOfficialH2H
+					if (next.availability === 'READY' || snapshot === null) {
+						setSnapshot(next)
+						setHead(current =>
+							current && next.revisions
+								? {
+										...current,
+										availability: next.availability,
+										contentRevision: next.revisions.content,
+										delivery: next.delivery
+									}
+								: current
+						)
+						setRefreshFailed(false)
+					} else {
+						// A failed or incomplete refresh must never replace a complete
+						// same-event H2H screen with an empty/error response.
+						setRefreshFailed(true)
+					}
 				} else {
 					console.error(
 						'Failed to refresh official H2H mirror:',
@@ -534,25 +506,6 @@ export function OfficialH2HCompetitionView({
 					setRefreshFailed(true)
 				}
 				setHasLoaded(true)
-				if (matchupResult === null) {
-					setEntryDesk(null)
-					setEntryDeskFailed(false)
-					setHasLoadedEntryDesk(true)
-				} else if (matchupResult.ok) {
-					const item = matchupResult.value.entryOfficialH2HDesk.find(
-						candidate => candidate.tournamentId === tournamentId
-					)
-					setEntryDesk(item ?? null)
-					setEntryDeskFailed(false)
-					setHasLoadedEntryDesk(true)
-				} else {
-					console.error(
-						'Failed to refresh official H2H matchup history:',
-						matchupResult.error
-					)
-					setEntryDeskFailed(true)
-					setHasLoadedEntryDesk(true)
-				}
 			} finally {
 				setIsRefreshing(false)
 			}
@@ -562,7 +515,7 @@ export function OfficialH2HCompetitionView({
 			if (inFlightRef.current === request) inFlightRef.current = null
 		})
 		return request
-	}, [eventId, tournamentId, viewerEntryId])
+	}, [eventId, snapshot, tournamentId])
 
 	useEffect(() => {
 		if (!isPageActive || snapshot?.eventId === eventId) return
@@ -570,57 +523,69 @@ export function OfficialH2HCompetitionView({
 	}, [eventId, isPageActive, refresh, snapshot?.eventId])
 
 	useEffect(() => {
-		if (!isPageActive || viewerEntryId == null || hasLoadedEntryDesk) return
-		void refresh()
-	}, [hasLoadedEntryDesk, isPageActive, refresh, viewerEntryId])
-
-	useEffect(() => {
 		if (!isCurrentEvent || !isPageActive) return
-		const timer = window.setInterval(() => void refresh(), REFRESH_INTERVAL_MS)
+		let cancelled = false
+		const probe = async () => {
+			try {
+				const next = await fetchLeagueLiveHead(tournamentId, eventId, 'H2H')
+				if (cancelled) return
+				setHead(next)
+				if (next.contentRevision !== snapshot?.revisions?.content)
+					await refresh()
+			} catch {
+				if (!cancelled && snapshot) setRefreshFailed(true)
+			}
+		}
+		void probe()
+		const timer = window.setInterval(() => void probe(), REFRESH_INTERVAL_MS)
 		return () => window.clearInterval(timer)
-	}, [isCurrentEvent, isPageActive, refresh])
+	}, [eventId, isCurrentEvent, isPageActive, refresh, snapshot, tournamentId])
 
-	const hasTraceableScore = traceableH2HScore(snapshot)
 	const standings = useMemo(
 		() =>
-			hasTraceableScore
-				? [...(snapshot?.standings ?? [])].sort(
-						(left, right) =>
-							(left.rank ?? Number.MAX_SAFE_INTEGER) -
-								(right.rank ?? Number.MAX_SAFE_INTEGER) ||
-							right.matchPoints - left.matchPoints ||
-							right.pointsFor - left.pointsFor ||
-							left.entryId - right.entryId
-					)
-				: [],
-		[hasTraceableScore, snapshot?.standings]
+			[...(snapshot?.standings?.rows ?? [])].sort(
+				(left, right) =>
+					(left.rank ?? Number.MAX_SAFE_INTEGER) -
+						(right.rank ?? Number.MAX_SAFE_INTEGER) ||
+					(right.matchPoints ?? -1) - (left.matchPoints ?? -1) ||
+					(right.pointsFor ?? -1) - (left.pointsFor ?? -1) ||
+					left.entryId - right.entryId
+			),
+		[snapshot?.standings?.rows]
 	)
-	const matches = useMemo(() => {
-		const source = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
-		if (hasTraceableScore) return source
-		return source.map(match => ({
-			...match,
-			home: { ...match.home, points: null, matchPoints: null },
-			away: { ...match.away, points: null, matchPoints: null },
-			winnerEntryId: null,
-			sourceCheckedAt: null
-		}))
-	}, [hasTraceableScore, snapshot])
+	const matches = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
 	const viewerStanding = useMemo(
 		() =>
 			standings.find(standing => standing.entryId === viewerEntryId) ?? null,
 		[standings, viewerEntryId]
 	)
-	const matchupHistory = entryDesk?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
+	const matchupHistory =
+		viewerEntryId == null
+			? EMPTY_OFFICIAL_H2H_MATCHES
+			: matches.filter(
+					match =>
+						match.home.entryId === viewerEntryId ||
+						match.away.entryId === viewerEntryId
+				)
 	const isMatchupInitialLoading =
-		viewerEntryId != null && !hasLoadedEntryDesk && isRefreshing
+		viewerEntryId != null && !hasLoaded && isRefreshing
 	const isInitialLoading = !hasLoaded && isRefreshing
-	const scoreStatus = scoreSourceLabel(
-		snapshot?.scoreSource ?? 'UNAVAILABLE',
-		t
-	)
+	const scoreStatus =
+		snapshot?.availability === 'READY'
+			? snapshot.delivery.state === 'FINAL'
+				? t('completed')
+				: t('live')
+			: t('pending')
 	const previousEvent = eventId > 1 ? eventId - 1 : null
 	const nextEvent = eventId < 38 ? eventId + 1 : null
+	const awaitingSchedule =
+		snapshot?.availability === 'PENDING' || head?.availability === 'PENDING'
+	const scoreBadgeClass =
+		snapshot?.delivery.state === 'FINAL'
+			? 'border-border/80 bg-muted/60 text-muted-foreground'
+			: snapshot?.availability === 'READY'
+				? 'border-primary/35 bg-primary/10 text-primary-ink'
+				: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
 
 	useEffect(() => {
 		if (!isPageActive) return
@@ -738,7 +703,7 @@ export function OfficialH2HCompetitionView({
 							aria-hidden="true"
 						/>
 						<p className="text-sm font-medium">
-							{snapshot?.awaitingSchedule
+							{awaitingSchedule
 								? t('officialH2HAwaitingSchedule')
 								: t('officialH2HLiveUnavailable', { event: eventId })}
 						</p>
@@ -779,7 +744,7 @@ export function OfficialH2HCompetitionView({
 							aria-hidden="true"
 						/>
 						<p className="text-sm font-medium text-muted-foreground">
-							{snapshot?.awaitingSchedule
+							{awaitingSchedule
 								? t('officialH2HAwaitingGameweek', { event: eventId })
 								: t('officialH2HNoFixtures', { event: eventId })}
 						</p>
@@ -804,22 +769,15 @@ export function OfficialH2HCompetitionView({
 							/>
 						))}
 					</div>
-				) : entryDeskFailed ? (
-					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-						<CalendarClock
-							className="size-7 text-muted-foreground/60"
-							aria-hidden="true"
-						/>
-						<p className="text-sm font-medium text-muted-foreground">
-							{t('officialH2HMyMatchupsUnavailable')}
-						</p>
-					</div>
 				) : matchupHistory.length > 0 ? (
 					<MatchupHistoryBoard
 						matches={matchupHistory}
-						currentEventId={entryDesk?.eventId}
-						isLive={entryDesk?.isLive}
-						isFinal={entryDesk?.isFinal}
+						currentEventId={eventId}
+						isLive={
+							snapshot?.availability === 'READY' &&
+							snapshot.delivery.state !== 'FINAL'
+						}
+						isFinal={snapshot?.delivery.state === 'FINAL'}
 					/>
 				) : (
 					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
@@ -835,16 +793,14 @@ export function OfficialH2HCompetitionView({
 			}
 		],
 		[
-			entryDesk?.eventId,
-			entryDesk?.isLive,
-			entryDesk?.isFinal,
-			entryDeskFailed,
 			eventId,
 			isInitialLoading,
 			isMatchupInitialLoading,
 			matches,
 			matchupHistory,
-			snapshot?.awaitingSchedule,
+			awaitingSchedule,
+			snapshot?.availability,
+			snapshot?.delivery.state,
 			standings,
 			showStandings,
 			t,
@@ -881,7 +837,7 @@ export function OfficialH2HCompetitionView({
 									variant="outline"
 									className={cn(
 										'rounded-full px-2.5 py-1 font-medium',
-										scoreSourceClass(snapshot?.scoreSource ?? 'UNAVAILABLE')
+										scoreBadgeClass
 									)}
 								>
 									{scoreStatus}
@@ -989,9 +945,9 @@ export function OfficialH2HCompetitionView({
 							<dd className="text-sm font-bold tracking-tight sm:text-base">
 								{viewerStanding
 									? t('officialH2HRecordValue', {
-											won: viewerStanding.won,
-											drawn: viewerStanding.drawn,
-											lost: viewerStanding.lost
+											won: viewerStanding.won ?? '—',
+											drawn: viewerStanding.drawn ?? '—',
+											lost: viewerStanding.lost ?? '—'
 										})
 									: '—'}
 							</dd>
@@ -1009,7 +965,7 @@ export function OfficialH2HCompetitionView({
 				</Alert>
 			) : null}
 
-			{snapshot?.awaitingSchedule ? (
+			{awaitingSchedule ? (
 				<Card className="flex items-start gap-3 rounded-xl border-dashed border-border/80 bg-muted/20 p-4 shadow-none sm:items-center">
 					<CalendarClock
 						className="mt-0.5 size-5 shrink-0 text-primary-ink sm:mt-0"
