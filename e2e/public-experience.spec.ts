@@ -405,7 +405,7 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 		mobileMenu.getByRole('link', { name: 'Browse competitions', exact: true })
 	).toHaveAttribute('href', '/competitions/browse')
 	await expect(
-		mobileMenu.getByRole('link', { name: 'Competition Review', exact: true })
+		mobileMenu.getByRole('link', { name: 'Tournament Review', exact: true })
 	).toHaveAttribute('href', '/my-fpl/competitions')
 	await expect(
 		mobileMenu.getByRole('link', { name: 'New Competition', exact: true })
