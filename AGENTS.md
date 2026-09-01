@@ -23,8 +23,8 @@
 ## Change routing
 
 - For a normal Web feature or bug, use `$letletme-web-request-path`; a single-repository task needs no cross-repo Change ID.
-- If behavior requires a Data schema/publication, GraphQL field/resolver, Mini Program contract, or Ops release change, stop treating it as Web-only and use `$letletme-stack-audit` to register and trace the affected repositories.
-- Use `$letletme-web-dev-environment` for local servers, ports, environment profiles, Playwright, or stale-process diagnosis. Use `$gh-codex-review-loop` only for PR completion and `$letletme-release-acceptance` only for authorized release acceptance.
+- If behavior requires a Data schema/publication, GraphQL field/resolver, Mini Program contract, or Ops release change, stop treating it as Web-only and use the global `$letletme-stack-audit` to register and trace the affected repositories.
+- Use the global `$letletme-web-dev-environment` for local servers, ports, environment profiles, Playwright, or stale-process diagnosis. Use the global `$gh-codex-review-loop` only for PR completion and the global `$letletme-release-acceptance` only for authorized release acceptance.
 - Generic Next.js, React, accessibility, SEO, or design skills are opt-in for relevant work; they do not replace this repository's boundary rules.
 
 ## Verification
