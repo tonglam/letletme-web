@@ -76,15 +76,36 @@ export const LIVE_POINTS_CONTRACT_HEADER = 'X-LetLetMe-Contract'
 export const LIVE_POINTS_CONTRACT_VERSION = 'live-points-v2'
 export const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v3'
 
+export const LIVE_POINTS_V2_ROOT_FIELDS = [
+	'calcLivePointsByEntry',
+	'calcLivePointsForEntries',
+	'liveScores',
+	'playerLive',
+	'eventLive',
+	'eventLiveExplain',
+	'eventLiveExplains',
+	'liveSnapshot',
+	'liveContext',
+	'entryLiveCompetitionBoard',
+	'entryLiveCompetitionsDesk',
+	'tournamentSelectionIndex',
+	'tournamentEntrySquads',
+	'tournamentDetailDesk',
+	'gameweekDesk',
+	'homeGameweek'
+] as const
+
+const LIVE_POINTS_V2_ROOT_FIELD_PATTERN = new RegExp(
+	`\\b(?:${LIVE_POINTS_V2_ROOT_FIELDS.join('|')})\\s*(?:\\(|\\{)`
+)
+
 /**
  * Live Points is a breaking contract. Keep the gate in the shared request
  * path so an individual page, RSC seed, or explain refresh cannot silently
  * omit the required V2 header.
  */
 export const requiresLivePointsV2Contract = (query: string): boolean =>
-	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|entryLiveCompetitionBoard|entryLiveCompetitionsDesk|liveSnapshot|liveContext|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|tournamentSelectionIndex|tournamentEntrySquads)\s*(?:\(|\{)/.test(
-		query
-	)
+	LIVE_POINTS_V2_ROOT_FIELD_PATTERN.test(query)
 
 export const requiresLiveMatchesV3Contract = (query: string): boolean =>
 	/\bliveMatchday\s*(?:\(|\{)/.test(query)

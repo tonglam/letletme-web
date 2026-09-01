@@ -9,7 +9,7 @@
  *
  * Usage: `npx tsx scripts/validate-queries-vs-schema.ts`
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import path from 'node:path'
@@ -18,10 +18,12 @@ import {
 	buildSchema,
 	getIntrospectionQuery,
 	GraphQLSchema,
+	Kind,
 	parse,
 	validate,
 	visit
 } from 'graphql'
+import type { SelectionSetNode } from 'graphql'
 import { buildFixtureWindowQuery } from '../lib/fixture-window'
 import {
 	GET_ENTRY,
@@ -43,11 +45,13 @@ import {
 	GET_LIVE_MATCHDAY,
 	GET_LIVE_MATCHDAY_HEAD,
 	GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
+	GET_GAMEWEEK_BOARDS,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
 	GET_LIVE_CONTEXT,
 	GET_PLAYER_LIVE
 } from '../lib/graphql/operations/live'
+import { GET_GAMEWEEK_DESK } from '../lib/graphql/operations/gameweek'
 import {
 	GET_FIXTURE_PLANNING_SIGNALS,
 	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
@@ -122,6 +126,11 @@ import {
 	GET_TREND_COHORTS
 } from '../lib/graphql/operations/trends'
 import { AGENT_GRAPHQL_DOCUMENTS } from '../lib/agent-tools/documents'
+import {
+	LIVE_MATCHES_CONTRACT_VERSION,
+	LIVE_POINTS_CONTRACT_VERSION,
+	liveContractVersionForQuery
+} from '../lib/graphql-client'
 
 function hydrateGraphQlEnvFromLocalFile(): void {
 	for (const filename of ['.env.e2e.local', '.env.local']) {
@@ -195,6 +204,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_HOME_MARKET_OWNERSHIP', GET_HOME_MARKET_OWNERSHIP],
 	['GET_HOME_MARKET_DESK', GET_HOME_MARKET_DESK],
 	['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK],
+	['GET_GAMEWEEK_DESK', GET_GAMEWEEK_DESK],
 	['GET_HOME_PERSONAL_DESK', GET_HOME_PERSONAL_DESK],
 	['GET_MY_TOURNAMENT_REVIEW_CATALOG', GET_MY_TOURNAMENT_REVIEW_CATALOG],
 	['GET_MY_TOURNAMENT_GAMEWEEK_REVIEW', GET_MY_TOURNAMENT_GAMEWEEK_REVIEW],
@@ -224,6 +234,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_EVENT_FIXTURES', GET_EVENT_FIXTURES],
 	['GET_FIXTURE_WINDOW_5', buildFixtureWindowQuery(5)],
 	['GET_LIVE_POINTS', GET_LIVE_POINTS],
+	['GET_GAMEWEEK_BOARDS', GET_GAMEWEEK_BOARDS],
 	['GET_TOURNAMENT_LIVE_DESK', GET_TOURNAMENT_LIVE_DESK],
 	['GET_TOURNAMENT_DETAIL_DESK', GET_TOURNAMENT_DETAIL_DESK],
 	['SEARCH_ENTRIES', SEARCH_ENTRIES],
@@ -248,6 +259,119 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 		([name, document]) => [`AGENT_${name}`, document] as const
 	)
 ]
+
+type PinnedTransportContracts = {
+	requiresLivePointsV2Contract: (rootFields: readonly string[]) => boolean
+	requiresLiveMatchesV2Contract: (rootFields: readonly string[]) => boolean
+	livePointsValue: string
+	liveMatchesValue: string
+}
+
+const rootFieldsForDocument = (document: string): string[] => {
+	const ast = parse(document)
+	const fragments = new Map(
+		ast.definitions
+			.filter(definition => definition.kind === Kind.FRAGMENT_DEFINITION)
+			.map(definition => [definition.name.value, definition] as const)
+	)
+	const rootFields = new Set<string>()
+	const visitedFragments = new Set<string>()
+
+	const collect = (selectionSet: SelectionSetNode): void => {
+		for (const selection of selectionSet.selections) {
+			if (selection.kind === Kind.FIELD) {
+				rootFields.add(selection.name.value)
+				continue
+			}
+			if (selection.kind === Kind.INLINE_FRAGMENT) {
+				collect(selection.selectionSet)
+				continue
+			}
+			if (
+				selection.kind === Kind.FRAGMENT_SPREAD &&
+				!visitedFragments.has(selection.name.value)
+			) {
+				visitedFragments.add(selection.name.value)
+				const fragment = fragments.get(selection.name.value)
+				if (fragment) collect(fragment.selectionSet)
+			}
+		}
+	}
+
+	for (const definition of ast.definitions) {
+		if (definition.kind === Kind.OPERATION_DEFINITION) {
+			collect(definition.selectionSet)
+		}
+	}
+	return Array.from(rootFields)
+}
+
+async function loadPinnedTransportContracts(): Promise<PinnedTransportContracts | null> {
+	const modulePath = process.env.GRAPHQL_SCHEMA_MODULE?.trim()
+	if (!modulePath) return null
+	const graphqlRoot = path.resolve(path.dirname(path.resolve(modulePath)), '..', '..')
+	const pointsPath = path.join(
+		graphqlRoot,
+		'src/http/live-points-contract.ts'
+	)
+	const matchesPath = path.join(
+		graphqlRoot,
+		'src/http/live-matches-contract.ts'
+	)
+	if (!existsSync(pointsPath) || !existsSync(matchesPath)) {
+		throw new Error(
+			`Pinned GraphQL transport contract modules were not found under ${graphqlRoot}`
+		)
+	}
+	const [points, matches] = await Promise.all([
+		import(pathToFileURL(pointsPath).href),
+		import(pathToFileURL(matchesPath).href)
+	])
+	if (
+		typeof points.requiresLivePointsV2Contract !== 'function' ||
+		typeof matches.requiresLiveMatchesV2Contract !== 'function' ||
+		typeof points.LIVE_POINTS_CONTRACT_VALUE !== 'string' ||
+		typeof matches.LIVE_MATCHES_CONTRACT_VALUE !== 'string'
+	) {
+		throw new Error('Pinned GraphQL transport contract exports are invalid')
+	}
+	return {
+		requiresLivePointsV2Contract: points.requiresLivePointsV2Contract,
+		requiresLiveMatchesV2Contract: matches.requiresLiveMatchesV2Contract,
+		livePointsValue: points.LIVE_POINTS_CONTRACT_VALUE,
+		liveMatchesValue: matches.LIVE_MATCHES_CONTRACT_VALUE
+	}
+}
+
+async function discoverVersionGatedOperations(
+	contracts: PinnedTransportContracts
+): Promise<ReadonlyArray<readonly [string, string]>> {
+	const operationsDirectory = path.resolve('lib/graphql/operations')
+	const discovered: Array<readonly [string, string]> = []
+	for (const filename of readdirSync(operationsDirectory).filter(name =>
+		name.endsWith('.ts')
+	)) {
+		const exports = await import(
+			pathToFileURL(path.join(operationsDirectory, filename)).href
+		)
+		for (const [exportName, value] of Object.entries(exports)) {
+			if (typeof value !== 'string') continue
+			let rootFields: string[]
+			try {
+				rootFields = rootFieldsForDocument(value)
+			} catch {
+				continue
+			}
+			if (
+				contracts.requiresLivePointsV2Contract(rootFields) ||
+				contracts.requiresLiveMatchesV2Contract(rootFields)
+			) {
+				discovered.push([`${filename}:${exportName}`, value])
+			}
+		}
+	}
+	return discovered
+}
 
 async function fetchSchema(endpointUrl: string): Promise<GraphQLSchema> {
 	const res = await fetch(endpointUrl, {
@@ -335,6 +459,40 @@ async function main(): Promise<void> {
 	}
 
 	let failed = 0
+	let transportContracts: PinnedTransportContracts | null = null
+	try {
+		transportContracts = await loadPinnedTransportContracts()
+	} catch (e) {
+		console.error(e)
+		process.exit(1)
+	}
+	if (transportContracts) {
+		if (
+			transportContracts.livePointsValue !== LIVE_POINTS_CONTRACT_VERSION ||
+			transportContracts.liveMatchesValue !== LIVE_MATCHES_CONTRACT_VERSION
+		) {
+			console.error('[CONTRACT_FAIL] Client contract tokens differ from GraphQL')
+			failed += 1
+		}
+		const registeredDocuments = new Set(
+			OPERATIONS.map(([, document]) => document.trim())
+		)
+		for (const [name, document] of await discoverVersionGatedOperations(
+			transportContracts
+		)) {
+			if (!registeredDocuments.has(document.trim())) {
+				console.error(
+					`[REGISTRY_FAIL] ${name} is version-gated but missing from OPERATIONS`
+				)
+				failed += 1
+			}
+		}
+	} else {
+		console.warn(
+			'[CONTRACT_SKIP] GRAPHQL_SCHEMA_MODULE is unset; pinned transport parity was not checked'
+		)
+	}
+
 	for (const [name, doc] of OPERATIONS) {
 		let ast
 		try {
@@ -344,6 +502,41 @@ async function main(): Promise<void> {
 			console.log(`[PARSE_FAIL] ${name}`)
 			console.error(e)
 			continue
+		}
+		let operationFailed = false
+		if (transportContracts) {
+			const rootFields = rootFieldsForDocument(doc)
+			const requiresPoints =
+				transportContracts.requiresLivePointsV2Contract(rootFields)
+			const requiresMatches =
+				transportContracts.requiresLiveMatchesV2Contract(rootFields)
+			if (requiresPoints && requiresMatches) {
+				console.log(
+					`[CONTRACT_FAIL] ${name}: mixes Live Points and Live Matches roots`
+				)
+				operationFailed = true
+			} else {
+				const expected = requiresPoints
+					? transportContracts.livePointsValue
+					: requiresMatches
+						? transportContracts.liveMatchesValue
+						: null
+				let actual: string | null = null
+				try {
+					actual = liveContractVersionForQuery(doc)
+				} catch (error) {
+					console.log(
+						`[CONTRACT_FAIL] ${name}: ${error instanceof Error ? error.message : String(error)}`
+					)
+					operationFailed = true
+				}
+				if (!operationFailed && actual !== expected) {
+					console.log(
+						`[CONTRACT_FAIL] ${name}: expected ${expected ?? 'no contract'}, client selected ${actual ?? 'no contract'}`
+					)
+					operationFailed = true
+				}
+			}
 		}
 		const errs = validate(schema, ast)
 		const astNodeLimit =
@@ -364,11 +557,14 @@ async function main(): Promise<void> {
 			}
 		}
 		if (errs.length > 0) {
-			failed += 1
+			operationFailed = true
 			console.log(`[SCHEMA_FAIL] ${name}`)
 			for (const err of errs) {
 				console.log(`  ${err.message}`)
 			}
+		}
+		if (operationFailed) {
+			failed += 1
 		} else {
 			console.log(`[OK] ${name}`)
 		}

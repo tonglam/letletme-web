@@ -4,6 +4,11 @@ const host = '127.0.0.1'
 const port = Number(process.env.E2E_GRAPHQL_PORT ?? 4100)
 const liveHydrationFixtureEnabled = process.env.E2E_LIVE_HYDRATION === '1'
 
+const requiresLivePointsV2Contract = query =>
+	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|liveSnapshot|liveContext|entryLiveCompetitionBoard|entryLiveCompetitionsDesk|tournamentSelectionIndex|tournamentEntrySquads|tournamentDetailDesk|gameweekDesk|homeGameweek)\s*(?:\(|\{)/.test(
+		query
+	)
+
 const json = (response, status, body) => {
 	response.writeHead(status, {
 		'Cache-Control': 'no-store',
@@ -575,6 +580,25 @@ const server = createServer((request, response) => {
 		} catch {
 			json(response, 400, { errors: [{ message: 'Invalid JSON' }] })
 			return
+		}
+
+		if (requiresLivePointsV2Contract(query)) {
+			const contracts = String(
+				request.headers['x-letletme-contract'] ?? ''
+			)
+				.split(',')
+				.map(value => value.trim())
+			if (!contracts.includes('live-points-v2')) {
+				json(response, 426, {
+					errors: [
+						{
+							message: 'Client upgrade required',
+							extensions: { code: 'CLIENT_UPGRADE_REQUIRED' }
+						}
+					]
+				})
+				return
+			}
 		}
 
 		if (query.includes('GetHomePublicBootstrap')) {
