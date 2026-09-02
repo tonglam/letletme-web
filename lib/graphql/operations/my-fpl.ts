@@ -646,12 +646,17 @@ export interface MyTournamentReviewEventStatus {
 	eventId: number
 	format: MyTournamentReviewFormat
 	state: MyTournamentReviewState
+	eligibleAt: string | null
+	readyAt: string | null
+	observedAt: string | null
 	nextAttemptAt: string | null
 	executionAttempts: number
 	sourceRechecks: number
 	degradedAt: string | null
 	revision: string | null
 	publishedAt: string | null
+	repairState: string
+	errorCode: string | null
 }
 
 export interface MyTournamentReviewPageInfo {
@@ -910,7 +915,7 @@ export const GET_MY_TOURNAMENT_REVIEW_CATALOG = `
         node {
           tournamentId name creator leagueId leagueType totalTeamNum
           latestFinalizedEventId previousReadyEventId setupStatus state
-          latestFinalizedScope { eventId format state nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt }
+          latestFinalizedScope { eventId format state eligibleAt readyAt observedAt nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt repairState errorCode }
           phaseSummaries { phaseId format startEventId endEventId state }
         }
       }
@@ -982,7 +987,7 @@ export const GET_MY_TOURNAMENT_REVIEW_STATUS = `
   query GetMyTournamentReviewStatus($tournamentId: Int!) {
     myTournamentReviewStatus(tournamentId: $tournamentId) {
       tournamentId latestFinalizedEventId
-      events { eventId format state nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt }
+      events { eventId format state eligibleAt readyAt observedAt nextAttemptAt executionAttempts sourceRechecks degradedAt revision publishedAt repairState errorCode }
     }
   }
 `
