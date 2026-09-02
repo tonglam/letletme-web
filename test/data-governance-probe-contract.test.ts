@@ -24,6 +24,9 @@ describe('data governance consumer probe contract', () => {
 
 	it('uses server-only canaries for every authenticated business contract', async () => {
 		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /GET_ENTRY_LIVE_COMPETITION_BOARD/)
+		assert.match(source, /entryLiveCompetitionBoard/)
+		assert.doesNotMatch(source, /GET_TOURNAMENT_DETAIL_DESK/)
 		for (const envName of [
 			'DATA_GOVERNANCE_CANARY_ENTRY_ID',
 			'DATA_GOVERNANCE_CANARY_TOURNAMENT_ID',

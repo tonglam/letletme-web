@@ -4,20 +4,14 @@ import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_LIVE_COMPETITION_BOARD,
-	GET_TOURNAMENT_LIVE_DESK,
 	type EntryLiveCompetitionBoardResponse,
 	type EntryLiveCompetitionBoardVariables
 } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
-import { getCurrentSeasonKey } from '@/lib/season'
-import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liveDesk'
 
 export const dynamic = 'force-dynamic'
 
-// Full-field tournament boards (including large classic leagues) can require
-// several upstream/cache reads on a cold revision. Keep this budget scoped to
-// the board route; the request signal still aborts work when the client leaves.
-const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 20_000
+const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 5_000
 
 const noStoreHeaders = (requestId?: string): Record<string, string> => ({
 	'Cache-Control': 'private, no-store',
@@ -36,16 +30,17 @@ const allowedSorts = new Set([
 	'TRANSFER_COST',
 	'PLAYED',
 	'TOTAL_POINTS',
-	'OVERALL_RANK',
 	'TEAM_VALUE',
 	'RANK',
 	'ENTRY_NAME'
 ])
 const allowedChips = new Set([
+	'NONE',
 	'TRIPLE_CAPTAIN',
 	'BENCH_BOOST',
 	'WILDCARD',
-	'FREE_HIT'
+	'FREE_HIT',
+	'MANAGER'
 ])
 
 function parsePostVariables(
@@ -55,26 +50,26 @@ function parsePostVariables(
 ): EntryLiveCompetitionBoardVariables | null {
 	if (!isRecord(value) || !positiveInteger(value.eventId) || value.eventId > 38)
 		return null
-	const page = value.page ?? 1
-	const pageSize = value.pageSize ?? 20
-	if (!positiveInteger(page) || !positiveInteger(pageSize) || pageSize > 50)
+	if (value.input !== undefined && value.input !== null && !isRecord(value.input))
 		return null
-	const search = value.search == null ? null : value.search
-	if (search !== null && (typeof search !== 'string' || search.length > 100))
+	const input = isRecord(value.input) ? value.input : {}
+	const first = input.first ?? 20
+	if (!positiveInteger(first) || first > 50) return null
+	const after = input.after ?? null
+	if (after !== null && (typeof after !== 'string' || after.length === 0 || after.length > 512))
 		return null
-	const sort = value.sort ?? 'EVENT_POINTS'
-	const direction = value.direction ?? 'DESC'
-	if (
-		!allowedSorts.has(String(sort)) ||
-		(direction !== 'ASC' && direction !== 'DESC')
-	)
+	const search = input.search == null ? null : input.search
+	if (search !== null && (typeof search !== 'string' || search.length > 100)) return null
+	const sort = input.sort ?? 'EVENT_POINTS'
+	const direction = input.direction ?? 'DESC'
+	if (!allowedSorts.has(String(sort)) || (direction !== 'ASC' && direction !== 'DESC'))
 		return null
-	const chips = value.chips ?? []
-	const captainPlayerIds = value.captainPlayerIds ?? []
-	const teamCountRules = value.teamCountRules ?? []
+	const chips = input.chips ?? []
+	const captainPlayerIds = input.captainPlayerIds ?? []
+	const teamCountRules = input.teamCountRules ?? []
 	if (
 		!Array.isArray(chips) ||
-		chips.length > 5 ||
+		chips.length > 6 ||
 		!chips.every(chip => typeof chip === 'string' && allowedChips.has(chip)) ||
 		new Set(chips).size !== chips.length ||
 		!Array.isArray(captainPlayerIds) ||
@@ -83,30 +78,27 @@ function parsePostVariables(
 		new Set(captainPlayerIds).size !== captainPlayerIds.length ||
 		!Array.isArray(teamCountRules) ||
 		teamCountRules.length > 4
-	) {
+	)
 		return null
-	}
-	let ownership: EntryLiveCompetitionBoardVariables['ownership'] = null
-	if (value.ownership != null) {
-		if (!isRecord(value.ownership)) return null
-		const playerIds = value.ownership.playerIds
+	let ownership: NonNullable<EntryLiveCompetitionBoardVariables['input']>['ownership'] = null
+	if (input.ownership != null) {
+		if (!isRecord(input.ownership)) return null
+		const playerIds = input.ownership.playerIds
 		if (
 			!Array.isArray(playerIds) ||
 			playerIds.length === 0 ||
 			playerIds.length > 5 ||
 			!playerIds.every(positiveInteger) ||
 			new Set(playerIds).size !== playerIds.length
-		) {
+		)
 			return null
-		}
-		const scope = value.ownership.scope ?? 'ANY'
-		const captainMode = value.ownership.captainMode ?? 'ANY'
+		const scope = input.ownership.scope ?? 'ANY'
+		const captainMode = input.ownership.captainMode ?? 'ANY'
 		if (
 			!['ANY', 'STARTER', 'BENCH'].includes(String(scope)) ||
 			!['ANY', 'CAPTAIN', 'VICE'].includes(String(captainMode))
-		) {
+		)
 			return null
-		}
 		ownership = {
 			playerIds,
 			scope: scope as NonNullable<typeof ownership>['scope'],
@@ -114,68 +106,41 @@ function parsePostVariables(
 		}
 	}
 	const normalizedTeamRules: NonNullable<
-		EntryLiveCompetitionBoardVariables['teamCountRules']
+		NonNullable<EntryLiveCompetitionBoardVariables['input']>['teamCountRules']
 	> = []
 	for (const rule of teamCountRules) {
 		if (!isRecord(rule)) return null
 		const scope = rule.scope ?? 'ANY'
 		if (
 			!positiveInteger(rule.teamId) ||
-			!positiveInteger(rule.exactCount) ||
+			typeof rule.exactCount !== 'number' ||
+			!Number.isSafeInteger(rule.exactCount) ||
+			rule.exactCount < 0 ||
 			rule.exactCount > 15 ||
 			!['ANY', 'STARTER', 'BENCH'].includes(String(scope))
-		) {
+		)
 			return null
-		}
 		normalizedTeamRules.push({
 			teamId: rule.teamId,
 			exactCount: rule.exactCount,
 			scope: scope as 'ANY' | 'STARTER' | 'BENCH'
 		})
 	}
-	let ref: EntryLiveCompetitionBoardVariables['ref'] = null
-	if (value.ref != null) {
-		if (
-			!isRecord(value.ref) ||
-			typeof value.ref.season !== 'string' ||
-			value.ref.season.length === 0 ||
-			value.ref.eventId !== value.eventId ||
-			typeof value.ref.scoreCoreRevision !== 'string' ||
-			value.ref.scoreCoreRevision.length === 0
-		) {
-			return null
-		}
-		ref = {
-			season: value.ref.season,
-			eventId: value.ref.eventId as number,
-			scoreCoreRevision: value.ref.scoreCoreRevision
-		}
-	}
-	const expectedBoardRevision = value.expectedBoardRevision ?? null
-	if (
-		expectedBoardRevision !== null &&
-		(typeof expectedBoardRevision !== 'string' ||
-			expectedBoardRevision.length === 0 ||
-			expectedBoardRevision.length > 200)
-	) {
-		return null
-	}
-	if (page > 1 && expectedBoardRevision === null) return null
 	return {
 		entryId,
 		tournamentId,
 		eventId: value.eventId,
-		ref,
-		page,
-		pageSize,
-		sort: sort as EntryLiveCompetitionBoardVariables['sort'],
-		direction,
-		search,
-		chips,
-		captainPlayerIds,
-		ownership,
-		teamCountRules: normalizedTeamRules,
-		expectedBoardRevision
+		input: {
+			first,
+			after,
+			sort: sort as NonNullable<EntryLiveCompetitionBoardVariables['input']>['sort'],
+			direction,
+			search,
+			chips,
+			captainPlayerIds,
+			ownership,
+			teamCountRules: normalizedTeamRules
+		}
 	}
 }
 
@@ -187,39 +152,40 @@ export async function POST(
 	const { entryId, session } = await getVerifiedEntryContext()
 	if (!entryId)
 		return NextResponse.json(
-			{ error: 'Unauthenticated' },
+			{ error: 'UNAUTHENTICATED' },
 			{ status: 401, headers: noStoreHeaders(requestId) }
 		)
 	const tournamentId = Number((await context.params).id)
 	if (!positiveInteger(tournamentId))
 		return NextResponse.json(
-			{ error: 'Invalid live competition parameters' },
+			{ error: 'BAD_USER_INPUT' },
 			{ status: 400, headers: noStoreHeaders(requestId) }
 		)
-	const body = await request.json().catch(() => null)
-	const variables = parsePostVariables(body, entryId, tournamentId)
+	const variables = parsePostVariables(await request.json().catch(() => null), entryId, tournamentId)
 	if (!variables)
 		return NextResponse.json(
-			{ error: 'Invalid live competition parameters' },
+			{ error: 'BAD_USER_INPUT' },
 			{ status: 400, headers: noStoreHeaders(requestId) }
 		)
 	try {
-		const data =
-			await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
-				session,
-				GET_ENTRY_LIVE_COMPETITION_BOARD,
-				variables as unknown as Record<string, unknown>,
-				{
-					cache: 'no-store',
-					signal: request.signal,
-					timeoutMs: LIVE_COMPETITION_BOARD_TIMEOUT_MS
-				}
-			)
+		const data = await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+			session,
+			GET_ENTRY_LIVE_COMPETITION_BOARD,
+			variables as unknown as Record<string, unknown>,
+			{
+				cache: 'no-store',
+				signal: request.signal,
+				timeoutMs: LIVE_COMPETITION_BOARD_TIMEOUT_MS,
+				contract: 'live-points-v2'
+			}
+		)
 		return NextResponse.json(data, { headers: noStoreHeaders(requestId) })
 	} catch (error) {
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
-			code === 'LIVE_SCORE_REVISION_GONE'
+			code === 'CLIENT_UPGRADE_REQUIRED'
+				? 426
+				: code === 'LIVE_BOARD_REVISION_GONE'
 				? 409
 				: code === 'RATE_LIMITED' ||
 					  code === 'UPSTREAM_RATE_LIMITED' ||
@@ -233,15 +199,14 @@ export async function POST(
 								? 403
 								: 502
 		const headers = noStoreHeaders(requestId)
-		if (status === 429 && error instanceof GraphQLRequestError) {
-			headers['Retry-After'] = String(
-				Math.max(1, error.retryAfterSeconds ?? 30)
-			)
-		}
+		if (status === 429 && error instanceof GraphQLRequestError)
+			headers['Retry-After'] = String(Math.max(1, error.retryAfterSeconds ?? 30))
 		return NextResponse.json(
 			{
 				error:
-					status === 409
+					status === 426
+						? 'CLIENT_UPGRADE_REQUIRED'
+						: status === 409
 						? code
 						: status === 429
 							? 'RATE_LIMITED'
@@ -251,59 +216,9 @@ export async function POST(
 									? 'FORBIDDEN'
 									: status === 400
 										? 'BAD_USER_INPUT'
-										: 'Competition unavailable'
+										: 'COMPETITION_UNAVAILABLE'
 			},
 			{ status, headers }
-		)
-	}
-}
-
-export async function GET(
-	request: Request,
-	context: { params: Promise<{ id: string }> }
-) {
-	const { entryId, session } = await getVerifiedEntryContext()
-	if (!entryId)
-		return NextResponse.json(
-			{ error: 'Unauthenticated' },
-			{ status: 401, headers: noStoreHeaders() }
-		)
-	const tournamentId = Number((await context.params).id)
-	const params = new URL(request.url).searchParams
-	const eventId = Number(params.get('eventId'))
-	const scoreCoreRevision = params.get('scoreCoreRevision')
-	if (
-		!Number.isSafeInteger(tournamentId) ||
-		tournamentId <= 0 ||
-		!Number.isSafeInteger(eventId) ||
-		eventId <= 0 ||
-		!scoreCoreRevision
-	)
-		return NextResponse.json(
-			{ error: 'Invalid live competition parameters' },
-			{ status: 400 }
-		)
-	try {
-		const data = await loadTournamentLiveDeskWithRevisionRecovery(
-			(ref, recoveryOptions) =>
-				executeServerQueryWithSession(
-					session,
-					GET_TOURNAMENT_LIVE_DESK,
-					{ entryId, selectedTournamentId: tournamentId, ref },
-					{ cache: 'no-store', signal: request.signal, ...recoveryOptions }
-				),
-				{ season: String(getCurrentSeasonKey()), eventId, scoreCoreRevision }
-		)
-		return NextResponse.json(data, {
-			headers: { 'Cache-Control': 'private, no-store' }
-		})
-	} catch (error) {
-			const status = String(error).includes('LIVE_SCORE_REVISION_GONE') ? 409 : 502
-		return NextResponse.json(
-			{
-					error: status === 409 ? 'LIVE_SCORE_REVISION_GONE' : 'Competition unavailable'
-			},
-			{ status, headers: { 'Cache-Control': 'private, no-store' } }
 		)
 	}
 }

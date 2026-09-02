@@ -73,7 +73,26 @@ const score = (overrides: Record<string, unknown> = {}) => ({
 
 describe('Live Points V2 web contract', () => {
 	it('covers every GraphQL-gated root, including all three desk surfaces', () => {
-		assert.equal(LIVE_POINTS_V2_ROOT_FIELDS.length, 16)
+		assert.deepEqual(new Set(LIVE_POINTS_V2_ROOT_FIELDS), new Set([
+			'calcLivePointsByEntry',
+			'calcLivePointsForEntries',
+			'liveScores',
+			'playerLive',
+			'eventLive',
+			'eventLiveExplain',
+			'eventLiveExplains',
+			'liveSnapshot',
+			'liveContext',
+			'entryLiveCompetitionBoard',
+			'leagueLiveHead',
+			'tournamentOfficialH2H',
+			'tournamentOfficialH2HHistory',
+			'tournamentSelectionIndex',
+			'tournamentEntrySquads',
+			'tournamentDetailDesk',
+			'gameweekDesk',
+			'homeGameweek'
+		]))
 		for (const document of [
 			GET_GAMEWEEK_DESK,
 			GET_HOME_GAMEWEEK,
@@ -101,6 +120,23 @@ describe('Live Points V2 web contract', () => {
 				),
 			/LIVE_CONTRACT_MIXED_OPERATION/
 		)
+	})
+
+	it('keeps server competition routes on V2 and preserves upgrade failures', () => {
+		for (const route of [
+			'board/route.ts',
+			'head/route.ts',
+			'compare/route.ts',
+			'selection-index/route.ts'
+		]) {
+			const source = readFileSync(
+				new URL(`../app/api/live/competitions/[id]/${route}`, import.meta.url),
+				'utf8'
+			)
+			assert.match(source, /contract: 'live-points-v2'/)
+			assert.match(source, /status === 426/)
+			assert.match(source, /CLIENT_UPGRADE_REQUIRED/)
+		}
 	})
 
 	it('requests only V2 fields and keeps duplicate score aliases out of the document', () => {
@@ -255,21 +291,20 @@ describe('Live Points V2 web contract', () => {
 		)
 		const tournament = readFileSync(
 			new URL(
-				'../app/live/tournaments/[id]/TournamentDetailClient.tsx',
+				'../app/live/tournaments/TournamentClient.tsx',
 				import.meta.url
 			),
 			'utf8'
 		)
 		assert.doesNotMatch(hook, /liveScoreDue/)
-		assert.doesNotMatch(tournament, /const liveScoreDue/)
+		assert.doesNotMatch(tournament, /liveScoreDue/)
 		assert.match(
 			hook,
 			/if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/
 		)
-		assert.match(
-			tournament,
-			/if \(!liveSnapshotNeedsRefresh\(snapshotRef\.current, observedSnapshot\)\)/
-		)
+		assert.match(tournament, /fetchLeagueLiveHead/)
+		assert.match(tournament, /liveBoardPublicationChanged/)
+		assert.match(tournament, /shouldAutoRefreshLiveBoardPage\(boardPage\)/)
 	})
 
 	it('preserves the same event while polling only the active event', () => {

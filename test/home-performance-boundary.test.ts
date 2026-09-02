@@ -68,7 +68,6 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(homeServerData, /timeoutMs: 5_000/)
 		for (const removed of [
 			'GET_ENTRY_LEAGUES',
-			'GET_ENTRY_OFFICIAL_H2H_DESK',
 			'GET_ENTRY,',
 			'<Suspense'
 		]) {
@@ -79,7 +78,6 @@ describe('Home first-screen performance boundary', () => {
 	it('keeps league rows compact and the server projection request-free', () => {
 		for (const removed of [
 			'executeQuery',
-			'GET_ENTRY_OFFICIAL_H2H_DESK',
 			'usePageActive',
 			'setInterval',
 			'officialH2H',

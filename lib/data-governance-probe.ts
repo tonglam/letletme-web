@@ -13,8 +13,12 @@ import {
 	type MyFplManagerGameweekResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
-	GET_TOURNAMENT_DETAIL_DESK,
-	type TournamentDetailDeskResponse
+	GET_ENTRY_LIVE_COMPETITION_BOARD,
+	GET_TOURNAMENT_OFFICIAL_H2H,
+	type EntryLiveCompetitionBoardHead,
+	type EntryLiveCompetitionBoardResponse,
+	type TournamentOfficialH2HResponse,
+	type TournamentOfficialH2HStanding
 } from '@/lib/graphql/operations/tournaments'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
@@ -148,6 +152,7 @@ type ProbeEventContext = Readonly<{
 }>
 
 const CANARY_INTEGER = /^[1-9]\d*$/
+const MAX_LIVE_LEAGUE_CANARY_PAGES = Math.ceil(5_000 / 50) + 1
 
 function parseCanaryInteger(name: string): number | null {
 	const raw = process.env[name]?.trim() ?? ''
@@ -392,6 +397,25 @@ async function probeLivePicks(
 	}
 }
 
+const isLiveLeagueBoardHeadUsable = (
+	head: EntryLiveCompetitionBoardHead
+): boolean =>
+	head.availability === 'READY' &&
+	head.publication !== null &&
+	head.contentRevision !== null &&
+	head.delivery.state !== 'UNAVAILABLE'
+
+const isOfficialH2HStandingRowComplete = (
+	row: TournamentOfficialH2HStanding
+): boolean =>
+	row.rank !== null &&
+	row.matchPoints !== null &&
+	row.played !== null &&
+	row.won !== null &&
+	row.drawn !== null &&
+	row.lost !== null &&
+	row.pointsFor !== null
+
 async function probeTournament(
 	input: DataGovernanceProbeRequest,
 	config: DataGovernanceCanary,
@@ -404,47 +428,144 @@ async function probeTournament(
 			`${contractKey} canary is not configured`
 		)
 	}
-	const response =
-		await executeServerQueryWithSession<TournamentDetailDeskResponse>(
-			canarySession(config),
-			GET_TOURNAMENT_DETAIL_DESK,
-			{
-				tournamentId: config.tournamentId,
-				entryId: config.entryId,
-				eventId
-			},
-			{ cache: 'no-store', timeoutMs: 5_000 }
+	if (contractKey === 'official-h2h') {
+		const response =
+			await executeServerQueryWithSession<TournamentOfficialH2HResponse>(
+				canarySession(config),
+				GET_TOURNAMENT_OFFICIAL_H2H,
+				{ tournamentId: config.tournamentId, eventId },
+				{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+			)
+		const official = response.tournamentOfficialH2H
+		const standingEntryIds = new Set(
+			official.standings?.rows.map(row => row.entryId) ?? []
 		)
-	const detail = response.tournamentDetailDesk
-	if (!detail || detail.context.requestedEventId !== eventId) {
+		return {
+			revision: revision(official.revisions?.content ?? 'unavailable'),
+			complete:
+				official.eventId === eventId &&
+				official.availability === 'READY' &&
+				official.standings?.state === 'READY' &&
+				official.standings.rows.length > 0 &&
+				official.standings.rows.every(isOfficialH2HStandingRowComplete) &&
+				standingEntryIds.size === official.standings.rows.length &&
+				official.matches.length > 0 &&
+				official.matches.every(match => match.availability === 'READY')
+		}
+	}
+	const response =
+		await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+			canarySession(config),
+			GET_ENTRY_LIVE_COMPETITION_BOARD,
+			{
+				entryId: config.entryId,
+				tournamentId: config.tournamentId,
+				eventId,
+				input: { first: 50 }
+			},
+			{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+		)
+	let board = response.entryLiveCompetitionBoard
+	if (
+		!board ||
+		board.head.eventId !== eventId ||
+		board.head.tournamentId !== config.tournamentId ||
+		!isLiveLeagueBoardHeadUsable(board.head)
+	) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
-			'tournament business loader returned no matching event'
+			'live league board returned no matching event'
 		)
 	}
-	if (contractKey === 'official-h2h') {
-		const official = detail.officialH2H
-		if (!official) {
+	const expectedRevision = revision(board.head.contentRevision)
+	const seenEntries = new Set<number>()
+	let after: string | null = null
+	let pageCount = 0
+	while (true) {
+		if (
+			board.head.eventId !== eventId ||
+			board.head.tournamentId !== config.tournamentId ||
+			revision(board.head.contentRevision) !== expectedRevision ||
+			!isLiveLeagueBoardHeadUsable(board.head)
+		) {
 			throw new DataGovernanceProbeError(
 				'BUSINESS_DATA_UNAVAILABLE',
-				'official H2H business loader has no payload'
+				'live league board changed while the canary was paged'
 			)
 		}
-		return {
-			revision: revision(official.scoreRevision ?? detail.revision),
-			complete:
-				!official.awaitingSchedule &&
-				official.eventId === eventId &&
-				official.scoreRevision !== null &&
-				official.matches.some(match => match.eventId === eventId)
+		if (board.totalEntries <= 0 || board.totalEntries > 5_000) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board has an invalid bounded row count'
+			)
 		}
+		for (const row of board.rows) {
+			if (seenEntries.has(row.entry)) {
+				throw new DataGovernanceProbeError(
+					'BUSINESS_DATA_UNAVAILABLE',
+					'live league board contains a duplicate entry'
+				)
+			}
+			seenEntries.add(row.entry)
+			if (
+				(row.availability === 'READY' && row.score === null) ||
+				(row.availability === 'MISSING' && row.score !== null) ||
+				(row.availability !== 'READY' && row.availability !== 'MISSING')
+			) {
+				throw new DataGovernanceProbeError(
+					'BUSINESS_DATA_UNAVAILABLE',
+					'live league board contains an incomplete row'
+				)
+			}
+		}
+		pageCount += 1
+		if (pageCount > MAX_LIVE_LEAGUE_CANARY_PAGES) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board pagination exceeded the safety bound'
+			)
+		}
+		if (!board.pageInfo.hasNextPage) {
+			if (
+				(board.rows.length === 0 && board.pageInfo.endCursor !== null) ||
+				seenEntries.size !== board.filteredEntries ||
+				board.filteredEntries !== board.totalEntries
+			) {
+				throw new DataGovernanceProbeError(
+					'BUSINESS_DATA_UNAVAILABLE',
+					'live league board pagination is incomplete'
+				)
+			}
+			break
+		}
+		if (!board.pageInfo.endCursor || board.pageInfo.endCursor === after) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'live league board pagination did not advance'
+			)
+		}
+		after = board.pageInfo.endCursor
+		const next =
+			await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+				canarySession(config),
+				GET_ENTRY_LIVE_COMPETITION_BOARD,
+				{
+					entryId: config.entryId,
+					tournamentId: config.tournamentId,
+					eventId,
+					input: { first: 50, after }
+				},
+				{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
+			)
+		board = next.entryLiveCompetitionBoard
 	}
 	return {
-		revision: revision(detail.revision),
+		revision: expectedRevision,
 		complete:
-			detail.tournament.state !== 'INACTIVE' &&
-			detail.participants.length > 0 &&
-			(detail.live === null || !detail.live.partial)
+			isLiveLeagueBoardHeadUsable(board.head) &&
+			seenEntries.size === board.totalEntries &&
+			response.entryLiveCompetitionBoard.viewerRow?.entry === config.entryId &&
+			response.entryLiveCompetitionBoard.viewerRow.availability === 'READY'
 	}
 }
 

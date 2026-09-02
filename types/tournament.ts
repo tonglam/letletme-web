@@ -19,6 +19,7 @@ export interface TournamentEntryPick {
 
 export interface TournamentEntry {
 	id: string
+	availability?: 'READY' | 'MISSING'
 	rank: number
 	previousRank?: number
 	teamName: string
@@ -46,6 +47,7 @@ export interface TournamentEntry {
 		triple: boolean
 		wildcard: boolean
 		freeHit: boolean
+		manager: boolean
 	}
 	/** True when this row was retained from a previous failed calc batch. */
 	stale?: boolean

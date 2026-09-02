@@ -18,9 +18,9 @@ import { usePageActive } from '@/hooks/use-page-active'
 import { Link, useRouter } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_LIVE_CONTEXT,
-	type LiveContextResponse
-} from '@/lib/graphql/operations/live'
+	GET_CURRENT_AND_NEXT_EVENTS,
+	type EventsResponse
+} from '@/lib/graphql/operations/events'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	type EntryLiveCompetitionBoardPage,
@@ -33,12 +33,13 @@ import {
 	boardRowToTournamentEntry,
 	canLoadMoreLiveBoard,
 	canStartLiveBoardRefresh,
-	clearOtherLiveBoardLastGood,
 	fetchEntryLiveCompetitionBoard,
+	fetchLeagueLiveHead,
 	isCurrentLiveBoardRequest,
+	isCompleteLiveBoardPage,
 	isLiveBoardRevisionGoneCode,
-	liveBoardLastGoodKey,
 	liveBoardPublicationChanged,
+	mergeLiveBoardEntries,
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
 	resolveUrlGameweekSelection,
@@ -48,8 +49,7 @@ import {
 	type LiveBoardFilterState,
 	type LiveBoardFreshnessMarker
 } from '@/lib/tournament/live-board'
-import { liveContextToSnapshot } from '@/lib/live-refresh'
-import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
+import { formatLiveAveragePoints } from '@/lib/tournament/live-format'
 import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
@@ -68,7 +68,8 @@ import type {
 	TournamentSortDirection
 } from '@/lib/tournament/table-sort'
 import type { Tournament, TournamentEntry } from '@/types/tournament'
-import { Filter, RefreshCw } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Check, Filter, RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -132,10 +133,10 @@ const pageRows = (
 const boardFreshnessMarker = (
 	page: EntryLiveCompetitionBoardPage | null
 ): LiveBoardFreshnessMarker | null =>
-	page?.scoreCoreRevision
+	page?.head.publication?.revisions.scoreCore
 		? {
-				eventId: page.eventId,
-				scoreCoreRevision: page.scoreCoreRevision
+				eventId: page.head.eventId,
+				contentRevision: page.head.contentRevision
 			}
 		: null
 
@@ -155,19 +156,13 @@ const boardPartialMessage = (
 		unavailable: string
 	}
 ): string | null => {
-	if (page.failedEntryCount > 0) {
-		return messages.failed
-	}
-	if (
-		page.deferredEntryCount > 0 ||
-		page.coverageState === 'WARMING' ||
-		page.coverageState === 'PARTIAL'
-	) {
+	if (page.head.availability === 'PENDING') {
 		return messages.warming
 	}
 	if (
-		page.unavailableEntryCount > 0 ||
-		page.delivery.state === 'UNAVAILABLE'
+		page.head.availability === 'MISSING' ||
+		page.head.availability === 'ERROR' ||
+		page.head.delivery.state === 'UNAVAILABLE'
 	) {
 		return messages.unavailable
 	}
@@ -187,6 +182,7 @@ interface TournamentClientProps {
 	initialBoardPage?: EntryLiveCompetitionBoardPage | null
 	initialResultsLoaded?: boolean
 	initialResultsError?: string | null
+	initialCreated?: boolean
 	season: string
 	sessionCacheKey: string
 }
@@ -199,6 +195,7 @@ export default function TournamentClient({
 	initialBoardPage = null,
 	initialResultsLoaded = false,
 	initialResultsError = null,
+	initialCreated = false,
 	season,
 	sessionCacheKey
 }: TournamentClientProps) {
@@ -216,6 +213,23 @@ export default function TournamentClient({
 		const value = Number(raw)
 		return Number.isInteger(value) && value >= 1 && value <= 38 ? value : null
 	})()
+	const initialTournamentForGameweek =
+		initialTournaments.find(
+			tournament => tournament.id === initialSelectedTournamentId
+		) ??
+		initialTournaments[0] ??
+		null
+	const initialAllowsFutureGameweek = isOfficialH2HTournament(
+		initialTournamentForGameweek
+	)
+	const initialGameweekSelection =
+		gameweekFromUrl !== null &&
+		(gameweekFromUrl <= initialEventId || initialAllowsFutureGameweek)
+			? gameweekFromUrl
+			: initialEventId
+	const initialFollowsGameweekAnchor =
+		gameweekFromUrl === null ||
+		(gameweekFromUrl > initialEventId && !initialAllowsFutureGameweek)
 
 	const [tournaments, setTournaments] = useState(initialTournaments)
 	const [restoredTournamentId, setRestoredTournamentId] = useState<
@@ -229,14 +243,16 @@ export default function TournamentClient({
 	const [listError, setListError] = useState<string | null>(null)
 	const [currentGameweek, setCurrentGameweek] = useState(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] = useState(
-		gameweekFromUrl && gameweekFromUrl <= initialEventId
-			? gameweekFromUrl
-			: initialEventId
+		initialGameweekSelection
 	)
-	const followsAnchorRef = useRef(
-		gameweekFromUrl === null || gameweekFromUrl > initialEventId
+	const [followsGameweekAnchor, setFollowsGameweekAnchor] = useState(
+		initialFollowsGameweekAnchor
 	)
-	const lastUrlGameweekRef = useRef(gameweekFromUrl)
+	const followsAnchorRef = useRef(initialFollowsGameweekAnchor)
+	const lastUrlGameweekRef = useRef({
+		requestedGameweek: gameweekFromUrl,
+		preserveFutureGameweek: initialAllowsFutureGameweek
+	})
 	const selectionRestoreEntryIdRef = useRef<number | null>(null)
 	const cachedTournamentIdRef = useRef<string | null>(null)
 	const requestedTournamentId =
@@ -271,9 +287,26 @@ export default function TournamentClient({
 		? `${selectedTournamentId}:${selectedGameweek}`
 		: null
 
+	const [officialH2HReady, setOfficialH2HReady] = useState(false)
+	const [officialH2HReadyScopeKey, setOfficialH2HReadyScopeKey] = useState<
+		string | null
+	>(null)
+	const handleOfficialH2HReadyChange = useCallback(
+		(ready: boolean): void => {
+			setOfficialH2HReady(ready)
+			setOfficialH2HReadyScopeKey(ready ? scopeKey : null)
+		},
+		[scopeKey]
+	)
+
+	useEffect(() => {
+		setOfficialH2HReady(false)
+		setOfficialH2HReadyScopeKey(null)
+	}, [selectedGameweek, selectedTournamentId, selectedTournamentIsOfficialH2H])
+
 	const initialScopeKey =
 		initialBoardPage && initialSelectedTournamentId
-			? `${initialSelectedTournamentId}:${initialBoardPage.eventId}`
+			? `${initialSelectedTournamentId}:${initialBoardPage.head.eventId}`
 			: null
 	const initialSeedRef = useRef(
 		initialScopeKey
@@ -358,15 +391,79 @@ export default function TournamentClient({
 	}, [scopeKey])
 
 	useEffect(() => {
-		if (lastUrlGameweekRef.current === gameweekFromUrl) return
-		lastUrlGameweekRef.current = gameweekFromUrl
+		const preserveFutureGameweek = selectedTournamentIsOfficialH2H
+		if (
+			lastUrlGameweekRef.current.requestedGameweek === gameweekFromUrl &&
+			lastUrlGameweekRef.current.preserveFutureGameweek ===
+				preserveFutureGameweek
+		)
+			return
+		lastUrlGameweekRef.current = {
+			requestedGameweek: gameweekFromUrl,
+			preserveFutureGameweek
+		}
 		const next = resolveUrlGameweekSelection({
 			currentEvent: currentGameweek,
-			requestedGameweek: gameweekFromUrl
+			requestedGameweek: gameweekFromUrl,
+			preserveFutureGameweek
 		})
 		followsAnchorRef.current = next.followsAnchor
+		setFollowsGameweekAnchor(next.followsAnchor)
 		setSelectedGameweek(next.selectedGameweek)
-	}, [currentGameweek, gameweekFromUrl])
+	}, [currentGameweek, gameweekFromUrl, selectedTournamentIsOfficialH2H])
+
+	useEffect(() => {
+		if (!followsGameweekAnchor) return
+		setSelectedGameweek(currentGameweek)
+	}, [currentGameweek, followsGameweekAnchor])
+
+	useEffect(() => {
+		if (
+			!isPageActive ||
+			!selectedTournamentId ||
+			!standingsReady ||
+			!followsGameweekAnchor
+		)
+			return
+		let cancelled = false
+		let timer: number | null = null
+		const poll = async () => {
+			try {
+				const data = await executeQuery<EventsResponse>(
+					GET_CURRENT_AND_NEXT_EVENTS,
+					undefined,
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				)
+				const nextCurrentEvent = data.current[0]?.id
+				if (
+					!cancelled &&
+					typeof nextCurrentEvent === 'number' &&
+					Number.isSafeInteger(nextCurrentEvent) &&
+					nextCurrentEvent >= 1 &&
+					nextCurrentEvent <= 38 &&
+					followsAnchorRef.current
+				) {
+					setCurrentGameweek(nextCurrentEvent)
+					setSelectedGameweek(nextCurrentEvent)
+				}
+			} catch {
+				// Existing publication-backed content remains usable while the
+				// lifecycle anchor is temporarily unavailable.
+			} finally {
+				if (!cancelled) timer = window.setTimeout(poll, 30_000)
+			}
+		}
+		void poll()
+		return () => {
+			cancelled = true
+			if (timer !== null) window.clearTimeout(timer)
+		}
+	}, [
+		followsGameweekAnchor,
+		isPageActive,
+		selectedTournamentId,
+		standingsReady
+	])
 
 	useEffect(() => {
 		rateLimitSecondsRef.current = rateLimitSeconds
@@ -514,22 +611,22 @@ export default function TournamentClient({
 			tournamentId: number,
 			eventId: number,
 			query: BoardQueryState,
-			page = 1,
-			expectedBoardRevision: string | null = null
+			after: string | null = null
 		): EntryLiveCompetitionBoardVariables => ({
 			entryId,
 			tournamentId,
 			eventId,
-			page,
-			pageSize: 20,
-			sort: tableSortToBoardSort(query.sortColumn),
-			direction: query.sortDirection === 'asc' ? 'ASC' : 'DESC',
-			search: query.search || null,
-			chips: query.filters.chips,
-			captainPlayerIds: query.filters.captainPlayerIds,
-			ownership: query.filters.ownership,
-			teamCountRules: query.filters.teamCountRules,
-			expectedBoardRevision
+			input: {
+				first: 20,
+				after,
+				sort: tableSortToBoardSort(query.sortColumn),
+				direction: query.sortDirection === 'asc' ? 'ASC' : 'DESC',
+				search: query.search || null,
+				chips: query.filters.chips,
+				captainPlayerIds: query.filters.captainPlayerIds,
+				ownership: query.filters.ownership,
+				teamCountRules: query.filters.teamCountRules
+			}
 		}),
 		[entryId]
 	)
@@ -574,6 +671,22 @@ export default function TournamentClient({
 				) {
 					return false
 				}
+				const complete = isCompleteLiveBoardPage(page, { firstPage: true })
+				if (
+					!complete &&
+					(options.preserve || page.head.availability === 'READY')
+				) {
+					setResultsError(
+						boardPartialMessage(page, {
+							failed: t('calculationFailed'),
+							warming: t('coverageWarming'),
+							unavailable: t('unavailableCalculation', {
+								count: page.totalEntries
+							})
+						}) ?? t('refreshFailedRetained')
+					)
+					return false
+				}
 				setBoardPage(page)
 				setEntries(pageRows(page))
 				setContentScopeKey(options.expectedScope)
@@ -589,17 +702,13 @@ export default function TournamentClient({
 					updateSearchInput(query.search)
 				}
 				setResultsError(
-					page.partial
-						? boardPartialMessage(page, {
-								failed: t('calculationFailed', {
-									count: page.failedEntryCount
-								}),
-								warming: t('coverageWarming'),
-								unavailable: t('unavailableCalculation', {
-									count: page.unavailableEntryCount || page.totalEntries
-								})
-							})
-						: null
+					boardPartialMessage(page, {
+						failed: t('calculationFailed'),
+						warming: t('coverageWarming'),
+						unavailable: t('unavailableCalculation', {
+							count: page.totalEntries
+						})
+					})
 				)
 				setShowingLastGood(false)
 				if (queryIsDefault(query)) {
@@ -742,9 +851,6 @@ export default function TournamentClient({
 			entryId,
 			tournamentId
 		}
-		const cacheKey = liveBoardLastGoodKey(cacheScope)
-		clearOtherLiveBoardLastGood(storage, cacheKey)
-
 		const initial = initialSeedRef.current
 		if (initial?.key === scopeKey && initial.page) {
 			initialSeedRef.current = null
@@ -754,16 +860,13 @@ export default function TournamentClient({
 			acceptedBoardFreshnessRef.current = boardFreshnessMarker(initial.page)
 			setShowingLastGood(false)
 			writeLiveBoardLastGood(storage, cacheScope, initial.page)
-			if (initial.page.partial) {
+			if (initial.page.head.availability !== 'READY') {
 				setResultsError(
 					boardPartialMessage(initial.page, {
-						failed: t('calculationFailed', {
-							count: initial.page.failedEntryCount
-						}),
+						failed: t('calculationFailed'),
 						warming: t('coverageWarming'),
 						unavailable: t('unavailableCalculation', {
-							count:
-								initial.page.unavailableEntryCount || initial.page.totalEntries
+							count: initial.page.totalEntries
 						})
 					})
 				)
@@ -915,7 +1018,7 @@ export default function TournamentClient({
 			!selectedTournamentId ||
 			!boardPage ||
 			!canLoadMoreLiveBoard({
-				hasMore: boardPage.hasMore,
+				hasMore: boardPage.pageInfo.hasNextPage,
 				isLoadingMore,
 				replacementPending: replaceInFlightRef.current,
 				rateLimited: rateLimitSecondsRef.current > 0
@@ -932,8 +1035,7 @@ export default function TournamentClient({
 					Number(selectedTournamentId),
 					selectedGameweek,
 					queryStateRef.current,
-					boardPage.page + 1,
-					boardPage.boardRevision
+					boardPage.pageInfo.endCursor
 				)
 			)
 			if (
@@ -946,24 +1048,30 @@ export default function TournamentClient({
 			) {
 				return
 			}
-			setEntries(current => {
-				const byId = new Map(current.map(entry => [entry.id, entry]))
-				for (const entry of pageRows(next)) byId.set(entry.id, entry)
-				return Array.from(byId.values())
-			})
+			if (!isCompleteLiveBoardPage(next)) {
+				setResultsError(
+					boardPartialMessage(next, {
+						failed: t('calculationFailed'),
+						warming: t('coverageWarming'),
+						unavailable: t('unavailableCalculation', {
+							count: next.totalEntries
+						})
+					}) ?? t('refreshFailedRetained')
+				)
+				return
+			}
+			setEntries(current =>
+				mergeLiveBoardEntries(current, pageRows(next))
+			)
 			setBoardPage(next)
 			setResultsError(
-				next.partial
-					? boardPartialMessage(next, {
-							failed: t('calculationFailed', {
-								count: next.failedEntryCount
-							}),
-							warming: t('coverageWarming'),
-							unavailable: t('unavailableCalculation', {
-								count: next.unavailableEntryCount || next.totalEntries
-							})
-						})
-					: null
+				boardPartialMessage(next, {
+					failed: t('calculationFailed'),
+					warming: t('coverageWarming'),
+					unavailable: t('unavailableCalculation', {
+						count: next.totalEntries
+					})
+				})
 			)
 		} catch (error) {
 			if (
@@ -1052,111 +1160,82 @@ export default function TournamentClient({
 
 	const autoRefresh = useCallback(async (): Promise<void> => {
 		try {
-			const probe = await executeQuery<LiveContextResponse>(
-				GET_LIVE_CONTEXT,
-				undefined,
-				{ cache: 'no-store', timeoutMs: 2_000 }
+			if (!selectedTournamentId) return
+			const observedEventId = followsAnchorRef.current
+				? currentGameweek
+				: selectedGameweek
+			const observedHead = await fetchLeagueLiveHead(
+				Number(selectedTournamentId),
+				observedEventId,
+				'CLASSIC'
 			)
-			const nextEvent = probe.liveContext?.anchorEventId
-			if (nextEvent && nextEvent !== currentGameweek) {
-				setCurrentGameweek(nextEvent)
-				if (followsAnchorRef.current) {
-					const nextSelection = resolveAnchoredGameweek({
-						nextEvent,
-						requestedGameweek: gameweekFromUrl,
-						followsAnchor: true
-					})
-					followsAnchorRef.current = nextSelection.followsAnchor
-					setSelectedGameweek(nextSelection.selectedGameweek)
-				}
-				return
-			}
-			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 			const accepted = acceptedBoardFreshnessRef.current
-			const boardPublicationChanged = liveBoardPublicationChanged(
-				accepted,
-				observedSnapshot
-					? {
-							eventId: observedSnapshot.eventId,
-							scoreCoreRevision: observedSnapshot.scoreCoreRevision ?? null
-						}
-					: null
-			)
-			const refreshDue = Boolean(
-				boardPage?.times.nextRefreshAt &&
-				Date.parse(boardPage.times.nextRefreshAt) <= Date.now()
-			)
-			const deliveryNeedsRefresh =
-				boardPage?.delivery.state === 'STALE' ||
-				boardPage?.delivery.state === 'DEGRADED' ||
-				boardPage?.coverageState === 'WARMING' ||
-				boardPage?.coverageState === 'PARTIAL'
+			const boardPublicationChanged = liveBoardPublicationChanged(accepted, {
+				eventId: observedHead.eventId,
+				contentRevision: observedHead.contentRevision
+			})
+			const observedHeadUsable =
+				observedHead.availability === 'READY' &&
+				observedHead.publication !== null &&
+				observedHead.contentRevision !== null &&
+				observedHead.delivery.state !== 'UNAVAILABLE'
 			if (
-				shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
-				(boardPublicationChanged || refreshDue || deliveryNeedsRefresh)
+				boardPage &&
+				observedHead.eventId === boardPage.head.eventId &&
+				observedHeadUsable &&
+				!boardPublicationChanged &&
+				isCompleteLiveBoardPage(boardPage, { firstPage: true })
+			) {
+				setBoardPage(current =>
+					current ? { ...current, head: observedHead } : current
+				)
+			}
+			if (
+				shouldAutoRefreshLiveBoardPage(boardPage) &&
+				observedHeadUsable &&
+				boardPublicationChanged
 			) {
 				await refresh()
+			} else if (!observedHeadUsable && entries.length > 0) {
+				setResultsError(t('refreshFailedRetained'))
 			}
 		} catch {
 			if (entries.length > 0) setResultsError(t('refreshFailedRetained'))
 		}
-	}, [boardPage, currentGameweek, entries.length, gameweekFromUrl, refresh, t])
+	}, [
+		boardPage,
+		entries.length,
+		refresh,
+		currentGameweek,
+		selectedGameweek,
+		selectedTournamentId,
+		t
+	])
 
 	const liveStatus = useMemo(() => {
 		if (!boardPage) return t('scoreConfirming')
 		if (showingLastGood) return t('showingLastGood')
-		if (boardPage.failedEntryCount > 0)
-			return t('calculationFailed', { count: boardPage.failedEntryCount })
-		if (boardPage.unavailableEntryCount > 0)
-			return t('unavailableCalculation', {
-				count: boardPage.unavailableEntryCount
-			})
-		if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
+		if (boardPage.head.availability === 'PENDING') return t('coverageWarming')
 		if (
-			boardPage.coverageState === 'WARMING' ||
-			boardPage.coverageState === 'PARTIAL'
-		)
-			return t('coverageWarming')
-		if (boardPage.delivery.state === 'DEGRADED')
-			return t('scoreOfficialDelayed')
-		if (
-			boardPage.delivery.state === 'STALE' ||
-				(boardPage.officialCoverage > 0 && boardPage.officialCoverage < 1)
-		)
-			return t('scorePartiallyAvailable')
-		if (
-			boardPage.delivery.state === 'UNAVAILABLE' ||
-			boardPage.officialCoverage === 0
+			boardPage.head.availability === 'MISSING' ||
+			boardPage.head.availability === 'ERROR' ||
+			boardPage.head.delivery.state === 'UNAVAILABLE'
 		)
 			return t('scoreOfficialUnavailable')
+		if (boardPage.head.delivery.state === 'DEGRADED')
+			return t('scoreOfficialDelayed')
+		if (boardPage.head.delivery.state === 'STALE')
+			return t('scorePartiallyAvailable')
 		return t('scoreOfficialLive')
 	}, [boardPage, showingLastGood, t])
 	const boardCoverageSummary = useMemo(() => {
 		if (!boardPage) return null
-		const parts = [
-			t('computedCoverage', {
-				computed: boardPage.computedEntries,
-				total: boardPage.totalEntries
-			})
-		]
-		if (boardPage.deferredEntryCount > 0)
-			parts.push(
-				t('deferredCalculation', { count: boardPage.deferredEntryCount })
-			)
-		if (boardPage.failedEntryCount > 0)
-			parts.push(t('calculationFailed', { count: boardPage.failedEntryCount }))
-		if (boardPage.unavailableEntryCount > 0)
-			parts.push(
-				t('unavailableCalculation', {
-					count: boardPage.unavailableEntryCount
-				})
-			)
-		if (boardPage.rankScope === 'FULL_FIELD') parts.push(t('fullFieldRank'))
-		else parts.push(t('availableRowsRank'))
-		return parts.join(' · ')
+		return t('participantCountValue', { count: boardPage.totalEntries })
 	}, [boardPage, t])
 
-	const updatedAt = exactUpdatedAt(boardPage?.times.contentUpdatedAt ?? null)
+	const updatedAt = exactUpdatedAt(
+		boardPage?.head.publication?.times.contentUpdatedAt ?? null
+	)
 	const visibleEntries = useMemo(
 		() => (contentScopeKey === scopeKey ? entries : []),
 		[contentScopeKey, entries, scopeKey]
@@ -1183,11 +1262,12 @@ export default function TournamentClient({
 						sortColumn: queryState.sortColumn,
 						sortDirection: queryState.sortDirection,
 						onSortChange: applySort,
-						hasMore: boardPage.hasMore,
+						hasMore: boardPage.pageInfo.hasNextPage,
 						filteredEntries: boardPage.filteredEntries,
 						isLoadingMore: isLoadingMore || isRefreshing || isLoadingInitial,
 						onLoadMore: () => void loadMore(),
-							scoreCoreRevision: boardPage.scoreCoreRevision ?? '',
+						scoreCoreRevision:
+							boardPage.head.publication?.revisions.scoreCore ?? '',
 						onRevisionGone: handleBoardRevisionGone
 					}
 				: undefined,
@@ -1266,8 +1346,9 @@ export default function TournamentClient({
 						selectedTournament &&
 						selectionRestoreComplete &&
 						standingsReady &&
-						(selectedTournamentIsOfficialH2H ||
-							(!isLoadingInitial && contentScopeKey === scopeKey && hasBoard))
+						(selectedTournamentIsOfficialH2H
+							? officialH2HReady && officialH2HReadyScopeKey === scopeKey
+							: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)
 					)}
 					audienceHint="session-hint"
 					goodMs={1500}
@@ -1278,6 +1359,16 @@ export default function TournamentClient({
 					title={t('liveStandings')}
 					badge={<GameweekBadge gameweek={selectedGameweek} />}
 				/>
+
+				{initialCreated ? (
+					<Alert
+						variant="success"
+						className="mb-6"
+					>
+						<Check aria-hidden="true" />
+						<AlertDescription>{lifecycleT('createdShell')}</AlertDescription>
+					</Alert>
+				) : null}
 
 				{listError ? (
 					<Card className="mb-6 border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -1326,9 +1417,11 @@ export default function TournamentClient({
 					<GameweekSelector
 						onGameweekChange={gameweek => {
 							followsAnchorRef.current = false
+							setFollowsGameweekAnchor(false)
 							setSelectedGameweek(gameweek)
 						}}
 						currentGameweek={currentGameweek}
+						maxGameweek={selectedTournamentIsOfficialH2H ? 38 : currentGameweek}
 						selectedGameweek={selectedGameweek}
 						disabled={
 							isLoadingInitial || Boolean(selectedTournament && !standingsReady)
@@ -1340,7 +1433,9 @@ export default function TournamentClient({
 								<LiveAutoRefreshCountdown
 									enabled={autoRefreshEnabled}
 									onRefresh={autoRefresh}
-									nextRefreshAt={boardPage?.times.nextRefreshAt}
+									nextRefreshAt={
+										boardPage?.head.publication?.times.nextRefreshAt ?? null
+									}
 									renderLabel={seconds => t('nextRefresh', { seconds })}
 								/>
 								<Button
@@ -1431,6 +1526,7 @@ export default function TournamentClient({
 							initialSnapshot={null}
 							tournamentId={Number(selectedTournament.id)}
 							viewerEntryId={entryId}
+							onReadyChange={handleOfficialH2HReadyChange}
 						/>
 					) : (
 						<div
@@ -1483,7 +1579,9 @@ export default function TournamentClient({
 										<LiveCompetitionBoardFilters
 											tournamentId={Number(selectedTournament.id)}
 											eventId={selectedGameweek}
-										scoreCoreRevision={boardPage.scoreCoreRevision ?? ''}
+											scoreCoreRevision={
+												boardPage.head.publication?.revisions.scoreCore ?? ''
+											}
 											value={queryState.filters}
 											disabled={isRefreshing || rateLimitSeconds > 0}
 											onApply={applyFilters}

@@ -1,6 +1,6 @@
 'use client'
 
-import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
+import { formatLiveAveragePoints } from '@/lib/tournament/live-format'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface TournamentHeaderProps {

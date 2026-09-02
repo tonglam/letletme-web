@@ -4,11 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
-import type {
-	KeyboardEvent,
-	ReactNode,
-	TouchEvent
-} from 'react'
+import type { KeyboardEvent, ReactNode, TouchEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const AUTO_ADVANCE_MS = 7_000
@@ -35,6 +31,7 @@ export type HomeAutoCarouselLabels = {
 type HomeAutoCarouselProps = {
 	slides: HomeAutoCarouselSlide[]
 	labels: HomeAutoCarouselLabels
+	onActiveSlideChange?: (slideId: string) => void
 	renderHeader?: (slide: HomeAutoCarouselSlide) => ReactNode
 	renderAction?: (slide: HomeAutoCarouselSlide) => ReactNode
 	renderFullContentAction?: (
@@ -48,6 +45,7 @@ type HomeAutoCarouselProps = {
 export function HomeAutoCarousel({
 	slides,
 	labels,
+	onActiveSlideChange,
 	renderHeader,
 	renderAction,
 	renderFullContentAction,
@@ -110,6 +108,10 @@ export function HomeAutoCarousel({
 		}
 		setActiveSlideId(firstSlideId)
 	}, [activeSlideId, firstSlideId, visibleSlides])
+
+	useEffect(() => {
+		if (activeSlide) onActiveSlideChange?.(activeSlide.id)
+	}, [activeSlide, onActiveSlideChange])
 
 	if (!activeSlide) return null
 
@@ -313,9 +315,7 @@ export function HomeAutoCarousel({
 								aria-labelledby={`${dataAttribute}-${slide.id}-tab`}
 								aria-hidden={isInactive}
 								inert={isInactive}
-								data-share-carousel-inactive={
-									isInactive ? 'true' : undefined
-								}
+								data-share-carousel-inactive={isInactive ? 'true' : undefined}
 								data-share-exclude={isInactive ? 'true' : undefined}
 								className="min-w-full"
 							>
@@ -349,35 +349,35 @@ export function HomeAutoCarousel({
 				</div>
 			</div>
 
-		{activeSlide.fullContent ? (
-			<Dialog
-				open={isFullListOpen}
-				onOpenChange={setIsFullListOpen}
-			>
-				<DialogContent className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-xl sm:p-6">
-					<div
-						id={fullContentId}
-						data-share-preserve-width="true"
-						data-share-fit-content="true"
-						data-share-full-content="true"
-						data-share-reserve-brand-space="true"
-						className="rounded-lg bg-card"
-					>
-						<div className="flex min-w-0 items-start justify-between gap-4 pr-12">
-							<DialogTitle className="min-w-0 flex-1 font-display text-base font-bold uppercase tracking-wide">
-								{activeSlide.label}
-							</DialogTitle>
-							{renderFullContentAction ? (
-								<div className="shrink-0">
-									{renderFullContentAction(activeSlide, fullContentId)}
-								</div>
-							) : null}
+			{activeSlide.fullContent ? (
+				<Dialog
+					open={isFullListOpen}
+					onOpenChange={setIsFullListOpen}
+				>
+					<DialogContent className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-xl sm:p-6">
+						<div
+							id={fullContentId}
+							data-share-preserve-width="true"
+							data-share-fit-content="true"
+							data-share-full-content="true"
+							data-share-reserve-brand-space="true"
+							className="rounded-lg bg-card"
+						>
+							<div className="flex min-w-0 items-start justify-between gap-4 pr-12">
+								<DialogTitle className="min-w-0 flex-1 font-display text-base font-bold uppercase tracking-wide">
+									{activeSlide.label}
+								</DialogTitle>
+								{renderFullContentAction ? (
+									<div className="shrink-0">
+										{renderFullContentAction(activeSlide, fullContentId)}
+									</div>
+								) : null}
+							</div>
+							<div className="mt-3">{activeSlide.fullContent}</div>
 						</div>
-						<div className="mt-3">{activeSlide.fullContent}</div>
-					</div>
-				</DialogContent>
-			</Dialog>
-		) : null}
+					</DialogContent>
+				</Dialog>
+			) : null}
 		</div>
 	)
 }
