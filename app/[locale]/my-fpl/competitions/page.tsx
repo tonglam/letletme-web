@@ -94,6 +94,19 @@ const eventIdsFromPhases = (
 	return ids.length > 0 ? ids : latest ? [latest] : []
 }
 
+function phaseAtEvent(
+	phases: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']['phases'],
+	eventId: number
+) {
+	return (
+		phases.find(
+			phase => phase.startEventId <= eventId && phase.endEventId >= eventId
+		) ??
+		phases.filter(phase => phase.startEventId <= eventId).at(-1) ??
+		null
+	)
+}
+
 const sectionForFormat = (
 	format: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']['phases'][number]['format']
 ) =>
@@ -119,7 +132,7 @@ async function hydrateSeasonSeed(
 	sections: MyTournamentSeasonSection[]
 	error: unknown | null
 }> {
-	const phase = review.phases.at(-1)
+	const phase = phaseAtEvent(review.phases, throughEventId)
 	if (
 		!phase ||
 		phase.state !== 'READY' ||
