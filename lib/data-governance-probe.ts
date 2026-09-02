@@ -41,6 +41,10 @@ export type DataGovernanceProbeResponse = {
 	expectedCount: number | null
 	observedCount: number | null
 	complete: boolean
+	settlementState?: 'PROVISIONAL' | 'FINALIZING' | 'FINAL' | 'DELAYED'
+	coverageState?: 'COMPLETE' | 'CORRECTION_PENDING'
+	timelinessState?: 'CURRENT' | 'STALE'
+	finalizationDueAt?: string | null
 }
 
 export class DataGovernanceProbeError extends Error {
@@ -308,7 +312,16 @@ function snapshotRevision(value: unknown): string {
 async function probeEntryData(
 	input: DataGovernanceProbeRequest,
 	config: DataGovernanceCanary
-): Promise<{ revision: string; complete: boolean }> {
+): Promise<{
+	revision: string
+	complete: boolean
+	settlementState: 'PROVISIONAL' | 'FINALIZING' | 'FINAL' | 'DELAYED'
+	coverageState: 'COMPLETE' | 'CORRECTION_PENDING'
+	timelinessState: 'CURRENT' | 'STALE'
+	expectedCount: number
+	observedCount: number
+	finalizationDueAt: string | null
+}> {
 	const { eventId } = await resolveProbeEvent(input)
 	const response =
 		await executeServerQueryWithSession<MyFplManagerGameweekResponse>(
@@ -325,8 +338,21 @@ async function probeEntryData(
 		)
 	}
 	const picks = gameweek.result?.picks ?? []
+	const meta = gameweek.snapshotMeta
+	if (!meta) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer response has no snapshot metadata'
+		)
+	}
 	return {
-		revision: snapshotRevision(gameweek.snapshotMeta),
+		revision: snapshotRevision(meta),
+		settlementState: meta.settlementState,
+		coverageState: meta.coverageState,
+		timelinessState: meta.timelinessState,
+		expectedCount: meta.expectedEntryCount,
+		observedCount: meta.observedEntryCount,
+		finalizationDueAt: meta.finalizationDueAt,
 		complete:
 			gameweek.state === 'READY' &&
 			gameweek.result?.eventId === eventId &&
@@ -425,10 +451,13 @@ async function probeTournament(
 async function probeMyFpl(
 	input: DataGovernanceProbeRequest,
 	config: DataGovernanceCanary
-): Promise<{ revision: string; complete: boolean }> {
+): Promise<Awaited<ReturnType<typeof probeEntryData>>> {
 	const { eventId } = await resolveProbeEvent(input)
 	const result = await probeEntryData({ ...input, eventId }, config)
-	return result
+	return {
+		...result,
+		complete: result.complete && result.coverageState === 'COMPLETE'
+	}
 }
 
 async function probePlayerStats(
@@ -469,6 +498,10 @@ export async function probeDataContract(
 	let expectedCount: number | null = input.expectedCount ?? null
 	let observedCount: number | null = input.observedCount ?? null
 	let complete = false
+	let settlementState: DataGovernanceProbeResponse['settlementState']
+	let coverageState: DataGovernanceProbeResponse['coverageState']
+	let timelinessState: DataGovernanceProbeResponse['timelinessState']
+	let finalizationDueAt: string | null | undefined
 
 	try {
 		const config = canaryForContract(input.contractKey)
@@ -533,7 +566,26 @@ export async function probeDataContract(
 			case 'my-fpl': {
 				const result = await probeMyFpl(input, config)
 				graphqlRevision = result.revision
-				complete = result.complete
+				settlementState = result.settlementState
+				coverageState = result.coverageState
+				timelinessState = result.timelinessState
+				// These counts must come from the GraphQL snapshot metadata.  The
+				// producer values are an assertion supplied by Data, not a value
+				// that may overwrite what the consumer actually observed.
+				expectedCount = result.expectedCount
+				observedCount = result.observedCount
+				finalizationDueAt = result.finalizationDueAt
+				complete =
+					result.complete &&
+					(input.producerRevision === null ||
+						input.producerRevision === undefined ||
+						input.producerRevision === result.revision) &&
+					(input.expectedCount === null ||
+						input.expectedCount === undefined ||
+						input.expectedCount === result.expectedCount) &&
+					(input.observedCount === null ||
+						input.observedCount === undefined ||
+						input.observedCount === result.observedCount)
 				break
 			}
 			case 'player-stats': {
@@ -575,6 +627,10 @@ export async function probeDataContract(
 		webRevision,
 		expectedCount,
 		observedCount,
-		complete
+		complete,
+		...(settlementState ? { settlementState } : {}),
+		...(coverageState ? { coverageState } : {}),
+		...(timelinessState ? { timelinessState } : {}),
+		...(finalizationDueAt !== undefined ? { finalizationDueAt } : {})
 	}
 }

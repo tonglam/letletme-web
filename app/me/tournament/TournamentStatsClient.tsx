@@ -27,6 +27,7 @@ import { TournamentSeasonField } from './_components/TournamentSeasonField'
 import { TournamentSeasonMeSection } from './_components/TournamentSeasonMe'
 import { TournamentStatsHeader } from './_components/TournamentStatsHeader'
 import { TournamentGameweekDetails } from './_components/TournamentGameweekDetails'
+import { MyFplSnapshotStatus } from '../_components/MyFplSnapshotStatus'
 import {
 	useTournamentStats,
 	type TournamentStatsClientProps
@@ -310,10 +311,10 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 						/>
 					}
 				/>
-					<div
-						ref={shareRef}
-						data-share-expand-width="true"
-					>
+				<div
+					ref={shareRef}
+					data-share-expand-width="true"
+				>
 					{error ? (
 						<Alert
 							variant="destructive"
@@ -325,30 +326,14 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 						</Alert>
 					) : null}
 					{snapshotMeta ? (
-						<Alert className="mb-6">
-							<AlertDescription>
-								{snapshotMeta.kind === 'FINAL'
-									? t('snapshotFinal', {
-											date: formatSnapshotDate(snapshotMeta, format)
-										})
-									: t('snapshotProvisional', {
-											date: formatSnapshotDate(snapshotMeta, format)
-										})}{' '}
-								{snapshotMeta.freshness === 'STALE'
-									? t('snapshotStale')
-									: snapshotMeta.freshness === 'GENERATING'
-										? t('snapshotGenerating')
-										: null}
-								{snapshotMeta.kind === 'PROVISIONAL' && selectedTournamentId ? (
-									<Link
-										href={`/live/competitions/${selectedTournamentId}`}
-										className="ml-2 font-semibold text-primary-ink underline-offset-4 hover:underline"
-									>
-										{t('openLive')}
-									</Link>
-								) : null}
-							</AlertDescription>
-						</Alert>
+						<MyFplSnapshotStatus
+							meta={snapshotMeta}
+							liveHref={
+								selectedTournamentId
+									? `/live/competitions/${selectedTournamentId}`
+									: undefined
+							}
+						/>
 					) : null}
 
 					{/* Frame: tournament picker always on */}
@@ -725,17 +710,4 @@ export default function TournamentStatsClient(
 			<TournamentStatsBody {...props} />
 		</Suspense>
 	)
-}
-
-function formatSnapshotDate(
-	meta: MyFplSnapshotMeta,
-	format: ReturnType<typeof useFormatter>
-): string {
-	const value = new Date(meta.publishedAt)
-	return Number.isFinite(value.getTime())
-		? format.dateTime(value, {
-				dateStyle: 'medium',
-				timeStyle: 'medium'
-			})
-		: meta.snapshotDate
 }

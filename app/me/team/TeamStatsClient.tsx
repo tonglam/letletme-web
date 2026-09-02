@@ -20,7 +20,7 @@ import type { SeasonIdentity } from './_lib/team-stats-model'
 import type { SeasonPresentationPhase } from '@/lib/season-presentation'
 import { cn } from '@/lib/utils'
 import { AlertCircle, X } from 'lucide-react'
-import { useFormatter, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TeamGameweekOverall } from './_components/TeamGameweekOverall'
@@ -30,6 +30,7 @@ import { TeamSeasonOverall } from './_components/TeamSeasonOverall'
 import { TeamSquadSection } from './_components/TeamSquadSection'
 import { TeamSquadPitch } from './_components/TeamSquadPitch'
 import { TeamStatsDeepDive } from './_components/TeamStatsDeepDive'
+import { MyFplSnapshotStatus } from '../_components/MyFplSnapshotStatus'
 import { useTeamStats, type InitialEntryHistory } from './_hooks/useTeamStats'
 import {
 	TeamGameweekWorkspaceProvider,
@@ -71,7 +72,6 @@ interface TeamStatsClientProps {
  */
 export default function TeamStatsClient(props: TeamStatsClientProps) {
 	const t = useTranslations('TeamStats')
-	const format = useFormatter()
 	const router = useRouter()
 	const pathname = usePathname()
 	const searchParams = useSearchParams()
@@ -173,48 +173,10 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 				</p>
 
 				{snapshotMeta ? (
-					<Alert className="mb-6">
-						<AlertDescription>
-							{snapshotMeta.kind === 'FINAL'
-								? t('snapshotFinal', {
-										cutoff: formatSnapshotDate(
-											snapshotMeta.sourceMaxCheckedAt,
-											snapshotMeta.snapshotDate,
-											format
-										),
-										published: formatSnapshotDate(
-											snapshotMeta.publishedAt,
-											snapshotMeta.snapshotDate,
-											format
-										)
-									})
-								: t('snapshotProvisional', {
-										cutoff: formatSnapshotDate(
-											snapshotMeta.sourceMaxCheckedAt,
-											snapshotMeta.snapshotDate,
-											format
-										),
-										published: formatSnapshotDate(
-											snapshotMeta.publishedAt,
-											snapshotMeta.snapshotDate,
-											format
-										)
-									})}{' '}
-							{snapshotMeta.freshness === 'STALE'
-								? t('snapshotStale')
-								: snapshotMeta.freshness === 'GENERATING'
-									? t('snapshotGenerating')
-									: null}
-							{snapshotMeta.kind === 'PROVISIONAL' ? (
-								<Link
-									href={`/live/points/${props.entryId}`}
-									className="ml-2 font-semibold text-primary-ink underline-offset-4 hover:underline"
-								>
-									{t('openLive')}
-								</Link>
-							) : null}
-						</AlertDescription>
-					</Alert>
+					<MyFplSnapshotStatus
+						meta={snapshotMeta}
+						liveHref={`/live/points/${props.entryId}`}
+					/>
 				) : null}
 
 				{error ? (
@@ -256,6 +218,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							pastSeasonsState={pastSeasonsState}
 							seasonLogs={seasonLogs}
 							managerReview={managerReview}
+							snapshotMeta={snapshotMeta}
 							emptyStateMessage={emptyStateMessage}
 							hasAnyContent={hasAnyContent}
 							searchParamsGw={searchParams.get('gw')}
@@ -295,23 +258,10 @@ interface TeamStatsViewsProps {
 	pastSeasonsState?: MyFplReviewState
 	seasonLogs: ReturnType<typeof useTeamStats>['seasonLogs']
 	managerReview: ReturnType<typeof useTeamStats>['managerReview']
+	snapshotMeta: MyFplSnapshotMeta | null
 	emptyStateMessage: string | null
 	hasAnyContent: boolean
 	searchParamsGw: string | null
-}
-
-function formatSnapshotDate(
-	raw: string,
-	fallback: string,
-	format: ReturnType<typeof useFormatter>
-): string {
-	const value = new Date(raw)
-	return Number.isFinite(value.getTime())
-		? format.dateTime(value, {
-				dateStyle: 'medium',
-				timeStyle: 'medium'
-			})
-		: fallback
 }
 
 function TeamStatsViews({
@@ -332,6 +282,7 @@ function TeamStatsViews({
 	pastSeasonsState,
 	seasonLogs,
 	managerReview,
+	snapshotMeta,
 	emptyStateMessage,
 	hasAnyContent,
 	searchParamsGw
@@ -474,6 +425,7 @@ function TeamStatsViews({
 					{seasonOverall ? (
 						<TeamSeasonOverall
 							snapshot={seasonOverall}
+							snapshotMeta={snapshotMeta}
 							variant="full"
 							preseason={preseason}
 						/>

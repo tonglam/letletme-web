@@ -37,6 +37,7 @@ export const ROUTE_CLIENT_NAMESPACES = {
 		'Share'
 	],
 	myFpl: [
+		'MyFplSnapshot',
 		'TeamStats',
 		'TournamentStats',
 		'LiveTournament',
