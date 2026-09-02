@@ -183,7 +183,9 @@ export async function POST(
 	} catch (error) {
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
-			code === 'LIVE_BOARD_REVISION_GONE'
+			code === 'CLIENT_UPGRADE_REQUIRED'
+				? 426
+				: code === 'LIVE_BOARD_REVISION_GONE'
 				? 409
 				: code === 'RATE_LIMITED' ||
 					  code === 'UPSTREAM_RATE_LIMITED' ||
@@ -202,7 +204,9 @@ export async function POST(
 		return NextResponse.json(
 			{
 				error:
-					status === 409
+					status === 426
+						? 'CLIENT_UPGRADE_REQUIRED'
+						: status === 409
 						? code
 						: status === 429
 							? 'RATE_LIMITED'

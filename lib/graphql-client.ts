@@ -90,7 +90,6 @@ export const LIVE_POINTS_V2_ROOT_FIELDS = [
 	'leagueLiveHead',
 	'tournamentOfficialH2H',
 	'tournamentOfficialH2HHistory',
-	'entryLiveCompetitionsDesk',
 	'tournamentSelectionIndex',
 	'tournamentEntrySquads',
 	'tournamentDetailDesk',

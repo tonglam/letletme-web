@@ -1083,7 +1083,7 @@ const LIVE_H2H_MATCH_FIELDS = `
     tiebreak
     isBye
     availability
-    delivery { state }
+    delivery { state servedFrom reasonCodes }
     revisions { publicationId generation scoreCore content }
     times { contentUpdatedAt nextRefreshAt }
     home {
@@ -1214,7 +1214,7 @@ export interface TournamentOfficialH2HLiveMatch {
 	tiebreak: string | null
 	isBye: boolean
 	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
-	delivery: Pick<LiveDelivery, 'state'>
+	delivery: LiveDelivery
 	revisions: Pick<
 		LeagueLiveRevisionVector,
 		'publicationId' | 'generation' | 'scoreCore' | 'content'

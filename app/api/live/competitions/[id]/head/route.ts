@@ -63,8 +63,10 @@ export async function POST(
 	} catch (error) {
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
-			code === 'RATE_LIMITED' ||
-			code === 'UPSTREAM_RATE_LIMITED' ||
+			code === 'CLIENT_UPGRADE_REQUIRED'
+				? 426
+				: code === 'RATE_LIMITED' ||
+				code === 'UPSTREAM_RATE_LIMITED' ||
 			(error instanceof GraphQLRequestError && error.status === 429)
 				? 429
 				: code === 'UNAUTHENTICATED'
@@ -78,7 +80,9 @@ export async function POST(
 		return NextResponse.json(
 			{
 				error:
-					status === 429
+					status === 426
+						? 'CLIENT_UPGRADE_REQUIRED'
+						: status === 429
 						? 'RATE_LIMITED'
 						: status === 401
 							? 'UNAUTHENTICATED'

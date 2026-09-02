@@ -434,7 +434,7 @@ async function probeTournament(
 				entryId: config.entryId,
 				tournamentId: config.tournamentId,
 				eventId,
-				input: { first: 1 }
+				input: { first: 50 }
 			},
 			{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
 		)
@@ -499,7 +499,7 @@ async function probeTournament(
 		}
 		if (!board.pageInfo.hasNextPage) {
 			if (
-				board.pageInfo.endCursor !== null ||
+				(board.rows.length === 0 && board.pageInfo.endCursor !== null) ||
 				seenEntries.size !== board.filteredEntries ||
 				board.filteredEntries !== board.totalEntries
 			) {

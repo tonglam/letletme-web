@@ -23,7 +23,11 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import { fetchLeagueLiveHead } from '@/lib/tournament/live-board'
 import {
-	isCompleteOfficialH2HSnapshot,
+	isOfficialH2HContentChanged,
+	isOfficialH2HScoreVisible,
+	isUsableOfficialH2HSnapshot,
+	retainOfficialH2HMatches,
+	retainOfficialH2HStandings,
 	shouldShowOfficialH2HStandings
 } from '@/lib/tournament/official-h2h-presentation'
 import { cn, formatInteger } from '@/lib/utils'
@@ -69,7 +73,7 @@ function shareMatchLabel(
 ): string {
 	const home = sideLabel(match.home, averageLabel)
 	const away = sideLabel(match.away, averageLabel)
-	if (match.home.points == null || match.away.points == null) {
+	if (!isOfficialH2HScoreVisible(match.home, match.away)) {
 		return `${home} ${versusLabel} ${away}`
 	}
 	return `${home} ${scoreLabel(match.home)} — ${scoreLabel(match.away)} ${away}`
@@ -248,8 +252,9 @@ function MatchCard({
 		viewerEntryId != null &&
 		(match.home.entryId === viewerEntryId ||
 			match.away.entryId === viewerEntryId)
-	const hasScore = match.home.points != null && match.away.points != null
-	const scoreAvailable = hasScore && match.availability === 'READY'
+	const scoreAvailable =
+		match.availability === 'READY' &&
+		isOfficialH2HScoreVisible(match.home, match.away)
 
 	return (
 		<li>
@@ -365,8 +370,7 @@ function MatchupHistoryBoard({
 		<div className="overflow-hidden rounded-xl border border-border/70 bg-background/45">
 			<ul className="divide-y divide-border/60">
 				{matches.map(match => {
-					const hasScore =
-						match.home.points != null && match.away.points != null
+					const hasScore = isOfficialH2HScoreVisible(match.home, match.away)
 					const isLiveMatch =
 						isLive === true && match.eventId === currentEventId
 					const isFinishedMatch =
@@ -453,12 +457,14 @@ export function OfficialH2HCompetitionView({
 	activeEventId,
 	eventId,
 	initialSnapshot,
+	onReadyChange,
 	tournamentId,
 	viewerEntryId
 }: {
 	activeEventId?: number
 	eventId: number
 	initialSnapshot: TournamentOfficialH2H | null
+	onReadyChange?: (ready: boolean) => void
 	tournamentId: number
 	viewerEntryId?: number
 }) {
@@ -466,6 +472,7 @@ export function OfficialH2HCompetitionView({
 	const router = useRouter()
 	const isPageActive = usePageActive()
 	const [snapshot, setSnapshot] = useState(initialSnapshot)
+	const snapshotRef = useRef(initialSnapshot)
 	const [head, setHead] = useState<LeagueLiveHead | null>(null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [refreshFailed, setRefreshFailed] = useState(false)
@@ -478,44 +485,116 @@ export function OfficialH2HCompetitionView({
 	const [isMatchupHistoryRefreshing, setIsMatchupHistoryRefreshing] =
 		useState(false)
 	const inFlightRef = useRef<Promise<void> | null>(null)
-	const matchupHistoryInFlightRef = useRef<Promise<void> | null>(null)
+	const matchupHistoryInFlightRef = useRef<{
+		generation: number
+		promise: Promise<void>
+	} | null>(null)
+	const matchupHistoryReloadPendingRef = useRef(false)
+	const matchupHistoryGenerationRef = useRef(0)
+	const activeSlideIdRef = useRef<string | null>(null)
+	const loadMatchupHistoryRef = useRef<(force?: boolean) => Promise<void>>(
+		async () => undefined
+	)
 	const boardsShareRef = useRef<HTMLElement | null>(null)
 	const isCurrentEvent = activeEventId === eventId
 	const showStandings = shouldShowOfficialH2HStandings(eventId, activeEventId)
 
-	const loadMatchupHistory = useCallback(() => {
-		if (matchupHistory !== null) return Promise.resolve()
-		if (matchupHistoryLoadFailed) return Promise.resolve()
-		if (matchupHistoryInFlightRef.current)
-			return matchupHistoryInFlightRef.current
-		const request = (async () => {
-			setIsMatchupHistoryRefreshing(true)
-			try {
-				const result = await executeQuery<TournamentOfficialH2HHistoryResponse>(
-					GET_TOURNAMENT_OFFICIAL_H2H_HISTORY,
-					{ tournamentId, eventId, limit: 100 },
-					{ cache: 'no-store', contract: 'live-points-v2' }
-				)
-				setMatchupHistory(result.tournamentOfficialH2HHistory.matches)
-				setMatchupHistoryLoadFailed(false)
-			} catch {
-				// The current-event snapshot remains the usable fallback when the
-				// optional history read is unavailable.
-				setMatchupHistoryLoadFailed(true)
-			} finally {
-				setIsMatchupHistoryRefreshing(false)
+	useEffect(() => {
+		// Official standings are an independent overlay. They may be stale or
+		// updating while the match publication remains a usable page.
+		onReadyChange?.(isUsableOfficialH2HSnapshot(snapshot, { eventId }))
+	}, [eventId, onReadyChange, snapshot])
+
+	const loadMatchupHistory = useCallback(
+		(force = false) => {
+			if (!isPageActive) return Promise.resolve()
+			if (!force && matchupHistory !== null) return Promise.resolve()
+			if (!force && matchupHistoryLoadFailed) return Promise.resolve()
+			const generation = matchupHistoryGenerationRef.current
+			const inFlight = matchupHistoryInFlightRef.current
+			if (inFlight) {
+				if (force && inFlight.generation !== generation)
+					matchupHistoryReloadPendingRef.current = true
+				return inFlight.promise
 			}
-		})()
-		matchupHistoryInFlightRef.current = request
-		void request.finally(() => {
-			if (matchupHistoryInFlightRef.current === request)
-				matchupHistoryInFlightRef.current = null
-		})
-		return request
-	}, [eventId, matchupHistory, matchupHistoryLoadFailed, tournamentId])
+			matchupHistoryReloadPendingRef.current = false
+			const request = (async () => {
+				setIsMatchupHistoryRefreshing(true)
+				try {
+					const result =
+						await executeQuery<TournamentOfficialH2HHistoryResponse>(
+							GET_TOURNAMENT_OFFICIAL_H2H_HISTORY,
+							{ tournamentId, eventId, limit: 100 },
+							{ cache: 'no-store', contract: 'live-points-v2' }
+						)
+					if (generation !== matchupHistoryGenerationRef.current) return
+					setMatchupHistory(result.tournamentOfficialH2HHistory.matches)
+					setMatchupHistoryLoadFailed(false)
+				} catch {
+					if (generation !== matchupHistoryGenerationRef.current) return
+					// The current-event snapshot remains the usable fallback when the
+					// optional history read is unavailable.
+					setMatchupHistoryLoadFailed(true)
+				} finally {
+					if (generation === matchupHistoryGenerationRef.current)
+						setIsMatchupHistoryRefreshing(false)
+				}
+			})()
+			matchupHistoryInFlightRef.current = { generation, promise: request }
+			void request.then(
+				() => {
+					if (matchupHistoryInFlightRef.current?.promise !== request) return
+					matchupHistoryInFlightRef.current = null
+					if (
+						!matchupHistoryReloadPendingRef.current ||
+						!isPageActive ||
+						activeSlideIdRef.current !== 'my-matchups'
+					)
+						return
+					matchupHistoryReloadPendingRef.current = false
+					queueMicrotask(() => void loadMatchupHistoryRef.current(true))
+				},
+				() => {
+					if (matchupHistoryInFlightRef.current?.promise !== request) return
+					matchupHistoryInFlightRef.current = null
+					if (
+						!matchupHistoryReloadPendingRef.current ||
+						!isPageActive ||
+						activeSlideIdRef.current !== 'my-matchups'
+					)
+						return
+					matchupHistoryReloadPendingRef.current = false
+					queueMicrotask(() => void loadMatchupHistoryRef.current(true))
+				}
+			)
+			return request
+		},
+		[
+			eventId,
+			isPageActive,
+			matchupHistory,
+			matchupHistoryLoadFailed,
+			tournamentId
+		]
+	)
+	useEffect(() => {
+		loadMatchupHistoryRef.current = loadMatchupHistory
+	}, [loadMatchupHistory])
+	useEffect(() => {
+		if (
+			!isPageActive ||
+			activeSlideIdRef.current !== 'my-matchups' ||
+			!matchupHistoryReloadPendingRef.current ||
+			matchupHistoryInFlightRef.current
+		)
+			return
+		matchupHistoryReloadPendingRef.current = false
+		void loadMatchupHistoryRef.current(true)
+	}, [isPageActive, loadMatchupHistory])
 
 	const handleBoardSlideChange = useCallback(
 		(slideId: string) => {
+			activeSlideIdRef.current = slideId
 			if (slideId === 'my-matchups') void loadMatchupHistory()
 		},
 		[loadMatchupHistory]
@@ -540,18 +619,45 @@ export function OfficialH2HCompetitionView({
 				)
 				if (snapshotResult.ok) {
 					const next = snapshotResult.value.tournamentOfficialH2H
-					const nextIsComplete = isCompleteOfficialH2HSnapshot(next, {
-						requireStandings: showStandings
-					})
-					if (snapshot === null || nextIsComplete) {
-						setSnapshot(next)
+					const previousSnapshot = snapshotRef.current
+					const contentChanged = isOfficialH2HContentChanged(
+						previousSnapshot,
+						next
+					)
+					const nextIsUsable = isUsableOfficialH2HSnapshot(next, { eventId })
+					if (nextIsUsable) {
+						const withRetainedMatches = retainOfficialH2HMatches(
+							previousSnapshot,
+							next
+						)
+						const committed = retainOfficialH2HStandings(
+							previousSnapshot,
+							withRetainedMatches
+						)
+						if (contentChanged) {
+							// Matchup history is a separate lazy read, but it is still
+							// revision-bound. Invalidate it with the board so an already
+							// open history slide cannot keep displaying the old event data.
+							matchupHistoryGenerationRef.current += 1
+							setMatchupHistory(null)
+							setMatchupHistoryLoadFailed(false)
+							if (
+								activeSlideIdRef.current === 'my-matchups' &&
+								matchupHistoryInFlightRef.current
+							)
+								matchupHistoryReloadPendingRef.current = true
+							if (activeSlideIdRef.current === 'my-matchups')
+								void loadMatchupHistoryRef.current(true)
+						}
+						snapshotRef.current = committed
+						setSnapshot(committed)
 						setHead(current =>
-							current && next.revisions
+							current && committed.revisions
 								? {
 										...current,
-										availability: next.availability,
-										contentRevision: next.revisions.content,
-										delivery: next.delivery
+										availability: committed.availability,
+										contentRevision: committed.revisions.content,
+										delivery: committed.delivery
 									}
 								: current
 						)
@@ -578,7 +684,7 @@ export function OfficialH2HCompetitionView({
 			if (inFlightRef.current === request) inFlightRef.current = null
 		})
 		return request
-	}, [eventId, showStandings, snapshot, tournamentId])
+	}, [eventId, tournamentId])
 
 	useEffect(() => {
 		if (!isPageActive || snapshot?.eventId === eventId) return
@@ -592,17 +698,27 @@ export function OfficialH2HCompetitionView({
 			try {
 				const next = await fetchLeagueLiveHead(tournamentId, eventId, 'H2H')
 				if (cancelled) return
+				const currentSnapshot = snapshotRef.current
+				const usableHead =
+					next.availability === 'READY' &&
+					next.publication !== null &&
+					next.contentRevision !== null &&
+					next.delivery.state !== 'UNAVAILABLE'
+				if (!usableHead) {
+					if (currentSnapshot) setRefreshFailed(true)
+					return
+				}
 				setHead(next)
-				if (next.contentRevision !== snapshot?.revisions?.content)
+				if (next.contentRevision !== currentSnapshot?.revisions?.content)
 					await refresh()
 			} catch {
-				if (!cancelled && snapshot) setRefreshFailed(true)
+				if (!cancelled && snapshotRef.current) setRefreshFailed(true)
 			}
 		}
 		void probe()
 		const timer = window.setInterval(() => void probe(), REFRESH_INTERVAL_MS)
 		return () => window.clearInterval(timer)
-	}, [eventId, isCurrentEvent, isPageActive, refresh, snapshot, tournamentId])
+	}, [eventId, isCurrentEvent, isPageActive, refresh, tournamentId])
 
 	const standings = useMemo(
 		() =>
@@ -636,13 +752,27 @@ export function OfficialH2HCompetitionView({
 		matchupHistory === null &&
 		isMatchupHistoryRefreshing
 	const isInitialLoading = !hasLoaded && isRefreshing
+	const displayHead =
+		head !== null &&
+		snapshot !== null &&
+		head.eventId === snapshot.eventId &&
+		head.contentRevision !== null &&
+		head.contentRevision === snapshot.revisions?.content
+			? head
+			: null
+	const displayAvailability = displayHead
+		? displayHead.availability
+		: snapshot?.availability
+	const displayDelivery = displayHead
+		? displayHead.delivery
+		: snapshot?.delivery
 	const scoreStatus =
-		snapshot?.availability === 'READY'
-			? snapshot.delivery.state === 'FINAL'
+		displayAvailability === 'READY'
+			? displayDelivery?.state === 'FINAL'
 				? t('completed')
-				: snapshot.delivery.state === 'FRESH'
+				: displayDelivery?.state === 'FRESH'
 					? t('live')
-					: snapshot.delivery.state === 'UNAVAILABLE'
+					: displayDelivery?.state === 'UNAVAILABLE'
 						? t('scoreOfficialUnavailable')
 						: t('scoreOfficialDelayed')
 			: t('pending')
@@ -651,9 +781,10 @@ export function OfficialH2HCompetitionView({
 	const awaitingSchedule =
 		snapshot?.availability === 'PENDING' || head?.availability === 'PENDING'
 	const scoreBadgeClass =
-		snapshot?.delivery.state === 'FINAL'
+		displayDelivery?.state === 'FINAL'
 			? 'border-border/80 bg-muted/60 text-muted-foreground'
-			: snapshot?.availability === 'READY'
+			: displayAvailability === 'READY' &&
+				  displayDelivery?.state !== 'UNAVAILABLE'
 				? 'border-primary/35 bg-primary/10 text-primary-ink'
 				: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
 
@@ -844,11 +975,11 @@ export function OfficialH2HCompetitionView({
 						matches={visibleMatchupHistory}
 						currentEventId={activeEventId}
 						isLive={
-							snapshot?.availability === 'READY' &&
+							displayAvailability === 'READY' &&
 							eventId === activeEventId &&
-							snapshot.delivery.state === 'FRESH'
+							displayDelivery?.state === 'FRESH'
 						}
-						isFinal={snapshot?.delivery.state === 'FINAL'}
+						isFinal={displayDelivery?.state === 'FINAL'}
 					/>
 				) : (
 					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
@@ -871,8 +1002,8 @@ export function OfficialH2HCompetitionView({
 			matches,
 			visibleMatchupHistory,
 			awaitingSchedule,
-			snapshot?.availability,
-			snapshot?.delivery.state,
+			displayAvailability,
+			displayDelivery,
 			standings,
 			showStandings,
 			t,

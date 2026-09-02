@@ -237,6 +237,13 @@ describe('Live Board V2 score contract', () => {
 		assert.equal(
 			isCompleteLiveBoardPage({
 				...page,
+				viewerRow: page.rows[0]!
+			}),
+			true
+		)
+		assert.equal(
+			isCompleteLiveBoardPage({
+				...page,
 				head: { ...page.head, availability: 'PENDING' }
 			}),
 			false
@@ -254,6 +261,36 @@ describe('Live Board V2 score contract', () => {
 				rows: [{ ...page.rows[0]!, availability: 'MISSING', score: null }]
 			}),
 			true
+		)
+		assert.equal(
+			isCompleteLiveBoardPage({
+				...page,
+				filteredEntries: 2
+			}),
+			true
+		)
+		assert.equal(
+			isCompleteLiveBoardPage(
+				{
+					...page,
+					filteredEntries: 2,
+					pageInfo: { hasNextPage: false, endCursor: 'cursor-terminal' }
+				},
+				{ firstPage: true }
+			),
+			false
+		)
+		assert.equal(
+			isCompleteLiveBoardPage(
+				{
+					...page,
+					rows: [],
+					filteredEntries: 1,
+					pageInfo: { hasNextPage: false, endCursor: null }
+				},
+				{ firstPage: true }
+			),
+			false
 		)
 	})
 })

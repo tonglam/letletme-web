@@ -127,8 +127,7 @@ const tableSortToBoardSort = (
 
 const pageRows = (
 	page: EntryLiveCompetitionBoardPage | null
-): TournamentEntry[] =>
-	page ? page.rows.map(boardRowToTournamentEntry) : []
+): TournamentEntry[] => (page ? page.rows.map(boardRowToTournamentEntry) : [])
 
 const boardFreshnessMarker = (
 	page: EntryLiveCompetitionBoardPage | null
@@ -286,6 +285,17 @@ export default function TournamentClient({
 	const scopeKey = selectedTournamentId
 		? `${selectedTournamentId}:${selectedGameweek}`
 		: null
+
+	const [officialH2HReady, setOfficialH2HReady] = useState(
+		!selectedTournamentIsOfficialH2H
+	)
+	const handleOfficialH2HReadyChange = useCallback((ready: boolean): void => {
+		setOfficialH2HReady(ready)
+	}, [])
+
+	useEffect(() => {
+		setOfficialH2HReady(!selectedTournamentIsOfficialH2H)
+	}, [selectedGameweek, selectedTournamentId, selectedTournamentIsOfficialH2H])
 
 	const initialScopeKey =
 		initialBoardPage && initialSelectedTournamentId
@@ -654,7 +664,11 @@ export default function TournamentClient({
 				) {
 					return false
 				}
-				if (!isCompleteLiveBoardPage(page) && options.preserve) {
+				const complete = isCompleteLiveBoardPage(page, { firstPage: true })
+				if (
+					!complete &&
+					(options.preserve || page.head.availability === 'READY')
+				) {
 					setResultsError(
 						boardPartialMessage(page, {
 							failed: t('calculationFailed'),
@@ -1155,9 +1169,15 @@ export default function TournamentClient({
 				eventId: observedHead.eventId,
 				contentRevision: observedHead.contentRevision
 			})
+			const observedHeadUsable =
+				observedHead.availability === 'READY' &&
+				observedHead.publication !== null &&
+				observedHead.contentRevision !== null &&
+				observedHead.delivery.state !== 'UNAVAILABLE'
 			if (
 				boardPage &&
 				observedHead.eventId === boardPage.head.eventId &&
+				observedHeadUsable &&
 				!boardPublicationChanged
 			) {
 				setBoardPage(current =>
@@ -1166,9 +1186,12 @@ export default function TournamentClient({
 			}
 			if (
 				shouldAutoRefreshLiveBoardPage(boardPage) &&
+				observedHeadUsable &&
 				boardPublicationChanged
 			) {
 				await refresh()
+			} else if (!observedHeadUsable && entries.length > 0) {
+				setResultsError(t('refreshFailedRetained'))
 			}
 		} catch {
 			if (entries.length > 0) setResultsError(t('refreshFailedRetained'))
@@ -1317,8 +1340,9 @@ export default function TournamentClient({
 						selectedTournament &&
 						selectionRestoreComplete &&
 						standingsReady &&
-						(selectedTournamentIsOfficialH2H ||
-							(!isLoadingInitial && contentScopeKey === scopeKey && hasBoard))
+						(selectedTournamentIsOfficialH2H
+							? officialH2HReady
+							: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)
 					)}
 					audienceHint="session-hint"
 					goodMs={1500}
@@ -1496,6 +1520,7 @@ export default function TournamentClient({
 							initialSnapshot={null}
 							tournamentId={Number(selectedTournament.id)}
 							viewerEntryId={entryId}
+							onReadyChange={handleOfficialH2HReadyChange}
 						/>
 					) : (
 						<div
@@ -1564,11 +1589,11 @@ export default function TournamentClient({
 										tournamentId={selectedTournament.id}
 										gameweek={selectedGameweek}
 										viewerEntryId={entryId}
-						pinnedViewerEntry={
-							boardPage.viewerRow
-								? boardRowToTournamentEntry(boardPage.viewerRow)
-								: undefined
-						}
+										pinnedViewerEntry={
+											boardPage.viewerRow
+												? boardRowToTournamentEntry(boardPage.viewerRow)
+												: undefined
+										}
 										onVisibleEntriesChange={setTableEntriesForShare}
 										shareText={shareText}
 										shareImageRef={shareRef}

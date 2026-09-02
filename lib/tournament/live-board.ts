@@ -441,7 +441,8 @@ export const shouldAutoRefreshLiveBoardPage = (
  * entry and keeps its score null.
  */
 export const isCompleteLiveBoardPage = (
-	page: EntryLiveCompetitionBoardPage | null
+	page: EntryLiveCompetitionBoardPage | null,
+	options: { firstPage?: boolean } = {}
 ): boolean => {
 	if (
 		!page ||
@@ -450,19 +451,22 @@ export const isCompleteLiveBoardPage = (
 		page.head.delivery.state === 'UNAVAILABLE'
 	)
 		return false
-	const rows = page.viewerRow ? [...page.rows, page.viewerRow] : page.rows
-	if (new Set(rows.map(row => row.entry)).size !== rows.length) return false
+	// The viewer row is an explicitly requested overlay and may also be part
+	// of the visible page. Only duplicate rows within the page are corrupt.
+	if (new Set(page.rows.map(row => row.entry)).size !== page.rows.length)
+		return false
 	if (page.rows.length > page.filteredEntries) return false
+	if (page.filteredEntries > 0 && page.rows.length === 0) return false
 	if (page.pageInfo.hasNextPage) {
 		if (!page.pageInfo.endCursor || page.rows.length >= page.filteredEntries) {
 			return false
 		}
-	} else if (
-		page.pageInfo.endCursor !== null ||
-		page.rows.length !== page.filteredEntries
-	) {
+	} else if (page.rows.length === 0 && page.pageInfo.endCursor !== null) {
+		return false
+	} else if (options.firstPage && page.rows.length !== page.filteredEntries) {
 		return false
 	}
+	const rows = page.viewerRow ? [...page.rows, page.viewerRow] : page.rows
 	return rows.every(
 		row =>
 			(row.availability === 'READY' && row.score !== null) ||
@@ -564,7 +568,7 @@ export const liveBoardLastGoodKey = (scope: LastGoodScope): string =>
 const liveBoardHasUsableLastGoodRows = (
 	page: EntryLiveCompetitionBoardPage
 ): boolean => {
-	return isCompleteLiveBoardPage(page)
+	return isCompleteLiveBoardPage(page, { firstPage: true })
 }
 
 export const readLiveBoardLastGood = (
