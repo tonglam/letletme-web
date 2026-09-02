@@ -286,15 +286,21 @@ export default function TournamentClient({
 		? `${selectedTournamentId}:${selectedGameweek}`
 		: null
 
-	const [officialH2HReady, setOfficialH2HReady] = useState(
-		!selectedTournamentIsOfficialH2H
+	const [officialH2HReady, setOfficialH2HReady] = useState(false)
+	const [officialH2HReadyScopeKey, setOfficialH2HReadyScopeKey] = useState<
+		string | null
+	>(null)
+	const handleOfficialH2HReadyChange = useCallback(
+		(ready: boolean): void => {
+			setOfficialH2HReady(ready)
+			setOfficialH2HReadyScopeKey(ready ? scopeKey : null)
+		},
+		[scopeKey]
 	)
-	const handleOfficialH2HReadyChange = useCallback((ready: boolean): void => {
-		setOfficialH2HReady(ready)
-	}, [])
 
 	useEffect(() => {
-		setOfficialH2HReady(!selectedTournamentIsOfficialH2H)
+		setOfficialH2HReady(false)
+		setOfficialH2HReadyScopeKey(null)
 	}, [selectedGameweek, selectedTournamentId, selectedTournamentIsOfficialH2H])
 
 	const initialScopeKey =
@@ -1341,7 +1347,7 @@ export default function TournamentClient({
 						selectionRestoreComplete &&
 						standingsReady &&
 						(selectedTournamentIsOfficialH2H
-							? officialH2HReady
+							? officialH2HReady && officialH2HReadyScopeKey === scopeKey
 							: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)
 					)}
 					audienceHint="session-hint"

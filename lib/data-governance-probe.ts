@@ -150,6 +150,7 @@ type ProbeEventContext = Readonly<{
 }>
 
 const CANARY_INTEGER = /^[1-9]\d*$/
+const MAX_LIVE_LEAGUE_CANARY_PAGES = Math.ceil(5_000 / 50) + 1
 
 function parseCanaryInteger(name: string): number | null {
 	const raw = process.env[name]?.trim() ?? ''
@@ -491,7 +492,7 @@ async function probeTournament(
 			}
 		}
 		pageCount += 1
-		if (pageCount > 100) {
+		if (pageCount > MAX_LIVE_LEAGUE_CANARY_PAGES) {
 			throw new DataGovernanceProbeError(
 				'BUSINESS_DATA_UNAVAILABLE',
 				'live league board pagination exceeded the safety bound'
