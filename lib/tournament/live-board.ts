@@ -662,6 +662,26 @@ const chipFlags = (chip: string) => ({
 	manager: chip === 'MANAGER'
 })
 
+export const mergeLiveBoardEntries = (
+	current: readonly TournamentEntry[],
+	incoming: readonly TournamentEntry[]
+): TournamentEntry[] => {
+	const byId = new Map(current.map(entry => [entry.id, entry]))
+	for (const entry of incoming) {
+		const previous = byId.get(entry.id)
+		if (
+			previous &&
+			entry.teamValue === undefined &&
+			previous.teamValue !== undefined
+		) {
+			byId.set(entry.id, { ...entry, teamValue: previous.teamValue })
+			continue
+		}
+		byId.set(entry.id, entry)
+	}
+	return Array.from(byId.values())
+}
+
 export const boardRowToTournamentEntry = (
 	row: EntryLiveCompetitionBoardRow
 ): TournamentEntry => {
@@ -669,7 +689,7 @@ export const boardRowToTournamentEntry = (
 		return {
 			id: String(row.entry),
 			availability: 'MISSING',
-			rank: 0,
+			rank: row.liveRank ?? 0,
 			teamName: row.entryName,
 			managerName: row.playerName,
 			captainName: 'N/A',

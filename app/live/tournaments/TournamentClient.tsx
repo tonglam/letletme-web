@@ -39,6 +39,7 @@ import {
 	isCompleteLiveBoardPage,
 	isLiveBoardRevisionGoneCode,
 	liveBoardPublicationChanged,
+	mergeLiveBoardEntries,
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
 	resolveUrlGameweekSelection,
@@ -1059,11 +1060,9 @@ export default function TournamentClient({
 				)
 				return
 			}
-			setEntries(current => {
-				const byId = new Map(current.map(entry => [entry.id, entry]))
-				for (const entry of pageRows(next)) byId.set(entry.id, entry)
-				return Array.from(byId.values())
-			})
+			setEntries(current =>
+				mergeLiveBoardEntries(current, pageRows(next))
+			)
 			setBoardPage(next)
 			setResultsError(
 				boardPartialMessage(next, {
@@ -1184,7 +1183,8 @@ export default function TournamentClient({
 				boardPage &&
 				observedHead.eventId === boardPage.head.eventId &&
 				observedHeadUsable &&
-				!boardPublicationChanged
+				!boardPublicationChanged &&
+				isCompleteLiveBoardPage(boardPage, { firstPage: true })
 			) {
 				setBoardPage(current =>
 					current ? { ...current, head: observedHead } : current

@@ -15,8 +15,10 @@ import {
 import {
 	GET_ENTRY_LIVE_COMPETITION_BOARD,
 	GET_TOURNAMENT_OFFICIAL_H2H,
+	type EntryLiveCompetitionBoardHead,
 	type EntryLiveCompetitionBoardResponse,
-	type TournamentOfficialH2HResponse
+	type TournamentOfficialH2HResponse,
+	type TournamentOfficialH2HStanding
 } from '@/lib/graphql/operations/tournaments'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
@@ -395,6 +397,25 @@ async function probeLivePicks(
 	}
 }
 
+const isLiveLeagueBoardHeadUsable = (
+	head: EntryLiveCompetitionBoardHead
+): boolean =>
+	head.availability === 'READY' &&
+	head.publication !== null &&
+	head.contentRevision !== null &&
+	head.delivery.state !== 'UNAVAILABLE'
+
+const isOfficialH2HStandingRowComplete = (
+	row: TournamentOfficialH2HStanding
+): boolean =>
+	row.rank !== null &&
+	row.matchPoints !== null &&
+	row.played !== null &&
+	row.won !== null &&
+	row.drawn !== null &&
+	row.lost !== null &&
+	row.pointsFor !== null
+
 async function probeTournament(
 	input: DataGovernanceProbeRequest,
 	config: DataGovernanceCanary,
@@ -416,6 +437,9 @@ async function probeTournament(
 				{ cache: 'no-store', timeoutMs: 5_000, contract: 'live-points-v2' }
 			)
 		const official = response.tournamentOfficialH2H
+		const standingEntryIds = new Set(
+			official.standings?.rows.map(row => row.entryId) ?? []
+		)
 		return {
 			revision: revision(official.revisions?.content ?? 'unavailable'),
 			complete:
@@ -423,6 +447,8 @@ async function probeTournament(
 				official.availability === 'READY' &&
 				official.standings?.state === 'READY' &&
 				official.standings.rows.length > 0 &&
+				official.standings.rows.every(isOfficialH2HStandingRowComplete) &&
+				standingEntryIds.size === official.standings.rows.length &&
 				official.matches.length > 0 &&
 				official.matches.every(match => match.availability === 'READY')
 		}
@@ -443,7 +469,8 @@ async function probeTournament(
 	if (
 		!board ||
 		board.head.eventId !== eventId ||
-		board.head.tournamentId !== config.tournamentId
+		board.head.tournamentId !== config.tournamentId ||
+		!isLiveLeagueBoardHeadUsable(board.head)
 	) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
@@ -459,7 +486,7 @@ async function probeTournament(
 			board.head.eventId !== eventId ||
 			board.head.tournamentId !== config.tournamentId ||
 			revision(board.head.contentRevision) !== expectedRevision ||
-			board.head.availability !== 'READY'
+			!isLiveLeagueBoardHeadUsable(board.head)
 		) {
 			throw new DataGovernanceProbeError(
 				'BUSINESS_DATA_UNAVAILABLE',
@@ -535,6 +562,7 @@ async function probeTournament(
 	return {
 		revision: expectedRevision,
 		complete:
+			isLiveLeagueBoardHeadUsable(board.head) &&
 			seenEntries.size === board.totalEntries &&
 			response.entryLiveCompetitionBoard.viewerRow?.entry === config.entryId &&
 			response.entryLiveCompetitionBoard.viewerRow.availability === 'READY'

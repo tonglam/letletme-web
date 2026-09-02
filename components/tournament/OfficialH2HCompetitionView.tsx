@@ -502,8 +502,12 @@ export function OfficialH2HCompetitionView({
 	useEffect(() => {
 		// Official standings are an independent overlay. They may be stale or
 		// updating while the match publication remains a usable page.
-		onReadyChange?.(isUsableOfficialH2HSnapshot(snapshot, { eventId }))
-	}, [eventId, onReadyChange, snapshot])
+		// Deep links redirect without a server snapshot, so readiness must wait
+		// for the first client fetch to settle before reporting a usable board.
+		onReadyChange?.(
+			hasLoaded && isUsableOfficialH2HSnapshot(snapshot, { eventId })
+		)
+	}, [eventId, hasLoaded, onReadyChange, snapshot])
 
 	const loadMatchupHistory = useCallback(
 		(force = false) => {

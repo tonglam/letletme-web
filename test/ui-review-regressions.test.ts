@@ -1036,7 +1036,38 @@ describe('live tournament filter visibility', () => {
 			source,
 			/selectedTournamentIsOfficialH2H \? \(\s*<OfficialH2HCompetitionView/
 		)
+		assert.match(
+			source,
+			/officialH2HReady && officialH2HReadyScopeKey === scopeKey/
+		)
+		assert.doesNotMatch(
+			source,
+			/selectedTournamentIsOfficialH2H \|\|\s*\n\s*!isLoadingInitial/
+		)
 		assert.doesNotMatch(source, /GET_TOURNAMENT_LIVE_DESK/)
+	})
+
+	it('waits for H2H board load before reporting deep-link readiness', async () => {
+		const [clientSource, h2hSource] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/live/tournaments/TournamentClient.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/tournament/OfficialH2HCompetitionView.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(h2hSource, /hasLoaded && isUsableOfficialH2HSnapshot\(snapshot/)
+		assert.match(clientSource, /initialSnapshot=\{null\}/)
+		assert.match(clientSource, /onReadyChange=\{handleOfficialH2HReadyChange\}/)
 	})
 
 	it('clears pagination state when replacing a live board query', async () => {
