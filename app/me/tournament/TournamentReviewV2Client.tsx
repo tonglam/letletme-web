@@ -64,8 +64,7 @@ function normalizeSeason(
 	review: MyTournamentSeasonReview,
 	phaseId?: string | null
 ): MyTournamentSeasonReview {
-	const latest =
-		review.latestFinalizedEventId ?? review.phases.at(-1)?.endEventId ?? null
+	const latest = review.latestFinalizedEventId ?? null
 	const phase =
 		(review.phases.find(candidate => candidate.phaseId === phaseId) ??
 			review.phases.at(-1)) ||
@@ -75,16 +74,20 @@ function normalizeSeason(
 		latestEventId: latest,
 		latestRevision: phase?.revision ?? null,
 		format: phase?.format ?? null,
-		finalizedEventIds: review.phases.flatMap(current => {
-			const ids: number[] = []
-			for (
-				let eventId = current.startEventId;
-				eventId <= current.endEventId;
-				eventId += 1
-			)
-				ids.push(eventId)
-			return ids
-		}),
+		finalizedEventIds:
+			latest === null
+				? []
+				: review.phases.flatMap(current => {
+						const ids: number[] = []
+						const endEventId = Math.min(current.endEventId, latest)
+						for (
+							let eventId = current.startEventId;
+							eventId <= endEventId;
+							eventId += 1
+						)
+							ids.push(eventId)
+						return ids
+					}),
 		points: review.points ?? null,
 		h2h: review.h2h ?? null,
 		knockout: review.knockout ?? null
@@ -111,6 +114,7 @@ export interface TournamentReviewV2ClientProps {
 	initialSeasonReview: MyTournamentSeasonReview | null
 	initialSeasonSections?: SeasonSectionData[]
 	initialError: string | null
+	initialSeasonError?: string | null
 }
 
 const CONTRACT = 'my-tournament-review-v2.1' as const
@@ -790,7 +794,8 @@ export default function TournamentReviewV2Client({
 	initialGameweekReview,
 	initialSeasonReview,
 	initialSeasonSections = [],
-	initialError
+	initialError,
+	initialSeasonError = null
 }: TournamentReviewV2ClientProps) {
 	const t = useTranslations('TournamentStats')
 	const router = useRouter()
@@ -822,7 +827,9 @@ export default function TournamentReviewV2Client({
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
 	const [gameweekError, setGameweekError] = useState<string | null>(null)
-	const [seasonError, setSeasonError] = useState<string | null>(null)
+	const [seasonError, setSeasonError] = useState<string | null>(
+		initialSeasonError
+	)
 	const [catalogSearch, setCatalogSearch] = useState('')
 	const [catalogSearchInput, setCatalogSearchInput] = useState('')
 	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
@@ -1558,6 +1565,19 @@ export default function TournamentReviewV2Client({
 		visibleError && !activeReview
 			? 'UNAVAILABLE'
 			: (activeReview?.state ?? selectedTournament?.state ?? 'UNAVAILABLE')
+	const hasActivePayload =
+		format === 'POINTS'
+			? Boolean(activeReview?.points)
+			: format === 'H2H'
+				? Boolean(activeReview?.h2h)
+				: format === 'KNOCKOUT'
+					? Boolean(activeReview?.knockout)
+					: false
+	const canRenderPayload = Boolean(
+		activeReview &&
+		format &&
+		(state === 'READY' || (state === 'DEGRADED' && hasActivePayload))
+	)
 	return (
 		<div className="min-h-screen bg-slate-50">
 			<div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -1856,7 +1876,7 @@ export default function TournamentReviewV2Client({
 										</button>
 									) : null}
 								</div>
-								{activeReview && state === 'READY' && format && (
+								{canRenderPayload && format && activeReview && (
 									<div className="mt-5">
 										<ReviewPayload
 											review={activeReview}

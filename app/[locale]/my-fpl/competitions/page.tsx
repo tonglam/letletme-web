@@ -76,11 +76,13 @@ const eventIdsFromPhases = (
 	phases: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']['phases'],
 	latest: number | null
 ) => {
+	if (latest === null) return []
 	const ids = phases.flatMap(phase => {
 		const values: number[] = []
+		const endEventId = Math.min(phase.endEventId, latest)
 		for (
 			let eventId = phase.startEventId;
-			eventId <= phase.endEventId;
+			eventId <= endEventId;
 			eventId += 1
 		) {
 			values.push(eventId)
@@ -281,6 +283,7 @@ export default async function TournamentStatsPage({
 		MyTournamentSeasonReviewResponse['myTournamentSeasonReview'] | null = null
 	let initialSeasonSections: MyTournamentSeasonSection[] = []
 	let initialError: string | null = null
+	let initialSeasonError: string | null = null
 
 	try {
 		let catalogResponse: MyTournamentReviewCatalogResponse
@@ -412,14 +415,23 @@ export default async function TournamentStatsPage({
 						])
 				)
 				initialGameweekReview = gameweekResponse.myTournamentGameweekReview
-				const seasonSeed = await hydrateSeasonSeed(
-					session,
-					initialSelectedTournamentId,
-					initialEventId,
-					seasonResponse.myTournamentSeasonReview
-				)
-				initialSeasonReview = seasonSeed.review
-				initialSeasonSections = seasonSeed.sections
+				try {
+					const seasonSeed = await hydrateSeasonSeed(
+						session,
+						initialSelectedTournamentId,
+						initialEventId,
+						seasonResponse.myTournamentSeasonReview
+					)
+					initialSeasonReview = seasonSeed.review
+					initialSeasonSections = seasonSeed.sections
+				} catch {
+					// The Season overview and Gameweek snapshot are independent
+					// publications. Keep both summaries usable when a Season section
+					// page is unavailable; the client will retry only the Season view.
+					initialSeasonReview = seasonResponse.myTournamentSeasonReview
+					initialSeasonSections = []
+					initialSeasonError = t('tournamentStatsFailed')
+				}
 			}
 		}
 	} catch (error) {
@@ -431,7 +443,7 @@ export default async function TournamentStatsPage({
 	}
 	const initialFplClassicRanks = await fplClassicRanksPromise
 
-	timing.finish(initialError ? 'unavailable' : 'ready')
+	timing.finish(initialError || initialSeasonError ? 'unavailable' : 'ready')
 	return (
 		<Suspense fallback={<TournamentReviewFallback />}>
 			<TournamentReviewV2Client
@@ -447,6 +459,7 @@ export default async function TournamentStatsPage({
 				initialSeasonReview={initialSeasonReview}
 				initialSeasonSections={initialSeasonSections}
 				initialError={initialError}
+				initialSeasonError={initialSeasonError}
 			/>
 		</Suspense>
 	)
