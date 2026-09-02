@@ -131,6 +131,7 @@ export interface TournamentReviewV2ClientProps {
 	initialSeasonReview: MyTournamentSeasonReview | null
 	initialSeasonSections?: SeasonSectionData[]
 	initialError: string | null
+	initialEventIndexError?: string | null
 	initialGameweekError?: string | null
 	initialSeasonError?: string | null
 }
@@ -366,7 +367,7 @@ function combineSeasonSections(
 						...h2hSource.h2h,
 						matches: h2hMatches,
 						standings: h2hStandings,
-						hasNextPage: hasH2HNextPage || !phaseSectionsComplete,
+						hasNextPage: hasH2HNextPage,
 						nextCursor: null
 					}
 				: null,
@@ -828,6 +829,7 @@ export default function TournamentReviewV2Client({
 	initialSeasonReview,
 	initialSeasonSections = [],
 	initialError,
+	initialEventIndexError = null,
 	initialGameweekError = null,
 	initialSeasonError = null
 }: TournamentReviewV2ClientProps) {
@@ -871,6 +873,9 @@ export default function TournamentReviewV2Client({
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
+	const [eventIndexError, setEventIndexError] = useState<string | null>(
+		initialEventIndexError
+	)
 	const [catalogError, setCatalogError] = useState<string | null>(null)
 	const [gameweekError, setGameweekError] = useState<string | null>(
 		initialGameweekError
@@ -1019,6 +1024,7 @@ export default function TournamentReviewV2Client({
 		setLoadingMore(false)
 		setError(null)
 		setCatalogError(null)
+		setEventIndexError(null)
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -1090,6 +1096,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setEventIndexError(null)
 		setCatalogError(null)
 		if (fetchGameweek) setGameweekError(null)
 		if (fetchSeason) setSeasonError(null)
@@ -1442,6 +1449,7 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setEventIndexError(null)
 		setGameweekError(null)
 		setSeasonError(null)
 		try {
@@ -1521,6 +1529,7 @@ export default function TournamentReviewV2Client({
 			setLoading(false)
 			setLoadingMore(false)
 			setError(null)
+			setEventIndexError(null)
 			setGameweekError(null)
 			setSeasonError(null)
 			setRetryPhaseId(null)
@@ -1544,6 +1553,7 @@ export default function TournamentReviewV2Client({
 		setLoading(false)
 		setLoadingMore(false)
 		setError(null)
+		setEventIndexError(null)
 		setGameweekError(null)
 		setSeasonError(null)
 		setRetryPhaseId(null)
@@ -1596,6 +1606,7 @@ export default function TournamentReviewV2Client({
 		setError(null)
 		setSeasonError(null)
 		seasonSectionPages.current = {}
+		const clearPhasePayload = !(force && phaseId === selectedPhaseId)
 		// Remove the previous phase's rows immediately. A settled phase is an
 		// immutable bundle, so showing rows from another phase while the selected
 		// bundle loads would be a misleading cross-phase response.
@@ -1605,10 +1616,12 @@ export default function TournamentReviewV2Client({
 						{
 							...previous,
 							state: phase.state,
-							points: null,
-							trajectoryPoints: null,
-							h2h: null,
-							knockout: null
+							points: clearPhasePayload ? null : previous.points,
+							trajectoryPoints: clearPhasePayload
+								? null
+								: previous.trajectoryPoints,
+							h2h: clearPhasePayload ? null : previous.h2h,
+							knockout: clearPhasePayload ? null : previous.knockout
 						},
 						phaseId
 					)
@@ -1710,7 +1723,9 @@ export default function TournamentReviewV2Client({
 				phaseAtEvent(seasonReview?.phases ?? [], eventId)?.format ??
 				null)
 	const visibleError =
-		view === 'season' ? (seasonError ?? error) : (gameweekError ?? error)
+		view === 'season'
+			? (eventIndexError ?? seasonError ?? error)
+			: (eventIndexError ?? gameweekError ?? error)
 	const state: MyTournamentReviewState =
 		visibleError && !activeReview
 			? 'UNAVAILABLE'
@@ -2033,6 +2048,20 @@ export default function TournamentReviewV2Client({
 											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
 										>
 											{t('reviewRetryPhase')}
+										</button>
+									) : null}
+									{eventIndexError &&
+									!loading &&
+									selectedTournamentId &&
+									eventId ? (
+										<button
+											type="button"
+											onClick={() =>
+												void loadReview(selectedTournamentId, eventId, true)
+											}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewRetryOverview')}
 										</button>
 									) : null}
 									{retryOverview.length > 0 &&

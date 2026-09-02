@@ -335,6 +335,7 @@ export default async function TournamentStatsPage({
 		MyTournamentSeasonReviewResponse['myTournamentSeasonReview'] | null = null
 	let initialSeasonSections: MyTournamentSeasonSection[] = []
 	let initialError: string | null = null
+	let initialEventIndexError: string | null = null
 	let initialGameweekError: string | null = null
 	let initialSeasonError: string | null = null
 
@@ -422,86 +423,100 @@ export default async function TournamentStatsPage({
 			// Resolve the tournament's immutable event set before accepting a URL
 			// gameweek. A positive event below the latest one may still predate a
 			// custom tournament and therefore have no publication.
-			const latestSeasonResponse = await timing.measure(
-				'my-tournament-review-v2.1-event-index',
-				() =>
-					executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
-						session,
-						GET_MY_TOURNAMENT_SEASON_REVIEW,
-						{
-							tournamentId: initialSelectedTournamentId,
-							throughEventId: latestSettledEventId
-						},
-						{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
-					)
-			)
-			const latestSeasonReview = latestSeasonResponse.myTournamentSeasonReview
-			initialFinalizedEventIds = eventIdsFromPhases(
-				latestSeasonReview.phases,
-				latestSeasonReview.latestFinalizedEventId
-			)
-			initialEventId = selectTournamentReviewEventId(
-				requestedEventId,
-				latestSettledEventId,
-				initialFinalizedEventIds
-			)
-
-			if (initialEventId) {
-				const [gameweekResult, seasonResult] = await timing.measure(
-					'my-tournament-review-v2.1-snapshots',
+			let latestSeasonResponse: MyTournamentSeasonReviewResponse | null = null
+			try {
+				latestSeasonResponse = await timing.measure(
+					'my-tournament-review-v2.1-event-index',
 					() =>
-						Promise.allSettled([
-							executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
-								session,
-								GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
-								{
-									tournamentId: initialSelectedTournamentId,
-									eventId: initialEventId,
-									first: 50
-								},
-								{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
-							),
-							initialEventId === latestSettledEventId
-								? Promise.resolve(latestSeasonResponse)
-								: executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
-										session,
-										GET_MY_TOURNAMENT_SEASON_REVIEW,
-										{
-											tournamentId: initialSelectedTournamentId,
-											throughEventId: initialEventId
-										},
-										{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
-									)
-						])
-				)
-				if (gameweekResult.status === 'fulfilled') {
-					initialGameweekReview =
-						gameweekResult.value.myTournamentGameweekReview
-				} else {
-					initialGameweekError = t('tournamentStatsFailed')
-				}
-				if (seasonResult.status === 'fulfilled') {
-					try {
-						const seasonSeed = await hydrateSeasonSeed(
+						executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
 							session,
-							initialSelectedTournamentId,
-							initialEventId,
-							seasonResult.value.myTournamentSeasonReview
+							GET_MY_TOURNAMENT_SEASON_REVIEW,
+							{
+								tournamentId: initialSelectedTournamentId,
+								throughEventId: latestSettledEventId
+							},
+							{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
 						)
-						initialSeasonReview = seasonSeed.review
-						initialSeasonSections = seasonSeed.sections
-						if (seasonSeed.error)
+				)
+			} catch {
+				// Keep the catalog and its latest finalized event usable. The client
+				// receives a scoped event-index error and can retry from this catalog
+				// checkpoint without reloading or losing the selected tournament.
+				initialEventId = latestSettledEventId
+				initialEventIndexError = t('tournamentStatsFailed')
+			}
+			if (latestSeasonResponse) {
+				const latestSeasonReview = latestSeasonResponse.myTournamentSeasonReview
+				initialFinalizedEventIds = eventIdsFromPhases(
+					latestSeasonReview.phases,
+					latestSeasonReview.latestFinalizedEventId
+				)
+				initialEventId = selectTournamentReviewEventId(
+					requestedEventId,
+					latestSettledEventId,
+					initialFinalizedEventIds
+				)
+
+				if (initialEventId) {
+					const [gameweekResult, seasonResult] = await timing.measure(
+						'my-tournament-review-v2.1-snapshots',
+						() =>
+							Promise.allSettled([
+								executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
+									session,
+									GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+									{
+										tournamentId: initialSelectedTournamentId,
+										eventId: initialEventId,
+										first: 50
+									},
+									{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
+								),
+								initialEventId === latestSettledEventId
+									? Promise.resolve(latestSeasonResponse)
+									: executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
+											session,
+											GET_MY_TOURNAMENT_SEASON_REVIEW,
+											{
+												tournamentId: initialSelectedTournamentId,
+												throughEventId: initialEventId
+											},
+											{
+												cache: 'no-store',
+												contract: 'my-tournament-review-v2.1'
+											}
+										)
+							])
+					)
+					if (gameweekResult.status === 'fulfilled') {
+						initialGameweekReview =
+							gameweekResult.value.myTournamentGameweekReview
+					} else {
+						initialGameweekError = t('tournamentStatsFailed')
+					}
+					if (seasonResult.status === 'fulfilled') {
+						try {
+							const seasonSeed = await hydrateSeasonSeed(
+								session,
+								initialSelectedTournamentId,
+								initialEventId,
+								seasonResult.value.myTournamentSeasonReview
+							)
+							initialSeasonReview = seasonSeed.review
+							initialSeasonSections = seasonSeed.sections
+							if (seasonSeed.error)
+								initialSeasonError = t('tournamentStatsFailed')
+						} catch {
+							// The Season overview and Gameweek snapshot are independent
+							// publications. Keep both summaries usable when a Season section
+							// page is unavailable; the client will retry only the Season view.
+							initialSeasonReview = seasonResult.value.myTournamentSeasonReview
+							initialSeasonSections = []
 							initialSeasonError = t('tournamentStatsFailed')
-					} catch {
-						// The Season overview and Gameweek snapshot are independent
-						// publications. Keep both summaries usable when a Season section
-						// page is unavailable; the client will retry only the Season view.
-						initialSeasonReview = seasonResult.value.myTournamentSeasonReview
-						initialSeasonSections = []
+						}
+					} else {
 						initialSeasonError = t('tournamentStatsFailed')
 					}
-				} else {
-					initialSeasonError = t('tournamentStatsFailed')
 				}
 			}
 		}
@@ -515,7 +530,10 @@ export default async function TournamentStatsPage({
 	const initialFplClassicRanks = await fplClassicRanksPromise
 
 	timing.finish(
-		initialError || initialGameweekError || initialSeasonError
+		initialError ||
+			initialEventIndexError ||
+			initialGameweekError ||
+			initialSeasonError
 			? 'unavailable'
 			: 'ready'
 	)
@@ -534,6 +552,7 @@ export default async function TournamentStatsPage({
 				initialSeasonReview={initialSeasonReview}
 				initialSeasonSections={initialSeasonSections}
 				initialError={initialError}
+				initialEventIndexError={initialEventIndexError}
 				initialGameweekError={initialGameweekError}
 				initialSeasonError={initialSeasonError}
 			/>
