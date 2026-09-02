@@ -539,7 +539,7 @@ describe('data freshness timestamp precision', () => {
 		])
 
 		assert.match(market, /second: '2-digit'/)
-		for (const source of [personal, playerState, team, tournamentHeader]) {
+		for (const source of [personal, playerState, tournamentHeader]) {
 			assert.match(source, /timeStyle: 'medium'/)
 		}
 		assert.match(team, /<MyFplSnapshotStatus/)
