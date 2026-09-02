@@ -32,6 +32,9 @@ export function buildTournamentStatsQueryString(opts: {
 	tournamentId?: string | number | null
 	view: TournamentStatsPageView
 	gw?: number | null
+	/** URL scope is intentionally limited to the two user-selectable views.
+	 * MANAGED is an authorization class returned by GraphQL, not a public URL
+	 * mode; admin users use ALL to read the complete catalog. */
 	scope?: 'ACCESSIBLE' | 'ALL'
 }): string {
 	const params = new URLSearchParams()

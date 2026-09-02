@@ -1,14 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslations } from 'next-intl'
-import { usePathname, useRouter } from '@/i18n/navigation'
+import { useLocale, useTranslations } from 'next-intl'
+import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
 import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
 	GET_MY_TOURNAMENT_SEASON_REVIEW,
+	GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
 	type MyTournamentGameweekReview,
 	type MyTournamentGameweekReviewResponse,
 	type MyTournamentReviewCatalogResponse,
@@ -16,9 +17,9 @@ import {
 	type MyTournamentReviewH2H,
 	type MyTournamentReviewKnockout,
 	type MyTournamentReviewPoints,
-	type MyTournamentReviewFreshness,
 	type MyTournamentReviewScope,
 	type MyTournamentReviewState,
+	type MyTournamentSeasonSectionResponse,
 	type MyTournamentSeasonReview,
 	type MyTournamentSeasonReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
@@ -31,6 +32,91 @@ import {
 } from './_lib/tournament-review-v2'
 
 type Catalog = MyTournamentReviewCatalogResponse['myTournamentReviewCatalog']
+type CatalogEdge = Catalog['edges'][number]
+
+const catalogItems = (catalog: Catalog) => catalog.edges.map(edge => edge.node)
+
+type ReviewOverview = 'gameweek' | 'season'
+
+const mergeCatalogEdges = (
+	previousEdges: CatalogEdge[],
+	nextEdges: CatalogEdge[]
+) => {
+	const byTournamentId = new Map<number, CatalogEdge>()
+	for (const edge of [...previousEdges, ...nextEdges]) {
+		if (!byTournamentId.has(edge.node.tournamentId))
+			byTournamentId.set(edge.node.tournamentId, edge)
+	}
+	return Array.from(byTournamentId.values())
+}
+
+function normalizeGameweek(
+	review: MyTournamentGameweekReview
+): MyTournamentGameweekReview {
+	const payload = review.payload
+	return {
+		...review,
+		points: payload?.format === 'POINTS' ? payload.points : null,
+		h2h: payload?.format === 'H2H' ? payload.h2h : null,
+		knockout: payload?.format === 'KNOCKOUT' ? payload.knockout : null
+	}
+}
+
+function phaseAtEvent(
+	phases: MyTournamentSeasonReview['phases'],
+	eventId: number | null | undefined
+): MyTournamentSeasonReview['phases'][number] | null {
+	if (eventId === null || eventId === undefined) return phases.at(-1) ?? null
+	return (
+		phases.find(
+			phase => phase.startEventId <= eventId && phase.endEventId >= eventId
+		) ??
+		phases.filter(phase => phase.startEventId <= eventId).at(-1) ??
+		null
+	)
+}
+
+function normalizeSeason(
+	review: MyTournamentSeasonReview,
+	phaseId?: string | null,
+	throughEventId?: number | null
+): MyTournamentSeasonReview {
+	const latest = review.latestFinalizedEventId ?? null
+	const phase =
+		(review.phases.find(candidate => candidate.phaseId === phaseId) ??
+			phaseAtEvent(review.phases, throughEventId ?? latest)) ||
+		null
+	return {
+		...review,
+		latestEventId: latest,
+		latestRevision: phase?.revision ?? null,
+		format: phase?.format ?? null,
+		finalizedEventIds:
+			latest === null
+				? []
+				: review.phases.flatMap(current => {
+						const ids: number[] = []
+						const endEventId = Math.min(current.endEventId, latest)
+						for (
+							let eventId = current.startEventId;
+							eventId <= endEventId;
+							eventId += 1
+						)
+							ids.push(eventId)
+						return ids
+					}),
+		points: review.points ?? null,
+		h2h: review.h2h ?? null,
+		knockout: review.knockout ?? null
+	}
+}
+
+const sectionForFormat = (format: MyTournamentReviewFormat) =>
+	format === 'POINTS'
+		? 'POINTS_STANDINGS'
+		: format === 'H2H'
+			? 'H2H_STANDINGS'
+			: 'KNOCKOUT_BRACKET'
 
 export interface TournamentReviewV2ClientProps {
 	entryId: number
@@ -43,10 +129,48 @@ export interface TournamentReviewV2ClientProps {
 	initialFinalizedEventIds: number[]
 	initialGameweekReview: MyTournamentGameweekReview | null
 	initialSeasonReview: MyTournamentSeasonReview | null
+	initialSeasonSections?: SeasonSectionData[]
 	initialError: string | null
+	initialEventIndexError?: string | null
+	initialGameweekError?: string | null
+	initialSeasonError?: string | null
 }
 
-const CONTRACT = 'my-tournament-review-v2' as const
+const CONTRACT = 'my-tournament-review-v2.1' as const
+
+type SeasonSectionData =
+	MyTournamentSeasonSectionResponse['myTournamentSeasonReviewSection']
+
+async function fetchSeasonSection(
+	tournamentId: number,
+	throughEventId: number,
+	phase: MyTournamentSeasonReview['phases'][number],
+	first = 100,
+	after: string | null = null,
+	sectionOverride?:
+		| 'POINTS_STANDINGS'
+		| 'POINTS_TRAJECTORIES'
+		| 'H2H_STANDINGS'
+		| 'H2H_FIXTURES'
+		| 'KNOCKOUT_BRACKET'
+): Promise<SeasonSectionData | null> {
+	if (!phase.revision || !phase.semanticSha256) return null
+	const section = await executeQuery<MyTournamentSeasonSectionResponse>(
+		GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
+		{
+			tournamentId,
+			throughEventId,
+			phaseId: phase.phaseId,
+			section: sectionOverride ?? sectionForFormat(phase.format),
+			first,
+			after,
+			revision: phase.revision,
+			semanticSha256: phase.semanticSha256
+		},
+		{ cache: 'no-store', contract: CONTRACT }
+	)
+	return section.myTournamentSeasonReviewSection
+}
 
 const formatLabel = (
 	format: MyTournamentReviewFormat | null | undefined,
@@ -66,6 +190,7 @@ const stateLabel = (
 	if (state === 'WAITING_SOURCE') return t('reviewWaitingSource')
 	if (state === 'DEGRADED') return t('reviewDegraded')
 	if (state === 'PENDING') return t('reviewPending')
+	if (state === 'NOT_STARTED') return t('reviewNotStarted')
 	return t('reviewUnavailable')
 }
 
@@ -170,25 +295,108 @@ function mergeGameweekPage(
 	}
 }
 
-function mergeSeasonPage(
-	previous: MyTournamentSeasonReview,
-	next: MyTournamentSeasonReview
-): MyTournamentSeasonReview {
+type SeasonSectionKey = SeasonSectionData['section']
+type SeasonSectionPages = Partial<Record<SeasonSectionKey, SeasonSectionData>>
+
+function mergeSeasonSectionPage(
+	previous: SeasonSectionData | undefined,
+	next: SeasonSectionData
+): SeasonSectionData {
+	const mergedH2H =
+		previous?.h2h && next.h2h
+			? next.section === 'H2H_STANDINGS'
+				? {
+						...next.h2h,
+						standings: [...previous.h2h.standings, ...next.h2h.standings],
+						matches: next.h2h.matches
+					}
+				: mergeH2HPage(previous.h2h, next.h2h)
+			: (next.h2h ?? previous?.h2h ?? null)
 	return {
 		...next,
 		points:
-			previous.points && next.points
+			previous?.points && next.points
 				? mergePointsPage(previous.points, next.points)
-				: next.points,
-		h2h:
-			previous.h2h && next.h2h
-				? mergeH2HPage(previous.h2h, next.h2h)
-				: next.h2h,
+				: (next.points ?? previous?.points ?? null),
+		h2h: mergedH2H,
 		knockout:
-			previous.knockout && next.knockout
+			previous?.knockout && next.knockout
 				? mergeKnockoutPage(previous.knockout, next.knockout)
-				: next.knockout
+				: (next.knockout ?? previous?.knockout ?? null)
 	}
+}
+
+function combineSeasonSections(
+	review: MyTournamentSeasonReview,
+	pages: SeasonSectionPages,
+	phaseId: string
+): MyTournamentSeasonReview {
+	const sections = Object.values(pages).filter(
+		(section): section is SeasonSectionData => Boolean(section)
+	)
+	const standingsPage = pages.POINTS_STANDINGS
+	const trajectoryPage = pages.POINTS_TRAJECTORIES
+	const pointsPage = standingsPage?.points ?? review.points
+	const h2hPages = sections.filter(
+		section =>
+			section.section === 'H2H_STANDINGS' || section.section === 'H2H_FIXTURES'
+	)
+	const h2hStandings =
+		h2hPages.find(section => (section.h2h?.standings.length ?? 0) > 0)?.h2h
+			?.standings ?? []
+	const h2hMatches = h2hPages.flatMap(section => section.h2h?.matches ?? [])
+	const h2hSource = h2hPages.find(section => section.h2h) ?? null
+	const hasH2HNextPage = h2hPages.some(section => section.h2h?.hasNextPage)
+	const phase = review.phases.find(candidate => candidate.phaseId === phaseId)
+	const phaseSectionsComplete = phase
+		? phaseSectionsReady(phase.format, pages)
+		: true
+	const combinedState =
+		phase && !phaseSectionsComplete && sections.length > 0
+			? 'DEGRADED'
+			: review.state
+	return normalizeSeason(
+		{
+			...review,
+			state: combinedState,
+			points: pointsPage ?? null,
+			trajectoryPoints:
+				trajectoryPage?.points ?? review.trajectoryPoints ?? null,
+			h2h: h2hSource?.h2h
+				? {
+						...h2hSource.h2h,
+						matches: h2hMatches,
+						standings: h2hStandings,
+						hasNextPage: hasH2HNextPage,
+						nextCursor: null
+					}
+				: null,
+			knockout: pages.KNOCKOUT_BRACKET?.knockout ?? null
+		},
+		phaseId
+	)
+}
+
+function phaseSectionsReady(
+	format: MyTournamentReviewFormat,
+	pages: SeasonSectionPages
+): boolean {
+	if (format === 'POINTS')
+		return Boolean(
+			pages.POINTS_STANDINGS?.points && pages.POINTS_TRAJECTORIES?.points
+		)
+	if (format === 'H2H')
+		return Boolean(pages.H2H_STANDINGS?.h2h && pages.H2H_FIXTURES?.h2h)
+	return Boolean(pages.KNOCKOUT_BRACKET?.knockout)
+}
+
+function phaseCanRetry(
+	phase: MyTournamentSeasonReview['phases'][number]
+): boolean {
+	return (
+		phase.state !== 'NOT_STARTED' &&
+		Boolean(phase.revision && phase.semanticSha256)
+	)
 }
 
 function ReviewStateBanner({
@@ -217,19 +425,30 @@ function ReviewStateBanner({
 	)
 }
 
-function Freshness({
-	freshness
+function SettlementMeta({
+	settledAt,
+	publishedAt
 }: {
-	freshness: MyTournamentReviewFreshness | null | undefined
+	settledAt: string | null | undefined
+	publishedAt: string | null | undefined
 }) {
+	const locale = useLocale()
 	const t = useTranslations('TournamentStats')
 	const [hydrated, setHydrated] = useState(false)
 	useEffect(() => setHydrated(true), [])
-	if (!freshness) return null
+	if (!settledAt && !publishedAt) return null
 	return (
 		<div className="text-xs text-slate-500">
-			{t('reviewFreshness', { seconds: freshness.ageSeconds })} ·{' '}
-			{hydrated ? new Date(freshness.publishedAt).toLocaleString() : '—'}
+			{settledAt
+				? t('reviewSettledAt', {
+						value: hydrated ? new Date(settledAt).toLocaleString(locale) : '—'
+					})
+				: null}
+			{publishedAt
+				? ` · ${t('reviewPublishedAt', {
+						value: hydrated ? new Date(publishedAt).toLocaleString(locale) : '—'
+					})}`
+				: null}
 		</div>
 	)
 }
@@ -261,11 +480,13 @@ function LoadMore({
 
 function PointsReview({
 	points,
+	trajectory,
 	view,
 	loadingMore,
 	onLoadMore
 }: {
 	points: MyTournamentReviewPoints
+	trajectory?: MyTournamentReviewPoints | null
 	view: TournamentReviewV2View
 	loadingMore: boolean
 	onLoadMore?: () => void
@@ -368,6 +589,43 @@ function PointsReview({
 					onLoadMore={onLoadMore}
 				/>
 			</div>
+			{view === 'season' && trajectory ? (
+				<section className="rounded-2xl border bg-white p-4 shadow-sm">
+					<div className="flex items-baseline justify-between gap-3">
+						<h3 className="font-semibold text-slate-950">
+							{t('reviewTrajectories')}
+						</h3>
+						<span className="text-xs text-slate-500">
+							{t('reviewTrajectoryHint')}
+						</span>
+					</div>
+					<div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+						{trajectory.rows.slice(0, 12).map(row => (
+							<div
+								key={`trajectory-${row.entryId}`}
+								className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+							>
+								<div className="flex items-center justify-between gap-2 text-sm">
+									<span className="truncate font-medium text-slate-950">
+										{row.entryName}
+									</span>
+									<span className="shrink-0 font-semibold tabular-nums text-slate-700">
+										{numberOrDash(row.seasonNetPoints)}
+									</span>
+								</div>
+								<div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+									<span>{t('reviewSeasonNet')}</span>
+									<span>
+										{row.previousRank !== null && row.rank !== null
+											? `${row.previousRank} → ${row.rank}`
+											: numberOrDash(row.rank)}
+									</span>
+								</div>
+							</div>
+						))}
+					</div>
+				</section>
+			) : null}
 		</div>
 	)
 }
@@ -545,6 +803,11 @@ function ReviewPayload({
 		return (
 			<PointsReview
 				points={review.points}
+				trajectory={
+					view === 'season' && 'trajectoryPoints' in review
+						? review.trajectoryPoints
+						: null
+				}
 				view={view}
 				loadingMore={loadingMore}
 				onLoadMore={onLoadMore}
@@ -564,7 +827,11 @@ export default function TournamentReviewV2Client({
 	initialFinalizedEventIds,
 	initialGameweekReview,
 	initialSeasonReview,
-	initialError
+	initialSeasonSections = [],
+	initialError,
+	initialEventIndexError = null,
+	initialGameweekError = null,
+	initialSeasonError = null
 }: TournamentReviewV2ClientProps) {
 	const t = useTranslations('TournamentStats')
 	const router = useRouter()
@@ -583,19 +850,79 @@ export default function TournamentReviewV2Client({
 	useEffect(() => {
 		viewRef.current = view
 	}, [view])
-	const [gameweekReview, setGameweekReview] = useState(initialGameweekReview)
-	const [seasonReview, setSeasonReview] = useState(initialSeasonReview)
+	const [gameweekReview, setGameweekReview] = useState(
+		initialGameweekReview ? normalizeGameweek(initialGameweekReview) : null
+	)
+	const [seasonReview, setSeasonReview] = useState(
+		initialSeasonReview
+			? normalizeSeason(
+					initialSeasonReview,
+					null,
+					initialEventId ?? initialSeasonReview.latestFinalizedEventId
+				)
+			: null
+	)
+	const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(
+		(initialSeasonReview
+			? phaseAtEvent(
+					initialSeasonReview.phases,
+					initialEventId ?? initialSeasonReview.latestFinalizedEventId
+				)?.phaseId
+			: null) ?? null
+	)
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
+	const [eventIndexError, setEventIndexError] = useState<string | null>(
+		initialEventIndexError
+	)
+	const [catalogError, setCatalogError] = useState<string | null>(null)
+	const [gameweekError, setGameweekError] = useState<string | null>(
+		initialGameweekError
+	)
+	const [seasonError, setSeasonError] = useState<string | null>(
+		initialSeasonError
+	)
+	const [catalogSearch, setCatalogSearch] = useState('')
+	const [catalogSearchInput, setCatalogSearchInput] = useState('')
+	const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
+	const [retryPhaseId, setRetryPhaseId] = useState<string | null>(
+		initialSeasonReview?.state === 'DEGRADED'
+			? (phaseAtEvent(
+					initialSeasonReview.phases,
+					initialEventId ?? initialSeasonReview.latestFinalizedEventId
+				)?.phaseId ?? null)
+			: null
+	)
+	const [retryOverview, setRetryOverview] = useState<ReviewOverview[]>([
+		...(initialGameweekError ? (['gameweek'] as const) : []),
+		...(initialSeasonError ? (['season'] as const) : [])
+	])
+	const markRetryOverview = (target: ReviewOverview, retry: boolean) => {
+		setRetryOverview(current => {
+			if (retry)
+				return current.includes(target) ? current : [...current, target]
+			return current.filter(candidate => candidate !== target)
+		})
+	}
 	const requestSequence = useRef(0)
+	const catalogRequestSequence = useRef(0)
+	// A replacement (search/scope switch) advances this generation. Page
+	// appends capture it so an older load-more response can never append into a
+	// newly searched catalog, even if the network completes out of order.
+	const catalogQueryGeneration = useRef(0)
+	const seasonSectionPages = useRef<SeasonSectionPages>(
+		Object.fromEntries(
+			initialSeasonSections.map(section => [section.section, section])
+		) as SeasonSectionPages
+	)
 
 	const selectedTournament = useMemo(
 		() =>
-			catalog.tournaments.find(
+			catalogItems(catalog).find(
 				tournament => tournament.tournamentId === selectedTournamentId
 			) ?? null,
-		[catalog.tournaments, selectedTournamentId]
+		[catalog, selectedTournamentId]
 	)
 
 	const replaceRoute = useCallback(
@@ -605,6 +932,7 @@ export default function TournamentReviewV2Client({
 			view?: TournamentReviewV2View
 			scope?: MyTournamentReviewScope
 		}) => {
+			const nextScope = next.scope ?? scope
 			const query = buildTournamentStatsQueryString({
 				tournamentId:
 					next.tournamentId === undefined
@@ -612,7 +940,7 @@ export default function TournamentReviewV2Client({
 						: next.tournamentId,
 				view: next.view ?? view,
 				gw: next.eventId === undefined ? eventId : next.eventId,
-				scope: next.scope ?? scope
+				scope: nextScope === 'MANAGED' ? 'ALL' : nextScope
 			})
 			router.replace(query ? `${pathname}?${query}` : pathname, {
 				scroll: false
@@ -621,49 +949,336 @@ export default function TournamentReviewV2Client({
 		[eventId, pathname, router, scope, selectedTournamentId, view]
 	)
 
-	const loadReview = async (
-		tournamentId: number,
-		nextEventId: number,
-		replaceAvailableEvents = false
-	) => {
-		const requestId = ++requestSequence.current
-		setLoading(true)
-		setLoadingMore(false)
-		setError(null)
-		setGameweekReview(null)
-		setSeasonReview(null)
+	const loadCatalogPage = async ({
+		after = null,
+		search = catalogSearch,
+		replace = false,
+		nextScope = scope
+	}: {
+		after?: string | null
+		search?: string
+		replace?: boolean
+		nextScope?: MyTournamentReviewScope
+	} = {}) => {
+		const queryGeneration = catalogQueryGeneration.current
+		const requestId = ++catalogRequestSequence.current
+		setCatalogLoadingMore(true)
 		try {
-			const [gameweek, season] = await Promise.all([
-				executeQuery<MyTournamentGameweekReviewResponse>(
-					GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
-					{ tournamentId, eventId: nextEventId, first: 100 },
-					{ cache: 'no-store', contract: CONTRACT }
-				),
-				executeQuery<MyTournamentSeasonReviewResponse>(
-					GET_MY_TOURNAMENT_SEASON_REVIEW,
-					{ tournamentId, throughEventId: nextEventId, first: 100 },
-					{ cache: 'no-store', contract: CONTRACT }
-				)
-			])
-			if (requestId !== requestSequence.current) return
-			setGameweekReview(gameweek.myTournamentGameweekReview)
-			setSeasonReview(season.myTournamentSeasonReview)
-			setFinalizedEventIds(previous =>
-				replaceAvailableEvents
-					? season.myTournamentSeasonReview.finalizedEventIds
-					: mergeTournamentReviewEventIds(
-							previous,
-							season.myTournamentSeasonReview.finalizedEventIds
-						)
+			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
+				GET_MY_TOURNAMENT_REVIEW_CATALOG,
+				{
+					scope: nextScope,
+					first: 100,
+					after,
+					search: search.trim() || null
+				},
+				{ cache: 'no-store', contract: CONTRACT }
 			)
+			if (
+				requestId !== catalogRequestSequence.current ||
+				queryGeneration !== catalogQueryGeneration.current
+			)
+				return
+			const nextCatalog = response.myTournamentReviewCatalog
+			setCatalogError(null)
+			setError(null)
+			setCatalog(previous =>
+				replace
+					? nextCatalog
+					: {
+							...nextCatalog,
+							edges: mergeCatalogEdges(previous.edges, nextCatalog.edges)
+						}
+			)
+			setCatalogSearch(search.trim())
 		} catch (loadError) {
-			if (requestId !== requestSequence.current) return
+			if (
+				requestId !== catalogRequestSequence.current ||
+				queryGeneration !== catalogQueryGeneration.current
+			)
+				return
 			const requestError = loadError as GraphQLRequestError
-			setError(
+			setCatalogError(
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
 			)
+		} finally {
+			if (
+				requestId === catalogRequestSequence.current &&
+				queryGeneration === catalogQueryGeneration.current
+			)
+				setCatalogLoadingMore(false)
+		}
+	}
+
+	const searchCatalog = async (requestedSearch = catalogSearchInput) => {
+		const nextSearch = requestedSearch.trim()
+		// Invalidate an in-flight load-more response from the previous query. A
+		// catalog replacement must never be followed by an old page append.
+		++catalogRequestSequence.current
+		++catalogQueryGeneration.current
+		setCatalogLoadingMore(false)
+		const requestId = ++requestSequence.current
+		setLoading(true)
+		setLoadingMore(false)
+		setError(null)
+		setCatalogError(null)
+		setEventIndexError(null)
+		try {
+			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
+				GET_MY_TOURNAMENT_REVIEW_CATALOG,
+				{ scope, first: 100, after: null, search: nextSearch || null },
+				{ cache: 'no-store', contract: CONTRACT }
+			)
+			if (requestId !== requestSequence.current) return
+			const nextCatalog = response.myTournamentReviewCatalog
+			const nextItems = catalogItems(nextCatalog)
+			const nextSelected =
+				nextItems.find(item => item.tournamentId === selectedTournamentId) ??
+				nextItems[0] ??
+				null
+			setCatalog(nextCatalog)
+			setCatalogSearch(nextSearch)
+			setGameweekReview(null)
+			setSeasonReview(null)
+			seasonSectionPages.current = {}
+			setGameweekError(null)
+			setSeasonError(null)
+			setRetryPhaseId(null)
+			setRetryOverview([])
+			setSelectedTournamentId(nextSelected?.tournamentId ?? null)
+			const nextEventId = nextSelected?.latestFinalizedEventId ?? null
+			setEventId(nextEventId)
+			setSelectedPhaseId(null)
+			setFinalizedEventIds([])
+			replaceRoute({
+				tournamentId: nextSelected?.tournamentId ?? null,
+				eventId: nextEventId,
+				view: viewRef.current
+			})
+			if (nextSelected && nextEventId) {
+				void loadReview(nextSelected.tournamentId, nextEventId, true)
+			} else {
+				setLoading(false)
+			}
+		} catch (loadError) {
+			if (requestId !== requestSequence.current) return
+			const requestError = loadError as GraphQLRequestError
+			setCatalogError(
+				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+					? t('reviewClientUpgrade')
+					: t('loadFailed')
+			)
+			setLoading(false)
+		}
+	}
+
+	const loadReview = async (
+		tournamentId: number,
+		nextEventId: number,
+		replaceAvailableEvents = false,
+		preserveSuccessful = false,
+		retryTarget?: ReviewOverview
+	) => {
+		const requestedRetry = preserveSuccessful
+			? (retryTarget ?? (retryOverview.length === 1 ? retryOverview[0] : null))
+			: null
+		const fetchGameweek =
+			!preserveSuccessful ||
+			requestedRetry === null ||
+			requestedRetry === 'gameweek'
+		const fetchSeason =
+			!preserveSuccessful ||
+			requestedRetry === null ||
+			requestedRetry === 'season'
+		const requestId = ++requestSequence.current
+		setLoading(true)
+		setLoadingMore(false)
+		setError(null)
+		setEventIndexError(null)
+		setCatalogError(null)
+		if (fetchGameweek) setGameweekError(null)
+		if (fetchSeason) setSeasonError(null)
+		const retainedGameweek = preserveSuccessful ? gameweekReview : null
+		const retainedSeason = preserveSuccessful ? seasonReview : null
+		if (!preserveSuccessful || (fetchGameweek && !retainedGameweek))
+			setGameweekReview(null)
+		if (!preserveSuccessful || (fetchSeason && !retainedSeason))
+			setSeasonReview(null)
+		if (!preserveSuccessful || (fetchSeason && !retainedSeason))
+			seasonSectionPages.current = {}
+		if (!preserveSuccessful) {
+			setRetryPhaseId(null)
+			setRetryOverview([])
+		}
+		let attemptedPhaseId: string | null = null
+		let attemptedPhaseRetryable = false
+		let overviewPublished = false
+		try {
+			const [gameweekResult, seasonResult] = await Promise.allSettled([
+				fetchGameweek
+					? executeQuery<MyTournamentGameweekReviewResponse>(
+							GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+							{ tournamentId, eventId: nextEventId, first: 100 },
+							{ cache: 'no-store', contract: CONTRACT }
+						)
+					: Promise.resolve(null),
+				fetchSeason
+					? executeQuery<MyTournamentSeasonReviewResponse>(
+							GET_MY_TOURNAMENT_SEASON_REVIEW,
+							{ tournamentId, throughEventId: nextEventId },
+							{ cache: 'no-store', contract: CONTRACT }
+						)
+					: Promise.resolve(null)
+			])
+			if (requestId !== requestSequence.current) return
+			const requestMessage = (result: PromiseRejectedResult) => {
+				const requestError = result.reason as GraphQLRequestError
+				return requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+					? t('reviewClientUpgrade')
+					: t('loadFailed')
+			}
+			const normalizedGameweek =
+				gameweekResult.status === 'fulfilled' && gameweekResult.value
+					? normalizeGameweek(gameweekResult.value.myTournamentGameweekReview)
+					: null
+			const normalizedSeason =
+				seasonResult.status === 'fulfilled' && seasonResult.value
+					? normalizeSeason(
+							seasonResult.value.myTournamentSeasonReview,
+							null,
+							nextEventId
+						)
+					: null
+			if (gameweekResult.status === 'rejected')
+				setGameweekError(requestMessage(gameweekResult))
+			if (normalizedGameweek) setGameweekReview(normalizedGameweek)
+			if (
+				fetchGameweek &&
+				gameweekResult.status === 'rejected' &&
+				!retainedGameweek
+			)
+				markRetryOverview('gameweek', true)
+			overviewPublished = Boolean(
+				normalizedGameweek ||
+				normalizedSeason ||
+				retainedGameweek ||
+				retainedSeason
+			)
+			if (!fetchSeason) {
+				if (normalizedGameweek) markRetryOverview('gameweek', false)
+				return
+			}
+			if (!normalizedSeason) {
+				if (seasonResult.status === 'rejected')
+					setSeasonError(requestMessage(seasonResult))
+				setRetryPhaseId(null)
+				markRetryOverview('season', true)
+				return
+			}
+			const nextPhase = phaseAtEvent(normalizedSeason.phases, nextEventId)
+			attemptedPhaseId = nextPhase?.phaseId ?? null
+			attemptedPhaseRetryable = nextPhase ? phaseCanRetry(nextPhase) : false
+			// Publish the two successful overview reads before loading optional
+			// section pages. A section failure must not erase a valid Gameweek
+			// result, and a Season summary must remain explicitly non-ready until
+			// its format sections have been verified.
+			if (requestId !== requestSequence.current) return
+			setSelectedPhaseId(nextPhase?.phaseId ?? null)
+			if (!retainedSeason) {
+				setSeasonReview(
+					nextPhase
+						? {
+								...normalizedSeason,
+								state: 'PENDING',
+								points: null,
+								h2h: null,
+								knockout: null
+							}
+						: normalizedSeason
+				)
+			}
+			setFinalizedEventIds(previous =>
+				replaceAvailableEvents
+					? (normalizedSeason.finalizedEventIds ?? previous)
+					: mergeTournamentReviewEventIds(
+							previous,
+							normalizedSeason.finalizedEventIds ?? []
+						)
+			)
+			overviewPublished = true
+			let seasonWithSection = normalizedSeason
+			if (nextPhase) {
+				const sectionRequests: Promise<SeasonSectionData | null>[] = [
+					fetchSeasonSection(tournamentId, nextEventId, nextPhase)
+				]
+				if (nextPhase.format === 'POINTS') {
+					sectionRequests.push(
+						fetchSeasonSection(
+							tournamentId,
+							nextEventId,
+							nextPhase,
+							100,
+							null,
+							'POINTS_TRAJECTORIES'
+						)
+					)
+				}
+				if (nextPhase.format === 'H2H') {
+					sectionRequests.push(
+						fetchSeasonSection(
+							tournamentId,
+							nextEventId,
+							nextPhase,
+							100,
+							null,
+							'H2H_FIXTURES'
+						)
+					)
+				}
+				const settledSections = await Promise.allSettled(sectionRequests)
+				const primarySection = settledSections[0]
+				if (!primarySection)
+					throw new Error('Season phase publication is not ready')
+				if (primarySection.status === 'rejected') throw primarySection.reason
+				const sections = settledSections.map(result =>
+					result.status === 'fulfilled' ? result.value : null
+				)
+				const pages = Object.fromEntries(
+					sections
+						.filter((section): section is SeasonSectionData => Boolean(section))
+						.map(section => [section.section, section])
+				) as SeasonSectionPages
+				if (requestId !== requestSequence.current) return
+				seasonSectionPages.current = pages
+				if (sections.some(Boolean))
+					seasonWithSection = combineSeasonSections(
+						normalizedSeason,
+						pages,
+						nextPhase.phaseId
+					)
+				setRetryPhaseId(
+					phaseSectionsReady(nextPhase.format, pages) ||
+						!phaseCanRetry(nextPhase)
+						? null
+						: nextPhase.phaseId
+				)
+			}
+			if (requestId !== requestSequence.current) return
+			setSeasonReview(seasonWithSection)
+			if (normalizedGameweek) markRetryOverview('gameweek', false)
+			if (normalizedSeason) markRetryOverview('season', false)
+		} catch (loadError) {
+			if (requestId !== requestSequence.current) return
+			const requestError = loadError as GraphQLRequestError
+			const message =
+				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+					? t('reviewClientUpgrade')
+					: t('loadFailed')
+			if (overviewPublished) setSeasonError(message)
+			else setError(message)
+			setRetryPhaseId(attemptedPhaseRetryable ? attemptedPhaseId : null)
 		} finally {
 			if (requestId === requestSequence.current) setLoading(false)
 		}
@@ -671,24 +1286,44 @@ export default function TournamentReviewV2Client({
 
 	const loadMore = async () => {
 		if (loading || loadingMore || !selectedTournamentId || !eventId) return
-		const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
-		const nextCursor =
-			activeReview?.points?.nextCursor ??
-			activeReview?.h2h?.nextCursor ??
-			activeReview?.knockout?.nextCursor
-		if (!nextCursor) return
 		const requestView = view
 		const requestTournamentId = selectedTournamentId
 		const requestEventId = eventId
 		const requestRevision =
 			requestView === 'gameweek' ? gameweekReview?.scope?.revision : null
-		if (requestView === 'gameweek' && !requestRevision) {
-			setError(t('loadFailed'))
+		const gameweekCursor =
+			requestView === 'gameweek'
+				? (gameweekReview?.points?.nextCursor ??
+					gameweekReview?.h2h?.nextCursor ??
+					gameweekReview?.knockout?.nextCursor)
+				: null
+		const seasonPhase =
+			requestView === 'season'
+				? (seasonReview?.phases.find(
+						candidate => candidate.phaseId === selectedPhaseId
+					) ?? phaseAtEvent(seasonReview?.phases ?? [], requestEventId))
+				: null
+		const seasonPages =
+			requestView === 'season' ? seasonSectionPages.current : null
+		const pendingSeasonSections = seasonPages
+			? Object.values(seasonPages).filter(
+					(section): section is SeasonSectionData =>
+						Boolean(section?.pageInfo.hasNextPage && section.pageInfo.endCursor)
+				)
+			: []
+		if (requestView === 'gameweek' && (!gameweekCursor || !requestRevision)) {
+			setGameweekError(t('loadFailed'))
 			return
 		}
+		if (
+			requestView === 'season' &&
+			(!seasonPhase || !pendingSeasonSections.length)
+		)
+			return
 		const requestId = ++requestSequence.current
 		setLoadingMore(true)
-		setError(null)
+		if (requestView === 'season') setSeasonError(null)
+		else setGameweekError(null)
 		try {
 			if (requestView === 'gameweek') {
 				const response = await executeQuery<MyTournamentGameweekReviewResponse>(
@@ -697,7 +1332,7 @@ export default function TournamentReviewV2Client({
 						tournamentId: requestTournamentId,
 						eventId: requestEventId,
 						first: 100,
-						after: nextCursor,
+						after: gameweekCursor,
 						revision: requestRevision
 					},
 					{ cache: 'no-store', contract: CONTRACT }
@@ -710,74 +1345,145 @@ export default function TournamentReviewV2Client({
 					throw new Error(
 						'Tournament review revision changed during pagination'
 					)
+				const normalized = normalizeGameweek(
+					response.myTournamentGameweekReview
+				)
 				setGameweekReview(previous =>
-					previous
-						? mergeGameweekPage(previous, response.myTournamentGameweekReview)
-						: response.myTournamentGameweekReview
+					previous ? mergeGameweekPage(previous, normalized) : normalized
 				)
 			} else {
-				const response = await executeQuery<MyTournamentSeasonReviewResponse>(
-					GET_MY_TOURNAMENT_SEASON_REVIEW,
-					{
-						tournamentId: requestTournamentId,
-						throughEventId: requestEventId,
-						first: 100,
-						after: nextCursor
-					},
-					{ cache: 'no-store', contract: CONTRACT }
+				const phase = seasonPhase
+				if (!phase?.revision || !phase.semanticSha256)
+					throw new Error('Season phase identity missing')
+				const settledResponses = await Promise.allSettled(
+					pendingSeasonSections.map(section =>
+						fetchSeasonSection(
+							requestTournamentId,
+							requestEventId,
+							phase,
+							100,
+							section.pageInfo.endCursor,
+							section.section
+						)
+					)
 				)
 				if (requestId !== requestSequence.current) return
+				const successfulResponses = settledResponses
+					.map((result, index) =>
+						result.status === 'fulfilled'
+							? {
+									response: result.value,
+									section: pendingSeasonSections[index]!
+								}
+							: null
+					)
+					.filter(
+						(
+							item
+						): item is {
+							response: SeasonSectionData
+							section: SeasonSectionData
+						} => Boolean(item?.response)
+					)
+				if (!successfulResponses.length) {
+					throw new Error('Season phase publication is not ready')
+				}
+				const nextPages = { ...seasonSectionPages.current }
+				for (const { response } of successfulResponses) {
+					if (
+						response.phaseId !== phase.phaseId ||
+						response.revision !== phase.revision ||
+						response.semanticSha256 !== phase.semanticSha256
+					)
+						throw new Error('Season phase identity changed during pagination')
+					nextPages[response.section] = mergeSeasonSectionPage(
+						nextPages[response.section],
+						response
+					)
+				}
+				seasonSectionPages.current = nextPages
 				setSeasonReview(previous =>
 					previous
-						? mergeSeasonPage(previous, response.myTournamentSeasonReview)
-						: response.myTournamentSeasonReview
+						? combineSeasonSections(previous, nextPages, phase.phaseId)
+						: null
 				)
+				const primaryIndex = pendingSeasonSections.findIndex(
+					section => section.section === sectionForFormat(phase.format)
+				)
+				const primaryResult =
+					primaryIndex >= 0 ? settledResponses[primaryIndex] : undefined
+				if (primaryResult?.status === 'rejected') throw primaryResult.reason
 			}
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
-			setError(
+			const message =
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
-			)
+			if (requestView === 'season') setSeasonError(message)
+			else setGameweekError(message)
 		} finally {
 			if (requestId === requestSequence.current) setLoadingMore(false)
 		}
 	}
 
+	const loadMoreCatalog = () => {
+		if (
+			loading ||
+			catalogLoadingMore ||
+			!catalog.pageInfo.hasNextPage ||
+			!catalog.pageInfo.endCursor
+		)
+			return
+		void loadCatalogPage({ after: catalog.pageInfo.endCursor })
+	}
+
 	const switchScope = async () => {
+		++catalogRequestSequence.current
+		++catalogQueryGeneration.current
+		setCatalogLoadingMore(false)
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
 			scope === 'ALL' ? 'ACCESSIBLE' : 'ALL'
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setEventIndexError(null)
+		setGameweekError(null)
+		setSeasonError(null)
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
-				{ scope: nextScope },
+				{
+					scope: nextScope,
+					first: 100,
+					after: null,
+					search: catalogSearch || null
+				},
 				{ cache: 'no-store', contract: CONTRACT }
 			)
 			if (requestId !== requestSequence.current) return
 			const nextCatalog = response.myTournamentReviewCatalog
+			const nextItems = catalogItems(nextCatalog)
 			const nextSelected =
-				nextCatalog.tournaments.find(
-					item => item.tournamentId === selectedTournamentId
-				) ??
-				nextCatalog.tournaments[0] ??
+				nextItems.find(item => item.tournamentId === selectedTournamentId) ??
+				nextItems[0] ??
 				null
 			setScope(nextScope)
 			setCatalog(nextCatalog)
+			setCatalogSearchInput(catalogSearch)
 			setSelectedTournamentId(nextSelected?.tournamentId ?? null)
-			const nextEventId =
-				nextSelected?.latestAvailableEventId ??
-				nextSelected?.latestFinalizedEventId ??
-				null
+			const nextEventId = nextSelected?.latestFinalizedEventId ?? null
 			setEventId(nextEventId)
 			setFinalizedEventIds([])
 			setGameweekReview(null)
 			setSeasonReview(null)
+			seasonSectionPages.current = {}
+			setGameweekError(null)
+			setSeasonError(null)
+			setRetryPhaseId(null)
+			setRetryOverview([])
 			replaceRoute({
 				tournamentId: nextSelected?.tournamentId ?? null,
 				eventId: nextEventId,
@@ -801,6 +1507,9 @@ export default function TournamentReviewV2Client({
 
 	useEffect(() => {
 		if (!selectedTournamentId || !eventId) return
+		// Server-rendered Gameweek and Season reads are independent. Retain any
+		// successful seed and let the scoped retry action fetch only the missing
+		// side; a transient sibling failure must not erase usable rows on mount.
 		if (gameweekReview || seasonReview) return
 		void loadReview(selectedTournamentId, eventId, true)
 		// Initial server data is intentionally used once; subsequent changes load explicitly.
@@ -812,30 +1521,43 @@ export default function TournamentReviewV2Client({
 		if (!value) {
 			setSelectedTournamentId(null)
 			setEventId(null)
+			setSelectedPhaseId(null)
 			setFinalizedEventIds([])
 			setGameweekReview(null)
 			setSeasonReview(null)
+			seasonSectionPages.current = {}
 			setLoading(false)
 			setLoadingMore(false)
 			setError(null)
+			setEventIndexError(null)
+			setGameweekError(null)
+			setSeasonError(null)
+			setRetryPhaseId(null)
+			setRetryOverview([])
 			replaceRoute({ tournamentId: null, eventId: null })
 			return
 		}
 		const nextId = Number(value)
-		const tournament = catalog.tournaments.find(
+		const tournament = catalogItems(catalog).find(
 			item => item.tournamentId === nextId
 		)
 		if (!tournament) return
-		const nextEventId =
-			tournament.latestAvailableEventId ?? tournament.latestFinalizedEventId
+		const nextEventId = tournament.latestFinalizedEventId
 		setSelectedTournamentId(nextId)
 		setEventId(nextEventId)
+		setSelectedPhaseId(null)
 		setFinalizedEventIds([])
 		setGameweekReview(null)
 		setSeasonReview(null)
+		seasonSectionPages.current = {}
 		setLoading(false)
 		setLoadingMore(false)
 		setError(null)
+		setEventIndexError(null)
+		setGameweekError(null)
+		setSeasonError(null)
+		setRetryPhaseId(null)
+		setRetryOverview([])
 		replaceRoute({ tournamentId: nextId, eventId: nextEventId })
 		if (nextEventId) void loadReview(nextId, nextEventId, true)
 	}
@@ -850,27 +1572,177 @@ export default function TournamentReviewV2Client({
 		)
 			return
 		setEventId(nextEventId)
+		setSelectedPhaseId(null)
 		replaceRoute({ eventId: nextEventId })
 		void loadReview(selectedTournamentId, nextEventId)
 	}
 
 	const chooseView = (nextView: 'gameweek' | 'season') => {
+		// View changes only alter presentation. Keep an in-flight tournament/GW
+		// load alive so switching tabs cannot cancel the only request that can
+		// populate the selected review. Tournament and phase changes still use
+		// requestSequence for stale-response fencing.
 		setLoadingMore(false)
 		viewRef.current = nextView
 		setView(nextView)
 		replaceRoute({ view: nextView })
 	}
 
-	const format =
-		gameweekReview?.scope?.format ??
-		seasonReview?.format ??
-		selectedTournament?.latestFormat ??
-		null
+	const choosePhase = (phaseId: string, force = false) => {
+		if (
+			view !== 'season' ||
+			!seasonReview ||
+			(!force && phaseId === selectedPhaseId)
+		)
+			return
+		const phase = seasonReview.phases.find(
+			candidate => candidate.phaseId === phaseId
+		)
+		if (!phase || !selectedTournamentId || !eventId) return
+		const requestId = ++requestSequence.current
+		setSelectedPhaseId(phaseId)
+		setLoading(true)
+		setLoadingMore(false)
+		setError(null)
+		setSeasonError(null)
+		seasonSectionPages.current = {}
+		const clearPhasePayload = !(force && phaseId === selectedPhaseId)
+		// Remove the previous phase's rows immediately. A settled phase is an
+		// immutable bundle, so showing rows from another phase while the selected
+		// bundle loads would be a misleading cross-phase response.
+		setSeasonReview(previous =>
+			previous
+				? normalizeSeason(
+						{
+							...previous,
+							state: phase.state,
+							points: clearPhasePayload ? null : previous.points,
+							trajectoryPoints: clearPhasePayload
+								? null
+								: previous.trajectoryPoints,
+							h2h: clearPhasePayload ? null : previous.h2h,
+							knockout: clearPhasePayload ? null : previous.knockout
+						},
+						phaseId
+					)
+				: previous
+		)
+		void (async () => {
+			try {
+				const sectionRequests: Promise<SeasonSectionData | null>[] = [
+					fetchSeasonSection(selectedTournamentId, eventId, phase)
+				]
+				if (phase.format === 'POINTS')
+					sectionRequests.push(
+						fetchSeasonSection(
+							selectedTournamentId,
+							eventId,
+							phase,
+							100,
+							null,
+							'POINTS_TRAJECTORIES'
+						)
+					)
+				if (phase.format === 'H2H')
+					sectionRequests.push(
+						fetchSeasonSection(
+							selectedTournamentId,
+							eventId,
+							phase,
+							100,
+							null,
+							'H2H_FIXTURES'
+						)
+					)
+				const settledSections = await Promise.allSettled(sectionRequests)
+				const primarySection = settledSections[0]
+				if (!primarySection)
+					throw new Error('Season phase publication is not ready')
+				if (primarySection.status === 'rejected') throw primarySection.reason
+				const sections = settledSections.map(result =>
+					result.status === 'fulfilled' ? result.value : null
+				)
+				if (requestId !== requestSequence.current) return
+				const pages = Object.fromEntries(
+					sections
+						.filter((section): section is SeasonSectionData => Boolean(section))
+						.map(section => [section.section, section])
+				) as SeasonSectionPages
+				seasonSectionPages.current = pages
+				setRetryPhaseId(
+					phaseSectionsReady(phase.format, pages) || !phaseCanRetry(phase)
+						? null
+						: phaseId
+				)
+				const sectionData = sections.find(Boolean) ?? null
+				setSeasonReview(previous =>
+					previous
+						? combineSeasonSections(
+								{
+									...previous,
+									state: sectionData?.state ?? phase.state
+								},
+								pages,
+								phaseId
+							)
+						: previous
+				)
+			} catch (loadError) {
+				if (requestId !== requestSequence.current) return
+				const requestError = loadError as GraphQLRequestError
+				const message =
+					requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
+						? t('reviewClientUpgrade')
+						: t('loadFailed')
+				setSeasonError(message)
+				setRetryPhaseId(phaseCanRetry(phase) ? phaseId : null)
+			} finally {
+				if (requestId === requestSequence.current) setLoading(false)
+			}
+		})()
+	}
+
+	const selectedPhase = useMemo(
+		() =>
+			seasonReview?.phases.find(phase => phase.phaseId === selectedPhaseId) ??
+			phaseAtEvent(seasonReview?.phases ?? [], eventId) ??
+			null,
+		[seasonReview, selectedPhaseId, eventId]
+	)
+
 	const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
+	// Format is scoped to the active settled review. Do not let a previously
+	// loaded Gameweek (or the latest phase) leak into an earlier Season phase.
+	const format =
+		view === 'gameweek'
+			? (gameweekReview?.scope?.format ??
+				selectedTournament?.latestFinalizedScope?.format ??
+				selectedTournament?.phaseSummaries.at(-1)?.format ??
+				null)
+			: (selectedPhase?.format ??
+				phaseAtEvent(seasonReview?.phases ?? [], eventId)?.format ??
+				null)
+	const visibleError =
+		view === 'season'
+			? (eventIndexError ?? seasonError ?? error)
+			: (eventIndexError ?? gameweekError ?? error)
 	const state: MyTournamentReviewState =
-		error && !activeReview
+		visibleError && !activeReview
 			? 'UNAVAILABLE'
 			: (activeReview?.state ?? selectedTournament?.state ?? 'UNAVAILABLE')
+	const hasActivePayload =
+		format === 'POINTS'
+			? Boolean(activeReview?.points)
+			: format === 'H2H'
+				? Boolean(activeReview?.h2h)
+				: format === 'KNOCKOUT'
+					? Boolean(activeReview?.knockout)
+					: false
+	const canRenderPayload = Boolean(
+		activeReview &&
+		format &&
+		(state === 'READY' || (state === 'DEGRADED' && hasActivePayload))
+	)
 	return (
 		<div className="min-h-screen bg-slate-50">
 			<div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -885,6 +1757,12 @@ export default function TournamentReviewV2Client({
 						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+						<Link
+							href="/competitions/create"
+							className="rounded-full bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-700"
+						>
+							{t('createTournament')}
+						</Link>
 						<span className="rounded-full border bg-white px-3 py-1.5">
 							{t('reviewViewerEntry', { entryId })}
 						</span>
@@ -909,7 +1787,7 @@ export default function TournamentReviewV2Client({
 							className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500"
 						>
 							<option value="">{t('selectTournament')}</option>
-							{catalog.tournaments.map(tournament => (
+							{catalogItems(catalog).map(tournament => (
 								<option
 									key={tournament.tournamentId}
 									value={tournament.tournamentId}
@@ -928,6 +1806,70 @@ export default function TournamentReviewV2Client({
 									? t('reviewAdminAccessibleScope')
 									: t('reviewAdminAllScope')}
 							</button>
+						)}
+						{catalog.adminReadAll && (
+							<form
+								className="space-y-2 pt-1"
+								onSubmit={event => {
+									event.preventDefault()
+									void searchCatalog()
+								}}
+							>
+								<label
+									htmlFor="tournament-review-search"
+									className="sr-only"
+								>
+									{t('reviewSearchPlaceholder')}
+								</label>
+								<input
+									id="tournament-review-search"
+									value={catalogSearchInput}
+									onChange={event => setCatalogSearchInput(event.target.value)}
+									placeholder={t('reviewSearchPlaceholder')}
+									className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500"
+								/>
+								<div className="flex gap-2">
+									<button
+										type="submit"
+										disabled={loading || catalogLoadingMore}
+										className="flex-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
+									>
+										{t('reviewSearch')}
+									</button>
+									{catalogSearch && (
+										<button
+											type="button"
+											onClick={() => {
+												setCatalogSearchInput('')
+												void searchCatalog('')
+											}}
+											className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+										>
+											{t('reviewClearSearch')}
+										</button>
+									)}
+								</div>
+							</form>
+						)}
+						{catalog.pageInfo.hasNextPage && (
+							<button
+								type="button"
+								onClick={loadMoreCatalog}
+								disabled={catalogLoadingMore}
+								className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+							>
+								{catalogLoadingMore
+									? t('reviewLoadingTournaments')
+									: t('reviewLoadMoreTournaments')}
+							</button>
+						)}
+						{catalogError && (
+							<div
+								className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+								role="status"
+							>
+								{catalogError}
+							</div>
 						)}
 						{selectedTournament && finalizedEventIds.length > 0 && (
 							<>
@@ -959,11 +1901,11 @@ export default function TournamentReviewV2Client({
 					</aside>
 
 					<main className="min-w-0">
-						{error && (
+						{visibleError && (
 							<div className="mb-4">
 								<ReviewStateBanner
 									state="UNAVAILABLE"
-									message={error}
+									message={visibleError}
 								/>
 							</div>
 						)}
@@ -994,11 +1936,16 @@ export default function TournamentReviewV2Client({
 													? t('viewGameweek')
 													: t('viewSeason')}
 											</div>
-											<Freshness
-												freshness={
+											<SettlementMeta
+												settledAt={
 													view === 'gameweek'
-														? gameweekReview?.scope?.freshness
-														: seasonReview?.freshness
+														? gameweekReview?.scope?.settledAt
+														: selectedPhase?.settledAt
+												}
+												publishedAt={
+													view === 'gameweek'
+														? gameweekReview?.scope?.publishedAt
+														: selectedPhase?.publishedAt
 												}
 											/>
 										</div>
@@ -1027,6 +1974,29 @@ export default function TournamentReviewV2Client({
 											{t('viewSeason')}
 										</button>
 									</div>
+									{view === 'season' && seasonReview?.phases.length ? (
+										<div
+											className="mt-3 flex flex-wrap gap-2"
+											role="tablist"
+											aria-label={t('reviewPhaseTimeline')}
+										>
+											{seasonReview.phases.map(phase => (
+												<button
+													key={phase.phaseId}
+													type="button"
+													role="tab"
+													aria-selected={
+														selectedPhase?.phaseId === phase.phaseId
+													}
+													onClick={() => choosePhase(phase.phaseId)}
+													className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${selectedPhase?.phaseId === phase.phaseId ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300'}`}
+												>
+													{formatLabel(phase.format, t)} · GW
+													{phase.startEventId}–{phase.endEventId}
+												</button>
+											))}
+										</div>
+									) : null}
 								</div>
 
 								<div className="mt-4">
@@ -1038,8 +2008,92 @@ export default function TournamentReviewV2Client({
 									) : (
 										<ReviewStateBanner state={state} />
 									)}
+									{!loading &&
+									state !== 'READY' &&
+									selectedTournament.previousReadyEventId &&
+									selectedTournament.previousReadyEventId !== eventId ? (
+										<div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+											<div className="text-xs text-slate-500">
+												{t('reviewPreviousReadyHint')}
+											</div>
+											<button
+												type="button"
+												onClick={() =>
+													chooseEvent(
+														String(selectedTournament.previousReadyEventId)
+													)
+												}
+												className="mt-2 text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+											>
+												{t('reviewPreviousReady', {
+													gameweek: selectedTournament.previousReadyEventId
+												})}
+											</button>
+										</div>
+									) : null}
+									{!loading &&
+									(selectedTournament.latestFinalizedEventId === null ||
+										(state !== 'READY' && !hasActivePayload)) ? (
+										<Link
+											href={`/live/competitions/${selectedTournament.tournamentId}`}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewLiveLink')}
+										</Link>
+									) : null}
+									{retryPhaseId && view === 'season' && !loading ? (
+										<button
+											type="button"
+											onClick={() => choosePhase(retryPhaseId, true)}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewRetryPhase')}
+										</button>
+									) : null}
+									{eventIndexError &&
+									!loading &&
+									selectedTournamentId &&
+									eventId ? (
+										<button
+											type="button"
+											onClick={() =>
+												void loadReview(selectedTournamentId, eventId, true)
+											}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewRetryOverview')}
+										</button>
+									) : null}
+									{retryOverview.length > 0 &&
+									!loading &&
+									selectedTournamentId &&
+									eventId ? (
+										<div className="mt-3 flex flex-wrap gap-3">
+											{retryOverview.map(target => (
+												<button
+													key={target}
+													type="button"
+													onClick={() =>
+														void loadReview(
+															selectedTournamentId,
+															eventId,
+															false,
+															true,
+															target
+														)
+													}
+													className="text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+												>
+													{t('reviewRetryOverview')} ·{' '}
+													{target === 'gameweek'
+														? t('viewGameweek')
+														: t('viewSeason')}
+												</button>
+											))}
+										</div>
+									) : null}
 								</div>
-								{activeReview && state === 'READY' && format && (
+								{canRenderPayload && format && activeReview && (
 									<div className="mt-5">
 										<ReviewPayload
 											review={activeReview}

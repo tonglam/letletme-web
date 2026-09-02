@@ -38,7 +38,7 @@ import {
 	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_PARTICIPANTS
 } from '../lib/graphql/operations/tournaments'
-import { GET_MY_FPL_COMPETITIONS_DESK } from '../lib/graphql/operations/my-fpl'
+import { GET_MY_TOURNAMENT_REVIEW_CATALOG } from '../lib/graphql/operations/my-fpl'
 
 describe('GraphQL request budget', () => {
 	it('uses one root field for the fifteen-player live explanation batch', () => {
@@ -183,8 +183,8 @@ describe('GraphQL request budget', () => {
 		)
 	})
 
-	it('keeps the My FPL competitions desk within its bounded 400-node guard', () => {
-		const document = parse(GET_MY_FPL_COMPETITIONS_DESK)
+	it('keeps the My Tournament Review catalog within its bounded 400-node guard', () => {
+		const document = parse(GET_MY_TOURNAMENT_REVIEW_CATALOG)
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
 		const operation = document.definitions.find(
@@ -194,7 +194,7 @@ describe('GraphQL request budget', () => {
 		assert.equal(operation.selectionSet.selections.length, 1)
 		assert.ok(
 			astNodes <= 400,
-			`GET_MY_FPL_COMPETITIONS_DESK has ${astNodes} AST nodes`
+			`GET_MY_TOURNAMENT_REVIEW_CATALOG has ${astNodes} AST nodes`
 		)
 	})
 

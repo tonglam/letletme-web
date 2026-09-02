@@ -55,7 +55,7 @@ test('public competition copy is complete and contains no accidental legacy term
 				myCompetitions: 'My Competitions',
 				browseCompetitions: 'Browse competitions',
 				createCompetition: 'New Competition',
-				myTournament: 'Competition Review'
+				myTournament: 'Tournament Review'
 			},
 			home: {
 				liveCompetitionStandings: 'Live competition standings',
@@ -109,7 +109,13 @@ test('public competition copy is complete and contains no accidental legacy term
 			)
 		}
 
-		const legacyTerm = locale.name === 'en' ? /tournament/i : /锦标赛/
+		// The V2 product language is Tournament / 赛事.  Only the retired
+		// “official tournament/league” phrasing is forbidden; generic FPL
+		// source terminology remains valid on live and import surfaces.
+		const legacyTerm =
+			locale.name === 'en'
+				? /\bofficial\s+(?:tournament|competition|league)\b/i
+				: /官方(?:赛事|联赛)/
 		for (const entry of walkStrings(locale.messages)) {
 			const withoutPlaceholders = entry.value.replace(/\{[^}]+\}/g, '')
 			if (

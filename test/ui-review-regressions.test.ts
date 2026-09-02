@@ -524,7 +524,7 @@ describe('data freshness timestamp precision', () => {
 			),
 			readFile(
 				new URL(
-					'../app/me/tournament/TournamentStatsClient.tsx',
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
 					import.meta.url
 				),
 				'utf8'
@@ -539,14 +539,16 @@ describe('data freshness timestamp precision', () => {
 		])
 
 		assert.match(market, /second: '2-digit'/)
-		assert.match(personal, /timeStyle: 'medium'/)
-		assert.match(playerState, /timeStyle: 'medium'/)
+		for (const source of [personal, playerState, tournamentHeader]) {
+			assert.match(source, /timeStyle: 'medium'/)
+		}
 		assert.match(team, /<MyFplSnapshotStatus/)
-		assert.match(tournament, /<MyFplSnapshotStatus/)
-		assert.match(tournamentHeader, /timeStyle: 'medium'/)
 		assert.match(snapshotStatus, /timeStyle: 'medium'/)
-		assert.match(tournament, /data-share-expand-width="true"/)
-		assert.doesNotMatch(tournament, /data-share-preserve-width="true"/)
+		assert.match(tournament, /settledAt/)
+		assert.match(
+			tournament,
+			/function SettlementMeta[\s\S]*?new Date\(settledAt\)\.toLocaleString\(locale\)/
+		)
 	})
 })
 
@@ -1195,7 +1197,7 @@ describe('asynchronous selection safety', () => {
 			),
 			readFile(
 				new URL(
-					'../app/me/tournament/_hooks/useTournamentStats.ts',
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
 					import.meta.url
 				),
 				'utf8'
@@ -1210,32 +1212,14 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.ok(teamLoad >= 0 && teamClear > teamLoad && teamRequest > teamClear)
 
-		const tournamentLoad = tournamentSource.indexOf(
-			'// One request owns the selected tournament + GW'
-		)
-		const tournamentClear = tournamentSource.indexOf(
-			'setTournamentStats(null)',
-			tournamentLoad
-		)
-		const tournamentRequest = tournamentSource.indexOf(
-			'loadGameweekData && selectedGameweek > 0 ? selectedGameweek : null',
-			tournamentLoad
-		)
-		assert.ok(
-			tournamentLoad >= 0 &&
-				tournamentClear > tournamentLoad &&
-				tournamentRequest > tournamentClear
-		)
+		assert.match(tournamentSource, /requestSequence = useRef\(0\)/)
+		assert.match(tournamentSource, /requestId !== requestSequence\.current/)
+		assert.match(tournamentSource, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
+		assert.doesNotMatch(tournamentSource, /GET_MY_FPL_COMPETITION/)
 	})
 
 	it('keeps finalized season context and viewer state across tournament refreshes', async () => {
-		const [
-			competitionPage,
-			tournamentClient,
-			tournamentHook,
-			adapters,
-			teamPage
-		] = await Promise.all([
+		const [competitionPage, tournamentClient, teamPage] = await Promise.all([
 			readFile(
 				new URL(
 					'../app/[locale]/my-fpl/competitions/page.tsx',
@@ -1245,21 +1229,7 @@ describe('asynchronous selection safety', () => {
 			),
 			readFile(
 				new URL(
-					'../app/me/tournament/TournamentStatsClient.tsx',
-					import.meta.url
-				),
-				'utf8'
-			),
-			readFile(
-				new URL(
-					'../app/me/tournament/_hooks/useTournamentStats.ts',
-					import.meta.url
-				),
-				'utf8'
-			),
-			readFile(
-				new URL(
-					'../app/me/tournament/_lib/competition-review-projection.ts',
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
 					import.meta.url
 				),
 				'utf8'
@@ -1270,41 +1240,64 @@ describe('asynchronous selection safety', () => {
 			)
 		])
 
-		assert.match(competitionPage, /my-tournament-review-v2/)
+		assert.match(competitionPage, /my-tournament-review-v2\.1/)
 		assert.match(competitionPage, /selectTournamentReviewEventId\(/)
-		assert.match(tournamentClient, /const handleNavigateSeason = useCallback/)
-		assert.match(
-			tournamentClient,
-			/replaceQuery\(\{ view: 'season', gw: null \}\)/
-		)
-		assert.match(tournamentHook, /setDeskRefreshNonce\(value => value \+ 1\)/)
-		assert.match(tournamentHook, /boardAbortRef\.current\?\.abort\(\)/)
-		assert.match(tournamentHook, /setIsBoardLoading\(false\)/)
-		assert.match(
-			tournamentHook,
-			/commitBoardPage\(boardWithViewer, standingsSearch\.trim\(\)\)/
-		)
-		assert.match(tournamentHook, /initialReviewState === 'READY'/)
-		assert.match(tournamentHook, /initialBoard !== null/)
-		const searchFailure = tournamentHook.indexOf('board search failed:')
-		assert.ok(searchFailure >= 0)
-		assert.equal(
-			tournamentHook.indexOf('setTournamentStats(null)', searchFailure),
-			-1
-		)
-		assert.match(tournamentHook, /setSeasonPath\(\[\]\)/)
-		assert.match(tournamentHook, /initialBoardSearchSkippedRef\.current/)
-		assert.match(tournamentHook, /latestFinalizedGameweek \?\? dataGameweek/)
-		assert.match(tournamentClient, /setStandingsSearch\(''\)/)
-		assert.match(tournamentClient, /boardSearch === ''/)
-		assert.match(adapters, /myRank: viewerRow\?\.rank \?\? aggregate\.viewer/)
-		assert.match(adapters, /rank: row\.fieldRank/)
-		assert.match(tournamentHook, /setError\(t\('loadFailed'\)\)/)
+		assert.match(tournamentClient, /latestFinalizedScope/)
+		assert.match(tournamentClient, /GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION/)
+		assert.match(tournamentClient, /replaceRoute\(\{ view: nextView \}\)/)
+		assert.match(tournamentClient, /semanticSha256/)
 		assert.match(
 			teamPage,
 			/const maxKnownEvent = Math\.max\(currentEvent, latestFinalized\)/
 		)
 		assert.match(teamPage, /const safeRequestedEvent =/)
+	})
+
+	it('keeps the primary Season seed when an optional section read fails', async () => {
+		const [page, client] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/[locale]/my-fpl/competitions/page.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			page,
+			/const \[primaryResult, optionalResult\] = await Promise\.allSettled\(/
+		)
+		assert.match(
+			page,
+			/if \(primaryResult\.status === 'rejected'\)\s*return \{ review, sections: \[\], error: primaryResult\.reason \}/
+		)
+		assert.match(
+			client,
+			/const \[gameweekResult, seasonResult\] = await Promise\.allSettled\(/
+		)
+		assert.match(
+			client,
+			/if \(gameweekResult\.status === 'rejected'\)\s*setGameweekError\(/
+		)
+		assert.match(client, /if \(normalizedGameweek\) setGameweekReview\(/)
+		assert.match(client, /const visibleError =\s*\n?\s*view === 'season'/)
+		assert.match(
+			page,
+			/state: optionalSectionFailed \? 'DEGRADED' : review\.state/
+		)
+		assert.match(
+			client,
+			/setCatalog\(nextCatalog\)[\s\S]*setGameweekReview\(null\)/
+		)
+		assert.match(client, /const \[gameweekError, setGameweekError\]/)
 	})
 
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {

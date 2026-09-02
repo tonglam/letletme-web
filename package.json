@@ -78,6 +78,7 @@
 		"zod": "^3.25.76"
 	},
 	"overrides": {
+		"browserslist": "^4.28.8",
 		"glob": "^10.5.0",
 		"rimraf": "^5.0.10",
 		"minimatch@3": {
