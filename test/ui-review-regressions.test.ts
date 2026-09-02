@@ -1277,7 +1277,7 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.match(
 			page,
-			/if \(primaryResult\.status === 'rejected'\) throw primaryResult\.reason/
+			/if \(primaryResult\.status === 'rejected'\)\s*return \{ review, sections: \[\], error: primaryResult\.reason \}/
 		)
 		assert.match(
 			client,

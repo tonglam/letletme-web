@@ -85,7 +85,9 @@ const eventIdsFromPhases = (
 			eventId <= endEventId;
 			eventId += 1
 		) {
-			values.push(eventId)
+			// The phase window can extend into future rounds. Only the
+			// authoritative finalized cutoff belongs in the review selector.
+			if (eventId <= latest) values.push(eventId)
 		}
 		return values
 	})
@@ -115,6 +117,7 @@ async function hydrateSeasonSeed(
 ): Promise<{
 	review: MyTournamentSeasonReviewResponse['myTournamentSeasonReview']
 	sections: MyTournamentSeasonSection[]
+	error: unknown | null
 }> {
 	const phase = review.phases.at(-1)
 	if (
@@ -123,7 +126,7 @@ async function hydrateSeasonSeed(
 		!phase.revision ||
 		!phase.semanticSha256
 	)
-		return { review, sections: [] }
+		return { review, sections: [], error: null }
 	const fetchSection = async (
 		section:
 			| 'POINTS_STANDINGS'
@@ -157,7 +160,8 @@ async function hydrateSeasonSeed(
 		fetchSection(sectionForFormat(phase.format)),
 		optionalSection ? fetchSection(optionalSection) : Promise.resolve(null)
 	])
-	if (primaryResult.status === 'rejected') throw primaryResult.reason
+	if (primaryResult.status === 'rejected')
+		return { review, sections: [], error: primaryResult.reason }
 	const primary = primaryResult.value
 	const optional =
 		optionalResult.status === 'fulfilled' ? optionalResult.value : null
@@ -238,7 +242,8 @@ async function hydrateSeasonSeed(
 			...(fixtures?.myTournamentSeasonReviewSection
 				? [fixtures.myTournamentSeasonReviewSection]
 				: [])
-		]
+		],
+		error: null
 	}
 }
 
@@ -472,6 +477,8 @@ export default async function TournamentStatsPage({
 						)
 						initialSeasonReview = seasonSeed.review
 						initialSeasonSections = seasonSeed.sections
+						if (seasonSeed.error)
+							initialSeasonError = t('tournamentStatsFailed')
 					} catch {
 						// The Season overview and Gameweek snapshot are independent
 						// publications. Keep both summaries usable when a Season section

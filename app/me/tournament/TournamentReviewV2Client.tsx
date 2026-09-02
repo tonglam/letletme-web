@@ -835,6 +835,7 @@ export default function TournamentReviewV2Client({
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
+	const [catalogError, setCatalogError] = useState<string | null>(null)
 	const [gameweekError, setGameweekError] = useState<string | null>(
 		initialGameweekError
 	)
@@ -849,6 +850,9 @@ export default function TournamentReviewV2Client({
 			? (initialSeasonReview.phases.at(-1)?.phaseId ?? null)
 			: null
 	)
+	const [retryOverview, setRetryOverview] = useState<
+		'gameweek' | 'season' | null
+	>(initialGameweekError ? 'gameweek' : initialSeasonError ? 'season' : null)
 	const requestSequence = useRef(0)
 	const catalogRequestSequence = useRef(0)
 	// A replacement (search/scope switch) advances this generation. Page
@@ -924,6 +928,7 @@ export default function TournamentReviewV2Client({
 			)
 				return
 			const nextCatalog = response.myTournamentReviewCatalog
+			setCatalogError(null)
 			setError(null)
 			setCatalog(previous =>
 				replace
@@ -941,7 +946,7 @@ export default function TournamentReviewV2Client({
 			)
 				return
 			const requestError = loadError as GraphQLRequestError
-			setError(
+			setCatalogError(
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
@@ -966,8 +971,10 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setCatalogError(null)
 		setGameweekError(null)
 		setSeasonError(null)
+		setRetryOverview(null)
 		try {
 			const response = await executeQuery<MyTournamentReviewCatalogResponse>(
 				GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -1018,18 +1025,23 @@ export default function TournamentReviewV2Client({
 	const loadReview = async (
 		tournamentId: number,
 		nextEventId: number,
-		replaceAvailableEvents = false
+		replaceAvailableEvents = false,
+		preserveSuccessful = false
 	) => {
 		const requestId = ++requestSequence.current
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setCatalogError(null)
 		setGameweekError(null)
 		setSeasonError(null)
-		setGameweekReview(null)
-		setSeasonReview(null)
-		seasonSectionPages.current = {}
+		const retainedGameweek = preserveSuccessful ? gameweekReview : null
+		const retainedSeason = preserveSuccessful ? seasonReview : null
+		if (!preserveSuccessful || !retainedGameweek) setGameweekReview(null)
+		if (!preserveSuccessful || !retainedSeason) setSeasonReview(null)
+		if (!preserveSuccessful || !retainedSeason) seasonSectionPages.current = {}
 		setRetryPhaseId(null)
+		setRetryOverview(null)
 		let attemptedPhaseId: string | null = null
 		let overviewPublished = false
 		try {
@@ -1063,11 +1075,19 @@ export default function TournamentReviewV2Client({
 			if (gameweekResult.status === 'rejected')
 				setGameweekError(requestMessage(gameweekResult))
 			if (normalizedGameweek) setGameweekReview(normalizedGameweek)
-			overviewPublished = Boolean(normalizedGameweek || normalizedSeason)
+			if (gameweekResult.status === 'rejected' && !retainedGameweek)
+				setRetryOverview('gameweek')
+			overviewPublished = Boolean(
+				normalizedGameweek ||
+				normalizedSeason ||
+				retainedGameweek ||
+				retainedSeason
+			)
 			if (!normalizedSeason) {
 				if (seasonResult.status === 'rejected')
 					setSeasonError(requestMessage(seasonResult))
 				setRetryPhaseId(null)
+				setRetryOverview('season')
 				return
 			}
 			const nextPhase = normalizedSeason.phases.at(-1) ?? null
@@ -1154,6 +1174,7 @@ export default function TournamentReviewV2Client({
 			}
 			if (requestId !== requestSequence.current) return
 			setSeasonReview(seasonWithSection)
+			if (normalizedGameweek || retainedGameweek) setRetryOverview(null)
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
@@ -1387,13 +1408,10 @@ export default function TournamentReviewV2Client({
 
 	useEffect(() => {
 		if (!selectedTournamentId || !eventId) return
-		if (
-			gameweekReview &&
-			seasonReview &&
-			(seasonReview.points || seasonReview.h2h || seasonReview.knockout) &&
-			Object.keys(seasonSectionPages.current).length > 0
-		)
-			return
+		// Server-rendered Gameweek and Season reads are independent. Retain any
+		// successful seed and let the scoped retry action fetch only the missing
+		// side; a transient sibling failure must not erase usable rows on mount.
+		if (gameweekReview || seasonReview) return
 		void loadReview(selectedTournamentId, eventId, true)
 		// Initial server data is intentionally used once; subsequent changes load explicitly.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1731,6 +1749,14 @@ export default function TournamentReviewV2Client({
 									: t('reviewLoadMoreTournaments')}
 							</button>
 						)}
+						{catalogError && (
+							<div
+								className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+								role="status"
+							>
+								{catalogError}
+							</div>
+						)}
 						{selectedTournament && finalizedEventIds.length > 0 && (
 							<>
 								<label className="block pt-3 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -1907,6 +1933,25 @@ export default function TournamentReviewV2Client({
 											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
 										>
 											{t('reviewRetryPhase')}
+										</button>
+									) : null}
+									{retryOverview &&
+									!loading &&
+									selectedTournamentId &&
+									eventId ? (
+										<button
+											type="button"
+											onClick={() =>
+												void loadReview(
+													selectedTournamentId,
+													eventId,
+													false,
+													true
+												)
+											}
+											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+										>
+											{t('reviewRetryOverview')}
 										</button>
 									) : null}
 								</div>
