@@ -161,11 +161,45 @@ async function hydrateSeasonSeed(
 	const primary = primaryResult.value
 	const optional =
 		optionalResult.status === 'fulfilled' ? optionalResult.value : null
-	const optionalSectionFailed = optionalResult.status === 'rejected'
+	const sectionHasRows = (
+		candidate: MyTournamentSeasonSection | null,
+		expectedSection: MyTournamentSeasonSection['section']
+	) => {
+		if (
+			!candidate ||
+			candidate.state !== 'READY' ||
+			candidate.section !== expectedSection
+		)
+			return false
+		if (
+			candidate.section === 'POINTS_STANDINGS' ||
+			candidate.section === 'POINTS_TRAJECTORIES'
+		)
+			return candidate.points !== null
+		if (
+			candidate.section === 'H2H_STANDINGS' ||
+			candidate.section === 'H2H_FIXTURES'
+		)
+			return candidate.h2h !== null
+		return candidate.knockout !== null
+	}
+	const primarySection = primary.myTournamentSeasonReviewSection
+	if (!sectionHasRows(primarySection, sectionForFormat(phase.format)))
+		throw new Error('primary season review section is incomplete')
+	const optionalPayload = optional?.myTournamentSeasonReviewSection ?? null
+	const optionalSectionFailed =
+		optionalResult.status === 'rejected' ||
+		(optionalSection !== null &&
+			!sectionHasRows(optionalPayload, optionalSection))
 	const trajectories =
-		optionalSection === 'POINTS_TRAJECTORIES' ? optional : null
-	const fixtures = optionalSection === 'H2H_FIXTURES' ? optional : null
-	const section = primary.myTournamentSeasonReviewSection
+		optionalSection === 'POINTS_TRAJECTORIES' && !optionalSectionFailed
+			? optional
+			: null
+	const fixtures =
+		optionalSection === 'H2H_FIXTURES' && !optionalSectionFailed
+			? optional
+			: null
+	const section = primarySection
 	const h2h =
 		phase.format === 'H2H'
 			? {
@@ -283,6 +317,7 @@ export default async function TournamentStatsPage({
 		MyTournamentSeasonReviewResponse['myTournamentSeasonReview'] | null = null
 	let initialSeasonSections: MyTournamentSeasonSection[] = []
 	let initialError: string | null = null
+	let initialGameweekError: string | null = null
 	let initialSeasonError: string | null = null
 
 	try {
@@ -327,20 +362,27 @@ export default async function TournamentStatsPage({
 		) {
 			const directLookup = await timing.measure(
 				'my-tournament-review-v2.1-catalog-deep-link-lookup',
-				() =>
-					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
-						session,
-						GET_MY_TOURNAMENT_REVIEW_CATALOG,
-						{
-							scope,
-							first: 100,
-							after: null,
-							search: String(requestedTournamentId)
-						},
-						{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
-					)
+				async () => {
+					try {
+						return await executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
+							session,
+							GET_MY_TOURNAMENT_REVIEW_CATALOG,
+							{
+								scope,
+								first: 100,
+								after: null,
+								search: String(requestedTournamentId)
+							},
+							{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
+						)
+					} catch {
+						// Supplemental lookup failure must not erase the first catalog
+						// page or turn a usable review center into a page-wide error.
+						return null
+					}
+				}
 			)
-			const directEdge = directLookup.myTournamentReviewCatalog.edges.find(
+			const directEdge = directLookup?.myTournamentReviewCatalog.edges.find(
 				edge => edge.node.tournamentId === requestedTournamentId
 			)
 			if (directEdge) {
@@ -387,10 +429,10 @@ export default async function TournamentStatsPage({
 			)
 
 			if (initialEventId) {
-				const [gameweekResponse, seasonResponse] = await timing.measure(
+				const [gameweekResult, seasonResult] = await timing.measure(
 					'my-tournament-review-v2.1-snapshots',
 					() =>
-						Promise.all([
+						Promise.allSettled([
 							executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
 								session,
 								GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
@@ -414,22 +456,31 @@ export default async function TournamentStatsPage({
 									)
 						])
 				)
-				initialGameweekReview = gameweekResponse.myTournamentGameweekReview
-				try {
-					const seasonSeed = await hydrateSeasonSeed(
-						session,
-						initialSelectedTournamentId,
-						initialEventId,
-						seasonResponse.myTournamentSeasonReview
-					)
-					initialSeasonReview = seasonSeed.review
-					initialSeasonSections = seasonSeed.sections
-				} catch {
-					// The Season overview and Gameweek snapshot are independent
-					// publications. Keep both summaries usable when a Season section
-					// page is unavailable; the client will retry only the Season view.
-					initialSeasonReview = seasonResponse.myTournamentSeasonReview
-					initialSeasonSections = []
+				if (gameweekResult.status === 'fulfilled') {
+					initialGameweekReview =
+						gameweekResult.value.myTournamentGameweekReview
+				} else {
+					initialGameweekError = t('tournamentStatsFailed')
+				}
+				if (seasonResult.status === 'fulfilled') {
+					try {
+						const seasonSeed = await hydrateSeasonSeed(
+							session,
+							initialSelectedTournamentId,
+							initialEventId,
+							seasonResult.value.myTournamentSeasonReview
+						)
+						initialSeasonReview = seasonSeed.review
+						initialSeasonSections = seasonSeed.sections
+					} catch {
+						// The Season overview and Gameweek snapshot are independent
+						// publications. Keep both summaries usable when a Season section
+						// page is unavailable; the client will retry only the Season view.
+						initialSeasonReview = seasonResult.value.myTournamentSeasonReview
+						initialSeasonSections = []
+						initialSeasonError = t('tournamentStatsFailed')
+					}
+				} else {
 					initialSeasonError = t('tournamentStatsFailed')
 				}
 			}
@@ -443,7 +494,11 @@ export default async function TournamentStatsPage({
 	}
 	const initialFplClassicRanks = await fplClassicRanksPromise
 
-	timing.finish(initialError || initialSeasonError ? 'unavailable' : 'ready')
+	timing.finish(
+		initialError || initialGameweekError || initialSeasonError
+			? 'unavailable'
+			: 'ready'
+	)
 	return (
 		<Suspense fallback={<TournamentReviewFallback />}>
 			<TournamentReviewV2Client
@@ -459,6 +514,7 @@ export default async function TournamentStatsPage({
 				initialSeasonReview={initialSeasonReview}
 				initialSeasonSections={initialSeasonSections}
 				initialError={initialError}
+				initialGameweekError={initialGameweekError}
 				initialSeasonError={initialSeasonError}
 			/>
 		</Suspense>

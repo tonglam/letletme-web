@@ -114,6 +114,7 @@ export interface TournamentReviewV2ClientProps {
 	initialSeasonReview: MyTournamentSeasonReview | null
 	initialSeasonSections?: SeasonSectionData[]
 	initialError: string | null
+	initialGameweekError?: string | null
 	initialSeasonError?: string | null
 }
 
@@ -283,16 +284,23 @@ function mergeSeasonSectionPage(
 	previous: SeasonSectionData | undefined,
 	next: SeasonSectionData
 ): SeasonSectionData {
+	const mergedH2H =
+		previous?.h2h && next.h2h
+			? next.section === 'H2H_STANDINGS'
+				? {
+						...next.h2h,
+						standings: [...previous.h2h.standings, ...next.h2h.standings],
+						matches: next.h2h.matches
+					}
+				: mergeH2HPage(previous.h2h, next.h2h)
+			: (next.h2h ?? previous?.h2h ?? null)
 	return {
 		...next,
 		points:
 			previous?.points && next.points
 				? mergePointsPage(previous.points, next.points)
 				: (next.points ?? previous?.points ?? null),
-		h2h:
-			previous?.h2h && next.h2h
-				? mergeH2HPage(previous.h2h, next.h2h)
-				: (next.h2h ?? previous?.h2h ?? null),
+		h2h: mergedH2H,
 		knockout:
 			previous?.knockout && next.knockout
 				? mergeKnockoutPage(previous.knockout, next.knockout)
@@ -795,6 +803,7 @@ export default function TournamentReviewV2Client({
 	initialSeasonReview,
 	initialSeasonSections = [],
 	initialError,
+	initialGameweekError = null,
 	initialSeasonError = null
 }: TournamentReviewV2ClientProps) {
 	const t = useTranslations('TournamentStats')
@@ -826,7 +835,9 @@ export default function TournamentReviewV2Client({
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
-	const [gameweekError, setGameweekError] = useState<string | null>(null)
+	const [gameweekError, setGameweekError] = useState<string | null>(
+		initialGameweekError
+	)
 	const [seasonError, setSeasonError] = useState<string | null>(
 		initialSeasonError
 	)
@@ -1229,7 +1240,7 @@ export default function TournamentReviewV2Client({
 				const phase = seasonPhase
 				if (!phase?.revision || !phase.semanticSha256)
 					throw new Error('Season phase identity missing')
-				const responses = await Promise.all(
+				const settledResponses = await Promise.allSettled(
 					pendingSeasonSections.map(section =>
 						fetchSeasonSection(
 							requestTournamentId,
@@ -1241,12 +1252,29 @@ export default function TournamentReviewV2Client({
 						)
 					)
 				)
-				if (responses.some(response => !response))
-					throw new Error('Season phase publication is not ready')
 				if (requestId !== requestSequence.current) return
+				const successfulResponses = settledResponses
+					.map((result, index) =>
+						result.status === 'fulfilled'
+							? {
+									response: result.value,
+									section: pendingSeasonSections[index]!
+								}
+							: null
+					)
+					.filter(
+						(
+							item
+						): item is {
+							response: SeasonSectionData
+							section: SeasonSectionData
+						} => Boolean(item?.response)
+					)
+				if (!successfulResponses.length) {
+					throw new Error('Season phase publication is not ready')
+				}
 				const nextPages = { ...seasonSectionPages.current }
-				for (const response of responses) {
-					if (!response) continue
+				for (const { response } of successfulResponses) {
 					if (
 						response.phaseId !== phase.phaseId ||
 						response.revision !== phase.revision ||
@@ -1264,6 +1292,12 @@ export default function TournamentReviewV2Client({
 						? combineSeasonSections(previous, nextPages, phase.phaseId)
 						: null
 				)
+				const primaryIndex = pendingSeasonSections.findIndex(
+					section => section.section === sectionForFormat(phase.format)
+				)
+				const primaryResult =
+					primaryIndex >= 0 ? settledResponses[primaryIndex] : undefined
+				if (primaryResult?.status === 'rejected') throw primaryResult.reason
 			}
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
@@ -1447,7 +1481,6 @@ export default function TournamentReviewV2Client({
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
-		setGameweekError(null)
 		setSeasonError(null)
 		seasonSectionPages.current = {}
 		// Remove the previous phase's rows immediately. A settled phase is an
@@ -1858,9 +1891,10 @@ export default function TournamentReviewV2Client({
 											</button>
 										</div>
 									) : null}
-									{!loading && state !== 'READY' && eventId ? (
+									{!loading &&
+									selectedTournament.latestFinalizedEventId === null ? (
 										<Link
-											href={`/live/competitions/${selectedTournament.tournamentId}?gw=${eventId}`}
+											href={`/live/competitions/${selectedTournament.tournamentId}`}
 											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
 										>
 											{t('reviewLiveLink')}
