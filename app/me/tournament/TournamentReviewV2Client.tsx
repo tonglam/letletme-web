@@ -346,12 +346,12 @@ function combineSeasonSections(
 	const h2hMatches = h2hPages.flatMap(section => section.h2h?.matches ?? [])
 	const h2hSource = h2hPages.find(section => section.h2h) ?? null
 	const hasH2HNextPage = h2hPages.some(section => section.h2h?.hasNextPage)
-	const h2hSectionsComplete =
-		!h2hPages.length ||
-		(Boolean(pages.H2H_STANDINGS?.h2h) && Boolean(pages.H2H_FIXTURES?.h2h))
+	const phase = review.phases.find(candidate => candidate.phaseId === phaseId)
+	const phaseSectionsComplete = phase
+		? phaseSectionsReady(phase.format, pages)
+		: true
 	const combinedState =
-		review.phases.find(phase => phase.phaseId === phaseId)?.format === 'H2H' &&
-		!h2hSectionsComplete
+		phase && !phaseSectionsComplete && sections.length > 0
 			? 'DEGRADED'
 			: review.state
 	return normalizeSeason(
@@ -361,16 +361,15 @@ function combineSeasonSections(
 			points: pointsPage ?? null,
 			trajectoryPoints:
 				trajectoryPage?.points ?? review.trajectoryPoints ?? null,
-			h2h:
-				h2hSectionsComplete && h2hSource?.h2h
-					? {
-							...h2hSource.h2h,
-							matches: h2hMatches,
-							standings: h2hStandings,
-							hasNextPage: hasH2HNextPage,
-							nextCursor: null
-						}
-					: null,
+			h2h: h2hSource?.h2h
+				? {
+						...h2hSource.h2h,
+						matches: h2hMatches,
+						standings: h2hStandings,
+						hasNextPage: hasH2HNextPage || !phaseSectionsComplete,
+						nextCursor: null
+					}
+				: null,
 			knockout: pages.KNOCKOUT_BRACKET?.knockout ?? null
 		},
 		phaseId
@@ -388,6 +387,15 @@ function phaseSectionsReady(
 	if (format === 'H2H')
 		return Boolean(pages.H2H_STANDINGS?.h2h && pages.H2H_FIXTURES?.h2h)
 	return Boolean(pages.KNOCKOUT_BRACKET?.knockout)
+}
+
+function phaseCanRetry(
+	phase: MyTournamentSeasonReview['phases'][number]
+): boolean {
+	return (
+		phase.state !== 'NOT_STARTED' &&
+		Boolean(phase.revision && phase.semanticSha256)
+	)
 }
 
 function ReviewStateBanner({
@@ -881,9 +889,17 @@ export default function TournamentReviewV2Client({
 				)?.phaseId ?? null)
 			: null
 	)
-	const [retryOverview, setRetryOverview] = useState<
-		'gameweek' | 'season' | null
-	>(initialGameweekError ? 'gameweek' : initialSeasonError ? 'season' : null)
+	const [retryOverview, setRetryOverview] = useState<ReviewOverview[]>([
+		...(initialGameweekError ? (['gameweek'] as const) : []),
+		...(initialSeasonError ? (['season'] as const) : [])
+	])
+	const markRetryOverview = (target: ReviewOverview, retry: boolean) => {
+		setRetryOverview(current => {
+			if (retry)
+				return current.includes(target) ? current : [...current, target]
+			return current.filter(candidate => candidate !== target)
+		})
+	}
 	const requestSequence = useRef(0)
 	const catalogRequestSequence = useRef(0)
 	// A replacement (search/scope switch) advances this generation. Page
@@ -1024,7 +1040,7 @@ export default function TournamentReviewV2Client({
 			setGameweekError(null)
 			setSeasonError(null)
 			setRetryPhaseId(null)
-			setRetryOverview(null)
+			setRetryOverview([])
 			setSelectedTournamentId(nextSelected?.tournamentId ?? null)
 			const nextEventId = nextSelected?.latestFinalizedEventId ?? null
 			setEventId(nextEventId)
@@ -1043,7 +1059,7 @@ export default function TournamentReviewV2Client({
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
-			setError(
+			setCatalogError(
 				requestError?.code === 'CLIENT_UPGRADE_REQUIRED'
 					? t('reviewClientUpgrade')
 					: t('loadFailed')
@@ -1060,7 +1076,7 @@ export default function TournamentReviewV2Client({
 		retryTarget?: ReviewOverview
 	) => {
 		const requestedRetry = preserveSuccessful
-			? (retryTarget ?? retryOverview)
+			? (retryTarget ?? (retryOverview.length === 1 ? retryOverview[0] : null))
 			: null
 		const fetchGameweek =
 			!preserveSuccessful ||
@@ -1087,9 +1103,10 @@ export default function TournamentReviewV2Client({
 			seasonSectionPages.current = {}
 		if (!preserveSuccessful) {
 			setRetryPhaseId(null)
-			setRetryOverview(null)
+			setRetryOverview([])
 		}
 		let attemptedPhaseId: string | null = null
+		let attemptedPhaseRetryable = false
 		let overviewPublished = false
 		try {
 			const [gameweekResult, seasonResult] = await Promise.allSettled([
@@ -1135,7 +1152,7 @@ export default function TournamentReviewV2Client({
 				gameweekResult.status === 'rejected' &&
 				!retainedGameweek
 			)
-				setRetryOverview('gameweek')
+				markRetryOverview('gameweek', true)
 			overviewPublished = Boolean(
 				normalizedGameweek ||
 				normalizedSeason ||
@@ -1143,19 +1160,19 @@ export default function TournamentReviewV2Client({
 				retainedSeason
 			)
 			if (!fetchSeason) {
-				if (normalizedGameweek)
-					setRetryOverview(current => (current === 'gameweek' ? null : current))
+				if (normalizedGameweek) markRetryOverview('gameweek', false)
 				return
 			}
 			if (!normalizedSeason) {
 				if (seasonResult.status === 'rejected')
 					setSeasonError(requestMessage(seasonResult))
 				setRetryPhaseId(null)
-				setRetryOverview('season')
+				markRetryOverview('season', true)
 				return
 			}
 			const nextPhase = phaseAtEvent(normalizedSeason.phases, nextEventId)
 			attemptedPhaseId = nextPhase?.phaseId ?? null
+			attemptedPhaseRetryable = nextPhase ? phaseCanRetry(nextPhase) : false
 			// Publish the two successful overview reads before loading optional
 			// section pages. A section failure must not erase a valid Gameweek
 			// result, and a Season summary must remain explicitly non-ready until
@@ -1235,15 +1252,16 @@ export default function TournamentReviewV2Client({
 						nextPhase.phaseId
 					)
 				setRetryPhaseId(
-					phaseSectionsReady(nextPhase.format, pages) ? null : nextPhase.phaseId
+					phaseSectionsReady(nextPhase.format, pages) ||
+						!phaseCanRetry(nextPhase)
+						? null
+						: nextPhase.phaseId
 				)
 			}
 			if (requestId !== requestSequence.current) return
 			setSeasonReview(seasonWithSection)
-			if (normalizedGameweek || retainedGameweek)
-				setRetryOverview(current => (current === 'gameweek' ? null : current))
-			if (normalizedSeason || retainedSeason)
-				setRetryOverview(current => (current === 'season' ? null : current))
+			if (normalizedGameweek) markRetryOverview('gameweek', false)
+			if (normalizedSeason) markRetryOverview('season', false)
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
@@ -1253,7 +1271,7 @@ export default function TournamentReviewV2Client({
 					: t('loadFailed')
 			if (overviewPublished) setSeasonError(message)
 			else setError(message)
-			setRetryPhaseId(attemptedPhaseId)
+			setRetryPhaseId(attemptedPhaseRetryable ? attemptedPhaseId : null)
 		} finally {
 			if (requestId === requestSequence.current) setLoading(false)
 		}
@@ -1457,7 +1475,7 @@ export default function TournamentReviewV2Client({
 			setGameweekError(null)
 			setSeasonError(null)
 			setRetryPhaseId(null)
-			setRetryOverview(null)
+			setRetryOverview([])
 			replaceRoute({
 				tournamentId: nextSelected?.tournamentId ?? null,
 				eventId: nextEventId,
@@ -1506,7 +1524,7 @@ export default function TournamentReviewV2Client({
 			setGameweekError(null)
 			setSeasonError(null)
 			setRetryPhaseId(null)
-			setRetryOverview(null)
+			setRetryOverview([])
 			replaceRoute({ tournamentId: null, eventId: null })
 			return
 		}
@@ -1529,7 +1547,7 @@ export default function TournamentReviewV2Client({
 		setGameweekError(null)
 		setSeasonError(null)
 		setRetryPhaseId(null)
-		setRetryOverview(null)
+		setRetryOverview([])
 		replaceRoute({ tournamentId: nextId, eventId: nextEventId })
 		if (nextEventId) void loadReview(nextId, nextEventId, true)
 	}
@@ -1639,7 +1657,9 @@ export default function TournamentReviewV2Client({
 				) as SeasonSectionPages
 				seasonSectionPages.current = pages
 				setRetryPhaseId(
-					phaseSectionsReady(phase.format, pages) ? null : phaseId
+					phaseSectionsReady(phase.format, pages) || !phaseCanRetry(phase)
+						? null
+						: phaseId
 				)
 				const sectionData = sections.find(Boolean) ?? null
 				setSeasonReview(previous =>
@@ -1662,7 +1682,7 @@ export default function TournamentReviewV2Client({
 						? t('reviewClientUpgrade')
 						: t('loadFailed')
 				setSeasonError(message)
-				setRetryPhaseId(phaseId)
+				setRetryPhaseId(phaseCanRetry(phase) ? phaseId : null)
 			} finally {
 				if (requestId === requestSequence.current) setLoading(false)
 			}
@@ -2015,25 +2035,33 @@ export default function TournamentReviewV2Client({
 											{t('reviewRetryPhase')}
 										</button>
 									) : null}
-									{retryOverview &&
+									{retryOverview.length > 0 &&
 									!loading &&
 									selectedTournamentId &&
 									eventId ? (
-										<button
-											type="button"
-											onClick={() =>
-												void loadReview(
-													selectedTournamentId,
-													eventId,
-													false,
-													true,
-													retryOverview
-												)
-											}
-											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
-										>
-											{t('reviewRetryOverview')}
-										</button>
+										<div className="mt-3 flex flex-wrap gap-3">
+											{retryOverview.map(target => (
+												<button
+													key={target}
+													type="button"
+													onClick={() =>
+														void loadReview(
+															selectedTournamentId,
+															eventId,
+															false,
+															true,
+															target
+														)
+													}
+													className="text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
+												>
+													{t('reviewRetryOverview')} ·{' '}
+													{target === 'gameweek'
+														? t('viewGameweek')
+														: t('viewSeason')}
+												</button>
+											))}
+										</div>
 									) : null}
 								</div>
 								{canRenderPayload && format && activeReview && (
