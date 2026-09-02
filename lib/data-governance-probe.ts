@@ -333,7 +333,7 @@ async function probeEntryData(
 			canarySession(config),
 			GET_MY_FPL_MANAGER_GAMEWEEK,
 			{ eventId, snapshotRevision: null },
-			{ cache: 'no-store', timeoutMs: 5_000 }
+			{ cache: 'no-store', timeoutMs: 30_000 }
 		)
 	const gameweek = response.myFplManagerGameweek
 	if (!gameweek || gameweek.eventId !== eventId) {
