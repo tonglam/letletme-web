@@ -184,3 +184,21 @@ test('Vercel promotion waits for the production alias before Tencent activation'
 	assert.match(workflow, /\[\[ \$attempt -eq 12 \]\] \|\| sleep 5/)
 	assert.match(workflow, /\[\[ \$production_ready == 1 \]\]/)
 })
+
+test('EdgeOne cutover requires an explicit workflow authorization', () => {
+	assert.match(
+		workflow,
+		/edgeone_cutover:\n\s+description: 'Authorize Tencent activation and EdgeOne split routing'\n\s+required: false\n\s+default: false\n\s+type: boolean/
+	)
+	assert.match(workflow, /WEB_EDGEONE_CUTOVER: \$\{\{ inputs\.edgeone_cutover \|\| false \}\}/)
+	assert.match(workflow, /if \[\[ "\$WEB_EDGEONE_CUTOVER" != true \]\]; then/)
+	assert.match(
+		workflow,
+		/Vercel exact SHA \$RELEASE_SHA is active; EdgeOne remains all-Vercel until edgeone_cutover=true\./
+	)
+
+	const guard = workflow.indexOf('if [[ "$WEB_EDGEONE_CUTOVER" != true ]]; then')
+	const activate = workflow.indexOf('letletme-release activate', guard)
+	const split = workflow.indexOf('node ops/release/edgeone-mode.mjs --mode split >/dev/null', guard)
+	assert.ok(guard >= 0 && guard < activate && guard < split)
+})
