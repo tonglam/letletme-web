@@ -113,6 +113,20 @@ describe('account linking — trusted providers', () => {
 	})
 })
 
+describe('OAuth state storage', () => {
+	it('stores the OAuth start state in the signed cookie', async () => {
+		const source = await readFile(
+			new URL('../../lib/auth.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(
+			source,
+			/account:\s*\{[\s\S]*storeStateStrategy:\s*['"]cookie['"]/
+		)
+		assert.doesNotMatch(source, /skipStateCookieCheck\s*:\s*true/)
+	})
+})
+
 describe('password policy', () => {
 	it('requires at least 10 characters', () => {
 		assert.equal(AUTH_PASSWORD_POLICY.minPasswordLength, 10)
