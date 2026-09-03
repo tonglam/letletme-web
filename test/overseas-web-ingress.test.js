@@ -48,12 +48,12 @@ test('overseas ingress serializes GraphQL and Web slot authorities', () => {
 test('standalone image build uses exact SHA and a BuildKit-only production key', () => {
 	assert.match(imageWorkflow, /ref: \$\{\{ env\.RELEASE_SHA \}\}/)
 	assert.match(imageWorkflow, /main_sha.*RELEASE_SHA/s)
+	assert.doesNotMatch(imageWorkflow, /vercel env pull/)
 	assert.match(
 		imageWorkflow,
-		/source_env_dir="\$\(mktemp -d \/tmp\/letletme-vercel-production-env\.XXXXXX\)"/
+		/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: \$\{\{ secrets\.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \}\}/
 	)
-	assert.match(imageWorkflow, /source_env="\$source_env_dir\/\.env\.production"/)
-	assert.match(imageWorkflow, /env pull "\$source_env"/)
+	assert.match(imageWorkflow, /base64\.b64decode\(encryption_key, validate=True\)/)
 	assert.match(imageWorkflow, /rm -f -- "\$build_env"/)
 	assert.match(imageWorkflow, /id=web_build_env,src=\/tmp\/letletme-web-build-env/)
 	assert.match(
@@ -62,15 +62,11 @@ test('standalone image build uses exact SHA and a BuildKit-only production key',
 	)
 	assert.match(
 		imageWorkflow,
-		/wanted = \{\s+"NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",\s+\}/
+		/"NEXT_PUBLIC_APP_URL": "https:\/\/letletme\.top"/
 	)
 	assert.match(
 		imageWorkflow,
-		/values\.setdefault\("NEXT_PUBLIC_APP_URL", "https:\/\/letletme\.top"\)/
-	)
-	assert.match(
-		imageWorkflow,
-		/values\.setdefault\("NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE", "0\.25"\)/
+		/"NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE": "0\.25"/
 	)
 	assert.doesNotMatch(imageWorkflow, /"NEXT_PUBLIC_SUPABASE_URL"/)
 	assert.match(imageWorkflow, /NEXT_SERVER_ACTIONS_ENCRYPTION_KEY/)
