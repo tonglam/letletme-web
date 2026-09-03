@@ -258,7 +258,9 @@ handler/RSC. Proxy checks never replace data-access authorization.
   `Cache-Control: no-store`; upstream status and `Retry-After` are preserved.
 - Auth request bodies are capped at 16 KiB. Database-backed limits are
   120 requests/minute per opaque client subject at the Web proxy, 5/minute/IP
-  for Better Auth writes, 5/minute/IP and device for Mini Program login/confirmation,
+  for Better Auth writes (the OAuth start only emits a signed state cookie and
+  provider URL, while its callback remains GET-limited), 5/minute/IP and device
+  for Mini Program login/confirmation,
   and 5/minute/IP plus 3/hour/email for email start. Auth fails closed if the
   limiter is unavailable. Better Auth's built-in limiter is disabled so this
   atomic outer limiter is the single Web auth rate-limit owner. GraphQL applies a weighted

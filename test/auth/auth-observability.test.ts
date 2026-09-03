@@ -157,3 +157,14 @@ test('logout telemetry has an IP rate-limit boundary and self-hosted cleanup sta
 	assert.match(observability, /recordAuthRequestOutcome\(\n\s+503,/)
 	assert.match(installHost, /systemctl enable --now letletme-auth-event-cleanup\.timer/)
 })
+
+test('keeps the OAuth start path independent of the database limiter', () => {
+	const authCatchAll = readFileSync('app/api/auth/[...all]/route.ts', 'utf8')
+	const post = authCatchAll.slice(authCatchAll.indexOf('export async function POST'))
+	const oauthStartGate = post.indexOf("operation !== 'google-login-start'")
+	const databaseLimiter = post.indexOf("scope: 'better-auth-ip'")
+
+	assert.ok(oauthStartGate >= 0)
+	assert.ok(databaseLimiter > oauthStartGate)
+	assert.match(post, /const operation = authOperation\(request\)/)
+})

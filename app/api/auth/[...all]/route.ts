@@ -176,7 +176,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-	return withObservedAuthRequest(request, 'web', authOperation(request), async () => {
+	const operation = authOperation(request)
+	return withObservedAuthRequest(request, 'web', operation, async () => {
 		try {
 			const secret = process.env.BACKEND_PROXY_SECRET
 			if (!secret) {
@@ -191,24 +192,29 @@ export async function POST(request: Request) {
 					)
 				)
 			}
-			const rate = await checkDatabaseRateLimit({
-				scope: 'better-auth-ip',
-				subject: buildOpaqueRateLimitSubject(request.headers, secret),
-				limit: 5,
-				windowSeconds: 60
-			})
-			if (!rate.allowed) {
-				recordAuthFailure('rate_limited', 429, 'rate_limited')
-				return responseWithPolicies(
-					request,
-					Response.json(
-						{ code: 'RATE_LIMITED', message: 'Too many requests' },
-						{
-							status: 429,
-							headers: { 'Retry-After': String(rate.retryAfterSeconds) }
-						}
+			// OAuth start only creates a provider URL and signed state cookie. Keep
+			// it off the database limiter so a cold DB connection cannot consume
+			// Vercel's function deadline; the callback remains GET-rate-limited.
+			if (operation !== 'google-login-start') {
+				const rate = await checkDatabaseRateLimit({
+					scope: 'better-auth-ip',
+					subject: buildOpaqueRateLimitSubject(request.headers, secret),
+					limit: 5,
+					windowSeconds: 60
+				})
+				if (!rate.allowed) {
+					recordAuthFailure('rate_limited', 429, 'rate_limited')
+					return responseWithPolicies(
+						request,
+						Response.json(
+							{ code: 'RATE_LIMITED', message: 'Too many requests' },
+							{
+								status: 429,
+								headers: { 'Retry-After': String(rate.retryAfterSeconds) }
+							}
+						)
 					)
-				)
+				}
 			}
 			const body = await readBoundedText(request, MAX_AUTH_BODY_BYTES)
 			try {
