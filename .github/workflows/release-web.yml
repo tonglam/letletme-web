@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      edgeone_cutover:
+        description: 'Authorize Tencent activation and EdgeOne split routing'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -35,6 +40,7 @@ env:
   # remaining invocation headroom requires an immediate hard stop.
   WEB_LIVE_REFRESH_PROFILE: ${{ vars.LETLETME_LIVE_REFRESH_PROFILE || 'conserve' }}
   WEB_MAINTENANCE_MODE: ${{ inputs.maintenance_mode || false }}
+  WEB_EDGEONE_CUTOVER: ${{ inputs.edgeone_cutover || false }}
 
 jobs:
   deploy:
@@ -56,6 +62,10 @@ jobs:
           case "$WEB_MAINTENANCE_MODE" in
             true|false) ;;
             *) echo "invalid maintenance_mode: $WEB_MAINTENANCE_MODE" >&2; exit 1 ;;
+          esac
+          case "$WEB_EDGEONE_CUTOVER" in
+            true|false) ;;
+            *) echo "invalid edgeone_cutover: $WEB_EDGEONE_CUTOVER" >&2; exit 1 ;;
           esac
           if [[ "${{ vars.LETLETME_RELEASE_AUTOMATION_ENABLED }}" != "true" ]]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -487,6 +497,16 @@ jobs:
             route_changed=0
             cleanup_remote_root
             echo "Vercel maintenance barrier is active at exact SHA $RELEASE_SHA; EdgeOne remains all-Vercel."
+            exit 0
+          fi
+
+          if [[ "$WEB_EDGEONE_CUTOVER" != true ]]; then
+            # EdgeOne public cutover is an independently authorized action.
+            # Keep the verified Vercel release live and leave Tencent staged
+            # only for cleanup by the trap; do not activate or split traffic.
+            route_changed=0
+            cleanup_remote_root
+            echo "Vercel exact SHA $RELEASE_SHA is active; EdgeOne remains all-Vercel until edgeone_cutover=true."
             exit 0
           fi
 
