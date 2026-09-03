@@ -17,6 +17,7 @@ test('overseas Web ingress uses the active slot and canonical host', () => {
 		site,
 		/server_name letletme\.top www\.letletme\.top eo-overseas-canary\.letletme\.top;/
 	)
+	assert.match(site, /include \/etc\/nginx\/snippets\/letletme-web-origin-auth\.conf;/)
 	assert.match(site, /proxy_pass http:\/\/letletme_web_active;/)
 	assert.match(site, /proxy_set_header Host letletme\.top;/)
 	assert.match(site, /proxy_set_header X-LetLetMe-Proxy-Secret \$letletme_local_proxy_secret;/)
