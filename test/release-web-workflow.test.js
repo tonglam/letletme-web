@@ -194,7 +194,7 @@ test('EdgeOne cutover requires an explicit workflow authorization', () => {
 	assert.match(workflow, /if \[\[ "\$WEB_EDGEONE_CUTOVER" != true \]\]; then/)
 	assert.match(
 		workflow,
-		/Vercel exact SHA \$RELEASE_SHA is active; EdgeOne remains all-Vercel until edgeone_cutover=true\./
+		/Vercel and Tencent canary exact SHA \$RELEASE_SHA are active; EdgeOne remains all-Vercel until edgeone_cutover=true\./
 	)
 
 	const guard = workflow.indexOf('if [[ "$WEB_EDGEONE_CUTOVER" != true ]]; then')
