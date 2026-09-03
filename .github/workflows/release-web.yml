@@ -502,11 +502,18 @@ jobs:
 
           if [[ "$WEB_EDGEONE_CUTOVER" != true ]]; then
             # EdgeOne public cutover is an independently authorized action.
-            # Keep the verified Vercel release live and leave Tencent staged
-            # only for cleanup by the trap; do not activate or split traffic.
+            # The Tencent canary is still activated and health-checked so the
+            # read-only canary converges to the same exact SHA.  Do not split
+            # public EdgeOne traffic.
+            ssh -F "$ssh_dir/config" letletme-tencent \
+              "sudo /usr/local/libexec/letletme-release activate '$RELEASE_SHA'"
+            tencent_activated=1
+            ssh -F "$ssh_dir/config" letletme-tencent \
+              "curl --fail --silent --show-error --max-time 10 -D - -o /dev/null http://127.0.0.1:3000/healthz" |
+              grep -qi "^x-letletme-release: $RELEASE_SHA"
             route_changed=0
             cleanup_remote_root
-            echo "Vercel exact SHA $RELEASE_SHA is active; EdgeOne remains all-Vercel until edgeone_cutover=true."
+            echo "Vercel and Tencent canary exact SHA $RELEASE_SHA are active; EdgeOne remains all-Vercel until edgeone_cutover=true."
             exit 0
           fi
 
