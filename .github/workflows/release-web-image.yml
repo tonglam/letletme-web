@@ -71,8 +71,16 @@ jobs:
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
             [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
           done
-          source_env="$(mktemp /tmp/letletme-vercel-production-env.XXXXXX)"
+          source_env_dir="$(mktemp -d /tmp/letletme-vercel-production-env.XXXXXX)"
+          source_env="$source_env_dir/.env.production"
           build_env="/tmp/letletme-web-build-env"
+          cleanup() {
+            rm -f -- "$source_env"
+            rmdir -- "$source_env_dir" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          chmod 0700 "$source_env_dir"
+          rm -f -- "$build_env"
           mkdir -p .vercel
           python3 - "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json <<'PY'
           import json
@@ -81,8 +89,6 @@ jobs:
           print(json.dumps({"orgId": sys.argv[1], "projectId": sys.argv[2]}))
           PY
           chmod 0600 .vercel/project.json
-          chmod 0600 "$source_env"
-          chmod 0600 "$build_env" 2>/dev/null || true
           npx --yes "vercel@${VERCEL_CLI_VERSION}" env pull "$source_env" \
             --environment=production \
             --scope "$VERCEL_ORG_ID" \
@@ -121,7 +127,7 @@ jobs:
           )
           output_path.chmod(0o600)
           PY
-          rm -f -- "$source_env"
+          chmod 0600 "$build_env"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@18ce135bb5112fa8ce4ed6c17ab05699d7f3a5e0 # v3.11.0
@@ -139,6 +145,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cleanup() { rm -f -- /tmp/letletme-web-build-env; }
+          trap cleanup EXIT
           docker buildx build \
             --file Dockerfile \
             --platform linux/amd64 \
