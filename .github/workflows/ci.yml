@@ -9,6 +9,10 @@ permissions:
 
 env:
   NODE_ENV: test
+  # Production-shaped CI keeps the historical fast cadence so deterministic
+  # E2E fixtures exercise refresh behavior without waiting two minutes. The
+  # release workflow explicitly selects `conserve` for production.
+  NEXT_PUBLIC_LIVE_REFRESH_PROFILE: normal
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   SCHEMA_EXPORT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/schema_export

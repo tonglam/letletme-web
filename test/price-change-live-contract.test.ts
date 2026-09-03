@@ -19,9 +19,18 @@ describe('price-change live delivery contract', () => {
 		assert.match(board, /params\.get\('revision'\)/)
 		assert.match(board, /params\.get\('sourceHash'\)/)
 		assert.match(client, /HOT_WINDOW_BEFORE_MS = 5 \* 60_000/)
-		assert.match(client, /HOT_POLL_MS = 2_000/)
-		assert.match(client, /FINAL_POLL_MS = 500/)
-		assert.match(client, /IDLE_POLL_MS = 60_000/)
+		assert.match(
+			client,
+			/HOT_POLL_MS = LIVE_REFRESH_PROFILE === 'conserve' \? 15_000 : 2_000/
+		)
+		assert.match(
+			client,
+			/FINAL_POLL_MS = LIVE_REFRESH_PROFILE === 'conserve' \? 5_000 : 500/
+		)
+		assert.match(
+			client,
+			/IDLE_POLL_MS = LIVE_REFRESH_PROFILE === 'conserve' \? 120_000 : 60_000/
+		)
 		assert.match(client, /\[board\.deadline, \.\.\.board\.nextDeadlines\]/)
 		assert.match(client, /visibilitychange/)
 		assert.match(component, /liveState === 'PROVISIONAL'/)

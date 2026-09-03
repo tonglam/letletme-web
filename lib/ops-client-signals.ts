@@ -1,8 +1,16 @@
 import 'server-only'
 
 import type { ClientSignalBatchV1 } from '@/lib/client-signal-contract'
+import {
+	beginClientSignalForward,
+	createClientSignalForwardCircuit,
+	recordClientSignalForwardFailure,
+	recordClientSignalForwardSuccess
+} from '@/lib/ops-client-signal-circuit'
 
-const DATA_FORWARD_TIMEOUT_MS = 5_000
+export const DATA_FORWARD_TIMEOUT_MS = 300
+
+const forwardCircuit = createClientSignalForwardCircuit()
 
 function dataBaseUrl(): string {
 	return (process.env.LETLETME_DATA_URL ?? '').trim().replace(/\/+$/, '')
@@ -10,6 +18,11 @@ function dataBaseUrl(): string {
 
 function dataApiKey(): string {
 	return (process.env.LETLETME_DATA_API_KEY ?? '').trim()
+}
+
+/** Test-only reset; production code never calls this. */
+export function resetClientSignalForwarderForTests(): void {
+	recordClientSignalForwardSuccess(forwardCircuit)
 }
 
 /** Best-effort forwarder: telemetry failure is never allowed to fail a user request. */
@@ -23,6 +36,15 @@ export async function forwardClientSignalBatch(
 			JSON.stringify({
 				event: 'client_signal_forward_skipped',
 				reason: 'not_configured'
+			})
+		)
+		return
+	}
+	if (!beginClientSignalForward(forwardCircuit, Date.now())) {
+		console.warn(
+			JSON.stringify({
+				event: 'client_signal_forward_suppressed',
+				reason: 'circuit_open'
 			})
 		)
 		return
@@ -42,14 +64,26 @@ export async function forwardClientSignalBatch(
 			body: JSON.stringify(batch)
 		})
 		if (!response.ok) {
+			if (
+				response.status >= 500 ||
+				response.status === 408 ||
+				response.status === 429
+			) {
+				recordClientSignalForwardFailure(forwardCircuit, Date.now())
+			} else {
+				recordClientSignalForwardSuccess(forwardCircuit)
+			}
 			console.warn(
 				JSON.stringify({
 					event: 'client_signal_forward_failed',
 					status: response.status
 				})
 			)
+		} else {
+			recordClientSignalForwardSuccess(forwardCircuit)
 		}
 	} catch (error) {
+		recordClientSignalForwardFailure(forwardCircuit, Date.now())
 		console.warn(
 			JSON.stringify({
 				event: 'client_signal_forward_failed',

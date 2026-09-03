@@ -98,7 +98,15 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 	)
 	assert.match(
 		deployCommand,
+		/(?:^|\s)--build-env "NEXT_PUBLIC_LIVE_REFRESH_PROFILE=\$WEB_LIVE_REFRESH_PROFILE"(?:\s|$)/
+	)
+	assert.match(
+		deployCommand,
 		/(?:^|\s)--env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=\$WEB_PRICE_CHANGE_LIVE_ENABLED"(?:\s|$)/
+	)
+	assert.match(
+		deployCommand,
+		/(?:^|\s)--env "NEXT_PUBLIC_LIVE_REFRESH_PROFILE=\$WEB_LIVE_REFRESH_PROFILE"(?:\s|$)/
 	)
 	assert.match(deployCommand, /(?:^|\s)--meta "gitSha=\$RELEASE_SHA"(?:\s|$)/)
 	assert.doesNotMatch(deployCommand, /(?:^|\s)--prebuilt(?:\s|$)/)
@@ -111,7 +119,11 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 test('signed Tencent release archive carries the same public live flag', () => {
 	assert.match(
 		workflow,
-		/printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\\n' "\$WEB_PRICE_CHANGE_LIVE_ENABLED" > "\$tmp_root\/\.env\.production"/
+		/printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\\nNEXT_PUBLIC_LIVE_REFRESH_PROFILE=%s\\n'/
+	)
+	assert.match(
+		workflow,
+		/"\$WEB_PRICE_CHANGE_LIVE_ENABLED" "\$WEB_LIVE_REFRESH_PROFILE" > "\$tmp_root\/\.env\.production"/
 	)
 	assert.match(
 		workflow,

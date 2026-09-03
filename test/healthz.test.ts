@@ -68,3 +68,35 @@ test('healthz prefers the Vercel Git SHA over a stale explicit release', async (
 		}
 	}
 })
+
+test('healthz reports the overseas origin', async () => {
+	const names = [
+		'LETLETME_ORIGIN',
+		'LETLETME_RELEASE_SHA',
+		'VERCEL_GIT_COMMIT_SHA',
+		'VERCEL',
+		'NEXT_DEPLOYMENT_ID'
+	] as const
+	const previous = Object.fromEntries(
+		names.map(name => [name, process.env[name]])
+	)
+	process.env.LETLETME_ORIGIN = 'overseas'
+	process.env.LETLETME_RELEASE_SHA = 'def4567'
+	try {
+		delete process.env.VERCEL_GIT_COMMIT_SHA
+		delete process.env.VERCEL
+		delete process.env.NEXT_DEPLOYMENT_ID
+		const response = await GET()
+		assert.equal(response.headers.get('x-letletme-origin'), 'overseas')
+		assert.deepEqual(await response.json(), {
+			status: 'ok',
+			origin: 'overseas',
+			release: 'def4567'
+		})
+	} finally {
+		for (const name of names) {
+			if (previous[name] === undefined) delete process.env[name]
+			else process.env[name] = previous[name]
+		}
+	}
+})

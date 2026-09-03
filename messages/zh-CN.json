@@ -1454,6 +1454,8 @@
 	},
 	"PriceChanges": {
 		"title": "身价预测",
+		"refresh": "刷新",
+		"refreshing": "正在刷新…",
 		"deadlineLabel": "身价变化截止时间",
 		"snapshotUpdatedAt": "更新于",
 		"countdownEyebrow": "下一次身价检查",

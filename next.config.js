@@ -39,6 +39,7 @@ function resolveReleaseSha() {
 
 function resolveDeploymentOrigin() {
 	if (process.env.LETLETME_ORIGIN === 'tencent') return 'tencent'
+	if (process.env.LETLETME_ORIGIN === 'overseas') return 'overseas'
 	if (process.env.LETLETME_ORIGIN === 'vercel' || process.env.VERCEL === '1') {
 		return 'vercel'
 	}

@@ -92,6 +92,31 @@ describe('GraphQL proxy read path', () => {
 		assert.match(route, /workload: effectiveWorkload/)
 	})
 
+	it('keeps synthetic probes out of client telemetry and samples real successes at one percent', () => {
+		const route = readFileSync(
+			new URL('../app/api/graphql/route.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(route, /const SUCCESS_SIGNAL_SAMPLE_RATE = 0\.01/)
+		assert.match(
+			route,
+			/const sampleSource = sampleSourceForRequest\(input\.request\)[\s\S]*if \(sampleSource === 'synthetic'\) return response/
+		)
+		assert.match(route, /if \(result === 'ok' && Math\.random\(\) >= SUCCESS_SIGNAL_SAMPLE_RATE\)/)
+	})
+
+	it('bounds telemetry forwarding independently of the GraphQL response', () => {
+		const forwarder = readFileSync(
+			new URL('../lib/ops-client-signals.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(forwarder, /DATA_FORWARD_TIMEOUT_MS = 300/)
+		assert.match(forwarder, /setTimeout\(\(\) => controller\.abort\(\), DATA_FORWARD_TIMEOUT_MS\)/)
+		assert.match(forwarder, /beginClientSignalForward\(forwardCircuit, Date\.now\(\)\)/)
+		assert.match(forwarder, /recordClientSignalForwardFailure\(forwardCircuit, Date\.now\(\)\)/)
+		assert.match(forwarder, /recordClientSignalForwardSuccess\(forwardCircuit\)/)
+	})
+
 	it('adds trusted server context to direct RSC GraphQL requests', () => {
 		const client = readFileSync(
 			new URL('../lib/graphql-client.ts', import.meta.url),

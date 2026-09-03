@@ -1,0 +1,13 @@
+.git
+.vercel
+.github
+.next
+.playwright-cli
+node_modules
+output
+test-results
+playwright-report
+*.log
+.env*
+Dockerfile*
+!.dockerignore

@@ -1,6 +1,10 @@
 'use client'
 
-import { LIVE_AUTO_REFRESH_SECONDS } from '@/lib/live-refresh'
+import {
+	LIVE_AUTO_REFRESH_SECONDS,
+	LIVE_REFRESH_MANUAL_ONLY,
+	LIVE_REFRESH_PROFILE
+} from '@/lib/live-refresh'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -17,24 +21,25 @@ export function LiveAutoRefreshCountdown({
 	renderLabel: (seconds: number) => ReactNode
 	showLabel?: boolean
 }) {
+	const autoRefreshEnabled = enabled && !LIVE_REFRESH_MANUAL_ONLY
 	const [countdown, setCountdown] = useState<number | null>(null)
 	const refreshInFlightRef = useRef(false)
 	const refreshPendingRef = useRef(false)
 	const refreshRunnerRef = useRef<(() => void) | null>(null)
-	const enabledRef = useRef(enabled)
+	const enabledRef = useRef(autoRefreshEnabled)
 	const onRefreshRef = useRef(onRefresh)
-	const wasEnabledRef = useRef(enabled)
+	const wasEnabledRef = useRef(autoRefreshEnabled)
 
 	useEffect(() => {
 		onRefreshRef.current = onRefresh
 	}, [onRefresh])
 
 	useEffect(() => {
-		enabledRef.current = enabled
-		const resumed = enabled && !wasEnabledRef.current
-		wasEnabledRef.current = enabled
+		enabledRef.current = autoRefreshEnabled
+		const resumed = autoRefreshEnabled && !wasEnabledRef.current
+		wasEnabledRef.current = autoRefreshEnabled
 
-		if (!enabled) {
+		if (!autoRefreshEnabled) {
 			refreshPendingRef.current = false
 			const resetTimer = window.setTimeout(() => setCountdown(null), 0)
 			return () => window.clearTimeout(resetTimer)
@@ -64,13 +69,19 @@ export function LiveAutoRefreshCountdown({
 		refreshRunnerRef.current = runRefresh
 
 		const serverDeadline = nextRefreshAt ? Date.parse(nextRefreshAt) : Number.NaN
-		const baseDelay = Number.isFinite(serverDeadline)
+		const configuredDelay = LIVE_AUTO_REFRESH_SECONDS * 1000
+		const serverDelay = Number.isFinite(serverDeadline)
 			? Math.max(0, serverDeadline - Date.now())
-			: LIVE_AUTO_REFRESH_SECONDS * 1000
+			: configuredDelay
+		const baseDelay =
+			LIVE_REFRESH_PROFILE === 'conserve'
+				? Math.max(serverDelay, configuredDelay)
+				: serverDelay
 		const jitter = baseDelay > 0 ? baseDelay * (Math.random() * 0.2 - 0.1) : 0
 		let refreshDeadline = Date.now() + Math.max(0, baseDelay + jitter)
+		const initialCountdown = Math.max(1, Math.ceil(baseDelay / 1000))
 		const initialTimer = window.setTimeout(
-			() => setCountdown(LIVE_AUTO_REFRESH_SECONDS),
+			() => setCountdown(initialCountdown),
 			0
 		)
 		if (resumed) runRefresh()
@@ -81,7 +92,7 @@ export function LiveAutoRefreshCountdown({
 				Math.ceil((refreshDeadline - Date.now()) / 1000)
 			)
 			if (remaining === 0) {
-				refreshDeadline = Date.now() + LIVE_AUTO_REFRESH_SECONDS * 1000
+				refreshDeadline = Date.now() + configuredDelay
 				runRefresh()
 				setCountdown(LIVE_AUTO_REFRESH_SECONDS)
 				return
@@ -96,9 +107,9 @@ export function LiveAutoRefreshCountdown({
 				refreshRunnerRef.current = null
 			}
 		}
-	}, [enabled, nextRefreshAt])
+	}, [autoRefreshEnabled, nextRefreshAt])
 
-	if (!enabled || countdown === null || !showLabel) return null
+	if (!autoRefreshEnabled || countdown === null || !showLabel) return null
 
 	return (
 		<span className="text-xs text-muted-foreground">

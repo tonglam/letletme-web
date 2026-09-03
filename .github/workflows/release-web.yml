@@ -30,6 +30,10 @@ env:
   # variable.  The safe default remains off until the Data hot watcher has
   # been verified in production.
   WEB_PRICE_CHANGE_LIVE_ENABLED: ${{ vars.LETLETME_PRICE_CHANGE_LIVE_ENABLED || 'false' }}
+  # Conserve is the safe production profile while the free Function budget is
+  # being recovered. Set the repository variable to `manual` only when the
+  # remaining invocation headroom requires an immediate hard stop.
+  WEB_LIVE_REFRESH_PROFILE: ${{ vars.LETLETME_LIVE_REFRESH_PROFILE || 'conserve' }}
   WEB_MAINTENANCE_MODE: ${{ inputs.maintenance_mode || false }}
 
 jobs:
@@ -193,6 +197,10 @@ jobs:
             true|false) ;;
             *) echo "invalid LETLETME_PRICE_CHANGE_LIVE_ENABLED value: $WEB_PRICE_CHANGE_LIVE_ENABLED" >&2; exit 1 ;;
           esac
+          case "$WEB_LIVE_REFRESH_PROFILE" in
+            normal|conserve|manual) ;;
+            *) echo "invalid LETLETME_LIVE_REFRESH_PROFILE value: $WEB_LIVE_REFRESH_PROFILE" >&2; exit 1 ;;
+          esac
           # Keep sensitive Production variables inside Vercel. A local
           # `vercel build` receives empty placeholders for sensitive values,
           # while a remote Production build receives the real environment.
@@ -203,10 +211,12 @@ jobs:
             --force \
             --build-env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
             --build-env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=$WEB_PRICE_CHANGE_LIVE_ENABLED" \
+            --build-env "NEXT_PUBLIC_LIVE_REFRESH_PROFILE=$WEB_LIVE_REFRESH_PROFILE" \
             --build-env "MAINTENANCE_MODE=$WEB_MAINTENANCE_MODE" \
             --build-env "MAINTENANCE_RETRY_AFTER_SECONDS=420" \
             --env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
             --env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=$WEB_PRICE_CHANGE_LIVE_ENABLED" \
+            --env "NEXT_PUBLIC_LIVE_REFRESH_PROFILE=$WEB_LIVE_REFRESH_PROFILE" \
             --env "MAINTENANCE_MODE=$WEB_MAINTENANCE_MODE" \
             --env "MAINTENANCE_RETRY_AFTER_SECONDS=420" \
             --meta "gitSha=$RELEASE_SHA" \
@@ -363,12 +373,17 @@ jobs:
             true|false) ;;
             *) echo "invalid LETLETME_PRICE_CHANGE_LIVE_ENABLED value: $WEB_PRICE_CHANGE_LIVE_ENABLED" >&2; exit 1 ;;
           esac
+          case "$WEB_LIVE_REFRESH_PROFILE" in
+            normal|conserve|manual) ;;
+            *) echo "invalid LETLETME_LIVE_REFRESH_PROFILE value: $WEB_LIVE_REFRESH_PROFILE" >&2; exit 1 ;;
+          esac
           git archive --format=tar "$RELEASE_SHA" > "$tmp_root/release.tar"
           # The Tencent release tool builds from the signed archive and uses a
           # deliberately narrow host-env allowlist.  Carry the same public
           # feature flag in the signed source so both origins compile the
           # identical client bundle without copying any host secrets.
-          printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\n' "$WEB_PRICE_CHANGE_LIVE_ENABLED" > "$tmp_root/.env.production"
+          printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\nNEXT_PUBLIC_LIVE_REFRESH_PROFILE=%s\n' \
+            "$WEB_PRICE_CHANGE_LIVE_ENABLED" "$WEB_LIVE_REFRESH_PROFILE" > "$tmp_root/.env.production"
           chmod 0600 "$tmp_root/.env.production"
           tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .env.production
           printf '%s\n' "$RELEASE_SHA" > "$tmp_root/.letletme-release-sha"
