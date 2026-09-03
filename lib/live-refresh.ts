@@ -4,10 +4,27 @@ import type {
 } from '@/lib/graphql/operations/live'
 import type { LiveMatchdayStatus } from '@/lib/live-matches'
 
+export type LiveRefreshProfile = 'normal' | 'conserve' | 'manual'
+
+export function resolveLiveRefreshProfile(
+	rawValue = process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE,
+	nodeEnvironment = process.env.NODE_ENV
+): LiveRefreshProfile {
+	const value = rawValue?.trim().toLowerCase()
+	if (value === 'conserve' || value === 'manual' || value === 'normal') {
+		return value
+	}
+	return nodeEnvironment === 'production' ? 'conserve' : 'normal'
+}
+
+export const LIVE_REFRESH_PROFILE = resolveLiveRefreshProfile()
+export const LIVE_REFRESH_MANUAL_ONLY = LIVE_REFRESH_PROFILE === 'manual'
+
 // Context is a cheap ETag probe. Keep it more frequent than the Data live
 // publication poll so a newly published revision is noticed promptly without
 // causing another upstream FPL request.
-export const LIVE_AUTO_REFRESH_SECONDS = 30
+export const LIVE_AUTO_REFRESH_SECONDS =
+	LIVE_REFRESH_PROFILE === 'conserve' ? 120 : 30
 export const LIVE_EXPLAIN_REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
 export function isLiveRefreshTerminalState(state?: string | null): boolean {

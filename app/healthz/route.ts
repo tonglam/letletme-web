@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-function currentOrigin(): 'tencent' | 'vercel' | 'unknown' {
+function currentOrigin(): 'tencent' | 'overseas' | 'vercel' | 'unknown' {
 	if (process.env.LETLETME_ORIGIN === 'tencent') return 'tencent'
+	if (process.env.LETLETME_ORIGIN === 'overseas') return 'overseas'
 	if (process.env.LETLETME_ORIGIN === 'vercel' || process.env.VERCEL === '1') {
 		return 'vercel'
 	}

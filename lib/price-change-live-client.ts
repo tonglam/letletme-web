@@ -6,20 +6,29 @@ import type {
 	PriceChangeLiveCursor,
 	PriceChangeLiveState
 } from '@/lib/graphql/operations/price-changes'
+import {
+	LIVE_REFRESH_MANUAL_ONLY,
+	LIVE_REFRESH_PROFILE
+} from '@/lib/live-refresh'
 import { useEffect, useRef } from 'react'
 
 const HOT_WINDOW_BEFORE_MS = 5 * 60_000
 const HOT_WINDOW_AFTER_MS = 5 * 60_000
 const FINAL_WINDOW_BEFORE_MS = 10_000
-const HOT_POLL_MS = 2_000
-const FINAL_POLL_MS = 500
-const IDLE_POLL_MS = 60_000
+const HOT_POLL_MS = LIVE_REFRESH_PROFILE === 'conserve' ? 15_000 : 2_000
+const FINAL_POLL_MS = LIVE_REFRESH_PROFILE === 'conserve' ? 5_000 : 500
+const IDLE_POLL_MS = LIVE_REFRESH_PROFILE === 'conserve' ? 120_000 : 60_000
 const LIVE_DISABLED_REFRESH_MS = 5 * 60_000
 
 export function isPriceChangeLiveEnabled(): boolean {
+	if (LIVE_REFRESH_MANUAL_ONLY) return false
 	const raw = process.env.NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED
 	if (raw === undefined) return process.env.NODE_ENV !== 'production'
 	return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
+}
+
+export function isPriceChangeLiveManualOnly(): boolean {
+	return LIVE_REFRESH_MANUAL_ONLY
 }
 
 type LiveCursorResponse = PriceChangeLiveCursor

@@ -1454,6 +1454,8 @@
 	},
 	"PriceChanges": {
 		"title": "Price Predictions",
+		"refresh": "Refresh",
+		"refreshing": "Refreshing…",
 		"deadlineLabel": "Price-change deadline",
 		"snapshotUpdatedAt": "Updated",
 		"countdownEyebrow": "Next price check",

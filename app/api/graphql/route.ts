@@ -38,7 +38,7 @@ import { after, NextRequest, NextResponse } from 'next/server'
 const GRAPHQL_ENDPOINT = resolveServerGraphQLEndpoint()
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
 const MAX_GRAPHQL_RESPONSE_BYTES = 8 * 1024 * 1024
-const SUCCESS_SIGNAL_SAMPLE_RATE = 0.1
+const SUCCESS_SIGNAL_SAMPLE_RATE = 0.01
 
 function noStoreJson(
 	body: unknown,
@@ -401,6 +401,11 @@ function observeProxyResponse(
 	}
 ): Response {
 	const result = proxyResult(response.status, input.responseBodyOk)
+	const sampleSource = sampleSourceForRequest(input.request)
+	// Synthetic probes already have their own durable Ops result. Keeping them
+	// out of the client-signal forwarder prevents monitoring traffic from
+	// extending a user-facing serverless invocation.
+	if (sampleSource === 'synthetic') return response
 	if (result === 'ok' && Math.random() >= SUCCESS_SIGNAL_SAMPLE_RATE)
 		return response
 	const batch: ClientSignalBatchV1 = {
@@ -415,7 +420,7 @@ function observeProxyResponse(
 				surface: surfaceForWorkload(input.workload, input.operationName),
 				metric: 'graphql_proxy_ms',
 				deviceGroup: deviceGroupForRequest(input.request, input.trafficClass),
-				sampleSource: sampleSourceForRequest(input.request),
+				sampleSource,
 				result,
 				value: Math.max(0, Date.now() - input.startedAt)
 			}

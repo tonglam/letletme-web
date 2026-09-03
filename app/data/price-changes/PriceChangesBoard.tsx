@@ -36,6 +36,7 @@ import type {
 } from '@/lib/graphql/operations/price-changes'
 import {
 	isPriceChangeLiveEnabled,
+	isPriceChangeLiveManualOnly,
 	LIVE_DISABLED_REFRESH_MS,
 	usePriceChangeLiveBoard
 } from '@/lib/price-change-live-client'
@@ -72,7 +73,7 @@ import {
 	Search
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
 const PAGE_SIZE = 20
 
@@ -289,6 +290,7 @@ export function PriceChangesBoard({
 }) {
 	const t = useTranslations('PriceChanges')
 	const router = useRouter()
+	const [isRefreshing, startRefresh] = useTransition()
 	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
 	const [scope, setScope] = useState<PriceChangeScope>(
@@ -335,7 +337,7 @@ export function PriceChangesBoard({
 	}, [board])
 
 	useEffect(() => {
-		if (isPriceChangeLiveEnabled()) return
+		if (isPriceChangeLiveEnabled() || isPriceChangeLiveManualOnly()) return
 		const timer = window.setInterval(
 			() => router.refresh(),
 			LIVE_DISABLED_REFRESH_MS
@@ -639,6 +641,19 @@ export function PriceChangesBoard({
 
 			<div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-primary/15 bg-primary/[0.035] px-4 py-3 sm:px-5">
 				<div className="flex flex-wrap items-center justify-end gap-2">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => startRefresh(() => router.refresh())}
+						disabled={isRefreshing}
+					>
+						<RefreshCcw
+							className={isRefreshing ? 'size-4 animate-spin' : 'size-4'}
+							aria-hidden="true"
+						/>
+						{isRefreshing ? t('refreshing') : t('refresh')}
+					</Button>
 					<ShareActions
 						text={shareText}
 						imageRef={shareRef}

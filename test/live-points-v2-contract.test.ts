@@ -8,6 +8,7 @@ import { GET_HOME_GAMEWEEK } from '../lib/graphql/operations/home'
 import { GET_TOURNAMENT_DETAIL_DESK } from '../lib/graphql/operations/tournaments'
 import {
 	LIVE_AUTO_REFRESH_SECONDS,
+	resolveLiveRefreshProfile,
 	canReplaceLivePointsSnapshot,
 	liveContextToSnapshot,
 	livePointsRequestChangesEvent,
@@ -29,6 +30,14 @@ import {
 } from '../lib/live-score-v2'
 
 const revision = (value: string) => value.repeat(64 / value.length)
+
+it('resolves the production refresh profiles and safe defaults', () => {
+	assert.equal(resolveLiveRefreshProfile('normal', 'production'), 'normal')
+	assert.equal(resolveLiveRefreshProfile('CONSERVE', 'production'), 'conserve')
+	assert.equal(resolveLiveRefreshProfile('manual', 'production'), 'manual')
+	assert.equal(resolveLiveRefreshProfile('unexpected', 'production'), 'conserve')
+	assert.equal(resolveLiveRefreshProfile(undefined, 'test'), 'normal')
+})
 
 const score = (overrides: Record<string, unknown> = {}) => ({
 	eventPoints: 71,
