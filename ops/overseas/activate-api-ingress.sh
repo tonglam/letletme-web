@@ -251,15 +251,17 @@ if payload.get("release") != os.environ["EXPECTED_WEB_SHA"]:
 ' "$probe_body"
 
 curl --fail --silent --show-error --max-time 15 \
-  --resolve letletme.top:443:127.0.0.1 \
+  --header 'host: letletme.top' \
   --dump-header "$probe_headers" \
   --output "$probe_body" \
   --header 'content-type: application/json' \
   --header 'accept: application/json' \
+  --header "X-LetLetMe-Proxy-Secret: $(tr -d '[:space:]' < "$web_origin_token_file")" \
+  --header 'X-LetLetMe-Proxy-Client-IP: 127.0.0.1' \
   --header 'X-LetLetMe-Perf-Source: synthetic' \
   --header 'X-LetLetMe-Contract: live-points-v2' \
   --data '{"query":"query IngressActivationProbe { liveContext { season } }"}' \
-  https://letletme.top/api/graphql
+  "http://127.0.0.1:$web_active_port/api/graphql"
 
 python3 -c '
 import json, sys

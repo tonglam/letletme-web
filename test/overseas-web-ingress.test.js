@@ -37,7 +37,10 @@ test('overseas ingress serializes GraphQL and Web slot authorities', () => {
 	assert.match(activation, /hashlib\.sha256/)
 	assert.match(activation, /LETLETME_LOCAL_PROXY_SECRET/)
 	assert.match(activation, /127\.0\.0\.1:\$web_active_port\/healthz/)
+	assert.match(activation, /127\.0\.0\.1:\$web_active_port\/api\/graphql/)
+	assert.match(activation, /X-LetLetMe-Proxy-Secret: \$\(tr -d/)
 	assert.doesNotMatch(activation, /127\.0\.0\.1:3000\/healthz/)
+	assert.doesNotMatch(activation, /https:\/\/letletme\.top\/api\/graphql/)
 	assert.match(activation, /X-LetLetMe-Perf-Source: synthetic/)
 })
 
