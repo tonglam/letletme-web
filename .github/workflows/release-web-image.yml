@@ -23,7 +23,6 @@ env:
   RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha || github.sha }}
   IMAGE_NAME: ghcr.io/tonglam/letletme-web
   LIVE_REFRESH_PROFILE: ${{ vars.LETLETME_LIVE_REFRESH_PROFILE || 'conserve' }}
-  VERCEL_CLI_VERSION: 52.0.0
 
 jobs:
   publish:
@@ -60,64 +59,39 @@ jobs:
             *) echo "invalid LETLETME_LIVE_REFRESH_PROFILE value: $LIVE_REFRESH_PROFILE" >&2; exit 1 ;;
           esac
 
-      - name: Pull the minimal Vercel Production build environment
+      - name: Prepare the minimal production build environment
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
-            [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
-          done
-          source_env_dir="$(mktemp -d /tmp/letletme-vercel-production-env.XXXXXX)"
-          source_env="$source_env_dir/.env.production"
           build_env="/tmp/letletme-web-build-env"
-          cleanup() {
-            rm -f -- "$source_env"
-            rmdir -- "$source_env_dir" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          chmod 0700 "$source_env_dir"
           rm -f -- "$build_env"
-          mkdir -p .vercel
-          python3 - "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json <<'PY'
-          import json
-          import sys
-
-          print(json.dumps({"orgId": sys.argv[1], "projectId": sys.argv[2]}))
-          PY
-          chmod 0600 .vercel/project.json
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" env pull "$source_env" \
-            --environment=production \
-            --scope "$VERCEL_ORG_ID" \
-            --token "$VERCEL_TOKEN" >/dev/null
-          python3 - "$source_env" "$build_env" "$LIVE_REFRESH_PROFILE" <<'PY'
+          python3 - "$build_env" "$LIVE_REFRESH_PROFILE" <<'PY'
+          import base64
+          import os
           import pathlib
           import shlex
           import sys
 
-          source_path = pathlib.Path(sys.argv[1])
-          output_path = pathlib.Path(sys.argv[2])
-          live_profile = sys.argv[3]
-          wanted = {
-              "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",
+          output_path = pathlib.Path(sys.argv[1])
+          live_profile = sys.argv[2]
+          encryption_key = os.environ.get("NEXT_SERVER_ACTIONS_ENCRYPTION_KEY", "")
+          if not encryption_key:
+              raise SystemExit("GitHub Production is missing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY")
+          if len(encryption_key) != 44:
+              raise SystemExit("NEXT_SERVER_ACTIONS_ENCRYPTION_KEY must be 32-byte base64")
+          try:
+              decoded_key = base64.b64decode(encryption_key, validate=True)
+          except Exception as exc:
+              raise SystemExit("NEXT_SERVER_ACTIONS_ENCRYPTION_KEY must be valid base64") from exc
+          if len(decoded_key) != 32:
+              raise SystemExit("NEXT_SERVER_ACTIONS_ENCRYPTION_KEY must decode to 32 bytes")
+          values = {
+              "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": encryption_key,
+              "NEXT_PUBLIC_APP_URL": "https://letletme.top",
+              "NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE": "0.25",
           }
-          values = {}
-          for raw_line in source_path.read_text(encoding="utf-8").splitlines():
-              line = raw_line.strip()
-              if not line or line.startswith("#"):
-                  continue
-              key, separator, raw_value = line.partition("=")
-              if separator and key in wanted:
-                  parsed = shlex.split(raw_value, comments=False)
-                  values[key] = parsed[0] if parsed else ""
-          missing = sorted(key for key in wanted if not values.get(key))
-          if missing:
-              raise SystemExit("Vercel Production is missing build inputs: " + ",".join(missing))
-          values.setdefault("NEXT_PUBLIC_APP_URL", "https://letletme.top")
-          values.setdefault("NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE", "0.25")
           values["NEXT_PUBLIC_LIVE_REFRESH_PROFILE"] = live_profile
           values["NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED"] = "false"
           output_path.write_text(
