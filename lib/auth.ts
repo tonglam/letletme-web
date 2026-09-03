@@ -106,6 +106,9 @@ export const authConfig = {
 			: {})
 	},
 	account: {
+		// Keep the OAuth start path independent of the verification-table write.
+		// Better Auth still validates the signed state cookie on the callback.
+		storeStateStrategy: 'cookie',
 		accountLinking: {
 			enabled: true,
 			trustedProviders: [...AUTH_TRUSTED_PROVIDERS]
