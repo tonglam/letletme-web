@@ -60,6 +60,19 @@ test('standalone image build uses exact SHA and a BuildKit-only production key',
 		imageWorkflow,
 		/cleanup\(\) \{ rm -f -- \/tmp\/letletme-web-build-env; \}/
 	)
+	assert.match(
+		imageWorkflow,
+		/wanted = \{\s+"NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",\s+\}/
+	)
+	assert.match(
+		imageWorkflow,
+		/values\.setdefault\("NEXT_PUBLIC_APP_URL", "https:\/\/letletme\.top"\)/
+	)
+	assert.match(
+		imageWorkflow,
+		/values\.setdefault\("NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE", "0\.25"\)/
+	)
+	assert.doesNotMatch(imageWorkflow, /"NEXT_PUBLIC_SUPABASE_URL"/)
 	assert.match(imageWorkflow, /NEXT_SERVER_ACTIONS_ENCRYPTION_KEY/)
 	assert.match(imageWorkflow, /environment: production/)
 	assert.match(imageWorkflow, /--platform linux\/amd64/)

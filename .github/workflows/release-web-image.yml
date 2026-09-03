@@ -103,9 +103,6 @@ jobs:
           live_profile = sys.argv[3]
           wanted = {
               "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",
-              "NEXT_PUBLIC_APP_URL",
-              "NEXT_PUBLIC_SUPABASE_URL",
-              "NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE",
           }
           values = {}
           for raw_line in source_path.read_text(encoding="utf-8").splitlines():
@@ -119,6 +116,8 @@ jobs:
           missing = sorted(key for key in wanted if not values.get(key))
           if missing:
               raise SystemExit("Vercel Production is missing build inputs: " + ",".join(missing))
+          values.setdefault("NEXT_PUBLIC_APP_URL", "https://letletme.top")
+          values.setdefault("NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE", "0.25")
           values["NEXT_PUBLIC_LIVE_REFRESH_PROFILE"] = live_profile
           values["NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED"] = "false"
           output_path.write_text(
