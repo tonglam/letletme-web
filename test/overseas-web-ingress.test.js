@@ -48,8 +48,18 @@ test('overseas ingress serializes GraphQL and Web slot authorities', () => {
 test('standalone image build uses exact SHA and a BuildKit-only production key', () => {
 	assert.match(imageWorkflow, /ref: \$\{\{ env\.RELEASE_SHA \}\}/)
 	assert.match(imageWorkflow, /main_sha.*RELEASE_SHA/s)
+	assert.match(
+		imageWorkflow,
+		/source_env_dir="\$\(mktemp -d \/tmp\/letletme-vercel-production-env\.XXXXXX\)"/
+	)
+	assert.match(imageWorkflow, /source_env="\$source_env_dir\/\.env\.production"/)
 	assert.match(imageWorkflow, /env pull "\$source_env"/)
+	assert.match(imageWorkflow, /rm -f -- "\$build_env"/)
 	assert.match(imageWorkflow, /id=web_build_env,src=\/tmp\/letletme-web-build-env/)
+	assert.match(
+		imageWorkflow,
+		/cleanup\(\) \{ rm -f -- \/tmp\/letletme-web-build-env; \}/
+	)
 	assert.match(imageWorkflow, /NEXT_SERVER_ACTIONS_ENCRYPTION_KEY/)
 	assert.match(imageWorkflow, /environment: production/)
 	assert.match(imageWorkflow, /--platform linux\/amd64/)

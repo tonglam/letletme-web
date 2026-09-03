@@ -6,6 +6,11 @@
 			"main": false
 		}
 	},
+	"functions": {
+		"app/api/**/*.ts": {
+			"maxDuration": 10
+		}
+	},
 	"ignoreCommand": "node scripts/vercel-ignore-build.mjs",
 	"regions": ["sin1"],
 	"crons": [
