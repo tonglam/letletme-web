@@ -11,7 +11,7 @@ import { getVerifiedEntryContext } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
-const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 5_000
+const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 15_000
 
 const noStoreHeaders = (requestId?: string): Record<string, string> => ({
 	'Cache-Control': 'private, no-store',
