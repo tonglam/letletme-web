@@ -72,8 +72,8 @@ function withEmptyStateContext(
 	)
 	return {
 		...core,
-		position: core.profileRadar?.position ?? currentPoint?.position ?? 0,
-		asOfEventId: core.profileRadar?.asOfEventId ?? eventId ?? null,
+		position: currentPoint?.position ?? 0,
+		asOfEventId: eventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
