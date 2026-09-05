@@ -1194,6 +1194,21 @@ describe('asynchronous selection safety', () => {
 		assert.doesNotMatch(playerSource, /asOfEventId: eventId \?\? null/)
 	})
 
+	it('keeps player source notes separate across seasons with the same gameweek', async () => {
+		const profileSource = await readFile(
+			new URL(
+				'../app/data/player-stats/_components/PlayerFplProfile.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(
+			profileSource,
+			/second\.profile\.season !== first\.profile\.season/
+		)
+	})
+
 	it('clears stale team and tournament models before uncached gameweek loads', async () => {
 		const [teamSource, tournamentSource] = await Promise.all([
 			readFile(

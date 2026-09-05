@@ -380,7 +380,9 @@ export function PlayerFplProfile({
 	}
 
 	const sourceNote =
-		second && second.profile.asOfEventId !== first.profile.asOfEventId
+		second &&
+		(second.profile.season !== first.profile.season ||
+			second.profile.asOfEventId !== first.profile.asOfEventId)
 			? [first, second]
 					.map(
 						item =>
