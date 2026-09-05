@@ -17,6 +17,8 @@ type RadarPlayer = {
 	profile: PlayerRadarProfile
 }
 
+const FPL_PROFILE_MINUTES = 180
+
 const POSITION_LABELS: Record<
 	number,
 	'goalkeeper' | 'defender' | 'midfielder' | 'forward'
@@ -182,6 +184,16 @@ function ProfileCard({
 	const validAxes = player.profile.axes.filter(
 		axis => axis.available && axis.percentile !== null
 	).length
+	if (player.profile.smallSample) {
+		return (
+			<div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
+				{t('sampleInsufficient', {
+					minutes: player.profile.sampleMinutes,
+					threshold: FPL_PROFILE_MINUTES
+				})}
+			</div>
+		)
+	}
 	if (validAxes < 3) {
 		return (
 			<div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
@@ -215,6 +227,51 @@ function profileFromState(
 	}
 }
 
+function ProviderStatus({
+	items,
+	t
+}: {
+	items: Array<{
+		label?: string
+		profile: PlayerStateProfileData | null
+		loading: boolean
+		error: string | null
+	}>
+	t: ReturnType<typeof useTranslations<'PlayerStats.profile'>>
+}) {
+	return (
+		<div className="mb-3 space-y-2">
+			{items.map(item => {
+				if (item.error) return null
+				const understat = item.profile?.coverage.sources.find(
+					source =>
+						source.provider === 'UNDERSTAT' && source.scope === 'CURRENT'
+				)
+				const isVerifiedAndAvailable =
+					understat?.dataStatus === 'AVAILABLE' &&
+					understat.mappingStatus === 'VERIFIED'
+				return (
+					<p
+						key={item.label ?? 'primary'}
+						className="rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground"
+					>
+						{item.label ? `${item.label} · ` : ''}
+						{t('understatStatus', {
+							// An empty, completed source list is a deterministic
+							// unavailable result, not an endlessly loading state.
+							status: item.loading
+								? t('loading')
+								: isVerifiedAndAvailable
+									? t('understatVerified')
+									: t('notAvailable')
+						})}
+					</p>
+				)
+			})}
+		</div>
+	)
+}
+
 export function PlayerFplProfile({
 	player,
 	comparison,
@@ -223,7 +280,9 @@ export function PlayerFplProfile({
 	seasonStatsAvailable,
 	statusMessage,
 	isLoading,
-	isComparisonLoading
+	isComparisonLoading,
+	error,
+	comparisonError
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
@@ -233,6 +292,8 @@ export function PlayerFplProfile({
 	statusMessage: string | null
 	isLoading: boolean
 	isComparisonLoading: boolean
+	error: string | null
+	comparisonError: string | null
 }) {
 	const t = useTranslations('PlayerStats.profile')
 	const first = useMemo(
@@ -246,9 +307,13 @@ export function PlayerFplProfile({
 	const samePosition = Boolean(
 		second && first && first.profile.position === second.profile.position
 	)
+	const firstHasProfileSample = Boolean(first && !first.profile.smallSample)
+	const secondHasProfileSample = Boolean(second && !second.profile.smallSample)
 	const canOverlay = Boolean(
 		samePosition &&
 		first &&
+		firstHasProfileSample &&
+		secondHasProfileSample &&
 		(!second ||
 			(first.profile.axes.filter(
 				axis => axis.available && axis.percentile !== null
@@ -294,6 +359,27 @@ export function PlayerFplProfile({
 				title={t('title')}
 				hint={t('hint')}
 			>
+				<ProviderStatus
+					items={[
+						{
+							label: comparison ? player.webName : undefined,
+							profile,
+							loading: isLoading,
+							error
+						},
+						...(comparison
+							? [
+									{
+										label: comparison.webName,
+										profile: comparisonProfile,
+										loading: isComparisonLoading,
+										error: comparisonError
+									}
+								]
+							: [])
+					]}
+					t={t}
+				/>
 				<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
 					{t('unavailable')}
 				</p>
@@ -301,10 +387,23 @@ export function PlayerFplProfile({
 		)
 	}
 
-	const sourceNote = t('sourceNote', {
-		season: first.profile.season,
-		gw: first.profile.asOfEventId ?? '—'
-	})
+	const sourceNote =
+		second &&
+		(second.profile.season !== first.profile.season ||
+			second.profile.asOfEventId !== first.profile.asOfEventId)
+			? [first, second]
+					.map(
+						item =>
+							`${item.name}: ${t('sourceNote', {
+								season: item.profile.season,
+								gw: item.profile.asOfEventId ?? '—'
+							})}`
+					)
+					.join(' · ')
+			: t('sourceNote', {
+					season: first.profile.season,
+					gw: first.profile.asOfEventId ?? '—'
+				})
 
 	return (
 		<PlayerStatsSection
@@ -312,6 +411,27 @@ export function PlayerFplProfile({
 			title={t('title')}
 			hint={`${t('hint')} ${sourceNote}`}
 		>
+			<ProviderStatus
+				items={[
+					{
+						label: comparison ? player.webName : undefined,
+						profile,
+						loading: isLoading,
+						error
+					},
+					...(comparison
+						? [
+								{
+									label: comparison.webName,
+									profile: comparisonProfile,
+									loading: isComparisonLoading,
+									error: comparisonError
+								}
+							]
+						: [])
+				]}
+				t={t}
+			/>
 			{second && !samePosition ? (
 				<>
 					<p className="mb-3 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
@@ -359,6 +479,17 @@ export function PlayerFplProfile({
 						/>
 					</div>
 				</div>
+			) : !second ? (
+				<div>
+					<p className="mb-2 text-sm font-semibold">
+						{POSITION_CODES[first.profile.position] ?? '—'} ·{' '}
+						{t(POSITION_LABELS[first.profile.position] ?? 'midfielder')}
+					</p>
+					<ProfileCard
+						player={first}
+						t={t}
+					/>
+				</div>
 			) : (
 				<div className="grid items-center gap-6 md:grid-cols-[minmax(0,1.6fr)_minmax(13rem,0.8fr)]">
 					<div>
@@ -367,12 +498,12 @@ export function PlayerFplProfile({
 							{t(POSITION_LABELS[first.profile.position] ?? 'midfielder')}
 						</p>
 						<RadarChartView
-							players={second ? [first, second] : [first]}
+							players={[first, second]}
 							t={t}
 						/>
 					</div>
 					<RadarLegend
-						players={second ? [first, second] : [first]}
+						players={[first, second]}
 						t={t}
 					/>
 				</div>

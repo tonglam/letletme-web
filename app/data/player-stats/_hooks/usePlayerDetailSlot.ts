@@ -62,7 +62,7 @@ function writeRecentPlayers(
 
 function withEmptyStateContext(
 	core: PlayerStateOverviewData,
-	eventId?: number
+	authoritativePosition: number
 ): PlayerStateProfileData {
 	const seasonTimeline = Array.isArray(core.seasonTimeline)
 		? core.seasonTimeline
@@ -72,16 +72,23 @@ function withEmptyStateContext(
 	)
 	return {
 		...core,
-		position: core.profileRadar?.position ?? currentPoint?.position ?? 0,
-		asOfEventId: core.profileRadar?.asOfEventId ?? eventId ?? null,
+		// The overview document intentionally omits the timeline position. The
+		// player-detail contract is the authoritative FPL fallback; never turn
+		// an absent timeline point into the invented position 0.
+		position: currentPoint?.position ?? authoritativePosition,
+		// The requested desk event is an input scope, not evidence that the
+		// returned profile was published for that event. Preserve the producer's
+		// as-of identity and leave it null when the overview omitted it.
+		asOfEventId: core.asOfEventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
 					...core.profileRadar,
 					source: 'FPL',
-					season: core.season,
-					sampleMinutes: 0,
-					smallSample: false,
+					position: core.profileRadar.position,
+					season: core.profileRadar.season,
+					asOfEventId: core.profileRadar.asOfEventId,
+					smallSample: core.profileRadar.smallSample,
 					axes: core.profileRadar.axes.map(axis => ({
 						...axis,
 						direction: 'NEUTRAL',
@@ -113,7 +120,16 @@ function withEmptyStateContext(
 		careerTrajectory: [],
 		outlook: { rating: 'UNAVAILABLE', gameweeks: [] },
 		coverage: {
-			sources: [],
+			sources: (core.coverage?.sources ?? []).map(source => ({
+				...source,
+				seasons: [],
+				analysisStatus: 'UNAVAILABLE',
+				reasonCodes: [],
+				revision: null,
+				asOf: null,
+				freshnessSeconds: null,
+				stale: false
+			})),
 			metricCoverage: [],
 			limitations: []
 		}
@@ -177,7 +193,9 @@ export function usePlayerDetailSlot({
 	const t = useTranslations('PlayerStats')
 	const initialDetail = initialEntry?.overview ?? null
 	const initialState = isCoreState(initialEntry?.state)
-		? withEmptyStateContext(initialEntry.state, eventId)
+		? initialDetail
+			? withEmptyStateContext(initialEntry.state, initialDetail.elementType)
+			: null
 		: null
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryOption | null>(() =>
@@ -195,7 +213,11 @@ export function usePlayerDetailSlot({
 	const [isStateLoading, setIsStateLoading] = useState(false)
 	const [isStateContextLoading, setIsStateContextLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [stateError, setStateError] = useState<string | null>(null)
+	const [stateError, setStateError] = useState<string | null>(() =>
+		initialEntry?.fieldStatuses?.state === 'TEMPORARILY_UNAVAILABLE'
+			? t('stateLoadFailed')
+			: null
+	)
 	const [stateContextError, setStateContextError] = useState<string | null>(
 		null
 	)
@@ -294,7 +316,9 @@ export function usePlayerDetailSlot({
 						setPlayerDetail(detail)
 						setSelectedPlayer(playerDetailToDirectoryOption(detail))
 						if (isCoreState(entry?.state)) {
-							setPlayerStateProfile(withEmptyStateContext(entry.state, eventId))
+							setPlayerStateProfile(
+								withEmptyStateContext(entry.state, detail.elementType)
+							)
 						} else {
 							setPlayerStateProfile(null)
 							setStateError(t('stateLoadFailed'))
@@ -425,10 +449,10 @@ export function usePlayerDetailSlot({
 				const evidence = entry?.evidence
 				if (!evidence) throw new Error('Player evidence unavailable')
 				const processState = entry?.state
-					startTransition(() => {
-						setPlayerDetail(previous =>
-							mergePlayerDetailEvidence(previous, evidence, section)
-						)
+				startTransition(() => {
+					setPlayerDetail(previous =>
+						mergePlayerDetailEvidence(previous, evidence, section)
+					)
 					if (section === 'process' && isProcessState(processState)) {
 						setPlayerStateProfile(previous => {
 							if (!previous || previous.playerId !== processState.playerId)

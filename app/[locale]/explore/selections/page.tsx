@@ -63,7 +63,7 @@ export default async function SelectionsPage({
 				catalog: {
 					season: '',
 					revision: 'not-published:unknown',
-					state: 'NOT_PUBLISHED' as const,
+					state: 'UNAVAILABLE' as const,
 					sourceCheckedAt: null,
 					cohorts: [] as TrendCohort[]
 				},

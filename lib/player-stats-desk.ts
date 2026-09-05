@@ -15,6 +15,10 @@ import type {
 export const PLAYER_STATS_DESK_MAX_PLAYERS = 2
 export const PLAYER_STATS_DESK_MAX_EVENT_ID = 38
 export const PLAYER_STATS_DESK_MAX_HORIZON = 8
+// The public route is CDN-cacheable independently of Next's server cache.
+// Bump this query version whenever the response shape changes so old edge
+// objects cannot satisfy a request for a newer payload contract.
+export const PLAYER_STATS_DESK_PUBLIC_CACHE_VERSION = 'v3'
 
 export type PlayerStatsDeskResponse = Omit<
 	PlayerStatsDeskPayloadData,

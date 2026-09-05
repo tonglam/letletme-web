@@ -176,7 +176,7 @@ describe('GraphQL request budget', () => {
 		const document = parse(GET_PLAYER_STATS_DESK_OVERVIEW)
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
-		assert.equal(astNodes, 265)
+		assert.equal(astNodes, 275)
 		assert.ok(
 			astNodes <= PLAYER_STATS_DESK_MAX_AST_NODES,
 			`GET_PLAYER_STATS_DESK_OVERVIEW has ${astNodes} AST nodes`
@@ -250,8 +250,12 @@ describe('GraphQL request budget', () => {
 	it('keeps live league head, board and H2H queries below the production guard', () => {
 		for (const [name, query, maxNodes] of [
 			['GET_LEAGUE_LIVE_HEAD', GET_LEAGUE_LIVE_HEAD, 200],
-			['GET_ENTRY_LIVE_COMPETITION_BOARD', GET_ENTRY_LIVE_COMPETITION_BOARD, 200],
-			['GET_TOURNAMENT_OFFICIAL_H2H', GET_TOURNAMENT_OFFICIAL_H2H, 240],
+			[
+				'GET_ENTRY_LIVE_COMPETITION_BOARD',
+				GET_ENTRY_LIVE_COMPETITION_BOARD,
+				200
+			],
+			['GET_TOURNAMENT_OFFICIAL_H2H', GET_TOURNAMENT_OFFICIAL_H2H, 240]
 		] as const) {
 			const document = parse(query)
 			let astNodes = 0
@@ -269,5 +273,4 @@ describe('GraphQL request budget', () => {
 			`GET_TOURNAMENT_DETAIL_DESK has ${astNodes} AST nodes; backend detail-desk limit is 400`
 		)
 	})
-
 })
