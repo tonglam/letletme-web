@@ -72,7 +72,7 @@ const loadCompletePlayerStatsDeskByPlayerFromOrigin = (
 
 const loadCompletePlayerStatsDeskByPlayer = unstable_cache(
 	loadCompletePlayerStatsDeskByPlayerFromOrigin,
-	['graphql', 'player-stats-desk', 'v4'],
+	['graphql', 'player-stats-desk', 'v5'],
 	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.gameweekStats] }
 )
 
