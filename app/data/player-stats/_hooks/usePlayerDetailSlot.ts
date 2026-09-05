@@ -85,9 +85,9 @@ function withEmptyStateContext(
 			? {
 					...core.profileRadar,
 					source: 'FPL',
-					position: currentPoint?.position ?? authoritativePosition,
-					season: core.season,
-					asOfEventId: core.asOfEventId ?? null,
+					position: core.profileRadar.position,
+					season: core.profileRadar.season,
+					asOfEventId: core.profileRadar.asOfEventId,
 					smallSample: core.profileRadar.smallSample,
 					axes: core.profileRadar.axes.map(axis => ({
 						...axis,

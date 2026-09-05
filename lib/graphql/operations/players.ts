@@ -606,7 +606,10 @@ export type PlayerStateOverviewData = Pick<
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
-		| (Pick<PlayerRadarProfile, 'sampleMinutes' | 'smallSample'> & {
+		| (Pick<
+				PlayerRadarProfile,
+				'position' | 'season' | 'asOfEventId' | 'sampleMinutes' | 'smallSample'
+		  > & {
 				axes: Array<
 					Pick<
 						PlayerRadarAxis,
@@ -715,11 +718,11 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 				}
 				dataAvailability {
 					isFullyAuthoritative
-					seasonStats { state reasonCode revision sourceCheckedAt }
-					market { state reasonCode revision sourceCheckedAt }
-					historicalTeam { state reasonCode revision sourceCheckedAt }
-					fixtures { state reasonCode revision sourceCheckedAt }
-					recentGameweeks { state reasonCode revision sourceCheckedAt }
+					seasonStats { state reasonCode sourceCheckedAt }
+					market { state reasonCode sourceCheckedAt }
+					historicalTeam { state reasonCode sourceCheckedAt }
+					fixtures { state reasonCode sourceCheckedAt }
+					recentGameweeks { state reasonCode sourceCheckedAt }
 				}
 				totalPoints selectedByPercent transfersInEvent transfersOutEvent
 				fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
@@ -731,8 +734,9 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 				playerId teamId season horizon asOf asOfEventId
             trend confidence providerMode
             reasons { code }
-			profileRadar {
-				sampleMinutes smallSample
+				profileRadar {
+					position season asOfEventId
+					sampleMinutes smallSample
               axes { code value percentile unit available }
             }
             coverage {
