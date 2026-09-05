@@ -81,7 +81,8 @@ function reviewContext(
 	seasonStatsStatus: PlayerStatsSnapshotStatus
 	seasonState: PlayerDirectorySeasonState
 } {
-	const seasonStatsAvailable = statsContext.status === 'AVAILABLE'
+	const seasonStatsAvailable =
+		statsContext.status === 'AVAILABLE' || statsContext.status === 'STALE'
 	const seasonState: PlayerDirectorySeasonState =
 		statsContext.status === 'PRESEASON'
 			? 'preseason'

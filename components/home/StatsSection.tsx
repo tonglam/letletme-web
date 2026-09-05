@@ -133,7 +133,10 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 	const stats: HomeStat[] = [
 		{
 			label: t('highestScore'),
-			value: overview.highestPoints?.toString() ?? '0',
+			value:
+				overview.highestPoints === null
+					? t('highestScorePending')
+					: overview.highestPoints.toString(),
 			href:
 				overview.highestScoringEntry && currentEventId
 					? `/live/points/${overview.highestScoringEntry}?gw=${currentEventId}&from=home`
