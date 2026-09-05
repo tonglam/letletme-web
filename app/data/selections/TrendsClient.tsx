@@ -1067,7 +1067,7 @@ export default function TrendsClient({
 					) : null}
 					{myCohortsLoadFailed ||
 					(publicCohortsLoadFailed &&
-						(publicCatalogState !== 'UNAVAILABLE' || committed != null)) ? (
+						(publicCatalogState !== 'UNAVAILABLE' || !showEmptyBoard)) ? (
 						<div
 							className="mb-3 flex flex-wrap gap-2 text-xs text-destructive"
 							role="status"

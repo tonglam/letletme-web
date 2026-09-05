@@ -301,12 +301,8 @@ export function PlayerFplProfile({
 	const samePosition = Boolean(
 		second && first && first.profile.position === second.profile.position
 	)
-	const firstHasProfileSample = Boolean(
-		first && !first.profile.smallSample
-	)
-	const secondHasProfileSample = Boolean(
-		second && !second.profile.smallSample
-	)
+	const firstHasProfileSample = Boolean(first && !first.profile.smallSample)
+	const secondHasProfileSample = Boolean(second && !second.profile.smallSample)
 	const canOverlay = Boolean(
 		samePosition &&
 		first &&
@@ -357,6 +353,25 @@ export function PlayerFplProfile({
 				title={t('title')}
 				hint={t('hint')}
 			>
+				<ProviderStatus
+					items={[
+						{
+							label: comparison ? player.webName : undefined,
+							profile,
+							loading: isLoading
+						},
+						...(comparison
+							? [
+									{
+										label: comparison.webName,
+										profile: comparisonProfile,
+										loading: isComparisonLoading
+									}
+								]
+							: [])
+					]}
+					t={t}
+				/>
 				<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
 					{t('unavailable')}
 				</p>
@@ -378,7 +393,7 @@ export function PlayerFplProfile({
 			: t('sourceNote', {
 					season: first.profile.season,
 					gw: first.profile.asOfEventId ?? '—'
-				  })
+				})
 
 	return (
 		<PlayerStatsSection
@@ -396,9 +411,9 @@ export function PlayerFplProfile({
 					...(comparison
 						? [
 								{
-								label: comparison.webName,
-								profile: comparisonProfile,
-								loading: isComparisonLoading
+									label: comparison.webName,
+									profile: comparisonProfile,
+									loading: isComparisonLoading
 								}
 							]
 						: [])

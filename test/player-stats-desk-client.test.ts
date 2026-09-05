@@ -5,6 +5,7 @@ import {
 	primePlayerStatsDeskCache,
 	requestPlayerStatsDesk
 } from '../lib/player-stats-desk-client'
+import { PLAYER_STATS_DESK_PUBLIC_CACHE_VERSION } from '../lib/player-stats-desk'
 
 const originalFetch = globalThis.fetch
 const responseBody = {
@@ -58,8 +59,12 @@ describe('player stats desk client cache', () => {
 		const gate = new Promise<void>(resolve => {
 			release = resolve
 		})
-		globalThis.fetch = async () => {
+		globalThis.fetch = async input => {
 			calls += 1
+			assert.match(
+				String(input),
+				new RegExp(`cacheVersion=${PLAYER_STATS_DESK_PUBLIC_CACHE_VERSION}`)
+			)
 			await gate
 			return Response.json(responseBody)
 		}
