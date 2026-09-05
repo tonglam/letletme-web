@@ -606,7 +606,7 @@ export type PlayerStateOverviewData = Pick<
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
-		| (Pick<PlayerRadarProfile, 'sampleMinutes'> & {
+		| (Pick<PlayerRadarProfile, 'sampleMinutes' | 'smallSample'> & {
 				axes: Array<
 					Pick<
 						PlayerRadarAxis,
@@ -732,7 +732,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             trend confidence providerMode
             reasons { code }
 			profileRadar {
-				sampleMinutes
+				sampleMinutes smallSample
               axes { code value percentile unit available }
             }
             coverage {

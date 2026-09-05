@@ -184,7 +184,7 @@ function ProfileCard({
 	const validAxes = player.profile.axes.filter(
 		axis => axis.available && axis.percentile !== null
 	).length
-	if (player.profile.sampleMinutes < FPL_PROFILE_MINUTES) {
+	if (player.profile.smallSample) {
 		return (
 			<div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
 				{t('sampleInsufficient', {
@@ -302,10 +302,10 @@ export function PlayerFplProfile({
 		second && first && first.profile.position === second.profile.position
 	)
 	const firstHasProfileSample = Boolean(
-		first && first.profile.sampleMinutes >= FPL_PROFILE_MINUTES
+		first && !first.profile.smallSample
 	)
 	const secondHasProfileSample = Boolean(
-		second && second.profile.sampleMinutes >= FPL_PROFILE_MINUTES
+		second && !second.profile.smallSample
 	)
 	const canOverlay = Boolean(
 		samePosition &&
@@ -364,10 +364,21 @@ export function PlayerFplProfile({
 		)
 	}
 
-	const sourceNote = t('sourceNote', {
-		season: first.profile.season,
-		gw: first.profile.asOfEventId ?? '—'
-	})
+	const sourceNote =
+		second && second.profile.asOfEventId !== first.profile.asOfEventId
+			? [first, second]
+					.map(
+						item =>
+							`${item.name}: ${t('sourceNote', {
+								season: item.profile.season,
+								gw: item.profile.asOfEventId ?? '—'
+							})}`
+					)
+					.join(' · ')
+			: t('sourceNote', {
+					season: first.profile.season,
+					gw: first.profile.asOfEventId ?? '—'
+				  })
 
 	return (
 		<PlayerStatsSection

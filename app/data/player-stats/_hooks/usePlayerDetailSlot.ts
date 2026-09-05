@@ -88,7 +88,7 @@ function withEmptyStateContext(
 					position: currentPoint?.position ?? authoritativePosition,
 					season: core.season,
 					asOfEventId: core.asOfEventId ?? null,
-					smallSample: core.profileRadar.sampleMinutes < 180,
+					smallSample: core.profileRadar.smallSample,
 					axes: core.profileRadar.axes.map(axis => ({
 						...axis,
 						direction: 'NEUTRAL',

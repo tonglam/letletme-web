@@ -176,7 +176,7 @@ describe('GraphQL request budget', () => {
 		const document = parse(GET_PLAYER_STATS_DESK_OVERVIEW)
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
-		assert.equal(astNodes, 277)
+		assert.equal(astNodes, 279)
 		assert.ok(
 			astNodes <= PLAYER_STATS_DESK_MAX_AST_NODES,
 			`GET_PLAYER_STATS_DESK_OVERVIEW has ${astNodes} AST nodes`
