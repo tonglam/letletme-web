@@ -1065,7 +1065,8 @@ export default function TrendsClient({
 							</Link>
 						</div>
 					) : null}
-					{myCohortsLoadFailed || publicCohortsLoadFailed ? (
+					{myCohortsLoadFailed ||
+					(publicCohortsLoadFailed && publicCatalogState !== 'UNAVAILABLE') ? (
 						<div
 							className="mb-3 flex flex-wrap gap-2 text-xs text-destructive"
 							role="status"
@@ -1227,16 +1228,20 @@ export default function TrendsClient({
 									/>
 								</div>
 								<h2 className="mt-4 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-									{publicCatalogState === 'NOT_PUBLISHED'
-										? t('notPublished')
-										: t('emptyBoardTitle')}
+									{publicCatalogState === 'UNAVAILABLE'
+										? t('publicLeaguesError')
+										: publicCatalogState === 'NOT_PUBLISHED'
+											? t('notPublished')
+											: t('emptyBoardTitle')}
 								</h2>
 								<p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-									{publicCatalogState === 'NOT_PUBLISHED'
-										? t('notPublished')
-										: cohorts.length > 0
-											? t('noReadyLeagueOptions')
-											: t('emptyBoardDescription')}
+									{publicCatalogState === 'UNAVAILABLE'
+										? t('publicLeaguesUnavailableDescription')
+										: publicCatalogState === 'NOT_PUBLISHED'
+											? t('notPublishedDescription')
+											: cohorts.length > 0
+												? t('noReadyLeagueOptions')
+												: t('emptyBoardDescription')}
 								</p>
 								<div className="mt-5 flex flex-wrap gap-2">
 									{!canLoadMine ? (

@@ -43,7 +43,7 @@ export type TrendCohort = {
 	capabilities: TrendCapabilityStatus[]
 }
 
-export type TrendCatalogState = 'PUBLISHED' | 'NOT_PUBLISHED'
+export type TrendCatalogState = 'PUBLISHED' | 'NOT_PUBLISHED' | 'UNAVAILABLE'
 
 export type TrendCohortsResponse = {
 	trendCohorts: {

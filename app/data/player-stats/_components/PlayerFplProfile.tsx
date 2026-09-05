@@ -17,6 +17,8 @@ type RadarPlayer = {
 	profile: PlayerRadarProfile
 }
 
+const FPL_PROFILE_MINUTES = 180
+
 const POSITION_LABELS: Record<
 	number,
 	'goalkeeper' | 'defender' | 'midfielder' | 'forward'
@@ -182,6 +184,16 @@ function ProfileCard({
 	const validAxes = player.profile.axes.filter(
 		axis => axis.available && axis.percentile !== null
 	).length
+	if (player.profile.sampleMinutes < FPL_PROFILE_MINUTES) {
+		return (
+			<div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
+				{t('sampleInsufficient', {
+					minutes: player.profile.sampleMinutes,
+					threshold: FPL_PROFILE_MINUTES
+				})}
+			</div>
+		)
+	}
 	if (validAxes < 3) {
 		return (
 			<div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
@@ -215,6 +227,30 @@ function profileFromState(
 	}
 }
 
+function ProviderStatus({
+	profile,
+	t
+}: {
+	profile: PlayerStateProfileData | null
+	t: ReturnType<typeof useTranslations<'PlayerStats.profile'>>
+}) {
+	const understat = profile?.coverage.sources.find(
+		source => source.provider === 'UNDERSTAT' && source.scope === 'CURRENT'
+	)
+	const isVerifiedAndAvailable =
+		understat?.dataStatus === 'AVAILABLE' &&
+		understat.mappingStatus === 'VERIFIED'
+	return (
+		<p className="mb-3 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+			{t('understatStatus', {
+				status: isVerifiedAndAvailable
+					? t('understatVerified')
+					: t('notAvailable')
+			})}
+		</p>
+	)
+}
+
 export function PlayerFplProfile({
 	player,
 	comparison,
@@ -246,9 +282,17 @@ export function PlayerFplProfile({
 	const samePosition = Boolean(
 		second && first && first.profile.position === second.profile.position
 	)
+	const firstHasProfileSample = Boolean(
+		first && first.profile.sampleMinutes >= FPL_PROFILE_MINUTES
+	)
+	const secondHasProfileSample = Boolean(
+		second && second.profile.sampleMinutes >= FPL_PROFILE_MINUTES
+	)
 	const canOverlay = Boolean(
 		samePosition &&
 		first &&
+		firstHasProfileSample &&
+		secondHasProfileSample &&
 		(!second ||
 			(first.profile.axes.filter(
 				axis => axis.available && axis.percentile !== null
@@ -312,6 +356,10 @@ export function PlayerFplProfile({
 			title={t('title')}
 			hint={`${t('hint')} ${sourceNote}`}
 		>
+			<ProviderStatus
+				profile={profile}
+				t={t}
+			/>
 			{second && !samePosition ? (
 				<>
 					<p className="mb-3 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
@@ -366,15 +414,24 @@ export function PlayerFplProfile({
 							{POSITION_CODES[first.profile.position] ?? '—'} ·{' '}
 							{t(POSITION_LABELS[first.profile.position] ?? 'midfielder')}
 						</p>
-						<RadarChartView
-							players={second ? [first, second] : [first]}
+						{second ? (
+							<RadarChartView
+								players={[first, second]}
+								t={t}
+							/>
+						) : (
+							<ProfileCard
+								player={first}
+								t={t}
+							/>
+						)}
+					</div>
+					{second ? (
+						<RadarLegend
+							players={[first, second]}
 							t={t}
 						/>
-					</div>
-					<RadarLegend
-						players={second ? [first, second] : [first]}
-						t={t}
-					/>
+					) : null}
 				</div>
 			)}
 			<p className="mt-3 text-caption text-muted-foreground">
