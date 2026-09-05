@@ -213,7 +213,11 @@ export function usePlayerDetailSlot({
 	const [isStateLoading, setIsStateLoading] = useState(false)
 	const [isStateContextLoading, setIsStateContextLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [stateError, setStateError] = useState<string | null>(null)
+	const [stateError, setStateError] = useState<string | null>(() =>
+		initialEntry?.fieldStatuses?.state === 'TEMPORARILY_UNAVAILABLE'
+			? t('stateLoadFailed')
+			: null
+	)
 	const [stateContextError, setStateContextError] = useState<string | null>(
 		null
 	)

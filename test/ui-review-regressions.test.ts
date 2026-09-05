@@ -1192,6 +1192,10 @@ describe('asynchronous selection safety', () => {
 		assert.ok(staleGuard >= 0 && notFoundClear > staleGuard)
 		assert.ok(playerSource.includes('asOfEventId: core.asOfEventId ?? null'))
 		assert.doesNotMatch(playerSource, /asOfEventId: eventId \?\? null/)
+		assert.match(
+			playerSource,
+			/initialEntry\?\.fieldStatuses\?\.state === 'TEMPORARILY_UNAVAILABLE'/
+		)
 	})
 
 	it('keeps player source notes separate across seasons with the same gameweek', async () => {
