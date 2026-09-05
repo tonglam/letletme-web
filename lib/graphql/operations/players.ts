@@ -598,6 +598,7 @@ export type PlayerStateOverviewData = Pick<
 	| 'teamId'
 	| 'season'
 	| 'horizon'
+	| 'asOfEventId'
 	| 'asOf'
 	| 'trend'
 	| 'confidence'
@@ -726,12 +727,12 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
         }
         state {
           status
-          value {
-            playerId teamId season horizon asOf
+			value {
+				playerId teamId season horizon asOf asOfEventId
             trend confidence providerMode
             reasons { code }
-            profileRadar {
-              sampleMinutes
+			profileRadar {
+				sampleMinutes
               axes { code value percentile unit available }
             }
             coverage {

@@ -1067,7 +1067,10 @@ describe('live tournament filter visibility', () => {
 			)
 		])
 
-		assert.match(h2hSource, /hasLoaded && isUsableOfficialH2HSnapshot\(snapshot/)
+		assert.match(
+			h2hSource,
+			/hasLoaded && isUsableOfficialH2HSnapshot\(snapshot/
+		)
 		assert.match(clientSource, /initialSnapshot=\{null\}/)
 		assert.match(clientSource, /onReadyChange=\{handleOfficialH2HReadyChange\}/)
 	})
@@ -1187,6 +1190,8 @@ describe('asynchronous selection safety', () => {
 			staleGuard
 		)
 		assert.ok(staleGuard >= 0 && notFoundClear > staleGuard)
+		assert.ok(playerSource.includes('asOfEventId: core.asOfEventId ?? null'))
+		assert.doesNotMatch(playerSource, /asOfEventId: eventId \?\? null/)
 	})
 
 	it('clears stale team and tournament models before uncached gameweek loads', async () => {

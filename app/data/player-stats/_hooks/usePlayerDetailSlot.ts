@@ -62,7 +62,6 @@ function writeRecentPlayers(
 
 function withEmptyStateContext(
 	core: PlayerStateOverviewData,
-	eventId: number | undefined,
 	authoritativePosition: number
 ): PlayerStateProfileData {
 	const seasonTimeline = Array.isArray(core.seasonTimeline)
@@ -77,7 +76,10 @@ function withEmptyStateContext(
 		// player-detail contract is the authoritative FPL fallback; never turn
 		// an absent timeline point into the invented position 0.
 		position: currentPoint?.position ?? authoritativePosition,
-		asOfEventId: eventId ?? null,
+		// The requested desk event is an input scope, not evidence that the
+		// returned profile was published for that event. Preserve the producer's
+		// as-of identity and leave it null when the overview omitted it.
+		asOfEventId: core.asOfEventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
@@ -85,7 +87,7 @@ function withEmptyStateContext(
 					source: 'FPL',
 					position: currentPoint?.position ?? authoritativePosition,
 					season: core.season,
-					asOfEventId: eventId ?? null,
+					asOfEventId: core.asOfEventId ?? null,
 					smallSample: core.profileRadar.sampleMinutes < 180,
 					axes: core.profileRadar.axes.map(axis => ({
 						...axis,
@@ -192,11 +194,7 @@ export function usePlayerDetailSlot({
 	const initialDetail = initialEntry?.overview ?? null
 	const initialState = isCoreState(initialEntry?.state)
 		? initialDetail
-			? withEmptyStateContext(
-					initialEntry.state,
-					eventId,
-					initialDetail.elementType
-				)
+			? withEmptyStateContext(initialEntry.state, initialDetail.elementType)
 			: null
 		: null
 	const [selectedPlayer, setSelectedPlayer] =
@@ -315,7 +313,7 @@ export function usePlayerDetailSlot({
 						setSelectedPlayer(playerDetailToDirectoryOption(detail))
 						if (isCoreState(entry?.state)) {
 							setPlayerStateProfile(
-								withEmptyStateContext(entry.state, eventId, detail.elementType)
+								withEmptyStateContext(entry.state, detail.elementType)
 							)
 						} else {
 							setPlayerStateProfile(null)
