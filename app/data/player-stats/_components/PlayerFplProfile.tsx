@@ -235,12 +235,14 @@ function ProviderStatus({
 		label?: string
 		profile: PlayerStateProfileData | null
 		loading: boolean
+		error: string | null
 	}>
 	t: ReturnType<typeof useTranslations<'PlayerStats.profile'>>
 }) {
 	return (
 		<div className="mb-3 space-y-2">
 			{items.map(item => {
+				if (item.error) return null
 				const understat = item.profile?.coverage.sources.find(
 					source =>
 						source.provider === 'UNDERSTAT' && source.scope === 'CURRENT'
@@ -278,7 +280,9 @@ export function PlayerFplProfile({
 	seasonStatsAvailable,
 	statusMessage,
 	isLoading,
-	isComparisonLoading
+	isComparisonLoading,
+	error,
+	comparisonError
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
@@ -288,6 +292,8 @@ export function PlayerFplProfile({
 	statusMessage: string | null
 	isLoading: boolean
 	isComparisonLoading: boolean
+	error: string | null
+	comparisonError: string | null
 }) {
 	const t = useTranslations('PlayerStats.profile')
 	const first = useMemo(
@@ -358,14 +364,16 @@ export function PlayerFplProfile({
 						{
 							label: comparison ? player.webName : undefined,
 							profile,
-							loading: isLoading
+							loading: isLoading,
+							error
 						},
 						...(comparison
 							? [
 									{
 										label: comparison.webName,
 										profile: comparisonProfile,
-										loading: isComparisonLoading
+										loading: isComparisonLoading,
+										error: comparisonError
 									}
 								]
 							: [])
@@ -408,14 +416,16 @@ export function PlayerFplProfile({
 					{
 						label: comparison ? player.webName : undefined,
 						profile,
-						loading: isLoading
+						loading: isLoading,
+						error
 					},
 					...(comparison
 						? [
 								{
 									label: comparison.webName,
 									profile: comparisonProfile,
-									loading: isComparisonLoading
+									loading: isComparisonLoading,
+									error: comparisonError
 								}
 							]
 						: [])

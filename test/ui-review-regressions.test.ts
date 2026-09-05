@@ -1207,6 +1207,8 @@ describe('asynchronous selection safety', () => {
 			profileSource,
 			/second\.profile\.season !== first\.profile\.season/
 		)
+		assert.match(profileSource, /if \(item\.error\) return null/)
+		assert.match(profileSource, /comparisonError: string \| null/)
 	})
 
 	it('clears stale team and tournament models before uncached gameweek loads', async () => {

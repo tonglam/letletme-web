@@ -1104,6 +1104,8 @@ export function PlayerStatsView({
 					statusMessage={seasonStatsStatusMessage}
 					isLoading={isStateLoading}
 					isComparisonLoading={isComparisonStateLoading}
+					error={stateError}
+					comparisonError={comparisonStateError}
 				/>
 
 				<PlayerStateProfile
