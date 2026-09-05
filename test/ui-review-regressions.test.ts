@@ -1067,7 +1067,10 @@ describe('live tournament filter visibility', () => {
 			)
 		])
 
-		assert.match(h2hSource, /hasLoaded && isUsableOfficialH2HSnapshot\(snapshot/)
+		assert.match(
+			h2hSource,
+			/hasLoaded && isUsableOfficialH2HSnapshot\(snapshot/
+		)
 		assert.match(clientSource, /initialSnapshot=\{null\}/)
 		assert.match(clientSource, /onReadyChange=\{handleOfficialH2HReadyChange\}/)
 	})
@@ -1187,6 +1190,29 @@ describe('asynchronous selection safety', () => {
 			staleGuard
 		)
 		assert.ok(staleGuard >= 0 && notFoundClear > staleGuard)
+		assert.ok(playerSource.includes('asOfEventId: core.asOfEventId ?? null'))
+		assert.doesNotMatch(playerSource, /asOfEventId: eventId \?\? null/)
+		assert.match(
+			playerSource,
+			/initialEntry\?\.fieldStatuses\?\.state === 'TEMPORARILY_UNAVAILABLE'/
+		)
+	})
+
+	it('keeps player source notes separate across seasons with the same gameweek', async () => {
+		const profileSource = await readFile(
+			new URL(
+				'../app/data/player-stats/_components/PlayerFplProfile.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(
+			profileSource,
+			/second\.profile\.season !== first\.profile\.season/
+		)
+		assert.match(profileSource, /if \(item\.error\) return null/)
+		assert.match(profileSource, /comparisonError: string \| null/)
 	})
 
 	it('clears stale team and tournament models before uncached gameweek loads', async () => {

@@ -11,7 +11,10 @@ import type {
 	PlayerDetailDataAvailability,
 	PlayerStatsDeskSection
 } from '@/lib/graphql/operations/players'
-import type { PlayerStatsDeskResponse } from '@/lib/player-stats-desk'
+import {
+	PLAYER_STATS_DESK_PUBLIC_CACHE_VERSION,
+	type PlayerStatsDeskResponse
+} from '@/lib/player-stats-desk'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 const CACHE_MAX_ENTRIES = 50
@@ -219,7 +222,8 @@ export async function requestPlayerStatsDesk(
 		playerIds: request.playerIds.join(','),
 		eventId: String(request.eventId),
 		horizon: String(request.horizon),
-		section: request.section
+		section: request.section,
+		cacheVersion: PLAYER_STATS_DESK_PUBLIC_CACHE_VERSION
 	})
 	const requestHeaders: Record<string, string> = {}
 	if (options.navigationId) {

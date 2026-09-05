@@ -106,7 +106,7 @@ describe('public GraphQL cache contract', () => {
 			playerDesk,
 			/unstable_cache\(\s*loadCompletePlayerStatsDeskByPlayerFromOrigin/
 		)
-		assert.match(playerDesk, /\['graphql', 'player-stats-desk', 'v2'\]/)
+		assert.match(playerDesk, /\['graphql', 'player-stats-desk', 'v6'\]/)
 		assert.match(playerDesk, /playerIds\.map\(playerId/)
 		assert.match(
 			playerDesk,
