@@ -98,8 +98,8 @@ export async function HomePriceChangeDesk() {
 					})
 				: null,
 			capturedAt: observed.observedAt,
-			rises: observed.rises.slice(0, 5),
-			falls: observed.falls.slice(0, 5),
+			rises: observed.rises,
+			falls: observed.falls,
 			riseCount: observed.riseCount,
 			fallCount: observed.fallCount,
 			eventRevision: observed.eventRevision
@@ -138,8 +138,8 @@ export async function HomePriceChangeDesk() {
 					})
 				: null,
 			capturedAt: desk.capturedAt,
-			rises: rises.slice(0, 5),
-			falls: falls.slice(0, 5),
+			rises,
+			falls,
 			riseCount: rises.length,
 			fallCount: falls.length,
 			eventRevision: null
@@ -207,6 +207,7 @@ export async function HomePriceChangeDesk() {
 			shown: '{shown}',
 			total: '{total}'
 		}),
+		viewAllLabel: tHome('homePriceChangesViewAll', { count: '{count}' }),
 		likelyUnavailable: tHome('homeLikelyUnavailable'),
 		likelyUnavailableDescription: tHome('homeLikelyUnavailableDescription'),
 		dataUnavailable: tMarket('dataUnavailable'),

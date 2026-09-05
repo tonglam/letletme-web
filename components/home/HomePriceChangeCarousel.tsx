@@ -61,6 +61,7 @@ export type HomePriceChangeCarouselLabels = {
 	noTrendFalls: string
 	noLikelyToChange: string
 	topCountLabel: string
+	viewAllLabel: string
 	likelyUnavailable: string
 	likelyUnavailableDescription: string
 	dataUnavailable: string
@@ -106,6 +107,12 @@ function priceChangeHref(playerId: number, locale: string): string {
 	})
 }
 
+const HOME_PRICE_CHANGE_PREVIEW_LIMIT = 5
+
+function formatViewAllLabel(template: string, count: number): string {
+	return template.replace('{count}', String(count))
+}
+
 function actualFromBoard(
 	board: PriceChangeBoard,
 	labels: HomePriceChangeCarouselLabels
@@ -116,8 +123,8 @@ function actualFromBoard(
 		state: observed.state,
 		coverageLabel: labels.todayDescription,
 		capturedAt: observed.observedAt,
-		rises: observed.rises.slice(0, 5),
-		falls: observed.falls.slice(0, 5),
+		rises: observed.rises,
+		falls: observed.falls,
 		riseCount: observed.riseCount,
 		fallCount: observed.fallCount,
 		eventRevision: observed.eventRevision
@@ -303,6 +310,8 @@ function TodayPage({
 			<PriceChangeDirection
 				items={actual.rises}
 				count={actual.riseCount}
+				totalItems={actual.riseCount}
+				countLabel={labels.topCountLabel}
 				direction="RISE"
 				title={labels.priceRises}
 				emptyLabel={labels.noPriceRises}
@@ -317,6 +326,8 @@ function TodayPage({
 			<PriceChangeDirection
 				items={actual.falls}
 				count={actual.fallCount}
+				totalItems={actual.fallCount}
+				countLabel={labels.topCountLabel}
 				direction="FALL"
 				title={labels.priceFalls}
 				emptyLabel={labels.noPriceFalls}
@@ -498,6 +509,22 @@ export function HomePriceChangeCarousel({
 		initialLikely.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
 	)
 	const [liveRevision, setLiveRevision] = useState(liveSeed.revision)
+	const actualPreview = {
+		...currentActual,
+		rises: currentActual.rises.slice(0, HOME_PRICE_CHANGE_PREVIEW_LIMIT),
+		falls: currentActual.falls.slice(0, HOME_PRICE_CHANGE_PREVIEW_LIMIT)
+	}
+	const likelyPreview = {
+		...likely,
+		rises: likely.rises.slice(0, HOME_PRICE_CHANGE_PREVIEW_LIMIT),
+		falls: likely.falls.slice(0, HOME_PRICE_CHANGE_PREVIEW_LIMIT)
+	}
+	const actualHasMore =
+		actualPreview.rises.length < currentActual.rises.length ||
+		actualPreview.falls.length < currentActual.falls.length
+	const likelyHasMore =
+		likelyPreview.rises.length < likely.rises.length ||
+		likelyPreview.falls.length < likely.falls.length
 
 	useEffect(() => {
 		if (observedEvent) {
@@ -566,22 +593,48 @@ export function HomePriceChangeCarousel({
 			label: labels.todayPage,
 			content: (
 				<TodayPage
+					actual={actualPreview}
+					locale={locale}
+					labels={labels}
+				/>
+			),
+			fullContent: actualHasMore ? (
+				<TodayPage
 					actual={currentActual}
 					locale={locale}
 					labels={labels}
 				/>
-			)
+			) : undefined,
+			viewAllLabel: actualHasMore
+				? formatViewAllLabel(
+						labels.viewAllLabel,
+						currentActual.rises.length + currentActual.falls.length
+					)
+				: undefined
 		},
 		{
 			id: 'likely',
 			label: labels.likelyPage,
 			content: (
 				<LikelyPage
+					likely={likelyPreview}
+					locale={locale}
+					labels={labels}
+				/>
+			),
+			fullContent: likelyHasMore ? (
+				<LikelyPage
 					likely={likely}
 					locale={locale}
 					labels={labels}
 				/>
-			)
+			) : undefined,
+			viewAllLabel: likelyHasMore
+				? formatViewAllLabel(
+						labels.viewAllLabel,
+						likely.rises.length + likely.falls.length
+					)
+				: undefined
 		}
 	]
 
@@ -660,6 +713,14 @@ export function HomePriceChangeCarousel({
 						</div>
 					)
 				}}
+				renderFullContentAction={(slide, contentId) => (
+					<ShareActions
+						actions={['image']}
+						text={slide.label}
+						imageTargetId={contentId}
+						title={slide.label}
+					/>
+				)}
 			/>
 		</Card>
 	)

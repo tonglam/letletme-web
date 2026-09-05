@@ -41,8 +41,8 @@ export function buildHomePriceChangePredictionState(
 					? 'AVAILABLE'
 					: 'EMPTY',
 		capturedAt: board.fetchedAt,
-		rises: rises.slice(0, 5),
-		falls: falls.slice(0, 5),
+		rises,
+		falls,
 		riseTotal: rises.length,
 		fallTotal: falls.length
 	}
