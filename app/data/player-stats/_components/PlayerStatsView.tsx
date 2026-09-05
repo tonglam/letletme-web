@@ -647,7 +647,7 @@ export function PlayerStatsView({
 		{
 			AVAILABLE: null,
 			PRESEASON: t('timeline.preseasonPerformance'),
-			STALE: t('timeline.pointsUnavailable'),
+			STALE: t('playerState.coverage.stale'),
 			INCOMPLETE: t('timeline.pointsUnavailable'),
 			UNAVAILABLE: t('timeline.pointsUnavailable')
 		}[seasonStatsStatus] ?? null
@@ -665,8 +665,11 @@ export function PlayerStatsView({
 	)
 	const hasSeasonStats = Boolean(
 		seasonStatsAvailable &&
-		player?.statsContext.status === 'AVAILABLE' &&
-		(!comparison || comparison.statsContext.status === 'AVAILABLE')
+		(player?.statsContext.status === 'AVAILABLE' ||
+			player?.statsContext.status === 'STALE') &&
+		(!comparison ||
+			comparison.statsContext.status === 'AVAILABLE' ||
+			comparison.statsContext.status === 'STALE')
 	)
 	const navSections = useMemo<PlayerStatsSectionId[]>(
 		() =>

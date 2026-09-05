@@ -66,4 +66,31 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(pickerSource, /onReady\?\.\(\)/)
 		assert.match(pickerSource, /role="alert"/)
 	})
+
+	it('keeps complete stale Player Stats data visible with an explicit stale state', async () => {
+		const [seedSource, clientSource, viewSource] = await Promise.all([
+			readFile(new URL('../lib/player-stats-seed.ts', import.meta.url), 'utf8'),
+			readFile(
+				new URL(
+					'../app/data/player-stats/PlayerStatsClient.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/data/player-stats/_components/PlayerStatsView.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			seedSource,
+			/status === 'AVAILABLE' \|\|\s+statsContext\.status === 'STALE'/
+		)
+		assert.match(clientSource, /statsContext\.status === 'STALE'/)
+		assert.match(viewSource, /STALE: t\('playerState\.coverage\.stale'\)/)
+	})
 })

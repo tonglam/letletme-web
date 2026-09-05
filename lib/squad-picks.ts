@@ -151,28 +151,41 @@ function positiveEventId(value: unknown): number | null {
 		: null
 }
 
-/** Candidate event ids in descending order — probe latest GW first for existing picks. */
+/**
+ * Candidate event ids for a squad seed. Prefer the current event, then the
+ * latest event known to be finished, and only use the upcoming event when no
+ * current/finished event is available. Entry history is an optional source of
+ * additional anchors and must not be the only path to a published squad.
+ */
 export function squadPickEventCandidates(
 	events: EventsResponse | null | undefined,
 	historyEventIds?: number[] | null,
 ): number[] {
-	const historyMax = historyEventIds?.length
-		? Math.max(...historyEventIds.filter(id => id > 0))
+	const currentGw = positiveEventId(events?.current?.[0]?.id)
+	const latestFinishedGw = positiveEventId(events?.latestFinishedEventId)
+	const nextGw = positiveEventId(events?.next?.[0]?.id)
+	const positiveHistoryIds = (historyEventIds ?? []).filter(id => id > 0)
+	const historyMax = positiveHistoryIds.length
+		? Math.max(...positiveHistoryIds)
 		: null
 	const review = resolveReviewGameweekAnchor(events, {
 		historyMaxEventId: historyMax,
 	})
 	const ids = new Set<number>()
 
-	for (const id of historyEventIds ?? []) {
-		if (id > 0) ids.add(id)
-	}
 	const push = (id: number | null | undefined) => {
 		if (id != null && id > 0) ids.add(id)
 	}
-	push(positiveEventId(events?.next?.[0]?.id))
-	push(review.anchorGw)
-	push(review.currentGw)
 
-	return Array.from(ids).sort((a, b) => b - a)
+	push(currentGw)
+	push(latestFinishedGw)
+	for (const id of [...positiveHistoryIds].sort((a, b) => b - a)) {
+		ids.add(id)
+	}
+	if (currentGw === null && latestFinishedGw === null && historyMax === null) {
+		push(review.anchorGw)
+	}
+	if (currentGw === null) push(nextGw)
+
+	return Array.from(ids)
 }

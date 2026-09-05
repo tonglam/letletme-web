@@ -381,6 +381,7 @@ export default function PlayerStatsClient({
 
 	const pickerStatsAvailable =
 		firstPlayer.playerDetail?.statsContext.status === 'AVAILABLE' ||
+		firstPlayer.playerDetail?.statsContext.status === 'STALE' ||
 		(firstPlayer.playerDetail == null && seasonStatsAvailable)
 	const personalSeedReady =
 		personalSeedResolved && personalSeed?.squadState === 'ready'
