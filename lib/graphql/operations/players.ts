@@ -582,6 +582,11 @@ export type PlayerStateProfileCoreData = Omit<
 	coverage: PlayerStateProfileData['coverage']
 }
 
+type PlayerStateOverviewSource = Pick<
+	PlayerStateSourceCoverage,
+	'provider' | 'scope' | 'dataStatus' | 'mappingStatus'
+>
+
 /**
  * The first desk response contains only the fields rendered above the
  * supporting-data disclosures. The hook expands this into the stable client
@@ -600,7 +605,7 @@ export type PlayerStateOverviewData = Pick<
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
-		| (Pick<PlayerRadarProfile, 'position' | 'season' | 'asOfEventId'> & {
+		| (Pick<PlayerRadarProfile, 'sampleMinutes'> & {
 				axes: Array<
 					Pick<
 						PlayerRadarAxis,
@@ -609,6 +614,7 @@ export type PlayerStateOverviewData = Pick<
 				>
 		  })
 		| null
+	coverage: { sources: PlayerStateOverviewSource[] }
 	dimensions: Array<
 		Pick<
 			PlayerStateDimension,
@@ -725,8 +731,13 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             trend confidence providerMode
             reasons { code }
             profileRadar {
-              position season asOfEventId
+              sampleMinutes
               axes { code value percentile unit available }
+            }
+            coverage {
+              sources {
+                provider scope dataStatus mappingStatus
+              }
             }
             dimensions {
               kind rating direction reasonCodes

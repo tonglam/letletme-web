@@ -237,15 +237,18 @@ function ProviderStatus({
 	const understat = profile?.coverage.sources.find(
 		source => source.provider === 'UNDERSTAT' && source.scope === 'CURRENT'
 	)
+	const coverageLoaded = (profile?.coverage.sources.length ?? 0) > 0
 	const isVerifiedAndAvailable =
 		understat?.dataStatus === 'AVAILABLE' &&
 		understat.mappingStatus === 'VERIFIED'
 	return (
 		<p className="mb-3 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
 			{t('understatStatus', {
-				status: isVerifiedAndAvailable
-					? t('understatVerified')
-					: t('notAvailable')
+				status: !coverageLoaded
+					? t('loading')
+					: isVerifiedAndAvailable
+						? t('understatVerified')
+						: t('notAvailable')
 			})}
 		</p>
 	)
@@ -407,6 +410,17 @@ export function PlayerFplProfile({
 						/>
 					</div>
 				</div>
+			) : !second ? (
+				<div>
+					<p className="mb-2 text-sm font-semibold">
+						{POSITION_CODES[first.profile.position] ?? '—'} ·{' '}
+						{t(POSITION_LABELS[first.profile.position] ?? 'midfielder')}
+					</p>
+					<ProfileCard
+						player={first}
+						t={t}
+					/>
+				</div>
 			) : (
 				<div className="grid items-center gap-6 md:grid-cols-[minmax(0,1.6fr)_minmax(13rem,0.8fr)]">
 					<div>
@@ -414,24 +428,15 @@ export function PlayerFplProfile({
 							{POSITION_CODES[first.profile.position] ?? '—'} ·{' '}
 							{t(POSITION_LABELS[first.profile.position] ?? 'midfielder')}
 						</p>
-						{second ? (
-							<RadarChartView
-								players={[first, second]}
-								t={t}
-							/>
-						) : (
-							<ProfileCard
-								player={first}
-								t={t}
-							/>
-						)}
-					</div>
-					{second ? (
-						<RadarLegend
+						<RadarChartView
 							players={[first, second]}
 							t={t}
 						/>
-					) : null}
+					</div>
+					<RadarLegend
+						players={[first, second]}
+						t={t}
+					/>
 				</div>
 			)}
 			<p className="mt-3 text-caption text-muted-foreground">

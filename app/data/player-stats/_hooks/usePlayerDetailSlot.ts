@@ -79,9 +79,10 @@ function withEmptyStateContext(
 			? {
 					...core.profileRadar,
 					source: 'FPL',
+					position: currentPoint?.position ?? 0,
 					season: core.season,
-					sampleMinutes: 0,
-					smallSample: false,
+					asOfEventId: eventId ?? null,
+					smallSample: core.profileRadar.sampleMinutes < 180,
 					axes: core.profileRadar.axes.map(axis => ({
 						...axis,
 						direction: 'NEUTRAL',
@@ -113,7 +114,16 @@ function withEmptyStateContext(
 		careerTrajectory: [],
 		outlook: { rating: 'UNAVAILABLE', gameweeks: [] },
 		coverage: {
-			sources: [],
+			sources: (core.coverage?.sources ?? []).map(source => ({
+				...source,
+				seasons: [],
+				analysisStatus: 'UNAVAILABLE',
+				reasonCodes: [],
+				revision: null,
+				asOf: null,
+				freshnessSeconds: null,
+				stale: false
+			})),
 			metricCoverage: [],
 			limitations: []
 		}
@@ -425,10 +435,10 @@ export function usePlayerDetailSlot({
 				const evidence = entry?.evidence
 				if (!evidence) throw new Error('Player evidence unavailable')
 				const processState = entry?.state
-					startTransition(() => {
-						setPlayerDetail(previous =>
-							mergePlayerDetailEvidence(previous, evidence, section)
-						)
+				startTransition(() => {
+					setPlayerDetail(previous =>
+						mergePlayerDetailEvidence(previous, evidence, section)
+					)
 					if (section === 'process' && isProcessState(processState)) {
 						setPlayerStateProfile(previous => {
 							if (!previous || previous.playerId !== processState.playerId)
