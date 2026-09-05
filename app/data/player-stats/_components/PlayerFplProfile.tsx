@@ -278,9 +278,7 @@ export function PlayerFplProfile({
 	seasonStatsAvailable,
 	statusMessage,
 	isLoading,
-	isComparisonLoading,
-	isStateContextLoading,
-	isComparisonStateContextLoading
+	isComparisonLoading
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
@@ -290,8 +288,6 @@ export function PlayerFplProfile({
 	statusMessage: string | null
 	isLoading: boolean
 	isComparisonLoading: boolean
-	isStateContextLoading: boolean
-	isComparisonStateContextLoading: boolean
 }) {
 	const t = useTranslations('PlayerStats.profile')
 	const first = useMemo(
@@ -384,15 +380,14 @@ export function PlayerFplProfile({
 					{
 						label: comparison ? player.webName : undefined,
 						profile,
-						loading: isLoading || isStateContextLoading
+						loading: isLoading
 					},
 					...(comparison
 						? [
 								{
-									label: comparison.webName,
-									profile: comparisonProfile,
-									loading:
-										isComparisonLoading || isComparisonStateContextLoading
+								label: comparison.webName,
+								profile: comparisonProfile,
+								loading: isComparisonLoading
 								}
 							]
 						: [])
