@@ -195,7 +195,7 @@ describe('homepage price-change projection', () => {
 		assert.equal(isPriceChangeObservedEventAtLeastAsNew(current, older), true)
 	})
 
-	it('keeps the five strongest likely rises and falls from a live board', () => {
+	it('keeps complete sorted likely rises and falls for home preview and full-list views', () => {
 		const players = [
 			player(1, { status: 'LIKELY_RISE', progressPercent: 10 }),
 			player(2, { status: 'VERY_LIKELY_RISE', progressPercent: 60 }),
@@ -220,11 +220,11 @@ describe('homepage price-change projection', () => {
 		assert.equal(projection.fallTotal, 6)
 		assert.deepEqual(
 			projection.rises.map(item => item.playerId),
-			[2, 4, 5, 6, 3]
+			[2, 4, 5, 6, 3, 1]
 		)
 		assert.deepEqual(
 			projection.falls.map(item => item.playerId),
-			[8, 10, 11, 12, 9]
+			[8, 10, 11, 12, 9, 7]
 		)
 		assert.deepEqual(
 			players.map(item => item.playerId),
