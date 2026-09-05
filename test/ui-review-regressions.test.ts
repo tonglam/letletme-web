@@ -1215,6 +1215,21 @@ describe('asynchronous selection safety', () => {
 		assert.match(profileSource, /comparisonError: string \| null/)
 	})
 
+	it('keeps the FPL profile threshold authoritative when provider flags are early', async () => {
+		const profileSource = await readFile(
+			new URL(
+				'../app/data/player-stats/_components/PlayerFplProfile.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(profileSource, /const FPL_PROFILE_MINUTES = 180/)
+		assert.match(profileSource, /profile\.sampleMinutes >= FPL_PROFILE_MINUTES/)
+		assert.match(profileSource, /t\('sampleInsufficient'/)
+		assert.doesNotMatch(profileSource, /if \(player\.profile\.smallSample\)/)
+	})
+
 	it('clears stale team and tournament models before uncached gameweek loads', async () => {
 		const [teamSource, tournamentSource] = await Promise.all([
 			readFile(
