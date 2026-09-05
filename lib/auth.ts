@@ -18,23 +18,9 @@ import {
 	AUTH_SESSION_POLICY,
 	AUTH_TRUSTED_PROVIDERS
 } from '@/lib/auth-policy'
+import { trustedAuthOrigins } from '@/lib/auth-origin'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
-
-function trustedAuthOrigins(url: string): string[] {
-	const origins = new Set([url])
-	try {
-		const parsed = new URL(url)
-		if (
-			parsed.hostname === 'letletme.top' ||
-			parsed.hostname === 'www.letletme.top'
-		) {
-			origins.add(`${parsed.protocol}//letletme.top`)
-			origins.add(`${parsed.protocol}//www.letletme.top`)
-		}
-	} catch {}
-	return Array.from(origins)
-}
 
 export const authConfig = {
 	baseURL,
