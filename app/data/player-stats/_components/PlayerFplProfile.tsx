@@ -228,29 +228,45 @@ function profileFromState(
 }
 
 function ProviderStatus({
-	profile,
+	items,
 	t
 }: {
-	profile: PlayerStateProfileData | null
+	items: Array<{
+		label?: string
+		profile: PlayerStateProfileData | null
+		loading: boolean
+	}>
 	t: ReturnType<typeof useTranslations<'PlayerStats.profile'>>
 }) {
-	const understat = profile?.coverage.sources.find(
-		source => source.provider === 'UNDERSTAT' && source.scope === 'CURRENT'
-	)
-	const coverageLoaded = (profile?.coverage.sources.length ?? 0) > 0
-	const isVerifiedAndAvailable =
-		understat?.dataStatus === 'AVAILABLE' &&
-		understat.mappingStatus === 'VERIFIED'
 	return (
-		<p className="mb-3 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
-			{t('understatStatus', {
-				status: !coverageLoaded
-					? t('loading')
-					: isVerifiedAndAvailable
-						? t('understatVerified')
-						: t('notAvailable')
+		<div className="mb-3 space-y-2">
+			{items.map(item => {
+				const understat = item.profile?.coverage.sources.find(
+					source =>
+						source.provider === 'UNDERSTAT' && source.scope === 'CURRENT'
+				)
+				const isVerifiedAndAvailable =
+					understat?.dataStatus === 'AVAILABLE' &&
+					understat.mappingStatus === 'VERIFIED'
+				return (
+					<p
+						key={item.label ?? 'primary'}
+						className="rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground"
+					>
+						{item.label ? `${item.label} · ` : ''}
+						{t('understatStatus', {
+							// An empty, completed source list is a deterministic
+							// unavailable result, not an endlessly loading state.
+							status: item.loading
+								? t('loading')
+								: isVerifiedAndAvailable
+									? t('understatVerified')
+									: t('notAvailable')
+						})}
+					</p>
+				)
 			})}
-		</p>
+		</div>
 	)
 }
 
@@ -262,7 +278,9 @@ export function PlayerFplProfile({
 	seasonStatsAvailable,
 	statusMessage,
 	isLoading,
-	isComparisonLoading
+	isComparisonLoading,
+	isStateContextLoading,
+	isComparisonStateContextLoading
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
@@ -272,6 +290,8 @@ export function PlayerFplProfile({
 	statusMessage: string | null
 	isLoading: boolean
 	isComparisonLoading: boolean
+	isStateContextLoading: boolean
+	isComparisonStateContextLoading: boolean
 }) {
 	const t = useTranslations('PlayerStats.profile')
 	const first = useMemo(
@@ -360,7 +380,23 @@ export function PlayerFplProfile({
 			hint={`${t('hint')} ${sourceNote}`}
 		>
 			<ProviderStatus
-				profile={profile}
+				items={[
+					{
+						label: comparison ? player.webName : undefined,
+						profile,
+						loading: isLoading || isStateContextLoading
+					},
+					...(comparison
+						? [
+								{
+									label: comparison.webName,
+									profile: comparisonProfile,
+									loading:
+										isComparisonLoading || isComparisonStateContextLoading
+								}
+							]
+						: [])
+				]}
 				t={t}
 			/>
 			{second && !samePosition ? (

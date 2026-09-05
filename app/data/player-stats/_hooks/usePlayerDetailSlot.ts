@@ -62,7 +62,8 @@ function writeRecentPlayers(
 
 function withEmptyStateContext(
 	core: PlayerStateOverviewData,
-	eventId?: number
+	eventId: number | undefined,
+	authoritativePosition: number
 ): PlayerStateProfileData {
 	const seasonTimeline = Array.isArray(core.seasonTimeline)
 		? core.seasonTimeline
@@ -72,14 +73,17 @@ function withEmptyStateContext(
 	)
 	return {
 		...core,
-		position: currentPoint?.position ?? 0,
+		// The overview document intentionally omits the timeline position. The
+		// player-detail contract is the authoritative FPL fallback; never turn
+		// an absent timeline point into the invented position 0.
+		position: currentPoint?.position ?? authoritativePosition,
 		asOfEventId: eventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
 					...core.profileRadar,
 					source: 'FPL',
-					position: currentPoint?.position ?? 0,
+					position: currentPoint?.position ?? authoritativePosition,
 					season: core.season,
 					asOfEventId: eventId ?? null,
 					smallSample: core.profileRadar.sampleMinutes < 180,
@@ -187,7 +191,13 @@ export function usePlayerDetailSlot({
 	const t = useTranslations('PlayerStats')
 	const initialDetail = initialEntry?.overview ?? null
 	const initialState = isCoreState(initialEntry?.state)
-		? withEmptyStateContext(initialEntry.state, eventId)
+		? initialDetail
+			? withEmptyStateContext(
+					initialEntry.state,
+					eventId,
+					initialDetail.elementType
+				)
+			: null
 		: null
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryOption | null>(() =>
@@ -304,7 +314,9 @@ export function usePlayerDetailSlot({
 						setPlayerDetail(detail)
 						setSelectedPlayer(playerDetailToDirectoryOption(detail))
 						if (isCoreState(entry?.state)) {
-							setPlayerStateProfile(withEmptyStateContext(entry.state, eventId))
+							setPlayerStateProfile(
+								withEmptyStateContext(entry.state, eventId, detail.elementType)
+							)
 						} else {
 							setPlayerStateProfile(null)
 							setStateError(t('stateLoadFailed'))
