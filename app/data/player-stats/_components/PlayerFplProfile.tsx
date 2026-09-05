@@ -19,6 +19,13 @@ type RadarPlayer = {
 
 const FPL_PROFILE_MINUTES = 180
 
+function hasEnoughProfileMinutes(profile: PlayerRadarProfile) {
+	return (
+		Number.isFinite(profile.sampleMinutes) &&
+		profile.sampleMinutes >= FPL_PROFILE_MINUTES
+	)
+}
+
 const POSITION_LABELS: Record<
 	number,
 	'goalkeeper' | 'defender' | 'midfielder' | 'forward'
@@ -184,7 +191,7 @@ function ProfileCard({
 	const validAxes = player.profile.axes.filter(
 		axis => axis.available && axis.percentile !== null
 	).length
-	if (player.profile.smallSample) {
+	if (!hasEnoughProfileMinutes(player.profile)) {
 		return (
 			<div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
 				{t('sampleInsufficient', {
@@ -307,8 +314,12 @@ export function PlayerFplProfile({
 	const samePosition = Boolean(
 		second && first && first.profile.position === second.profile.position
 	)
-	const firstHasProfileSample = Boolean(first && !first.profile.smallSample)
-	const secondHasProfileSample = Boolean(second && !second.profile.smallSample)
+	const firstHasProfileSample = Boolean(
+		first && hasEnoughProfileMinutes(first.profile)
+	)
+	const secondHasProfileSample = Boolean(
+		second && hasEnoughProfileMinutes(second.profile)
+	)
 	const canOverlay = Boolean(
 		samePosition &&
 		first &&
