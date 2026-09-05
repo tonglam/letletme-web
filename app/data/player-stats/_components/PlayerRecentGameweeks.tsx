@@ -117,8 +117,14 @@ export function PlayerRecentGameweeks({
 }) {
 	const t = useTranslations('PlayerStats')
 	const tl = useTranslations('PlayerStats.labels')
+	// Overview intentionally omits the detailed recent-gameweek rows. The
+	// evidence request starts after the tab selection render, so tolerate that
+	// short hydration window instead of calling map on an absent field.
+	const recentGameweeks = Array.isArray(player.recentGameweeks)
+		? player.recentGameweeks
+		: []
 	const firstByEvent = new Map(
-		player.recentGameweeks.map(row => [row.eventId, row])
+		recentGameweeks.map(row => [row.eventId, row])
 	)
 	const secondByEvent = new Map(
 		(comparison?.recentGameweeks ?? []).map(row => [row.eventId, row])
