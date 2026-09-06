@@ -1,15 +1,17 @@
-import { Link } from '@/i18n/navigation'
-import { getTranslations } from 'next-intl/server'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
+import { getLocale, getTranslations } from 'next-intl/server'
 import { getCurrentSession, hasSessionCookieHint } from '@/lib/session'
 import { GuestNavigationActions } from './GuestNavigationActions'
 import { LogoMark, LogoWordmark } from './Logo'
 import { NavigationActions } from './NavigationActions'
 
 export async function Navbar() {
-	const [t, hasSessionCookie] = await Promise.all([
+	const [t, hasSessionCookie, locale] = await Promise.all([
 		getTranslations('Navigation'),
-		hasSessionCookieHint()
+		hasSessionCookieHint(),
+		getLocale()
 	])
+	const homeHref = localizePathname('/', locale as AppLocale)
 	const displaySession = hasSessionCookie
 		? await getCurrentSession().catch(error => {
 				console.warn('[navbar-session] display session unavailable', {
@@ -25,14 +27,13 @@ export async function Navbar() {
 			className="fascia texture-grain sticky top-0 z-50 border-b-2 border-electric"
 		>
 			<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 lg:px-8">
-				<Link
-					href="/"
-					prefetch={false}
+				<a
+					href={homeHref}
 					className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric focus-visible:ring-offset-2 focus-visible:ring-offset-fascia"
 				>
 					<LogoMark className="text-electric" />
 					<LogoWordmark />
-				</Link>
+				</a>
 
 				<div className="flex items-center gap-1.5">
 					{displaySession?.user ? (

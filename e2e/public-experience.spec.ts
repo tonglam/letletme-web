@@ -215,6 +215,26 @@ test('home keeps the five-section vocabulary and competition entry links aligned
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 
+test('localized shell navigation completes logo and menu-link navigation', async ({
+	page
+}) => {
+	await page.goto('/zh-CN/explore/fixtures')
+
+	const header = page.getByRole('navigation', { name: '主导航' })
+	await expect(header.getByRole('link', { name: 'LETLETME' })).toHaveAttribute(
+		'href',
+		'/zh-CN'
+	)
+	await header.getByRole('link', { name: 'LETLETME' }).click()
+	await expect(page).toHaveURL(/\/zh-CN\/?$/)
+
+	await header
+		.locator('details[data-navigation-group="live"] > summary')
+		.click()
+	await header.getByRole('link', { name: '实时比赛', exact: true }).click()
+	await expect(page).toHaveURL(/\/zh-CN\/live\/matches$/)
+})
+
 test('home team of the week shows each player name, gameweek score, and detail action', async ({
 	page
 }) => {
