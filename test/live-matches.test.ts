@@ -170,7 +170,7 @@ describe('live matchday V3 publication', () => {
 		assert.doesNotMatch(calls[0] ?? '', /liveFixturePlayers|eventLive\(/)
 		assert.doesNotMatch(calls[0] ?? '', /awardedPoints|pointsModification/)
 		assert.doesNotMatch(calls[0] ?? '', /nextEventId/)
-		assert.deepEqual(timeouts, [5_000])
+		assert.deepEqual(timeouts, [15_000])
 		assert.equal(data.matches.length, 1)
 		assert.equal(data.matches[0]?.homeTeam.players[0]?.player, 'Home Player')
 		assert.equal(data.matches[0]?.homeTeam.players[0]?.price, 55)
