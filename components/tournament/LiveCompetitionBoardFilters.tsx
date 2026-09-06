@@ -1,13 +1,11 @@
 'use client'
 
-import {
-	PlayerDirectoryPicker,
-	type PlayerDirectoryOption
-} from '@/components/player/PlayerDirectoryPicker'
+import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
 import { SelectedFilterBadge } from '@/components/player/SelectedFilterBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
 	Select,
 	SelectContent,
@@ -27,7 +25,7 @@ import {
 } from '@/lib/tournament/live-board'
 import { resolveTeamDisplayName } from '@/lib/team-display'
 import type { Position } from '@/types/common'
-import { Filter, Plus, Shirt, Users, X } from 'lucide-react'
+import { Filter, Plus, RotateCcw, Search, Shirt, Users, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -36,6 +34,8 @@ type Props = {
 	eventId: number
 	scoreCoreRevision: string
 	value: LiveBoardFilterState
+	totalEntries: number
+	filteredEntries: number
 	disabled?: boolean
 	onApply: (next: LiveBoardFilterState) => Promise<boolean>
 	onRevisionGone?: () => Promise<unknown> | unknown
@@ -113,13 +113,229 @@ const rowToPlayerOption = (
 	name: row.playerName,
 	position: selectionPositionToShort(row.position),
 	teamShortName: row.teamShortName,
-	teamName: row.teamName
+	teamName: row.teamName,
+	selectedByPercent: row.percentage
 })
+
+type LivePositionFilter = Position | 'ALL'
+
+const livePositionOptions: LivePositionFilter[] = [
+	'ALL',
+	'GKP',
+	'DEF',
+	'MID',
+	'FWD'
+]
+
+function LiveSelectionPlayerPicker({
+	rows,
+	excludedPlayerIds,
+	onSelect,
+	className = ''
+}: {
+	rows: TournamentSelectionIndexRow[]
+	excludedPlayerIds?: string[]
+	onSelect: (player: PlayerDirectoryOption) => void
+	className?: string
+}) {
+	const t = useTranslations('PlayerDirectory')
+	const [searchTerm, setSearchTerm] = useState('')
+	const [teamFilter, setTeamFilter] = useState('ALL')
+	const [positionFilter, setPositionFilter] =
+		useState<LivePositionFilter>('ALL')
+	const excludedIds = useMemo(
+		() => new Set(excludedPlayerIds ?? []),
+		[excludedPlayerIds]
+	)
+	const teams = useMemo(() => {
+		const unique = new Map<
+			number,
+			{ id: number; name: string; shortName: string }
+		>()
+		for (const row of rows) {
+			unique.set(row.teamId, {
+				id: row.teamId,
+				name: row.teamName,
+				shortName: row.teamShortName
+			})
+		}
+		return Array.from(unique.values()).sort((left, right) =>
+			resolveTeamDisplayName(left.shortName, left.name).localeCompare(
+				resolveTeamDisplayName(right.shortName, right.name)
+			)
+		)
+	}, [rows])
+	const availableRows = useMemo(
+		() => rows.filter(row => !excludedIds.has(String(row.playerId))),
+		[excludedIds, rows]
+	)
+	const visibleRows = useMemo(() => {
+		const normalizedSearch = searchTerm.trim().toLocaleLowerCase()
+		return [...availableRows]
+			.filter(row => {
+				const position = selectionPositionToShort(row.position)
+				return (
+					(normalizedSearch.length === 0 ||
+						row.playerName.toLocaleLowerCase().includes(normalizedSearch)) &&
+					(teamFilter === 'ALL' || String(row.teamId) === teamFilter) &&
+					(positionFilter === 'ALL' || position === positionFilter)
+				)
+			})
+			.sort(
+				(left, right) =>
+					right.count - left.count ||
+					left.playerName.localeCompare(right.playerName)
+			)
+	}, [availableRows, positionFilter, searchTerm, teamFilter])
+
+	const resetFilters = () => {
+		setSearchTerm('')
+		setTeamFilter('ALL')
+		setPositionFilter('ALL')
+	}
+
+	return (
+		<div className={className}>
+			<p className="mb-1.5 eyebrow sm:text-caption">{t('findPlayer')}</p>
+			<div className="relative">
+				<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					aria-label={t('search')}
+					value={searchTerm}
+					onChange={event => setSearchTerm(event.target.value)}
+					placeholder={t('searchPlaceholder')}
+					className="pl-9 pr-9"
+				/>
+				{searchTerm.length > 0 ? (
+					<button
+						type="button"
+						aria-label={t('clearSearch')}
+						onClick={() => setSearchTerm('')}
+						className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					>
+						<X className="h-4 w-4" />
+					</button>
+				) : null}
+			</div>
+
+			<div className="mt-2 flex flex-wrap items-center gap-2">
+				<Select
+					value={teamFilter}
+					onValueChange={setTeamFilter}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,9rem)] text-xs"
+						aria-label={t('filterTeam')}
+					>
+						<SelectValue placeholder={t('allTeams')} />
+					</SelectTrigger>
+					<SelectContent className="max-h-72">
+						<SelectItem value="ALL">{t('allTeams')}</SelectItem>
+						{teams.map(team => (
+							<SelectItem
+								key={team.id}
+								value={String(team.id)}
+							>
+								{resolveTeamDisplayName(team.shortName, team.name)}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+
+				<Select
+					value={positionFilter}
+					onValueChange={value =>
+						setPositionFilter(value as LivePositionFilter)
+					}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,7rem)] text-xs"
+						aria-label={t('filterPosition')}
+					>
+						<SelectValue placeholder={t('allPositions')} />
+					</SelectTrigger>
+					<SelectContent>
+						{livePositionOptions.map(position => (
+							<SelectItem
+								key={position}
+								value={position}
+							>
+								{position === 'ALL'
+									? t('allPositions')
+									: position === 'GKP'
+										? t('goalkeeper')
+										: position === 'DEF'
+											? t('defender')
+											: position === 'MID'
+												? t('midfielder')
+												: t('forward')}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="h-8 gap-1 px-2 text-xs"
+					onClick={resetFilters}
+				>
+					<RotateCcw
+						className="size-3.5"
+						aria-hidden="true"
+					/>
+					{t('resetFilters')}
+				</Button>
+			</div>
+
+			<div className="mt-3 rounded-md border">
+				<div className="max-h-64 overflow-y-auto">
+					{visibleRows.length === 0 ? (
+						<div className="p-3 text-sm text-muted-foreground">
+							{t('noPlayers')}
+						</div>
+					) : (
+						visibleRows.map(row => (
+							<button
+								key={row.playerId}
+								type="button"
+								onClick={() => onSelect(rowToPlayerOption(row))}
+								className="flex w-full items-center gap-2 border-b px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/50"
+							>
+								<span className="min-w-0 flex-1 truncate font-medium">
+									{row.playerName}
+								</span>
+								<span className="shrink-0 text-label text-muted-foreground">
+									{selectionPositionToShort(row.position)}
+								</span>
+								<span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+									{resolveTeamDisplayName(row.teamShortName, row.teamName)}
+								</span>
+								<span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+									{row.percentage.toFixed(1)}%
+								</span>
+							</button>
+						))
+					)}
+				</div>
+			</div>
+
+			<div className="mt-2 text-xs text-muted-foreground">
+				{t('resultCount', {
+					visible: visibleRows.length,
+					total: availableRows.length
+				})}
+			</div>
+		</div>
+	)
+}
 
 const scopeLabel = (
 	scope: EntryLiveCompetitionPickScope,
 	t: (key: 'any' | 'starter' | 'bench') => string
-) => (scope === 'ANY' ? t('any') : scope === 'STARTER' ? t('starter') : t('bench'))
+) =>
+	scope === 'ANY' ? t('any') : scope === 'STARTER' ? t('starter') : t('bench')
 
 const captainModeLabel = (
 	mode: EntryLiveCompetitionCaptainMode,
@@ -136,6 +352,8 @@ export function LiveCompetitionBoardFilters({
 	eventId,
 	scoreCoreRevision,
 	value,
+	totalEntries,
+	filteredEntries,
 	disabled,
 	onApply,
 	onRevisionGone
@@ -325,10 +543,12 @@ export function LiveCompetitionBoardFilters({
 			applyPromiseRef.current = promise
 			void promise.then(
 				() => {
-					if (applyPromiseRef.current === promise) applyPromiseRef.current = null
+					if (applyPromiseRef.current === promise)
+						applyPromiseRef.current = null
 				},
 				() => {
-					if (applyPromiseRef.current === promise) applyPromiseRef.current = null
+					if (applyPromiseRef.current === promise)
+						applyPromiseRef.current = null
 				}
 			)
 		},
@@ -430,7 +650,10 @@ export function LiveCompetitionBoardFilters({
 		commitFilters(next)
 	}
 
-	const removeTeamRule = (teamId: number, scope: EntryLiveCompetitionPickScope) => {
+	const removeTeamRule = (
+		teamId: number,
+		scope: EntryLiveCompetitionPickScope
+	) => {
 		const next = cloneFilters(draft)
 		next.teamCountRules = next.teamCountRules.filter(
 			rule => !(rule.teamId === teamId && rule.scope === scope)
@@ -478,22 +701,38 @@ export function LiveCompetitionBoardFilters({
 		(draft.ownership ? 1 : 0) +
 		draft.teamCountRules.length
 	const controlsDisabled = Boolean(disabled || applying)
+	const matchedPercentage =
+		totalEntries > 0 ? Math.round((filteredEntries / totalEntries) * 100) : 0
+	const matchedSummary = t('matched', {
+		matched: filteredEntries,
+		total: totalEntries,
+		percentage: matchedPercentage
+	})
 
 	return (
 		<div className="mb-6 space-y-4">
 			<Card className="space-y-4 border-border/80 p-4">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div className="flex items-center gap-2 text-sm font-medium">
-						<Filter className="size-4 text-primary-ink" aria-hidden="true" />
+						<Filter
+							className="size-4 text-primary-ink"
+							aria-hidden="true"
+						/>
 						{t('advancedFilters')}
 						{activeFilterCount > 0 ? (
-							<Badge variant="secondary" className="tabular-nums">
+							<Badge
+								variant="secondary"
+								className="tabular-nums"
+							>
 								{activeFilterCount}
 							</Badge>
 						) : null}
 					</div>
 					{loading || applying ? (
-						<span className="text-xs text-muted-foreground" role="status">
+						<span
+							className="text-xs text-muted-foreground"
+							role="status"
+						>
 							{liveT('loadingStandings')}
 						</span>
 					) : null}
@@ -569,7 +808,9 @@ export function LiveCompetitionBoardFilters({
 							type="button"
 							variant="outline"
 							disabled={
-								controlsDisabled || !pendingCaptain || selectedCaptainIds.size >= 15
+								controlsDisabled ||
+								!pendingCaptain ||
+								selectedCaptainIds.size >= 15
 							}
 							onClick={addCaptain}
 						>
@@ -582,7 +823,11 @@ export function LiveCompetitionBoardFilters({
 							const player = playersById.get(playerId)
 							const name = player?.playerName ?? String(playerId)
 							return (
-								<Badge key={playerId} variant="outline" className="gap-1.5">
+								<Badge
+									key={playerId}
+									variant="outline"
+									className="gap-1.5"
+								>
 									{name}
 									<button
 										type="button"
@@ -606,7 +851,7 @@ export function LiveCompetitionBoardFilters({
 						<div>
 							<p className="text-sm font-medium">{t('playerOwnership')}</p>
 							<p className="mt-1 text-xs text-muted-foreground">
-								{t('noOwnershipFilter')}
+								{matchedSummary}
 							</p>
 						</div>
 					</div>
@@ -629,7 +874,10 @@ export function LiveCompetitionBoardFilters({
 							</SelectTrigger>
 							<SelectContent>
 								{scopes.map(scope => (
-									<SelectItem key={scope} value={scope}>
+									<SelectItem
+										key={scope}
+										value={scope}
+									>
 										{scopeLabel(scope, t)}
 									</SelectItem>
 								))}
@@ -653,7 +901,10 @@ export function LiveCompetitionBoardFilters({
 							</SelectTrigger>
 							<SelectContent>
 								{captainModes.map(mode => (
-									<SelectItem key={mode} value={mode}>
+									<SelectItem
+										key={mode}
+										value={mode}
+									>
 										{captainModeLabel(mode, t)}
 									</SelectItem>
 								))}
@@ -677,13 +928,17 @@ export function LiveCompetitionBoardFilters({
 							<SelectedFilterBadge
 								key={player.id}
 								name={player.name}
-								details={`${player.position} | ${resolveTeamDisplayName(
-									player.teamShortName,
-									player.teamName
-								)} | ${scopeLabel(draft.ownership?.scope ?? 'ANY', t)} | ${captainModeLabel(
-									draft.ownership?.captainMode ?? 'ANY',
-									t
-								)}`}
+								details={[
+									player.position,
+									resolveTeamDisplayName(player.teamShortName, player.teamName),
+									player.selectedByPercent == null
+										? null
+										: `${player.selectedByPercent.toFixed(1)}%`,
+									scopeLabel(draft.ownership?.scope ?? 'ANY', t),
+									captainModeLabel(draft.ownership?.captainMode ?? 'ANY', t)
+								]
+									.filter(Boolean)
+									.join(' | ')}
 								removeLabel={t('removePlayer', { name: player.name })}
 								onRemove={() => removeOwner(Number(player.id))}
 							/>
@@ -706,8 +961,9 @@ export function LiveCompetitionBoardFilters({
 				)}
 
 				{isPlayerPickerOpen ? (
-					<PlayerDirectoryPicker
+					<LiveSelectionPlayerPicker
 						key={`${tournamentId}:${eventId}:${scoreCoreRevision}`}
+						rows={rows}
 						className="mt-4"
 						excludedPlayerIds={selectedOwnerIds.map(String)}
 						onSelect={addOwner}
@@ -722,7 +978,7 @@ export function LiveCompetitionBoardFilters({
 						<div>
 							<p className="text-sm font-medium">{t('teamExposure')}</p>
 							<p className="mt-1 text-xs text-muted-foreground">
-								{t('noTeamFilter')}
+								{matchedSummary}
 							</p>
 						</div>
 					</div>
@@ -745,7 +1001,10 @@ export function LiveCompetitionBoardFilters({
 							</SelectTrigger>
 							<SelectContent>
 								{availableTeams.map(team => (
-									<SelectItem key={team.id} value={String(team.id)}>
+									<SelectItem
+										key={team.id}
+										value={String(team.id)}
+									>
 										{team.name}
 									</SelectItem>
 								))}
@@ -764,7 +1023,10 @@ export function LiveCompetitionBoardFilters({
 							</SelectTrigger>
 							<SelectContent>
 								{teamCountOptions.map(count => (
-									<SelectItem key={count} value={String(count)}>
+									<SelectItem
+										key={count}
+										value={String(count)}
+									>
 										{count}
 									</SelectItem>
 								))}
@@ -785,7 +1047,10 @@ export function LiveCompetitionBoardFilters({
 							</SelectTrigger>
 							<SelectContent>
 								{scopes.map(scope => (
-									<SelectItem key={scope} value={scope}>
+									<SelectItem
+										key={scope}
+										value={scope}
+									>
 										{scopeLabel(scope, t)}
 									</SelectItem>
 								))}
@@ -795,7 +1060,9 @@ export function LiveCompetitionBoardFilters({
 							type="button"
 							variant="outline"
 							disabled={
-								controlsDisabled || !pendingTeam || draft.teamCountRules.length >= 4
+								controlsDisabled ||
+								!pendingTeam ||
+								draft.teamCountRules.length >= 4
 							}
 							onClick={addTeamRule}
 						>
