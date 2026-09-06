@@ -575,7 +575,7 @@ export async function loadLiveMatchdayV3(
 	const payload = await executor<LiveMatchdayV3Payload>(
 		GET_LIVE_MATCHDAY,
 		{ eventId: eventId ?? null },
-		{ cache: 'no-store', timeoutMs: 5_000, ...options }
+		{ cache: 'no-store', timeoutMs: 15_000, ...options }
 	)
 	return validateLiveMatchdayV3(payload)
 }
@@ -637,7 +637,7 @@ export async function loadLiveMatchdayHeadV3(
 	const payload = await executor<LiveMatchdayHeadV3Payload>(
 		GET_LIVE_MATCHDAY_HEAD,
 		{ eventId: eventId ?? null },
-		{ cache: 'no-store', timeoutMs: 5_000, ...options }
+		{ cache: 'no-store', timeoutMs: 15_000, ...options }
 	)
 	return validateLiveMatchdayHeadV3(payload)
 }
