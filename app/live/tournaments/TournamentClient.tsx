@@ -1060,9 +1060,7 @@ export default function TournamentClient({
 				)
 				return
 			}
-			setEntries(current =>
-				mergeLiveBoardEntries(current, pageRows(next))
-			)
+			setEntries(current => mergeLiveBoardEntries(current, pageRows(next)))
 			setBoardPage(next)
 			setResultsError(
 				boardPartialMessage(next, {
@@ -1575,7 +1573,11 @@ export default function TournamentClient({
 											{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
 										</Button>
 									</div>
-									<div className={showAdvancedFilters ? 'block' : 'hidden md:block'}>
+									<div
+										className={
+											showAdvancedFilters ? 'block' : 'hidden md:block'
+										}
+									>
 										<LiveCompetitionBoardFilters
 											tournamentId={Number(selectedTournament.id)}
 											eventId={selectedGameweek}
@@ -1583,6 +1585,8 @@ export default function TournamentClient({
 												boardPage.head.publication?.revisions.scoreCore ?? ''
 											}
 											value={queryState.filters}
+											totalEntries={boardPage.totalEntries}
+											filteredEntries={boardPage.filteredEntries}
 											disabled={isRefreshing || rateLimitSeconds > 0}
 											onApply={applyFilters}
 											onRevisionGone={handleBoardRevisionGone}
