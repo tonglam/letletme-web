@@ -1563,7 +1563,7 @@ export default function TournamentClient({
 											updateSearchInput(value.slice(0, 100))
 										}
 									/>
-									<div className="mb-3 flex justify-end">
+									<div className="mb-3 flex justify-end md:hidden">
 										<Button
 											type="button"
 											variant="outline"
@@ -1575,7 +1575,7 @@ export default function TournamentClient({
 											{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
 										</Button>
 									</div>
-									{showAdvancedFilters ? (
+									<div className={showAdvancedFilters ? 'block' : 'hidden md:block'}>
 										<LiveCompetitionBoardFilters
 											tournamentId={Number(selectedTournament.id)}
 											eventId={selectedGameweek}
@@ -1587,7 +1587,7 @@ export default function TournamentClient({
 											onApply={applyFilters}
 											onRevisionGone={handleBoardRevisionGone}
 										/>
-									) : null}
+									</div>
 									<TournamentTable
 										key={`table-${scopeKey}`}
 										entries={visibleEntries}
