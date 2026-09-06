@@ -135,9 +135,11 @@
 				anchor.target === '_blank' ||
 				anchor.hasAttribute('download')
 			if (!modified) {
-				queueMicrotask(() => {
-					if (!event.defaultPrevented) disclosure.removeAttribute('open')
-				})
+				// Next's client-side links prevent the browser default while they
+				// start the App Router transition. Close the native disclosure
+				// independently of that cancellation so a rapid click cannot leave
+				// an old menu open over the next route.
+				disclosure.removeAttribute('open')
 			}
 		} else if (target.closest('[role="radio"]')) {
 			disclosure.removeAttribute('open')

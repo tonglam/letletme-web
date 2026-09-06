@@ -424,6 +424,38 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 	).toBe(true)
 })
 
+test('rapid native menu interaction does not strand client navigation', async ({
+	page
+}) => {
+	await page.goto('/')
+
+	const navigation = page.getByRole('navigation', { name: 'Primary' })
+	const explore = navigation.locator(
+		'details[data-navigation-group="explore"]'
+	)
+	const summary = explore.locator(':scope > summary')
+
+	for (let index = 0; index < 6; index += 1) {
+		await summary.click()
+		await expect(explore).toHaveAttribute('open', '')
+		await summary.click()
+		await expect(explore).not.toHaveAttribute('open', '')
+	}
+
+	await summary.click()
+	const navigationPromise = page.waitForURL(/\/explore\/market$/)
+	await page.evaluate(() => {
+		document
+			.querySelector<HTMLAnchorElement>(
+				'details[data-navigation-group="explore"] a[href="/explore/market"]'
+			)
+			?.click()
+	})
+	await expect(explore).not.toHaveAttribute('open', '')
+	await navigationPromise
+	await expect(page).toHaveURL(/\/explore\/market$/)
+})
+
 test('guest mobile login closes its native disclosure before navigation', async ({
 	page
 }) => {
