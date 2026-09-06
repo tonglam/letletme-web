@@ -4,11 +4,13 @@ import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import {
 	GET_ENTRY_TOURNAMENTS,
+	GET_PLATFORM_ADMIN_TOURNAMENTS,
 	type EntryTournamentsResponse
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getLivePageContext } from '@/lib/live-context-server'
 import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
+import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
@@ -43,6 +45,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		getVerifiedEntryContext()
 	])
 	const entryId = verified.entryId
+	const platformAdmin = isPlatformAdminIdentity(verified.session?.user ?? {})
 	if (isOfficialLiveUpdatingContext(liveContext)) {
 		return (
 			<SeasonPhaseState
@@ -109,10 +112,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 				requestedTournamentIdNumber > 0
 					? requestedTournamentIdNumber
 					: null
-			const tournamentData = await executeServerQuery<EntryTournamentsResponse>(
-				GET_ENTRY_TOURNAMENTS,
-				{ entryId },
-				{ cache: 'no-store' }
+				const tournamentData = await executeServerQuery<EntryTournamentsResponse>(
+					platformAdmin
+						? GET_PLATFORM_ADMIN_TOURNAMENTS
+						: GET_ENTRY_TOURNAMENTS,
+					{ entryId },
+					{ cache: 'no-store' }
 			)
 			initialTournaments = tournamentData.entryTournaments.map(
 				mapEntryTournamentToLiveTournament
@@ -132,6 +137,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	return (
 		<TournamentClient
 			entryId={entryId ?? 0}
+			platformAdmin={platformAdmin}
 			initialTournaments={initialTournaments}
 			initialSelectedTournamentId={initialSelectedTournamentId}
 			initialEventId={currentEventId}

@@ -1002,6 +1002,51 @@ describe('My FPL hydration', () => {
 })
 
 describe('live tournament filter visibility', () => {
+	it('keeps platform-admin live lists on the management scope', async () => {
+		const [pageSource, clientSource, operationsSource] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/[locale]/live/competitions/page.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../lib/graphql/operations/tournaments.ts',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			operationsSource,
+			/entryTournaments: manageableTournaments\(entryId: \$entryId\)/
+		)
+		assert.match(
+			pageSource,
+			/isPlatformAdminIdentity\(verified\.session\?\.user \?\? \{\}\)/
+		)
+		assert.match(
+			pageSource,
+			/platformAdmin\s*\? GET_PLATFORM_ADMIN_TOURNAMENTS\s*:\s*GET_ENTRY_TOURNAMENTS/
+		)
+		assert.match(pageSource, /platformAdmin=\{platformAdmin\}/)
+		assert.match(
+			clientSource,
+			/const tournamentListQuery = platformAdmin\s*\? GET_PLATFORM_ADMIN_TOURNAMENTS\s*:\s*GET_ENTRY_TOURNAMENTS/
+		)
+		assert.equal(
+			(clientSource.match(/tournamentListQuery,/g) ?? []).length,
+			3
+		)
+	})
+
 	it('keeps ownership and team-exposure filters reachable in the paged board', async () => {
 		const [clientSource, filtersSource] = await Promise.all([
 			readFile(

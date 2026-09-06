@@ -23,6 +23,7 @@ import {
 } from '@/lib/graphql/operations/events'
 import {
 	GET_ENTRY_TOURNAMENTS,
+	GET_PLATFORM_ADMIN_TOURNAMENTS,
 	type EntryLiveCompetitionBoardPage,
 	type EntryLiveCompetitionBoardSort,
 	type EntryLiveCompetitionBoardVariables,
@@ -176,6 +177,7 @@ const exactUpdatedAt = (value: string | null): string | null => {
 
 interface TournamentClientProps {
 	entryId: number
+	platformAdmin: boolean
 	initialTournaments?: Tournament[]
 	initialSelectedTournamentId?: string
 	initialEventId: number
@@ -189,6 +191,7 @@ interface TournamentClientProps {
 
 export default function TournamentClient({
 	entryId,
+	platformAdmin,
 	initialTournaments = [],
 	initialSelectedTournamentId = '',
 	initialEventId,
@@ -202,6 +205,9 @@ export default function TournamentClient({
 	const t = useTranslations('LiveTournament')
 	const lifecycleT = useTranslations('TournamentLifecycle')
 	const filtersT = useTranslations('Filters')
+	const tournamentListQuery = platformAdmin
+		? GET_PLATFORM_ADMIN_TOURNAMENTS
+		: GET_ENTRY_TOURNAMENTS
 	const isPageActive = usePageActive()
 	const router = useRouter()
 	const searchParams = useSearchParams()
@@ -489,7 +495,7 @@ export default function TournamentClient({
 		setIsLoadingTournaments(true)
 		setListError(null)
 		void executeQuery<EntryTournamentsResponse>(
-			GET_ENTRY_TOURNAMENTS,
+			tournamentListQuery,
 			{ entryId },
 			{ cache: 'no-store', signal: controller.signal }
 		)
@@ -505,7 +511,7 @@ export default function TournamentClient({
 				if (!controller.signal.aborted) setIsLoadingTournaments(false)
 			})
 		return () => controller.abort()
-	}, [entryId, initialTournaments.length, t])
+	}, [entryId, initialTournaments.length, t, tournamentListQuery])
 
 	useEffect(() => {
 		if (entryId <= 0 || tournaments.length === 0) return
@@ -575,7 +581,7 @@ export default function TournamentClient({
 		const poll = async () => {
 			try {
 				const data = await executeQuery<EntryTournamentsResponse>(
-					GET_ENTRY_TOURNAMENTS,
+					tournamentListQuery,
 					{ entryId },
 					{ cache: 'no-store' }
 				)
@@ -603,6 +609,7 @@ export default function TournamentClient({
 		selectedTournamentInsightsReadyAt,
 		selectedTournamentSetupRepairExhausted,
 		selectedTournamentSetupStatus,
+		tournamentListQuery,
 		t
 	])
 

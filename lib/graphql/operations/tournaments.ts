@@ -106,6 +106,19 @@ export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
 `
 
 /**
+ * Platform-admin live pages need the management scope so tournaments where
+ * the admin is not a participant remain selectable. The alias keeps the
+ * response shape identical to GET_ENTRY_TOURNAMENTS for the shared client.
+ */
+export const GET_PLATFORM_ADMIN_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
+  query GetPlatformAdminTournaments($entryId: Int!) {
+    entryTournaments: manageableTournaments(entryId: $entryId) {
+      ...TournamentInfoFields
+    }
+  }
+`
+
+/**
  * List-page projection only — avoid the full TournamentInfoFields payload
  * (knockout sizing, setup unit counters, etc.) on every list navigation.
  */
