@@ -1,5 +1,10 @@
 'use client'
 
+import {
+	PlayerDirectoryPicker,
+	type PlayerDirectoryOption
+} from '@/components/player/PlayerDirectoryPicker'
+import { SelectedFilterBadge } from '@/components/player/SelectedFilterBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -20,9 +25,11 @@ import {
 	EMPTY_LIVE_BOARD_FILTERS,
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
-import { Filter, Plus, X } from 'lucide-react'
+import { resolveTeamDisplayName } from '@/lib/team-display'
+import type { Position } from '@/types/common'
+import { Filter, Plus, Shirt, Users, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Props = {
 	tournamentId: number
@@ -47,6 +54,7 @@ const chipOptions = [
 	'FREE_HIT',
 	'MANAGER'
 ] as const
+const teamCountOptions = [1, 2, 3] as const
 
 function isSelectionIndexRow(
 	value: unknown
@@ -79,6 +87,50 @@ const cloneFilters = (value: LiveBoardFilterState): LiveBoardFilterState => ({
 	teamCountRules: value.teamCountRules.map(rule => ({ ...rule }))
 })
 
+const selectionPositionToShort = (value: string): Position => {
+	switch (value.toUpperCase()) {
+		case 'GKP':
+		case 'GOALKEEPER':
+			return 'GKP'
+		case 'DEF':
+		case 'DEFENDER':
+			return 'DEF'
+		case 'MID':
+		case 'MIDFIELDER':
+			return 'MID'
+		case 'FWD':
+		case 'FORWARD':
+			return 'FWD'
+		default:
+			return 'MID'
+	}
+}
+
+const rowToPlayerOption = (
+	row: TournamentSelectionIndexRow
+): PlayerDirectoryOption => ({
+	id: String(row.playerId),
+	name: row.playerName,
+	position: selectionPositionToShort(row.position),
+	teamShortName: row.teamShortName,
+	teamName: row.teamName
+})
+
+const scopeLabel = (
+	scope: EntryLiveCompetitionPickScope,
+	t: (key: 'any' | 'starter' | 'bench') => string
+) => (scope === 'ANY' ? t('any') : scope === 'STARTER' ? t('starter') : t('bench'))
+
+const captainModeLabel = (
+	mode: EntryLiveCompetitionCaptainMode,
+	t: (key: 'anyCaptain' | 'selectedCaptain' | 'selectedViceCaptain') => string
+) =>
+	mode === 'ANY'
+		? t('anyCaptain')
+		: mode === 'CAPTAIN'
+			? t('selectedCaptain')
+			: t('selectedViceCaptain')
+
 export function LiveCompetitionBoardFilters({
 	tournamentId,
 	eventId,
@@ -98,13 +150,23 @@ export function LiveCompetitionBoardFilters({
 		cloneFilters(value)
 	)
 	const [pendingCaptain, setPendingCaptain] = useState('')
-	const [pendingOwner, setPendingOwner] = useState('')
 	const [pendingTeam, setPendingTeam] = useState('')
 	const [pendingCount, setPendingCount] = useState(1)
 	const [pendingTeamScope, setPendingTeamScope] =
 		useState<EntryLiveCompetitionPickScope>('ANY')
+	const [isPlayerPickerOpen, setIsPlayerPickerOpen] = useState(false)
+	const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false)
+	const [selectedPlayerOptions, setSelectedPlayerOptions] = useState<
+		Record<string, PlayerDirectoryOption>
+	>({})
+	const latestValueRef = useRef(value)
+	const queuedFiltersRef = useRef<LiveBoardFilterState | null>(null)
+	const applyPromiseRef = useRef<Promise<void> | null>(null)
 
-	useEffect(() => setDraft(cloneFilters(value)), [value])
+	useEffect(() => {
+		latestValueRef.current = value
+		setDraft(cloneFilters(value))
+	}, [value])
 
 	useEffect(() => {
 		const controller = new AbortController()
@@ -125,10 +187,7 @@ export function LiveCompetitionBoardFilters({
 				if (!response.ok) {
 					const error = new Error(
 						`selection-index:${response.status}`
-					) as Error & {
-						code?: string
-						status?: number
-					}
+					) as Error & { code?: string; status?: number }
 					error.code = typeof data?.error === 'string' ? data.error : undefined
 					error.status = response.status
 					throw error
@@ -137,8 +196,9 @@ export function LiveCompetitionBoardFilters({
 			})
 			.then(data => {
 				const next = data.tournamentSelectionIndex?.rows
-				if (!Array.isArray(next) || !next.every(isSelectionIndexRow))
+				if (!Array.isArray(next) || !next.every(isSelectionIndexRow)) {
 					throw new Error('selection-index:invalid')
+				}
 				setRows(next)
 			})
 			.catch(error => {
@@ -164,7 +224,10 @@ export function LiveCompetitionBoardFilters({
 		return () => controller.abort()
 	}, [eventId, onRevisionGone, scoreCoreRevision, tournamentId])
 
-	const selectedOwnerIds = new Set(draft.ownership?.playerIds ?? [])
+	const selectedOwnerIds = useMemo(
+		() => draft.ownership?.playerIds ?? [],
+		[draft.ownership?.playerIds]
+	)
 	const selectedCaptainIds = new Set(draft.captainPlayerIds)
 	const playerOptions = useMemo(
 		() =>
@@ -195,466 +258,598 @@ export function LiveCompetitionBoardFilters({
 			left.name.localeCompare(right.name)
 		)
 	}, [rows])
+	const teamsById = useMemo(
+		() => new Map(teams.map(team => [team.id, team])),
+		[teams]
+	)
+	const selectedTeamIds = useMemo(
+		() => new Set(draft.teamCountRules.map(rule => rule.teamId)),
+		[draft.teamCountRules]
+	)
+	const availableTeams = useMemo(
+		() => teams.filter(team => !selectedTeamIds.has(team.id)),
+		[selectedTeamIds, teams]
+	)
 
-	const toggleChip = (chip: string) =>
-		setDraft(current => ({
-			...current,
-			chips: current.chips.includes(chip)
-				? current.chips.filter(value => value !== chip)
-				: [...current.chips, chip].slice(0, 5)
-		}))
+	useEffect(() => {
+		const activeIds = new Set(selectedOwnerIds)
+		setSelectedPlayerOptions(current => {
+			const next: Record<string, PlayerDirectoryOption> = {}
+			let changed = false
+			for (const [id, player] of Object.entries(current)) {
+				if (activeIds.has(Number(id))) next[id] = player
+				else changed = true
+			}
+			for (const row of rows) {
+				const id = String(row.playerId)
+				if (activeIds.has(row.playerId) && !next[id]) {
+					next[id] = rowToPlayerOption(row)
+					changed = true
+				}
+			}
+			return changed ? next : current
+		})
+	}, [rows, selectedOwnerIds])
+
+	const commitFilters = useCallback(
+		(next: LiveBoardFilterState) => {
+			const normalized = cloneFilters(next)
+			setDraft(normalized)
+			queuedFiltersRef.current = normalized
+			if (applyPromiseRef.current) return
+
+			const run = async () => {
+				try {
+					while (queuedFiltersRef.current) {
+						const request = queuedFiltersRef.current
+						queuedFiltersRef.current = null
+						setApplying(true)
+						let accepted = false
+						try {
+							accepted = await onApply(request)
+						} catch {
+							accepted = false
+						}
+						if (!accepted) {
+							queuedFiltersRef.current = null
+							setDraft(cloneFilters(latestValueRef.current))
+							return
+						}
+					}
+				} finally {
+					setApplying(false)
+				}
+			}
+
+			const promise = run()
+			applyPromiseRef.current = promise
+			void promise.then(
+				() => {
+					if (applyPromiseRef.current === promise) applyPromiseRef.current = null
+				},
+				() => {
+					if (applyPromiseRef.current === promise) applyPromiseRef.current = null
+				}
+			)
+		},
+		[onApply]
+	)
+
+	const toggleChip = (chip: string) => {
+		const next = cloneFilters(draft)
+		next.chips = next.chips.includes(chip)
+			? next.chips.filter(value => value !== chip)
+			: [...next.chips, chip].slice(0, 5)
+		commitFilters(next)
+	}
 
 	const addCaptain = () => {
 		const playerId = Number(pendingCaptain)
 		if (!playerId || selectedCaptainIds.has(playerId)) return
-		setDraft(current => ({
-			...current,
-			captainPlayerIds: [...current.captainPlayerIds, playerId].slice(0, 15)
-		}))
+		const next = cloneFilters(draft)
+		next.captainPlayerIds = [...next.captainPlayerIds, playerId].slice(0, 15)
 		setPendingCaptain('')
+		commitFilters(next)
 	}
 
-	const addOwner = () => {
-		const playerId = Number(pendingOwner)
-		if (!playerId || selectedOwnerIds.has(playerId)) return
-		setDraft(current => ({
+	const removeCaptain = (playerId: number) => {
+		const next = cloneFilters(draft)
+		next.captainPlayerIds = next.captainPlayerIds.filter(id => id !== playerId)
+		commitFilters(next)
+	}
+
+	const addOwner = (player: PlayerDirectoryOption) => {
+		const playerId = Number(player.id)
+		if (
+			!Number.isSafeInteger(playerId) ||
+			playerId <= 0 ||
+			selectedOwnerIds.includes(playerId) ||
+			selectedOwnerIds.length >= 5
+		)
+			return
+		const next = cloneFilters(draft)
+		next.ownership = {
+			playerIds: [...selectedOwnerIds, playerId].slice(0, 5),
+			scope: draft.ownership?.scope ?? 'ANY',
+			captainMode: draft.ownership?.captainMode ?? 'ANY'
+		}
+		setSelectedPlayerOptions(current => ({
 			...current,
-			ownership: {
-				playerIds: [...(current.ownership?.playerIds ?? []), playerId].slice(
-					0,
-					5
-				),
-				scope: current.ownership?.scope ?? 'ANY',
-				captainMode: current.ownership?.captainMode ?? 'ANY'
-			}
+			[player.id]: player
 		}))
-		setPendingOwner('')
+		setIsPlayerPickerOpen(false)
+		commitFilters(next)
+	}
+
+	const removeOwner = (playerId: number) => {
+		const remaining = selectedOwnerIds.filter(id => id !== playerId)
+		const next = cloneFilters(draft)
+		next.ownership =
+			remaining.length > 0 && draft.ownership
+				? { ...draft.ownership, playerIds: remaining }
+				: null
+		setSelectedPlayerOptions(current => {
+			const copy = { ...current }
+			delete copy[String(playerId)]
+			return copy
+		})
+		commitFilters(next)
+	}
+
+	const updateOwnership = (
+		update: (
+			ownership: NonNullable<LiveBoardFilterState['ownership']>
+		) => NonNullable<LiveBoardFilterState['ownership']>
+	) => {
+		if (!draft.ownership) return
+		const next = cloneFilters(draft)
+		next.ownership = update(next.ownership!)
+		commitFilters(next)
+	}
+
+	const clearOwnership = () => {
+		const next = cloneFilters(draft)
+		next.ownership = null
+		setSelectedPlayerOptions({})
+		commitFilters(next)
 	}
 
 	const addTeamRule = () => {
 		const teamId = Number(pendingTeam)
 		if (!teamId || draft.teamCountRules.length >= 4) return
-		setDraft(current => ({
-			...current,
-			teamCountRules: [
-				...current.teamCountRules.filter(
-					rule => !(rule.teamId === teamId && rule.scope === pendingTeamScope)
-				),
-				{ teamId, exactCount: pendingCount, scope: pendingTeamScope }
-			].slice(0, 4)
-		}))
+		const next = cloneFilters(draft)
+		next.teamCountRules = [
+			...next.teamCountRules.filter(
+				rule => !(rule.teamId === teamId && rule.scope === pendingTeamScope)
+			),
+			{ teamId, exactCount: pendingCount, scope: pendingTeamScope }
+		].slice(0, 4)
 		setPendingTeam('')
 		setPendingCount(1)
+		setIsTeamPickerOpen(false)
+		commitFilters(next)
 	}
 
-	const apply = async () => {
-		setApplying(true)
-		const accepted = await onApply(cloneFilters(draft)).finally(() =>
-			setApplying(false)
+	const removeTeamRule = (teamId: number, scope: EntryLiveCompetitionPickScope) => {
+		const next = cloneFilters(draft)
+		next.teamCountRules = next.teamCountRules.filter(
+			rule => !(rule.teamId === teamId && rule.scope === scope)
 		)
-		if (!accepted) setDraft(cloneFilters(value))
+		commitFilters(next)
 	}
 
-	const clear = async () => {
-		const next = cloneFilters(EMPTY_LIVE_BOARD_FILTERS)
-		setDraft(next)
-		setApplying(true)
-		const accepted = await onApply(next).finally(() => setApplying(false))
-		if (!accepted) setDraft(cloneFilters(value))
+	const clearTeams = () => {
+		const next = cloneFilters(draft)
+		next.teamCountRules = []
+		setPendingTeam('')
+		setPendingCount(1)
+		setPendingTeamScope('ANY')
+		commitFilters(next)
 	}
+
+	const clear = () => {
+		setPendingCaptain('')
+		setPendingTeam('')
+		setPendingCount(1)
+		setPendingTeamScope('ANY')
+		setSelectedPlayerOptions({})
+		setIsPlayerPickerOpen(false)
+		setIsTeamPickerOpen(false)
+		commitFilters(EMPTY_LIVE_BOARD_FILTERS)
+	}
+
+	const selectedPlayers = selectedOwnerIds.map(playerId => {
+		const fromPicker = selectedPlayerOptions[String(playerId)]
+		if (fromPicker) return fromPicker
+		const row = playersById.get(playerId)
+		if (row) return rowToPlayerOption(row)
+		return {
+			id: String(playerId),
+			name: String(playerId),
+			position: 'MID' as Position,
+			teamShortName: '—',
+			teamName: '—'
+		}
+	})
+
+	const activeFilterCount =
+		draft.chips.length +
+		draft.captainPlayerIds.length +
+		(draft.ownership ? 1 : 0) +
+		draft.teamCountRules.length
+	const controlsDisabled = Boolean(disabled || applying)
 
 	return (
-		<Card className="mb-6 space-y-4 border-border/80 p-4">
-			<div className="flex items-center justify-between gap-3">
-				<div className="flex items-center gap-2 text-sm font-medium">
-					<Filter
-						className="size-4 text-primary-ink"
-						aria-hidden="true"
-					/>
-					{t('advancedFilters')}
+		<div className="mb-6 space-y-4">
+			<Card className="space-y-4 border-border/80 p-4">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div className="flex items-center gap-2 text-sm font-medium">
+						<Filter className="size-4 text-primary-ink" aria-hidden="true" />
+						{t('advancedFilters')}
+						{activeFilterCount > 0 ? (
+							<Badge variant="secondary" className="tabular-nums">
+								{activeFilterCount}
+							</Badge>
+						) : null}
+					</div>
+					{loading || applying ? (
+						<span className="text-xs text-muted-foreground" role="status">
+							{liveT('loadingStandings')}
+						</span>
+					) : null}
 				</div>
-				{loading ? (
-					<span className="text-xs text-muted-foreground">
-						{liveT('loadingStandings')}
-					</span>
+
+				{loadError ? (
+					<p className="text-xs text-destructive">
+						{liveT('filterOptionsUnavailable')}
+					</p>
 				) : null}
-			</div>
 
-			{loadError ? (
-				<p className="text-xs text-destructive">
-					{liveT('filterOptionsUnavailable')}
-				</p>
-			) : null}
-
-			<div className="space-y-2 rounded-lg border border-border/60 p-3">
-				<p className="text-sm font-medium">{liveT('filterByChip')}</p>
-				<div
-					className="flex flex-wrap gap-2"
-					role="group"
-					aria-label={liveT('filterChip')}
-				>
-					{chipOptions.map(chip => {
-						const label =
-							chip === 'TRIPLE_CAPTAIN'
-								? liveT('tripleCaptain')
-								: chip === 'BENCH_BOOST'
-									? liveT('benchBoost')
-									: chip === 'WILDCARD'
-										? liveT('wildcard')
-										: chip === 'FREE_HIT'
-											? liveT('freeHit')
-											: liveT('assistantManager')
-						return (
-							<Button
-								key={chip}
-								type="button"
-								size="sm"
-								variant={draft.chips.includes(chip) ? 'default' : 'outline'}
-								aria-pressed={draft.chips.includes(chip)}
-								onClick={() => toggleChip(chip)}
-							>
-								{label}
-							</Button>
-						)
-					})}
-				</div>
-			</div>
-
-			<div className="space-y-2 rounded-lg border border-border/60 p-3">
-				<p className="text-sm font-medium">{liveT('filterByCaptain')}</p>
-				<div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-					<Select
-						value={pendingCaptain}
-						onValueChange={setPendingCaptain}
-						disabled={loading || rows.length === 0}
+				<div className="space-y-2 rounded-lg border border-border/60 p-3">
+					<p className="text-sm font-medium">{liveT('filterByChip')}</p>
+					<div
+						className="flex flex-wrap gap-2"
+						role="group"
+						aria-label={liveT('filterChip')}
 					>
-						<SelectTrigger aria-label={liveT('filterCaptain')}>
-							<SelectValue placeholder={liveT('filterByCaptain')} />
-						</SelectTrigger>
-						<SelectContent className="max-h-72">
-							{playerOptions
-								.filter(player => !selectedCaptainIds.has(player.playerId))
-								.map(player => (
-									<SelectItem
-										key={player.playerId}
-										value={String(player.playerId)}
+						{chipOptions.map(chip => {
+							const label =
+								chip === 'TRIPLE_CAPTAIN'
+									? liveT('tripleCaptain')
+									: chip === 'BENCH_BOOST'
+										? liveT('benchBoost')
+										: chip === 'WILDCARD'
+											? liveT('wildcard')
+											: chip === 'FREE_HIT'
+												? liveT('freeHit')
+												: liveT('assistantManager')
+							return (
+								<Button
+									key={chip}
+									type="button"
+									size="sm"
+									variant={draft.chips.includes(chip) ? 'default' : 'outline'}
+									aria-pressed={draft.chips.includes(chip)}
+									disabled={controlsDisabled}
+									onClick={() => toggleChip(chip)}
+								>
+									{label}
+								</Button>
+							)
+						})}
+					</div>
+				</div>
+
+				<div className="space-y-2 rounded-lg border border-border/60 p-3">
+					<p className="text-sm font-medium">{liveT('filterByCaptain')}</p>
+					<div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+						<Select
+							value={pendingCaptain}
+							onValueChange={setPendingCaptain}
+							disabled={controlsDisabled || loading || rows.length === 0}
+						>
+							<SelectTrigger aria-label={liveT('filterCaptain')}>
+								<SelectValue placeholder={liveT('filterByCaptain')} />
+							</SelectTrigger>
+							<SelectContent className="max-h-72">
+								{playerOptions
+									.filter(player => !selectedCaptainIds.has(player.playerId))
+									.map(player => (
+										<SelectItem
+											key={player.playerId}
+											value={String(player.playerId)}
+										>
+											{player.playerName} · {player.position} ·{' '}
+											{player.teamShortName}
+										</SelectItem>
+									))}
+							</SelectContent>
+						</Select>
+						<Button
+							type="button"
+							variant="outline"
+							disabled={
+								controlsDisabled || !pendingCaptain || selectedCaptainIds.size >= 15
+							}
+							onClick={addCaptain}
+						>
+							<Plus className="size-4" />
+							{liveT('addCaptain')}
+						</Button>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						{draft.captainPlayerIds.map(playerId => {
+							const player = playersById.get(playerId)
+							const name = player?.playerName ?? String(playerId)
+							return (
+								<Badge key={playerId} variant="outline" className="gap-1.5">
+									{name}
+									<button
+										type="button"
+										aria-label={liveT('removeCaptain', { name })}
+										disabled={controlsDisabled}
+										onClick={() => removeCaptain(playerId)}
 									>
-										{player.playerName} · {player.position} ·{' '}
-										{player.teamShortName}
+										<X className="size-3" />
+									</button>
+								</Badge>
+							)
+						})}
+					</div>
+				</div>
+			</Card>
+
+			<Card className="space-y-3 border-border/80 p-4">
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex min-w-0 items-start gap-3">
+						<Users className="mt-0.5 size-4 shrink-0 text-primary-ink" />
+						<div>
+							<p className="text-sm font-medium">{t('playerOwnership')}</p>
+							<p className="mt-1 text-xs text-muted-foreground">
+								{t('noOwnershipFilter')}
+							</p>
+						</div>
+					</div>
+					<div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+						<Select
+							value={draft.ownership?.scope ?? 'ANY'}
+							onValueChange={scope =>
+								updateOwnership(ownership => ({
+									...ownership,
+									scope: scope as EntryLiveCompetitionPickScope
+								}))
+							}
+							disabled={controlsDisabled || !draft.ownership}
+						>
+							<SelectTrigger
+								className="h-10 min-h-10 sm:h-9 sm:min-h-9 sm:w-[120px]"
+								aria-label={t('ownershipScope')}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{scopes.map(scope => (
+									<SelectItem key={scope} value={scope}>
+										{scopeLabel(scope, t)}
 									</SelectItem>
 								))}
-						</SelectContent>
-					</Select>
-					<Button
-						type="button"
-						variant="outline"
-						onClick={addCaptain}
-						disabled={!pendingCaptain || selectedCaptainIds.size >= 15}
-					>
-						<Plus className="size-4" />
-						{liveT('addCaptain')}
-					</Button>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					{draft.captainPlayerIds.map(playerId => {
-						const player = playersById.get(playerId)
-						return (
-							<Badge
-								key={playerId}
-								variant="outline"
-								className="gap-1.5"
+							</SelectContent>
+						</Select>
+						<Select
+							value={draft.ownership?.captainMode ?? 'ANY'}
+							onValueChange={mode =>
+								updateOwnership(ownership => ({
+									...ownership,
+									captainMode: mode as EntryLiveCompetitionCaptainMode
+								}))
+							}
+							disabled={controlsDisabled || !draft.ownership}
+						>
+							<SelectTrigger
+								className="h-10 min-h-10 sm:h-9 sm:min-h-9 sm:w-[180px]"
+								aria-label={t('captaincyFilter')}
 							>
-								{player?.playerName ?? playerId}
-								<button
-									type="button"
-									aria-label={liveT('removeCaptain', {
-										name: player?.playerName ?? String(playerId)
-									})}
-									onClick={() =>
-										setDraft(current => ({
-											...current,
-											captainPlayerIds: current.captainPlayerIds.filter(
-												id => id !== playerId
-											)
-										}))
-									}
-								>
-									<X className="size-3" />
-								</button>
-							</Badge>
-						)
-					})}
-				</div>
-			</div>
-
-			<div className="space-y-2 rounded-lg border border-border/60 p-3">
-				<p className="text-sm font-medium">{t('playerOwnership')}</p>
-				<div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-					<Select
-						value={pendingOwner}
-						onValueChange={setPendingOwner}
-						disabled={loading}
-					>
-						<SelectTrigger aria-label={t('addPlayer')}>
-							<SelectValue placeholder={t('addPlayer')} />
-						</SelectTrigger>
-						<SelectContent className="max-h-72">
-							{playerOptions
-								.filter(player => !selectedOwnerIds.has(player.playerId))
-								.map(player => (
-									<SelectItem
-										key={player.playerId}
-										value={String(player.playerId)}
-									>
-										{player.playerName} · {player.position} ·{' '}
-										{player.teamShortName} · {player.percentage.toFixed(1)}%
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{captainModes.map(mode => (
+									<SelectItem key={mode} value={mode}>
+										{captainModeLabel(mode, t)}
 									</SelectItem>
 								))}
-						</SelectContent>
-					</Select>
-					<Button
-						type="button"
-						variant="outline"
-						onClick={addOwner}
-						disabled={!pendingOwner || selectedOwnerIds.size >= 5}
-					>
-						<Plus className="size-4" />
-						{t('addPlayer')}
-					</Button>
+							</SelectContent>
+						</Select>
+						<Button
+							type="button"
+							variant="outline"
+							disabled={controlsDisabled || selectedOwnerIds.length >= 5}
+							onClick={() => setIsPlayerPickerOpen(open => !open)}
+						>
+							<Plus className="size-4" />
+							{t('addPlayer')}
+						</Button>
+					</div>
 				</div>
-				<div className="grid gap-2 sm:grid-cols-2">
-					<Select
-						value={draft.ownership?.scope ?? 'ANY'}
-						onValueChange={scope =>
-							setDraft(current => ({
-								...current,
-								ownership: current.ownership
-									? {
-											...current.ownership,
-											scope: scope as EntryLiveCompetitionPickScope
-										}
-									: null
-							}))
-						}
-						disabled={!draft.ownership}
-					>
-						<SelectTrigger aria-label={t('ownershipScope')}>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{scopes.map(scope => (
-								<SelectItem
-									key={scope}
-									value={scope}
-								>
-									{scope === 'ANY'
-										? t('any')
-										: scope === 'STARTER'
-											? t('starter')
-											: t('bench')}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-					<Select
-						value={draft.ownership?.captainMode ?? 'ANY'}
-						onValueChange={mode =>
-							setDraft(current => ({
-								...current,
-								ownership: current.ownership
-									? {
-											...current.ownership,
-											captainMode: mode as EntryLiveCompetitionCaptainMode
-										}
-									: null
-							}))
-						}
-						disabled={!draft.ownership}
-					>
-						<SelectTrigger aria-label={t('captaincyFilter')}>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{captainModes.map(mode => (
-								<SelectItem
-									key={mode}
-									value={mode}
-								>
-									{mode === 'ANY'
-										? t('anyCaptain')
-										: mode === 'CAPTAIN'
-											? t('selectedCaptain')
-											: t('selectedViceCaptain')}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					{(draft.ownership?.playerIds ?? []).map(playerId => {
-						const player = rows.find(row => row.playerId === playerId)
-						return (
-							<Badge
-								key={playerId}
-								variant="outline"
-								className="gap-1.5"
-							>
-								{player?.playerName ?? playerId}
-								<button
-									type="button"
-									aria-label={t('removePlayer', {
-										name: player?.playerName ?? String(playerId)
-									})}
-									onClick={() =>
-										setDraft(current => ({
-											...current,
-											ownership:
-												current.ownership &&
-												current.ownership.playerIds.length > 1
-													? {
-															...current.ownership,
-															playerIds: current.ownership.playerIds.filter(
-																id => id !== playerId
-															)
-														}
-													: null
-										}))
-									}
-								>
-									<X className="size-3" />
-								</button>
-							</Badge>
-						)
-					})}
-				</div>
-			</div>
 
-			<div className="space-y-2 rounded-lg border border-border/60 p-3">
-				<p className="text-sm font-medium">{t('teamExposure')}</p>
-				<div className="grid gap-2 sm:grid-cols-4">
-					<Select
-						value={pendingTeam}
-						onValueChange={setPendingTeam}
-						disabled={loading}
-					>
-						<SelectTrigger aria-label={t('selectTeamAria')}>
-							<SelectValue placeholder={t('selectTeam')} />
-						</SelectTrigger>
-						<SelectContent>
-							{teams.map(team => (
-								<SelectItem
-									key={team.id}
-									value={String(team.id)}
-								>
-									{team.name}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-					<Select
-						value={String(pendingCount)}
-						onValueChange={value => setPendingCount(Number(value))}
-					>
-						<SelectTrigger aria-label={t('minimumPlayers')}>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{Array.from({ length: 15 }, (_, index) => index + 1).map(
-								count => (
-									<SelectItem
-										key={count}
-										value={String(count)}
-									>
+				{selectedPlayers.length > 0 ? (
+					<div className="flex flex-wrap gap-2">
+						{selectedPlayers.map(player => (
+							<SelectedFilterBadge
+								key={player.id}
+								name={player.name}
+								details={`${player.position} | ${resolveTeamDisplayName(
+									player.teamShortName,
+									player.teamName
+								)} | ${scopeLabel(draft.ownership?.scope ?? 'ANY', t)} | ${captainModeLabel(
+									draft.ownership?.captainMode ?? 'ANY',
+									t
+								)}`}
+								removeLabel={t('removePlayer', { name: player.name })}
+								onRemove={() => removeOwner(Number(player.id))}
+							/>
+						))}
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="h-7 px-2 text-xs"
+							disabled={controlsDisabled}
+							onClick={clearOwnership}
+						>
+							{t('clearAll')}
+						</Button>
+					</div>
+				) : (
+					<div className="rounded-md bg-accent/30 px-3 py-2 text-xs text-muted-foreground">
+						{t('noOwnershipFilter')}
+					</div>
+				)}
+
+				{isPlayerPickerOpen ? (
+					<PlayerDirectoryPicker
+						key={`${tournamentId}:${eventId}:${scoreCoreRevision}`}
+						className="mt-4"
+						excludedPlayerIds={selectedOwnerIds.map(String)}
+						onSelect={addOwner}
+					/>
+				) : null}
+			</Card>
+
+			<Card className="space-y-3 border-border/80 p-4">
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex min-w-0 items-start gap-3">
+						<Shirt className="mt-0.5 size-4 shrink-0 text-primary-ink" />
+						<div>
+							<p className="text-sm font-medium">{t('teamExposure')}</p>
+							<p className="mt-1 text-xs text-muted-foreground">
+								{t('noTeamFilter')}
+							</p>
+						</div>
+					</div>
+					<div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+						<Select
+							value={pendingTeam}
+							onValueChange={value => {
+								setPendingTeam(value)
+								setIsTeamPickerOpen(false)
+							}}
+							open={isTeamPickerOpen}
+							onOpenChange={setIsTeamPickerOpen}
+							disabled={controlsDisabled || availableTeams.length === 0}
+						>
+							<SelectTrigger
+								className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[160px]"
+								aria-label={t('selectTeamAria')}
+							>
+								<SelectValue placeholder={t('selectTeam')} />
+							</SelectTrigger>
+							<SelectContent>
+								{availableTeams.map(team => (
+									<SelectItem key={team.id} value={String(team.id)}>
+										{team.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							value={String(pendingCount)}
+							onValueChange={value => setPendingCount(Number(value))}
+							disabled={controlsDisabled}
+						>
+							<SelectTrigger
+								className="h-10 min-h-10 w-full sm:h-9 sm:min-h-9 sm:w-[80px]"
+								aria-label={t('minimumPlayers')}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{teamCountOptions.map(count => (
+									<SelectItem key={count} value={String(count)}>
 										{count}
 									</SelectItem>
-								)
-							)}
-						</SelectContent>
-					</Select>
-					<Select
-						value={pendingTeamScope}
-						onValueChange={value =>
-							setPendingTeamScope(value as EntryLiveCompetitionPickScope)
-						}
-					>
-						<SelectTrigger aria-label={t('teamScope')}>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{scopes.map(scope => (
-								<SelectItem
-									key={scope}
-									value={scope}
-								>
-									{scope === 'ANY'
-										? t('any')
-										: scope === 'STARTER'
-											? t('starter')
-											: t('bench')}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-					<Button
-						type="button"
-						variant="outline"
-						onClick={addTeamRule}
-						disabled={!pendingTeam || draft.teamCountRules.length >= 4}
-					>
-						<Plus className="size-4" />
-						{t('addTeam')}
-					</Button>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					{draft.teamCountRules.map(rule => {
-						const team = teams.find(option => option.id === rule.teamId)
-						const key = `${rule.teamId}:${rule.scope}`
-						return (
-							<Badge
-								key={key}
-								variant="outline"
-								className="gap-1.5"
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							value={pendingTeamScope}
+							onValueChange={value =>
+								setPendingTeamScope(value as EntryLiveCompetitionPickScope)
+							}
+							disabled={controlsDisabled}
+						>
+							<SelectTrigger
+								className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[110px]"
+								aria-label={t('teamScope')}
 							>
-								{team?.shortName ?? rule.teamId} · {rule.exactCount}
-								<button
-									type="button"
-									aria-label={t('removeTeamItem', {
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{scopes.map(scope => (
+									<SelectItem key={scope} value={scope}>
+										{scopeLabel(scope, t)}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Button
+							type="button"
+							variant="outline"
+							disabled={
+								controlsDisabled || !pendingTeam || draft.teamCountRules.length >= 4
+							}
+							onClick={addTeamRule}
+						>
+							<Plus className="size-4" />
+							{t('addTeam')}
+						</Button>
+					</div>
+				</div>
+
+				{draft.teamCountRules.length > 0 ? (
+					<div className="flex flex-wrap gap-2">
+						{draft.teamCountRules.map(rule => {
+							const team = teamsById.get(rule.teamId)
+							const key = `${rule.teamId}:${rule.scope}`
+							return (
+								<SelectedFilterBadge
+									key={key}
+									name={team?.name ?? String(rule.teamId)}
+									details={`${team?.shortName ?? rule.teamId} · ${rule.exactCount} · ${scopeLabel(rule.scope, t)}`}
+									removeLabel={t('removeTeamItem', {
 										team: team?.name ?? String(rule.teamId)
 									})}
-									onClick={() =>
-										setDraft(current => ({
-											...current,
-											teamCountRules: current.teamCountRules.filter(
-												item => `${item.teamId}:${item.scope}` !== key
-											)
-										}))
-									}
-								>
-									<X className="size-3" />
-								</button>
-							</Badge>
-						)
-					})}
-				</div>
-			</div>
+									onRemove={() => removeTeamRule(rule.teamId, rule.scope)}
+								/>
+							)
+						})}
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="h-7 px-2 text-xs"
+							disabled={controlsDisabled}
+							onClick={clearTeams}
+						>
+							{t('clearAll')}
+						</Button>
+					</div>
+				) : (
+					<div className="rounded-md bg-accent/30 px-3 py-2 text-xs text-muted-foreground">
+						{t('noTeamFilter')}
+					</div>
+				)}
+			</Card>
 
-			<div className="flex justify-end gap-2">
+			<div className="flex justify-end">
 				<Button
 					type="button"
 					variant="ghost"
-					onClick={() => void clear()}
-					disabled={disabled || applying}
+					disabled={controlsDisabled || activeFilterCount === 0}
+					onClick={clear}
 				>
 					{t('clearAll')}
 				</Button>
-				<Button
-					type="button"
-					onClick={() => void apply()}
-					disabled={disabled || applying}
-				>
-					{applying ? liveT('loadingStandings') : liveT('applyFilters')}
-				</Button>
 			</div>
-		</Card>
+		</div>
 	)
 }
