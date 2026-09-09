@@ -8,8 +8,30 @@ const teamPoints = readFileSync(
 	'app/live/points/[id]/TeamPointsClient.tsx',
 	'utf8'
 )
+const dashboard = readFileSync(
+	'app/live/points/_components/LivePointsDashboard.tsx',
+	'utf8'
+)
+const transfers = readFileSync(
+	'app/live/points/_components/LivePointsTransfers.tsx',
+	'utf8'
+)
 
 describe('live points navigation context', () => {
+	it('remounts transfer details for the displayed entry and gameweek', () => {
+		assert.match(dashboard, /liveData\.event === gameweek/)
+		assert.match(dashboard, /key=\{`\$\{liveData\.entry\}:\$\{gameweek\}`\}/)
+		assert.match(transfers, /week\.eventId === eventId/)
+		assert.match(transfers, /return \(\) => controller\.abort\(\)/)
+	})
+
+	it('keeps transfer failures separate from empty records without deriving hits', () => {
+		assert.match(transfers, /if \(!controller\.signal\.aborted\) setFailed\(true\)/)
+		assert.match(transfers, /failed \? \(/)
+		assert.match(transfers, /moves\.length === 0/)
+		assert.doesNotMatch(transfers, /eventTransfersCost|transferCost/)
+	})
+
 	it('marks the Home highest-score link as a Home-origin entry', () => {
 		assert.match(
 			homeStats,

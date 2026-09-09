@@ -588,6 +588,12 @@
 		"shareFooter": "Live matches: {url}"
 	},
 	"LivePoints": {
+		"gameweekTransfers": "Gameweek transfers",
+		"transfersLoading": "Loading transfers…",
+		"transfersFailed": "Unable to load transfers. Please refresh to retry.",
+		"noGameweekTransfers": "No synced transfer records for this gameweek.",
+		"transferOut": "Out",
+		"transferIn": "In",
 		"title": "Live Points",
 		"teamTitle": "Team live points",
 		"enterEntry": "Enter an FPL entry ID to view live points.",
