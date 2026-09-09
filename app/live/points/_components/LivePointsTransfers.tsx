@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
 import { useSession } from '@/lib/auth-client'
-import { executeQuery } from '@/lib/graphql-client'
+import { executeQuery, GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_TRANSFER_HISTORY,
 	type EntryTransferHistoryResponse,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/graphql/operations/entries'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export function LivePointsTransfers({
@@ -24,13 +25,19 @@ export function LivePointsTransfers({
 	const t = useTranslations('LivePoints')
 	const { data: session, isPending: sessionPending } = useSession()
 	const userId = session?.user.id
+	const searchParams = useSearchParams()
+	const returnQuery = new URLSearchParams(searchParams.toString())
+	returnQuery.set('gw', String(eventId))
+	const returnPath = `/live/points/${entryId}?${returnQuery}`
 	const [moves, setMoves] = useState<EntryTransferMove[] | null>(null)
 	const [failed, setFailed] = useState(false)
+	const [requiresSignIn, setRequiresSignIn] = useState(false)
 	const [retry, setRetry] = useState(0)
 
 	useEffect(() => {
 		setMoves(null)
 		setFailed(false)
+		setRequiresSignIn(false)
 		if (!userId) return
 		const controller = new AbortController()
 		void executeQuery<EntryTransferHistoryResponse>(
@@ -46,8 +53,16 @@ export function LivePointsTransfers({
 					)
 				}
 			},
-			() => {
-				if (!controller.signal.aborted) setFailed(true)
+			error => {
+				if (controller.signal.aborted) return
+				if (
+					error instanceof GraphQLRequestError &&
+					(error.status === 401 || error.code === 'UNAUTHENTICATED')
+				) {
+					setRequiresSignIn(true)
+				} else {
+					setFailed(true)
+				}
 			}
 		)
 		return () => controller.abort()
@@ -71,7 +86,7 @@ export function LivePointsTransfers({
 						GW{eventId}
 					</span>
 				</h2>
-				{userId ? (
+				{userId && !requiresSignIn ? (
 					<Button
 						variant="ghost"
 						size="sm"
@@ -90,11 +105,14 @@ export function LivePointsTransfers({
 					>
 						{t('transfersLoading')}
 					</p>
-				) : !userId ? (
+				) : !userId || requiresSignIn ? (
 					<Link
 						href={{
 							pathname: '/auth/login',
-							query: { next: `/live/points/${entryId}?gw=${eventId}` }
+							query: {
+								next: returnPath,
+								...(requiresSignIn ? { reason: 'reauth' } : {})
+							}
 						}}
 						prefetch={false}
 						className="text-sm underline underline-offset-4"

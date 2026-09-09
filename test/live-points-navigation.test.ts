@@ -26,7 +26,8 @@ describe('live points navigation context', () => {
 	})
 
 	it('keeps transfer failures separate from empty records without deriving hits', () => {
-		assert.match(transfers, /if \(!controller\.signal\.aborted\) setFailed\(true\)/)
+		assert.match(transfers, /if \(controller\.signal\.aborted\) return/)
+		assert.match(transfers, /setFailed\(true\)/)
 		assert.match(transfers, /failed \? \(/)
 		assert.match(transfers, /moves\.length === 0/)
 		assert.doesNotMatch(transfers, /eventTransfersCost|transferCost/)
