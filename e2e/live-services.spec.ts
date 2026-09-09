@@ -157,7 +157,8 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		if (payload.query?.includes('GetLiveCalcPoints')) {
 			clientLivePointsRequests += 1
 		}
-		if (payload.query?.includes('GetEntry')) entryOverallRequests += 1
+		if (/\bquery\s+GetEntry\s*\(/.test(payload.query ?? ''))
+			entryOverallRequests += 1
 		await continueToGraphqlFixture(route)
 	})
 
@@ -213,6 +214,201 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	// The deterministic fixture is outside the live window.  A scheduled or
 	// otherwise unconfirmed round must not re-arm the explanation poll.
 	expect(explainBatchRequests).toBe(1)
+})
+
+test('live points restores transfer details and distinguishes failure from empty records', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	await page.route('**/api/auth/get-session', async route => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				session: {
+					id: 'transfers-session',
+					userId: 'transfers-user',
+					expiresAt: '2099-01-01T00:00:00Z'
+				},
+				user: {
+					id: 'transfers-user',
+					name: 'Transfer Viewer',
+					email: 'transfers@example.test',
+					emailVerified: true
+				}
+			})
+		})
+	})
+	let transferRequests = 0
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as {
+			query?: string
+			variables?: { entryId?: number }
+		}
+		if (!payload.query?.includes('GetEntryTransferHistory')) {
+			await continueToGraphqlFixture(route)
+			return
+		}
+		expect(payload.variables?.entryId).toBe(123)
+		transferRequests += 1
+		if (transferRequests === 1) {
+			await route.fulfill({
+				status: 503,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					errors: [{ message: 'Temporarily unavailable' }]
+				})
+			})
+			return
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				data: {
+					entryTransferHistory:
+						transferRequests === 2
+							? [
+									{
+										eventId: 33,
+										eventTransfers: 1,
+										eventTransfersCost: 0,
+										transfers: [
+											{
+												event: 33,
+												elementOutWebName: 'Outgoing Player',
+												elementOutTeamShortName: 'OUT',
+												elementOutTypeName: 'MID',
+												elementOutCost: 5.5,
+												elementInWebName: 'Incoming Player',
+												elementInTeamShortName: 'IN',
+												elementInTypeName: 'MID',
+												elementInCost: 6.2,
+												time: '2026-08-04T10:00:00Z'
+											}
+										]
+									}
+								]
+							: []
+				}
+			})
+		})
+	})
+	await page.goto('/live/points/123')
+	const section = page.getByRole('region', {
+		name: /Gameweek transfers\s*GW33/
+	})
+	await expect(section.getByRole('alert')).toContainText(
+		'Unable to load transfers'
+	)
+	await expect(section).not.toContainText('No synced transfer records')
+	await section
+		.getByRole('button', { name: 'Refresh transfers', exact: true })
+		.click()
+	await expect(section).toContainText('Incoming Player')
+	await expect(section).toContainText('Outgoing Player')
+	await expect(section).toContainText('£5.5m')
+	await expect(section).toContainText('£6.2m')
+	await section
+		.getByRole('button', { name: 'Refresh transfers', exact: true })
+		.click()
+	await expect(section).toContainText(
+		'No synced transfer records for this gameweek.'
+	)
+	await expect(section).not.toContainText('Incoming Player')
+})
+
+test('public live points prompts anonymous visitors to sign in without querying protected transfers', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	let transferRequests = 0
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (payload.query?.includes('GetEntryTransferHistory'))
+			transferRequests += 1
+		await continueToGraphqlFixture(route)
+	})
+	await page.goto('/live/points/123?gw=33&tournamentId=3&from=home')
+	const section = page.getByRole('region', { name: /Gameweek transfers/ })
+	await expect(
+		section.getByRole('link', { name: 'Sign in to view gameweek transfers' })
+	).toHaveAttribute(
+		'href',
+		'/auth/login?next=%2Flive%2Fpoints%2F123%3Fgw%3D33%26tournamentId%3D3%26from%3Dhome'
+	)
+	await expect(
+		section.getByRole('button', { name: 'Refresh transfers' })
+	).toHaveCount(0)
+	expect(transferRequests).toBe(0)
+})
+
+test('live transfers offer reauthentication when a display session is no longer authorized', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	await page.route('**/api/auth/get-session', async route => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				session: {
+					id: 'revoked-session',
+					userId: 'revoked-user',
+					expiresAt: '2099-01-01T00:00:00Z'
+				},
+				user: {
+					id: 'revoked-user',
+					name: 'Cached Viewer',
+					email: 'revoked@example.test',
+					emailVerified: true
+				}
+			})
+		})
+	})
+	let transferRequests = 0
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (!payload.query?.includes('GetEntryTransferHistory')) {
+			await continueToGraphqlFixture(route)
+			return
+		}
+		transferRequests += 1
+		await route.fulfill({
+			status: 401,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				errors: [
+					{
+						message: 'Authentication required.',
+						extensions: { code: 'UNAUTHENTICATED' }
+					}
+				]
+			})
+		})
+	})
+	await page.goto('/live/points/123?gw=33&tournamentId=3')
+	const section = page.getByRole('region', { name: /Gameweek transfers/ })
+	await expect(
+		section.getByRole('link', { name: 'Sign in to view gameweek transfers' })
+	).toHaveAttribute(
+		'href',
+		'/auth/login?next=%2Flive%2Fpoints%2F123%3Fgw%3D33%26tournamentId%3D3&reason=reauth'
+	)
+	await expect(
+		section.getByRole('button', { name: 'Refresh transfers' })
+	).toHaveCount(0)
+	await expect(section.getByRole('alert')).toHaveCount(0)
+	expect(transferRequests).toBe(1)
 })
 
 test('official-sync live points auto-refreshes without a polling label', async ({

@@ -36,6 +36,7 @@ import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import { formatLivePointsShareText } from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
+import { LivePointsTransfers } from './LivePointsTransfers'
 
 export function LivePointsDashboard({
 	entrySearch,
@@ -479,6 +480,13 @@ export function LivePointsDashboard({
 							/>
 						</Card>
 					</section>
+					{liveData.event === gameweek ? (
+						<LivePointsTransfers
+							key={`${liveData.entry}:${gameweek}`}
+							entryId={liveData.entry}
+							eventId={gameweek}
+						/>
+					) : null}
 				</>
 			) : null}
 		</>
