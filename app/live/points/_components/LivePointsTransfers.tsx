@@ -72,7 +72,7 @@ export function LivePointsTransfers({
 					disabled={!failed && moves === null}
 					onClick={() => setRetry(value => value + 1)}
 				>
-					{t('refresh')}
+					{t('refreshTransfers')}
 				</Button>
 			</div>
 			<Card className="p-4">

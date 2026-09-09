@@ -589,6 +589,7 @@
 	},
 	"LivePoints": {
 		"gameweekTransfers": "Gameweek transfers",
+		"refreshTransfers": "Refresh transfers",
 		"transfersLoading": "Loading transfers…",
 		"transfersFailed": "Unable to load transfers. Please refresh to retry.",
 		"noGameweekTransfers": "No synced transfer records for this gameweek.",

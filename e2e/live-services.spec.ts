@@ -279,17 +279,17 @@ test('live points restores transfer details and distinguishes failure from empty
 		})
 	})
 	await page.goto('/live/points/123')
-	const section = page.getByRole('region', { name: 'Gameweek transfers GW33' })
+	const section = page.getByRole('region', { name: /Gameweek transfers\s*GW33/ })
 	await expect(section.getByRole('alert')).toContainText(
 		'Unable to load transfers'
 	)
 	await expect(section).not.toContainText('No synced transfer records')
-	await section.getByRole('button', { name: 'Refresh', exact: true }).click()
+	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
 	await expect(section).toContainText('Incoming Player')
 	await expect(section).toContainText('Outgoing Player')
 	await expect(section).toContainText('£5.5m')
 	await expect(section).toContainText('£6.2m')
-	await section.getByRole('button', { name: 'Refresh', exact: true }).click()
+	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
 	await expect(section).toContainText(
 		'No synced transfer records for this gameweek.'
 	)
