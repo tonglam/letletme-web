@@ -339,7 +339,7 @@ test('public live points prompts anonymous visitors to sign in without querying 
 	const section = page.getByRole('region', { name: /Gameweek transfers/ })
 	await expect(
 		section.getByRole('link', { name: 'Sign in to view gameweek transfers' })
-	).toHaveAttribute('href', '/auth/login')
+	).toHaveAttribute('href', '/auth/login?next=%2Flive%2Fpoints%2F123%3Fgw%3D33')
 	await expect(
 		section.getByRole('button', { name: 'Refresh transfers' })
 	).toHaveCount(0)

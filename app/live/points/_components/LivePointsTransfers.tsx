@@ -92,7 +92,10 @@ export function LivePointsTransfers({
 					</p>
 				) : !userId ? (
 					<Link
-						href="/auth/login"
+						href={{
+							pathname: '/auth/login',
+							query: { next: `/live/points/${entryId}?gw=${eventId}` }
+						}}
 						prefetch={false}
 						className="text-sm underline underline-offset-4"
 					>
