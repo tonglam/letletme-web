@@ -48,7 +48,8 @@ export function LivePointsTransfers({
 		return () => controller.abort()
 	}, [entryId, eventId, retry])
 
-	const money = (value: number) => `£${(value / 10).toFixed(1)}m`
+	// entryTransferHistory already converts FPL tenths to millions.
+	const money = (value: number) => `£${value.toFixed(1)}m`
 
 	return (
 		<section

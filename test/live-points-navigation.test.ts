@@ -31,6 +31,10 @@ describe('live points navigation context', () => {
 		assert.match(transfers, /moves\.length === 0/)
 		assert.doesNotMatch(transfers, /eventTransfersCost|transferCost/)
 	})
+	it('displays transfer-history prices in the millions returned by GraphQL', () => {
+		assert.match(transfers, /value\.toFixed\(1\)/)
+		assert.doesNotMatch(transfers, /value\s*\/\s*10/)
+	})
 
 	it('marks the Home highest-score link as a Home-origin entry', () => {
 		assert.match(
