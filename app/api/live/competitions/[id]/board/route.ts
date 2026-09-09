@@ -30,6 +30,7 @@ const allowedSorts = new Set([
 	'TRANSFER_COST',
 	'PLAYED',
 	'TOTAL_POINTS',
+	'OVERALL_RANK',
 	'TEAM_VALUE',
 	'RANK',
 	'ENTRY_NAME'
