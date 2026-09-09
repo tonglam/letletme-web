@@ -2,6 +2,8 @@
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Link } from '@/i18n/navigation'
+import { useSession } from '@/lib/auth-client'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_TRANSFER_HISTORY,
@@ -20,14 +22,17 @@ export function LivePointsTransfers({
 	eventId: number
 }) {
 	const t = useTranslations('LivePoints')
+	const { data: session, isPending: sessionPending } = useSession()
+	const userId = session?.user.id
 	const [moves, setMoves] = useState<EntryTransferMove[] | null>(null)
 	const [failed, setFailed] = useState(false)
 	const [retry, setRetry] = useState(0)
 
 	useEffect(() => {
-		const controller = new AbortController()
 		setMoves(null)
 		setFailed(false)
+		if (!userId) return
+		const controller = new AbortController()
 		void executeQuery<EntryTransferHistoryResponse>(
 			GET_ENTRY_TRANSFER_HISTORY,
 			{ entryId },
@@ -46,7 +51,7 @@ export function LivePointsTransfers({
 			}
 		)
 		return () => controller.abort()
-	}, [entryId, eventId, retry])
+	}, [entryId, eventId, retry, userId])
 
 	// entryTransferHistory already converts FPL tenths to millions.
 	const money = (value: number) => `£${value.toFixed(1)}m`
@@ -66,17 +71,34 @@ export function LivePointsTransfers({
 						GW{eventId}
 					</span>
 				</h2>
-				<Button
-					variant="ghost"
-					size="sm"
-					disabled={!failed && moves === null}
-					onClick={() => setRetry(value => value + 1)}
-				>
-					{t('refreshTransfers')}
-				</Button>
+				{userId ? (
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={!failed && moves === null}
+						onClick={() => setRetry(value => value + 1)}
+					>
+						{t('refreshTransfers')}
+					</Button>
+				) : null}
 			</div>
 			<Card className="p-4">
-				{failed ? (
+				{sessionPending ? (
+					<p
+						role="status"
+						className="text-sm text-muted-foreground"
+					>
+						{t('transfersLoading')}
+					</p>
+				) : !userId ? (
+					<Link
+						href="/auth/login"
+						prefetch={false}
+						className="text-sm underline underline-offset-4"
+					>
+						{t('transfersSignIn')}
+					</Link>
+				) : failed ? (
 					<p
 						role="alert"
 						className="text-sm text-destructive"

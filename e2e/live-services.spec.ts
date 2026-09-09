@@ -223,6 +223,25 @@ test('live points restores transfer details and distinguishes failure from empty
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
 	)
+	await page.route('**/api/auth/get-session', async route => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				session: {
+					id: 'transfers-session',
+					userId: 'transfers-user',
+					expiresAt: '2099-01-01T00:00:00Z'
+				},
+				user: {
+					id: 'transfers-user',
+					name: 'Transfer Viewer',
+					email: 'transfers@example.test',
+					emailVerified: true
+				}
+			})
+		})
+	})
 	let transferRequests = 0
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as {
@@ -279,21 +298,52 @@ test('live points restores transfer details and distinguishes failure from empty
 		})
 	})
 	await page.goto('/live/points/123')
-	const section = page.getByRole('region', { name: /Gameweek transfers\s*GW33/ })
+	const section = page.getByRole('region', {
+		name: /Gameweek transfers\s*GW33/
+	})
 	await expect(section.getByRole('alert')).toContainText(
 		'Unable to load transfers'
 	)
 	await expect(section).not.toContainText('No synced transfer records')
-	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
+	await section
+		.getByRole('button', { name: 'Refresh transfers', exact: true })
+		.click()
 	await expect(section).toContainText('Incoming Player')
 	await expect(section).toContainText('Outgoing Player')
 	await expect(section).toContainText('£5.5m')
 	await expect(section).toContainText('£6.2m')
-	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
+	await section
+		.getByRole('button', { name: 'Refresh transfers', exact: true })
+		.click()
 	await expect(section).toContainText(
 		'No synced transfer records for this gameweek.'
 	)
 	await expect(section).not.toContainText('Incoming Player')
+})
+
+test('public live points prompts anonymous visitors to sign in without querying protected transfers', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	let transferRequests = 0
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (payload.query?.includes('GetEntryTransferHistory'))
+			transferRequests += 1
+		await continueToGraphqlFixture(route)
+	})
+	await page.goto('/live/points/123')
+	const section = page.getByRole('region', { name: /Gameweek transfers/ })
+	await expect(
+		section.getByRole('link', { name: 'Sign in to view gameweek transfers' })
+	).toHaveAttribute('href', '/auth/login')
+	await expect(
+		section.getByRole('button', { name: 'Refresh transfers' })
+	).toHaveCount(0)
+	expect(transferRequests).toBe(0)
 })
 
 test('official-sync live points auto-refreshes without a polling label', async ({

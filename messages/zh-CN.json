@@ -590,6 +590,7 @@
 	"LivePoints": {
 		"gameweekTransfers": "本周转会",
 		"refreshTransfers": "刷新转会",
+		"transfersSignIn": "登录后查看本周转会",
 		"transfersLoading": "正在加载转会记录…",
 		"transfersFailed": "转会记录加载失败，请刷新重试。",
 		"noGameweekTransfers": "本轮暂无已同步的转会记录。",
