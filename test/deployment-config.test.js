@@ -89,7 +89,7 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 	}
 })
 
-test('lets Vercel Git deployments assign unique deployment IDs', async () => {
+test('lets Vercel own build output and assign unique deployment IDs', async () => {
 	const names = [
 		'LETLETME_RELEASE_SHA',
 		'VERCEL_GIT_COMMIT_SHA',
@@ -112,6 +112,7 @@ test('lets Vercel Git deployments assign unique deployment IDs', async () => {
 
 		assert.equal(await config.generateBuildId(), releaseSha)
 		assert.equal(config.deploymentId, undefined)
+		assert.equal(config.output, undefined)
 		assert.deepEqual(config.env, {
 			LETLETME_RELEASE_SHA: releaseSha
 		})

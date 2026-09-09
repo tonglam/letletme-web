@@ -107,7 +107,8 @@ const staticHeaders = [
 ]
 
 const nextConfig = {
-	output: 'standalone',
+	// Vercel's adapter owns its output; standalone is for self-hosted images.
+	output: process.env.VERCEL === '1' ? undefined : 'standalone',
 	poweredByHeader: false,
 	allowedDevOrigins: ['127.0.0.1'],
 	...deploymentConfig,
