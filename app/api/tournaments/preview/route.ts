@@ -7,10 +7,15 @@ import {
 	readBoundedJson
 } from '@/lib/http-security'
 import { getVerifiedEntryContext } from '@/lib/session'
-import { tournamentApiFetch } from '@/lib/tournament/backend-client'
+import {
+	TournamentApiCancelledError,
+	TournamentApiTimeoutError,
+	tournamentApiFetch
+} from '@/lib/tournament/backend-client'
 import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 40
 
 export async function POST(request: Request) {
 	const { entryId } = await getVerifiedEntryContext()
@@ -109,6 +114,18 @@ export async function POST(request: Request) {
 		}
 		if (error instanceof SyntaxError) {
 			return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
+		}
+		if (error instanceof TournamentApiTimeoutError) {
+			return NextResponse.json(
+				{ error: 'Tournament service timed out.' },
+				{ status: 504 }
+			)
+		}
+		if (error instanceof TournamentApiCancelledError) {
+			return NextResponse.json(
+				{ error: 'Tournament request was cancelled.' },
+				{ status: 499 }
+			)
 		}
 		console.error(
 			'[tournament preview] request failed:',

@@ -2,12 +2,14 @@ import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
 } from '@/lib/graphql-server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_PRICE_CHANGE_LIVE_BOARD,
 	type PriceChangeLiveBoardResponse
 } from '@/lib/graphql/operations/price-changes'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 async function handler(request: Request): Promise<Response> {
 	try {
@@ -27,6 +29,18 @@ async function handler(request: Request): Promise<Response> {
 			}
 		})
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return Response.json(
+				{ error: 'PRICE_CHANGE_LIVE_TIMEOUT' },
+				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return Response.json(
+				{ error: 'PRICE_CHANGE_LIVE_CANCELLED' },
+				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
 		console.warn('[price-changes] live board failed:', error)
 		return Response.json(
 			{ error: 'PRICE_CHANGE_LIVE_UNAVAILABLE' },

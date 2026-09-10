@@ -2,21 +2,23 @@ import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
 } from '@/lib/graphql-server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_PRICE_CHANGE_LIVE_CURSOR,
 	type PriceChangeLiveCursorResponse
 } from '@/lib/graphql/operations/price-changes'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
-async function handler(): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
 	try {
 		const result =
 			await executePublicServerQuery<PriceChangeLiveCursorResponse>(
 				'market',
 				GET_PRICE_CHANGE_LIVE_CURSOR,
 				undefined,
-				{ cache: 'no-store', timeoutMs: 2_000 }
+				{ cache: 'no-store', timeoutMs: 2_000, signal: request.signal }
 			)
 		return Response.json(result.priceChangeLiveCursor, {
 			headers: {
@@ -26,6 +28,18 @@ async function handler(): Promise<Response> {
 			}
 		})
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return Response.json(
+				{ error: 'PRICE_CHANGE_LIVE_TIMEOUT' },
+				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return Response.json(
+				{ error: 'PRICE_CHANGE_LIVE_CANCELLED' },
+				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
 		console.warn('[price-changes] live cursor failed:', error)
 		return Response.json(
 			{ error: 'PRICE_CHANGE_LIVE_UNAVAILABLE' },
@@ -35,5 +49,5 @@ async function handler(): Promise<Response> {
 }
 
 export function GET(request: Request): Promise<Response> {
-	return withPublicRouteGraphQLIngress(request, handler)
+	return withPublicRouteGraphQLIngress(request, () => handler(request))
 }

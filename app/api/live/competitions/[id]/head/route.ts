@@ -9,6 +9,7 @@ import {
 import { getVerifiedEntryContext } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 const headersFor = (requestId: string, etag?: string): Record<string, string> => ({
 	'Cache-Control': 'private, max-age=1, must-revalidate',
@@ -61,6 +62,18 @@ export async function POST(
 			return new NextResponse(null, { status: 304, headers: headersFor(requestId, etag) })
 		return NextResponse.json(data, { headers: headersFor(requestId, etag) })
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'Competition request timed out' },
+				{ status: 504, headers: headersFor(requestId) }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Competition request was cancelled' },
+				{ status: 499, headers: headersFor(requestId) }
+			)
+		}
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
 			code === 'CLIENT_UPGRADE_REQUIRED'

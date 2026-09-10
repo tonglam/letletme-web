@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
@@ -10,6 +11,7 @@ import {
 } from '@/lib/live-matches'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 async function handleGet(request: Request) {
 	const startedAt = performance.now()
@@ -32,7 +34,9 @@ async function handleGet(request: Request) {
 		const upstreamStartedAt = performance.now()
 		const executor: QueryExecutor = (query, variables, options) =>
 			executePublicServerQuery('gameweek', query, variables, options)
-		const data = await loadLiveMatchdayV3(executor, eventId)
+		const data = await loadLiveMatchdayV3(executor, eventId, {
+			signal: request.signal
+		})
 		const upstreamDurationMs = performance.now() - upstreamStartedAt
 		const snapshot = data.liveMatchday.snapshot
 		if (snapshot && eventId !== undefined && snapshot.eventId !== eventId) {
@@ -57,6 +61,18 @@ async function handleGet(request: Request) {
 		)
 		return response
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'Live matches request timed out' },
+				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Live matches request was cancelled' },
+				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
 		return NextResponse.json(
 			{ error: 'Live matches unavailable' },
 			{ status: 503, headers: { 'Cache-Control': 'no-store' } }

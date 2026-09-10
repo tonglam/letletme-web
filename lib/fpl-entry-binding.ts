@@ -6,6 +6,7 @@ import { after } from 'next/server'
 
 import { db, schema } from '@/lib/db'
 import { syncEntryAfterBind } from '@/lib/entry-sync'
+import { recordEntrySyncRequest } from '@/lib/entry-sync-outbox'
 import {
 	FPL_BINDING_CHALLENGE_TTL_MS,
 	FPL_BINDING_CREATION_LIMIT,
@@ -228,7 +229,15 @@ export async function confirmFplEntryBindingChallenge(
 				.update(schema.fplEntryBindingChallenge)
 				.set({ consumedAt: confirmedAt, updatedAt: confirmedAt })
 				.where(eq(schema.fplEntryBindingChallenge.id, challengeId))
+			await recordEntrySyncRequest(tx, pending.entryId, confirmedAt)
 		})
+		// The row is committed atomically with the binding. The post-response task
+		// only attempts one bounded delivery; the outbox retains any failure.
+		after(() =>
+			syncEntryAfterBind(pending.entryId, {
+				durable: true
+			})
+		)
 	} catch (error) {
 		if (isUniqueViolation(error)) {
 			throw new FplBindingError(
@@ -317,7 +326,7 @@ export async function bindFplEntryDirectly(
 
 	const boundAt = new Date()
 	try {
-		const [updated] = await db.transaction(async tx => {
+		const updated = await db.transaction(async tx => {
 			const [current] = await tx
 				.select({
 					fplEntryId: schema.user.fplEntryId,
@@ -357,7 +366,7 @@ export async function bindFplEntryDirectly(
 				})
 				.onConflictDoNothing()
 
-			return tx
+			const updated = await tx
 				.update(schema.user)
 				.set({
 					fplEntryId: entryId,
@@ -370,6 +379,8 @@ export async function bindFplEntryDirectly(
 				})
 				.where(eq(schema.user.id, userId))
 				.returning({ id: schema.user.id })
+			if (updated[0]) await recordEntrySyncRequest(tx, entryId, boundAt)
+			return updated[0]
 		})
 
 		if (!updated) throw new FplBindingError('Not authenticated', 401)
@@ -383,10 +394,9 @@ export async function bindFplEntryDirectly(
 		throw error
 	}
 
-	// Post-response: land the entry in letletme_data's entry_infos so the daily
-	// cron and the GraphQL entryLookup(id) path pick it up. Failure-isolated — syncEntryAfterBind
-	// never throws, and after() runs it after the action's response is sent.
-	after(() => syncEntryAfterBind(entryId))
+	// The outbox row is committed with the binding. The post-response task only
+	// attempts one bounded delivery; any failure remains pending for the cron.
+	after(() => syncEntryAfterBind(entryId, { durable: true }))
 
 	return {
 		entryId,

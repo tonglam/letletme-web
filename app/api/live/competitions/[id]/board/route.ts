@@ -10,6 +10,7 @@ import {
 import { getVerifiedEntryContext } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 15_000
 
@@ -182,6 +183,18 @@ export async function POST(
 		)
 		return NextResponse.json(data, { headers: noStoreHeaders(requestId) })
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'Competition request timed out' },
+				{ status: 504, headers: noStoreHeaders(requestId) }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Competition request was cancelled' },
+				{ status: 499, headers: noStoreHeaders(requestId) }
+			)
+		}
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
 			code === 'CLIENT_UPGRADE_REQUIRED'

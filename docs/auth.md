@@ -79,7 +79,7 @@ Authenticated server reads attach a signed ingress and user envelope. Public
 RSC reads carry only `X-GraphQL-Service-Token`, with no request-derived headers,
 so Next's shared fetch cache remains effective without creating a user identity.
 
-**Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification` · `bauth.request_rate_limits` · `bauth.mini_program_email_code` · `bauth.mini_program_session` · `bauth.fpl_entry_binding_challenges` · `bauth.__drizzle_migrations`
+**Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification` · `bauth.request_rate_limits` · `bauth.mini_program_email_code` · `bauth.mini_program_session` · `bauth.fpl_entry_binding_challenges` · `bauth.entry_sync_outbox` · `bauth.__drizzle_migrations`
 
 **Custom columns on `bauth.user`:**
 
@@ -148,6 +148,12 @@ destination so a successful binding returns the user to their original task.
 2. The server validates the public entry and creates a 15-minute `LLM-XXXXXX` team-name challenge.
 3. The user changes the FPL team name exactly to that challenge value and confirms it.
 4. A transaction locks the challenge and user, sets `fplEntryId`, `fplEntryBoundAt`, and `fplEntryVerifiedAt`, and consumes the challenge.
+
+After a successful binding, that same transaction appends or advances one
+`bauth.entry_sync_outbox` row for the entry. The Web process makes one bounded
+post-commit delivery attempt; a pending row is retried by the protected cron
+endpoint after restarts or Data outages. The Mini Program sync endpoint returns
+`queued: true` only after Data has returned its HTTP 202 queued contract.
 
 Existing bindings remain unverified until this flow succeeds. Rebinding always requires a new challenge; profile/onboarding actions never write the binding directly.
 

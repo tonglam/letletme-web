@@ -262,6 +262,18 @@ function buildAuthEventRow(event: AuthEventInput): typeof schema.authEvent.$infe
 }
 
 const AUTH_EVENT_CLEANUP_BATCH_SIZE = 500
+const AUTH_EVENT_CLEANUP_MAX_BATCHES = 20
+const AUTH_EVENT_CLEANUP_BUDGET_MS = 15_000
+const AUTH_EVENT_CLEANUP_LOCK_KEY = 'letletme-auth-event-cleanup'
+
+export type AuthEventCleanupResult = {
+	deleted: number
+	batches: number
+	stoppedByLimit: boolean
+	lockSkipped: boolean
+	remainingExpired: number
+	oldestExpiredAt: string | null
+}
 
 async function flushAuthEvents(events: readonly AuthEventInput[]): Promise<void> {
 	if (events.length === 0) return
@@ -285,32 +297,101 @@ async function flushAuthEvents(events: readonly AuthEventInput[]): Promise<void>
 	}
 }
 
-async function purgeExpiredAuthEventBatch(): Promise<number> {
-	const deleted = await db.execute(sql`
-		DELETE FROM bauth.auth_event
-		WHERE id IN (
-			SELECT id
-			FROM bauth.auth_event
-			WHERE expires_at <= CURRENT_TIMESTAMP
-			ORDER BY expires_at
-			LIMIT ${AUTH_EVENT_CLEANUP_BATCH_SIZE}
-		)
-		RETURNING id
-	`)
-	return deleted.length
+async function purgeExpiredAuthEventBatch(): Promise<{
+	deleted: number
+	lockSkipped: boolean
+}> {
+	return db.transaction(async tx => {
+		const [lock] = await tx.execute<{ locked: boolean }>(sql`
+			SELECT pg_try_advisory_xact_lock(hashtextextended(${AUTH_EVENT_CLEANUP_LOCK_KEY}, 0)) AS locked
+		`)
+		if (!lock?.locked) return { deleted: 0, lockSkipped: true }
+		await tx.execute(sql`SELECT set_config('statement_timeout', '3s', true)`)
+		await tx.execute(sql`SELECT set_config('lock_timeout', '1s', true)`)
+		const deleted = await tx.execute(sql`
+			DELETE FROM bauth.auth_event
+			WHERE id IN (
+				SELECT id
+				FROM bauth.auth_event
+				WHERE expires_at <= CURRENT_TIMESTAMP
+				ORDER BY expires_at
+				LIMIT ${AUTH_EVENT_CLEANUP_BATCH_SIZE}
+			)
+			RETURNING id
+		`)
+		return { deleted: deleted.length, lockSkipped: false }
+	})
 }
 
+export async function purgeExpiredAuthEventsBounded(options: {
+	drain?: boolean
+	maxBatches?: number
+	maxDurationMs?: number
+} = {}): Promise<AuthEventCleanupResult> {
+	const startedAt = Date.now()
+	const maxBatches = Math.max(
+		1,
+		Math.min(
+			options.maxBatches ??
+				(options.drain ? AUTH_EVENT_CLEANUP_MAX_BATCHES : 1),
+			AUTH_EVENT_CLEANUP_MAX_BATCHES
+		)
+	)
+	const maxDurationMs = Math.max(
+		1,
+		Math.min(options.maxDurationMs ?? AUTH_EVENT_CLEANUP_BUDGET_MS, AUTH_EVENT_CLEANUP_BUDGET_MS)
+	)
+	let deleted = 0
+	let batches = 0
+	let lockSkipped = false
+	let stoppedByLimit = false
+	let lastBatchFilled = false
+	while (batches < maxBatches) {
+		if (Date.now() - startedAt >= maxDurationMs) {
+			stoppedByLimit = true
+			break
+		}
+		const batch = await purgeExpiredAuthEventBatch()
+		batches += 1
+		if (batch.lockSkipped) {
+			lockSkipped = true
+			break
+		}
+		deleted += batch.deleted
+		lastBatchFilled = batch.deleted >= AUTH_EVENT_CLEANUP_BATCH_SIZE
+		if (batch.deleted < AUTH_EVENT_CLEANUP_BATCH_SIZE) break
+	}
+	if (batches >= maxBatches && lastBatchFilled) stoppedByLimit = true
+	const [remaining] = await db.transaction(async tx => {
+		await tx.execute(sql`SELECT set_config('statement_timeout', '3s', true)`)
+		await tx.execute(sql`SELECT set_config('lock_timeout', '1s', true)`)
+		return tx.execute<{
+			remaining_expired: number
+			oldest_expired_at: string | null
+		}>(sql`
+			SELECT
+				count(*)::integer AS remaining_expired,
+				min(expires_at)::text AS oldest_expired_at
+			FROM bauth.auth_event
+			WHERE expires_at <= CURRENT_TIMESTAMP
+		`)
+	})
+	return {
+		deleted,
+		batches,
+		stoppedByLimit,
+		lockSkipped,
+		remainingExpired: Number(remaining?.remaining_expired ?? 0),
+		oldestExpiredAt: remaining?.oldest_expired_at ?? null
+	}
+}
+
+/** Backwards-compatible count-only helper for opportunistic cleanup callers. */
 export async function purgeExpiredAuthEvents(options: {
 	drain?: boolean
 } = {}): Promise<number> {
-	let totalDeleted = 0
-	do {
-		const deleted = await purgeExpiredAuthEventBatch()
-		totalDeleted += deleted
-		if (!options.drain || deleted < AUTH_EVENT_CLEANUP_BATCH_SIZE) {
-			return totalDeleted
-		}
-	} while (true)
+	const result = await purgeExpiredAuthEventsBounded(options)
+	return result.deleted
 }
 
 async function runAuthEventCleanup(): Promise<void> {

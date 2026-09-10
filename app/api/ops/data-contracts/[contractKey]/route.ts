@@ -17,6 +17,7 @@ import {
 } from '@/lib/data-governance-probe'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 const WINDOW_VALUES = new Set<GovernanceWindow>(['1h', '6h', '3d', '28d'])
 const CONTRACT_KEY = /^[a-z0-9][a-z0-9-]{0,63}$/

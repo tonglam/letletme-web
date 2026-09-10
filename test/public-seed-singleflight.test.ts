@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { coalescePublicSeed } from '../lib/public-seed-singleflight'
+import {
+	coalescePublicSeed,
+	isPublicSeedFill,
+} from '../lib/public-seed-singleflight'
 
 describe('public seed cold-fill coalescing', () => {
 	it('runs one origin request for twenty concurrent callers of one cache key', async () => {
@@ -40,5 +43,18 @@ describe('public seed cold-fill coalescing', () => {
 			})
 		)
 		assert.equal(originCalls, 2)
+	})
+
+	it('marks only the shared cold-fill work as independent of callers', async () => {
+		let observedInside = false
+		const result = await coalescePublicSeed('context-seed', async () => {
+			observedInside = isPublicSeedFill()
+			await new Promise<void>(resolve => setImmediate(resolve))
+			return isPublicSeedFill()
+		})
+
+		assert.equal(observedInside, true)
+		assert.equal(result, true)
+		assert.equal(isPublicSeedFill(), false)
 	})
 })

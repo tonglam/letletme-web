@@ -9,6 +9,7 @@ import {
 	type ExecuteQueryOptions
 } from '@/lib/graphql-client'
 import { publicGraphQLCacheResult } from '@/lib/graphql-public-cache'
+import { isPublicSeedFill } from '@/lib/public-seed-singleflight'
 import {
 	buildIngressContextHeadersV2,
 	buildOpaqueRscSubject,
@@ -19,6 +20,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 type PublicRouteIngressContext = {
 	subject: string | null
+	signal?: AbortSignal
 }
 
 const currentPublicRouteIngress =
@@ -67,14 +69,23 @@ function getPublicRouteIngressHeaders(
 
 /** Keep public API-route cache fills on the originating browser/IP identity. */
 export function withPublicRouteGraphQLIngress<T>(
-	request: Pick<Request, 'headers'>,
+	request: Pick<Request, 'headers' | 'signal'>,
 	task: () => Promise<T>
 ): Promise<T> {
 	const secret = backendProxySecret()
 	const subject = secret
 		? buildOpaqueRateLimitSubject(request.headers, secret)
 		: null
-	return currentPublicRouteIngress.run({ subject }, task)
+	return currentPublicRouteIngress.run({ subject, signal: request.signal }, task)
+}
+
+function mergeAbortSignals(
+	left: AbortSignal | undefined,
+	right: AbortSignal | undefined
+): AbortSignal | undefined {
+	if (!left) return right
+	if (!right || left === right) return left
+	return AbortSignal.any([left, right])
 }
 
 // Use this instead of executeQuery in RSC pages.
@@ -128,5 +139,10 @@ export async function executePublicServerQuery<T>(
 	return executeQuery<T>(query, variables, {
 		...options,
 		headers: ingressHeaders,
+		// A coalesced cold fill is shared by concurrent callers. Do not let the
+		// first browser/RSC caller's disconnect cancel work reused by the others.
+		signal: isPublicSeedFill()
+			? undefined
+			: mergeAbortSignals(options?.signal, routeIngress?.signal),
 	})
 }

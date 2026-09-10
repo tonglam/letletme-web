@@ -1,6 +1,7 @@
 import type { Session } from '@/lib/auth'
 import {
 	TournamentApiConfigurationError,
+	TournamentApiCancelledError,
 	TournamentApiTimeoutError,
 	tournamentApiFetch
 } from '@/lib/tournament/backend-client'
@@ -17,6 +18,7 @@ import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-respo
 import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 export async function POST(request: Request) {
 	const report = createTournamentCreationProxyReporter()
@@ -110,6 +112,13 @@ export async function POST(request: Request) {
 			return NextResponse.json(
 				{ success: false, error: 'Tournament service timed out' },
 				{ status: 504 }
+			)
+		}
+		if (error instanceof TournamentApiCancelledError) {
+			report('cancelled', 499)
+			return NextResponse.json(
+				{ success: false, error: 'Tournament request was cancelled' },
+				{ status: 499 }
 			)
 		}
 		report('unavailable', 502)

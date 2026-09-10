@@ -28,7 +28,7 @@ test(
 		try {
 			const baselineContract = await loadAuthMappingContract(baseline)
 			const declarationContract = await loadAuthMappingContract(declaration)
-			assert.equal(baselineContract.length, 209)
+			assert.equal(baselineContract.length, 231)
 			assert.deepEqual(declarationContract, baselineContract)
 			assert.equal(
 				fingerprintAuthContract(declarationContract),

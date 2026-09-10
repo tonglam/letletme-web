@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { GET_TOURNAMENT_LIVE_PARTICIPANTS } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 export async function GET(
 	request: Request,
@@ -28,7 +30,19 @@ export async function GET(
 		return NextResponse.json(data, {
 			headers: { 'Cache-Control': 'private, no-store' }
 		})
-	} catch {
+	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'Participants request timed out' },
+				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Participants request was cancelled' },
+				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
 		return NextResponse.json(
 			{ error: 'Participants unavailable' },
 			{ status: 502 }

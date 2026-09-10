@@ -2,10 +2,14 @@ import 'server-only';
 
 import { z } from 'zod';
 import {
-	parseLeagueUrl as parseOfficialLeagueUrl,
-	type LeagueType,
-	type ParsedLeagueUrl,
+  parseLeagueUrl as parseOfficialLeagueUrl,
+  type LeagueType,
+  type ParsedLeagueUrl,
 } from './league-url';
+import {
+  readBoundedResponseBytes,
+  ResponseReadAbortedError,
+} from '../http-security-core';
 
 export type { LeagueType } from './league-url';
 
@@ -69,6 +73,21 @@ const FPL_API_BASE_URL = 'https://fantasy.premierleague.com/api';
 const FPL_PAGE_TIMEOUT_MS = 10_000;
 const FPL_TOTAL_TIMEOUT_MS = 30_000;
 const MAX_STANDINGS_PAGES = 100;
+const MAX_FPL_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+export class LeagueParticipantsTimeoutError extends Error {
+  constructor() {
+    super('League standings request timed out.');
+    this.name = 'LeagueParticipantsTimeoutError';
+  }
+}
+
+export class LeagueParticipantsCancelledError extends Error {
+  constructor() {
+    super('League standings request was cancelled.');
+    this.name = 'LeagueParticipantsCancelledError';
+  }
+}
 
 const unwrapEnvValue = (value: string): string => {
   const trimmed = value.trim();
@@ -121,6 +140,7 @@ export const parseLeagueUrl = (rawUrl: string): ParsedLeagueUrl =>
 
 export const fetchLeagueParticipants = async (
   leagueUrl: string,
+  externalSignal?: AbortSignal,
 ): Promise<{
   leagueId: number;
   leagueType: LeagueType;
@@ -146,67 +166,97 @@ export const fetchLeagueParticipants = async (
   while (readStandings || readNewEntries) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) {
-      throw new Error('League standings request exceeded the 30 second safety limit.');
+      throw new LeagueParticipantsTimeoutError();
     }
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
       Math.min(FPL_PAGE_TIMEOUT_MS, remainingMs),
     );
-    let response: Response;
+    const signals = [controller.signal, externalSignal].filter(
+      (signal): signal is AbortSignal => Boolean(signal),
+    );
+    const signal = signals.length === 1 ? controller.signal : AbortSignal.any(signals);
     try {
-      response = await fetch(
+      const response = await fetch(
         `${endpointBase}?page_standings=${standingsPage}&page_new_entries=${newEntriesPage}`,
         {
           cache: 'no-store',
-          signal: controller.signal,
+          signal,
         },
       );
+      const responseBytes = await readBoundedResponseBytes(
+        response,
+        MAX_FPL_RESPONSE_BYTES,
+        signal,
+      );
+      let responseBody: unknown;
+      try {
+        responseBody = JSON.parse(new TextDecoder().decode(responseBytes));
+      } catch {
+        throw new Error('League standings response has an invalid shape.');
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch league standings (HTTP ${response.status}).`);
+      }
+
+      const parsed = RawStandingsResponseSchema.safeParse(responseBody);
+      if (!parsed.success) throw new Error('League standings response has an invalid shape.');
+      if (parsed.data.league) {
+        leagueName = parsed.data.league.name.trim() || leagueName;
+        startEvent = parsed.data.league.start_event ?? startEvent;
+      }
+      // Ranked standings are the stronger source when FPL briefly exposes the
+      // same entry in both cursors. They include current rank and total points.
+      for (const result of readStandings ? parsed.data.standings.results : []) {
+        const participant = mapStandingToParticipant(result);
+        if (!participant) continue;
+        participantMap.set(participant.id, participant);
+      }
+
+      for (const result of readNewEntries ? (parsed.data.new_entries?.results ?? []) : []) {
+        const participant = mapStandingToParticipant(result);
+        if (participant && !participantMap.has(participant.id)) {
+          participantMap.set(participant.id, participant);
+        }
+      }
+
+      const standingsHasNext: boolean =
+        readStandings && parsed.data.standings.has_next === true;
+      const newEntriesHasNext: boolean =
+        readNewEntries && parsed.data.new_entries?.has_next === true;
+      if (standingsHasNext) standingsPage += 1;
+      if (newEntriesHasNext) newEntriesPage += 1;
+      readStandings = standingsHasNext;
+      readNewEntries = newEntriesHasNext;
+
+      if (standingsPage > MAX_STANDINGS_PAGES || newEntriesPage > MAX_STANDINGS_PAGES) {
+        throw new Error('League membership pagination exceeded the safety limit.');
+      }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('League standings request timed out.');
+        if (externalSignal?.aborted && !controller.signal.aborted) {
+          throw new LeagueParticipantsCancelledError();
+        }
+        throw new LeagueParticipantsTimeoutError();
+      }
+      if (error instanceof ResponseReadAbortedError) {
+        if (externalSignal?.aborted && !controller.signal.aborted) {
+          throw new LeagueParticipantsCancelledError();
+        }
+        throw new LeagueParticipantsTimeoutError();
+      }
+      if (
+        error instanceof Error &&
+        (error.message.startsWith('Failed to fetch league standings') ||
+          error.message === 'League standings response has an invalid shape.' ||
+          error.message === 'League membership pagination exceeded the safety limit.')
+      ) {
+        throw error;
       }
       throw new Error('Fantasy Premier League standings are unavailable.');
     } finally {
       clearTimeout(timeoutId);
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch league standings (HTTP ${response.status}).`);
-    }
-
-    const parsed = RawStandingsResponseSchema.safeParse(await response.json());
-    if (!parsed.success) throw new Error('League standings response has an invalid shape.');
-    if (parsed.data.league) {
-      leagueName = parsed.data.league.name.trim() || leagueName;
-      startEvent = parsed.data.league.start_event ?? startEvent;
-    }
-    // Ranked standings are the stronger source when FPL briefly exposes the
-    // same entry in both cursors. They include current rank and total points.
-    for (const result of readStandings ? parsed.data.standings.results : []) {
-      const participant = mapStandingToParticipant(result);
-      if (!participant) continue;
-      participantMap.set(participant.id, participant);
-    }
-
-    for (const result of readNewEntries ? (parsed.data.new_entries?.results ?? []) : []) {
-      const participant = mapStandingToParticipant(result);
-      if (participant && !participantMap.has(participant.id)) {
-        participantMap.set(participant.id, participant);
-      }
-    }
-
-    const standingsHasNext: boolean =
-      readStandings && parsed.data.standings.has_next === true;
-    const newEntriesHasNext: boolean =
-      readNewEntries && parsed.data.new_entries?.has_next === true;
-    if (standingsHasNext) standingsPage += 1;
-    if (newEntriesHasNext) newEntriesPage += 1;
-    readStandings = standingsHasNext;
-    readNewEntries = newEntriesHasNext;
-
-    if (standingsPage > MAX_STANDINGS_PAGES || newEntriesPage > MAX_STANDINGS_PAGES) {
-      throw new Error('League membership pagination exceeded the safety limit.');
     }
   }
 

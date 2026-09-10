@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 
 import type { Session } from '@/lib/auth';
-import { tournamentApiFetch } from '@/lib/tournament/backend-client';
+import {
+  TournamentApiCancelledError,
+  TournamentApiTimeoutError,
+  tournamentApiFetch,
+} from '@/lib/tournament/backend-client';
 import { executeServerQueryWithSession } from '@/lib/graphql-server';
+import { GraphQLRequestError } from '@/lib/graphql-client';
 import { getVerifiedEntryContext } from '@/lib/session';
 import {
   GET_TOURNAMENT_METADATA,
@@ -11,6 +16,7 @@ import {
 import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 export async function GET(request: Request) {
 	let session: Session | null;
@@ -42,10 +48,10 @@ export async function GET(request: Request) {
 
     const tournamentId = Number(id);
 	const access = await executeServerQueryWithSession<TournamentMetadataResponse>(
-	      session,
-	      GET_TOURNAMENT_METADATA,
+      session,
+      GET_TOURNAMENT_METADATA,
       { tournamentId, entryId: session.user.fplEntryId },
-      { cache: 'no-store' },
+      { cache: 'no-store', signal: request.signal },
     );
     if (!access.tournament) {
       return NextResponse.json({ success: false, error: 'Tournament not found.' }, { status: 404 });
@@ -65,6 +71,30 @@ export async function GET(request: Request) {
 			{ status: response.status },
 		);
   } catch (error) {
+    if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+      return NextResponse.json(
+        { success: false, error: 'GraphQL request timed out.' },
+        { status: 504 },
+      );
+    }
+    if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+      return NextResponse.json(
+        { success: false, error: 'Request was cancelled.' },
+        { status: 499 },
+      );
+    }
+    if (error instanceof TournamentApiTimeoutError) {
+      return NextResponse.json(
+        { success: false, error: 'Tournament service timed out.' },
+        { status: 504 },
+      );
+    }
+    if (error instanceof TournamentApiCancelledError) {
+      return NextResponse.json(
+        { success: false, error: 'Tournament request was cancelled.' },
+        { status: 499 },
+      );
+    }
     console.error('[tournaments] setup status failed:', error);
     return NextResponse.json(
       { success: false, error: 'Tournament service is unavailable.' },

@@ -144,6 +144,10 @@ test('logout telemetry has an IP rate-limit boundary and self-hosted cleanup sta
 	const authCatchAll = readFileSync('app/api/auth/[...all]/route.ts', 'utf8')
 	const observability = readFileSync('lib/auth-observability.ts', 'utf8')
 	const installHost = readFileSync('ops/tencent/scripts/install-host.sh', 'utf8')
+	const cleanupService = readFileSync(
+		'ops/tencent/systemd/letletme-auth-event-cleanup.service',
+		'utf8'
+	)
 
 	assert.match(miniLogout, /enforceLogoutRateLimit\(\{ request, channel: 'mini' \}\)/)
 	assert.match(webLogout, /enforceLogoutRateLimit\(\{ request, channel: 'web' \}\)/)
@@ -156,6 +160,7 @@ test('logout telemetry has an IP rate-limit boundary and self-hosted cleanup sta
 	assert.match(authCatchAll, /scope: 'better-auth-get-ip'/)
 	assert.match(observability, /recordAuthRequestOutcome\(\n\s+503,/)
 	assert.match(installHost, /systemctl enable --now letletme-auth-event-cleanup\.timer/)
+	assert.match(cleanupService, /TimeoutStartSec=30s/)
 })
 
 test('keeps the OAuth start path independent of the database limiter', () => {

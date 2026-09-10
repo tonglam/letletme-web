@@ -9,6 +9,42 @@
 	"functions": {
 		"app/api/**/*.ts": {
 			"maxDuration": 10
+		},
+		"app/api/graphql/route.ts": {
+			"maxDuration": 30
+		},
+		"app/api/agent/**/*.ts": {
+			"maxDuration": 30
+		},
+		"app/api/live/competitions/**/*.ts": {
+			"maxDuration": 30
+		},
+		"app/api/live/matches/route.ts": {
+			"maxDuration": 30
+		},
+		"app/api/live/context/route.ts": {
+			"maxDuration": 30
+		},
+		"app/api/ops/data-contracts/**/*.ts": {
+			"maxDuration": 30
+		},
+		"app/api/tournaments/**/*.ts": {
+			"maxDuration": 30
+		},
+		"app/api/tournaments/participants/route.ts": {
+			"maxDuration": 40
+		},
+		"app/api/tournaments/preview/route.ts": {
+			"maxDuration": 40
+		},
+		"app/api/miniprogram/entry-sync/route.ts": {
+			"maxDuration": 30
+		},
+		"app/api/cron/auth-event-cleanup/route.ts": {
+			"maxDuration": 30
+		},
+		"app/api/cron/entry-sync-outbox/route.ts": {
+			"maxDuration": 30
 		}
 	},
 	"ignoreCommand": "node scripts/vercel-ignore-build.mjs",

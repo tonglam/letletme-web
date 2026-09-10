@@ -149,10 +149,19 @@ test(
 					   AND permissive = 'PERMISSIVE'
 					   AND roles::text[] = ARRAY['letletme_web_auth']::text[]
 					   AND cmd = 'DELETE'
-						AND coalesce(qual, '') LIKE '%CURRENT_TIMESTAMP%'
-						AND with_check IS NULL
-					  )
-					  )) AS invalid_policy_count,
+										AND coalesce(qual, '') LIKE '%CURRENT_TIMESTAMP%'
+										AND with_check IS NULL
+									  )
+									  OR (
+										policyname = 'web_auth_runtime_all'
+										AND tablename = 'entry_sync_outbox'
+										AND permissive = 'PERMISSIVE'
+										AND roles::text[] = ARRAY['letletme_web_auth']::text[]
+										AND cmd = 'ALL'
+										AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
+										AND replace(replace(coalesce(with_check, ''), '(', ''), ')', '') = 'true'
+									  )
+								  )) AS invalid_policy_count,
 				(SELECT count(*)::int
 				 FROM pg_class relation
 				 JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
@@ -164,7 +173,7 @@ test(
 				anon_schema: false,
 				anon_user: false,
 				authenticated_session: false,
-				policy_count: 17,
+				policy_count: 18,
 				invalid_policy_count: 0,
 				missing_rls: 0
 			})

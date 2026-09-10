@@ -400,3 +400,64 @@ export const bugReportStorageNonce = authSchema.table(
 		)
 	})
 )
+
+/**
+ * Web-owned hand-off ledger for Data entry onboarding. A row is retained for
+ * each entry so a process restart cannot lose a successful binding's sync
+ * request. Generation and lease token fencing prevent an older worker from
+ * acknowledging a newer request.
+ */
+export const entrySyncOutbox = authSchema.table(
+	'entry_sync_outbox',
+	{
+		entryId: integer('entry_id').primaryKey(),
+		generation: integer('generation').notNull().default(1),
+		status: text('status')
+			.$type<'pending' | 'leased' | 'delivered'>()
+			.notNull()
+			.default('pending'),
+		attempts: integer('attempts').notNull().default(0),
+		nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		leaseToken: text('lease_token'),
+		leaseUntil: timestamp('lease_until', { withTimezone: true }),
+		dataJobId: text('data_job_id'),
+		lastErrorCode: text('last_error_code'),
+		lastError: text('last_error'),
+		createdAt: timestamp('created_at', { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+	},
+	table => ({
+		dueIdx: index('entry_sync_outbox_due_idx').on(
+			table.status,
+			table.nextAttemptAt,
+			table.entryId
+		),
+		leaseIdx: index('entry_sync_outbox_lease_idx').on(table.leaseUntil),
+		deliveredRetentionIdx: index('entry_sync_outbox_delivered_retention_idx').on(
+			table.status,
+			table.updatedAt
+		),
+		generationPositive: check(
+			'entry_sync_outbox_generation_positive',
+			sql`${table.generation} > 0`
+		),
+		attemptsNonnegative: check(
+			'entry_sync_outbox_attempts_nonnegative',
+			sql`${table.attempts} >= 0`
+		),
+		statusValid: check(
+			'entry_sync_outbox_status_valid',
+			sql`${table.status} in ('pending', 'leased', 'delivered')`
+		),
+		entryPositive: check(
+			'entry_sync_outbox_entry_positive',
+			sql`${table.entryId} > 0`
+		)
+	})
+)
