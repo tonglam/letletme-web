@@ -9,6 +9,7 @@ import {
 	type ExecuteQueryOptions
 } from '@/lib/graphql-client'
 import { publicGraphQLCacheResult } from '@/lib/graphql-public-cache'
+import { isPublicSeedFill } from '@/lib/public-seed-singleflight'
 import {
 	buildIngressContextHeadersV2,
 	buildOpaqueRscSubject,
@@ -138,6 +139,10 @@ export async function executePublicServerQuery<T>(
 	return executeQuery<T>(query, variables, {
 		...options,
 		headers: ingressHeaders,
-		signal: mergeAbortSignals(options?.signal, routeIngress?.signal),
+		// A coalesced cold fill is shared by concurrent callers. Do not let the
+		// first browser/RSC caller's disconnect cancel work reused by the others.
+		signal: isPublicSeedFill()
+			? undefined
+			: mergeAbortSignals(options?.signal, routeIngress?.signal),
 	})
 }

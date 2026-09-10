@@ -1,6 +1,8 @@
 // NOTE: deliberately no 'server-only' import because the plain Node test suite
 // imports this module. It is server-side by usage through fpl-entry-binding.
 
+import { createHmac } from 'node:crypto'
+
 import {
 	PayloadTooLargeError,
 	readBoundedResponseBytes,
@@ -8,6 +10,10 @@ import {
 } from './http-response-body'
 
 export const ENTRY_SYNC_TIMEOUT_MS = 3_000
+// A Retry-After header is upstream input. Keep honoring long but operationally
+// meaningful delays while preventing an unbounded value from creating an
+// invalid JavaScript/PostgreSQL timestamp during outbox settlement.
+export const ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS = 365 * 24 * 60 * 60
 const MAX_ENTRY_SYNC_RESPONSE_BYTES = 64 * 1024
 
 export type EntrySyncResult =
@@ -29,6 +35,23 @@ const getEntrySyncBaseUrl = (): string =>
 const getEntrySyncApiKey = (): string =>
 	(process.env.LETLETME_DATA_API_KEY || '').trim()
 
+const entrySyncLogReference = (entryId: number): string | undefined => {
+	const secret =
+		process.env.AUTH_OBSERVABILITY_SECRET?.trim() ||
+		process.env.BACKEND_PROXY_SECRET?.trim() ||
+		''
+	if (Buffer.byteLength(secret, 'utf8') < 32) return undefined
+	return createHmac('sha256', secret)
+		.update(`entry-sync:${entryId}`)
+		.digest('hex')
+		.slice(0, 24)
+}
+
+const safeEntrySyncErrorCode = (errorCode: string | undefined): string =>
+	typeof errorCode === 'string' && /^[A-Z0-9_]{1,64}$/.test(errorCode)
+		? errorCode
+		: 'UPSTREAM_FAILURE'
+
 const isAbortError = (error: unknown): boolean =>
 	error instanceof ResponseReadAbortedError ||
 	(error instanceof Error && error.name === 'AbortError')
@@ -36,10 +59,17 @@ const isAbortError = (error: unknown): boolean =>
 const parseRetryAfterSeconds = (value: string | null): number | undefined => {
 	if (!value) return undefined
 	const seconds = Number(value)
-	if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds)
+	if (Number.isFinite(seconds) && seconds >= 0)
+		return Math.min(
+			ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS,
+			Math.ceil(seconds)
+		)
 	const retryAt = Date.parse(value)
 	if (!Number.isFinite(retryAt)) return undefined
-	return Math.max(0, Math.ceil((retryAt - Date.now()) / 1_000))
+	return Math.min(
+		ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS,
+		Math.max(0, Math.ceil((retryAt - Date.now()) / 1_000))
+	)
 }
 
 /**
@@ -195,6 +225,7 @@ export async function syncEntryAfterBind(
 		retryDelaysMs?: number[]
 	}
 ): Promise<void> {
+	const entryRef = entrySyncLogReference(entryId)
 	if (options?.durable) {
 		try {
 			const { deliverEntrySyncOutboxNow } = await import(
@@ -202,18 +233,22 @@ export async function syncEntryAfterBind(
 			)
 			const delivery = await deliverEntrySyncOutboxNow(entryId)
 			if (delivery.status === 'delivered') {
-				console.info(
-					`[entry-sync] queued entry ${entryId} as job ${delivery.jobId}`
-				)
+				console.info('[entry-sync] durable hand-off delivered', {
+					...(entryRef ? { entryRef } : {}),
+					status: delivery.status
+				})
 			} else {
-				console.warn(
-					`[entry-sync] durable hand-off for entry ${entryId} remains ${delivery.status}: ${delivery.reason ?? 'pending retry'}`
-				)
+				console.warn('[entry-sync] durable hand-off remains pending', {
+					...(entryRef ? { entryRef } : {}),
+					status: delivery.status,
+					errorCode: safeEntrySyncErrorCode(delivery.errorCode)
+				})
 			}
-		} catch (error) {
-			console.warn(
-				`[entry-sync] durable hand-off failed for entry ${entryId}: ${error instanceof Error ? error.message : 'unknown error'}`
-			)
+		} catch {
+			console.warn('[entry-sync] durable hand-off failed', {
+				...(entryRef ? { entryRef } : {}),
+				errorCode: 'OUTBOX_DELIVERY_FAILED'
+			})
 		}
 		return
 	}
@@ -222,10 +257,15 @@ export async function syncEntryAfterBind(
 		timeoutMs: options?.timeoutMs ?? ENTRY_SYNC_TIMEOUT_MS
 	})
 	if (result.ok) {
-		console.info(`[entry-sync] queued entry ${entryId} as job ${result.jobId}`)
+		console.info('[entry-sync] hand-off delivered', {
+			...(entryRef ? { entryRef } : {}),
+			status: 'queued'
+		})
 	} else {
-		console.warn(
-			`[entry-sync] sync failed for entry ${entryId} after 1 attempt(s): ${result.reason}`
-		)
+		console.warn('[entry-sync] hand-off failed after 1 attempt(s)', {
+			...(entryRef ? { entryRef } : {}),
+			errorCode: safeEntrySyncErrorCode(result.errorCode),
+			attempts: 1
+		})
 	}
 }

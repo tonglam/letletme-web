@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 
-import { requestEntryInfoSync, syncEntryAfterBind } from '../lib/entry-sync'
+import {
+	ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS,
+	requestEntryInfoSync,
+	syncEntryAfterBind,
+} from '../lib/entry-sync'
 
 const ENV_KEYS = ['LETLETME_DATA_URL', 'LETLETME_DATA_API_KEY'] as const
 
@@ -154,6 +158,25 @@ describe('requestEntryInfoSync', () => {
 			assert.equal(result.retryable, true)
 			assert.equal(result.retryAfterSeconds, 37)
 		}
+	})
+
+	it('bounds an oversized Retry-After before it reaches durable scheduling', async () => {
+		stubFetch(
+			async () =>
+				new Response('slow down', {
+					status: 429,
+					headers: { 'Retry-After': '1e100' },
+				})
+		)
+
+		const result = await requestEntryInfoSync(6953)
+
+		assert.equal(result.ok, false)
+		if (!result.ok)
+			assert.equal(
+				result.retryAfterSeconds,
+				ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS
+			)
 	})
 
 	it('rejects a malformed queued response as retryable', async () => {

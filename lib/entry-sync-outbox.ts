@@ -11,7 +11,11 @@ import {
 } from 'drizzle-orm'
 
 import { db, schema } from '@/lib/db'
-import { requestEntryInfoSync, type EntrySyncResult } from '@/lib/entry-sync'
+import {
+	ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS,
+	requestEntryInfoSync,
+	type EntrySyncResult
+} from '@/lib/entry-sync'
 
 export const ENTRY_SYNC_OUTBOX_LEASE_MS = 60_000
 export const ENTRY_SYNC_OUTBOX_REQUEST_TIMEOUT_MS = 3_000
@@ -54,7 +58,7 @@ export type EntrySyncOutboxRecord = {
 
 export type EntrySyncOutboxDelivery =
 	| { status: 'delivered'; jobId: string }
-	| { status: 'pending' | 'leased' | 'stale'; reason?: string }
+	| { status: 'pending' | 'leased' | 'stale'; errorCode?: string }
 
 export type EntrySyncOutboxProcessResult = {
 	claimed: number
@@ -264,7 +268,16 @@ const retryDelayMilliseconds = (
 	if (!result.retryable) return 60 * 60 * 1_000
 	const delays = [60_000, 300_000, 900_000, 3_600_000]
 	const base = delays[Math.min(Math.max(attempts - 1, 0), delays.length - 1)]
-	const retryAfter = (result.retryAfterSeconds ?? 0) * 1_000
+	const retryAfterSeconds =
+		typeof result.retryAfterSeconds === 'number' &&
+		Number.isFinite(result.retryAfterSeconds) &&
+		result.retryAfterSeconds >= 0
+			? Math.min(
+					ENTRY_SYNC_MAX_RETRY_AFTER_SECONDS,
+					Math.ceil(result.retryAfterSeconds)
+				)
+			: 0
+	const retryAfter = retryAfterSeconds * 1_000
 	return Math.max(base, retryAfter)
 }
 
@@ -349,11 +362,16 @@ async function deliverClaimedRow(
 	})
 	const settled = await settleClaim(row, result, now)
 	if (settled === 'delivered') {
-		if (!result.ok) return { status: 'stale', reason: 'delivery result changed' }
+		if (!result.ok)
+			return { status: 'stale', errorCode: 'DELIVERY_RESULT_CHANGED' }
 		return { status: 'delivered', jobId: result.jobId }
 	}
-	if (settled === 'stale') return { status: 'stale', reason: 'generation or lease changed' }
-	return { status: 'pending', reason: result.ok ? undefined : result.reason }
+	if (settled === 'stale')
+		return { status: 'stale', errorCode: 'GENERATION_OR_LEASE_CHANGED' }
+	return {
+		status: 'pending',
+		errorCode: result.ok ? undefined : result.errorCode ?? 'UPSTREAM_FAILURE'
+	}
 }
 
 /** Attempt one immediate delivery after an outbox row has been committed. */
@@ -369,12 +387,15 @@ export async function deliverEntrySyncOutboxNow(
 
 	const current = await currentRow(entryId)
 	if (!current || (generation !== undefined && current.generation !== generation)) {
-		return { status: 'stale', reason: 'outbox generation is no longer current' }
+		return { status: 'stale', errorCode: 'OUTBOX_GENERATION_STALE' }
 	}
 	if (current.status === 'delivered' && current.dataJobId) {
 		return { status: 'delivered', jobId: current.dataJobId }
 	}
-	return { status: current.status === 'leased' ? 'leased' : 'pending' }
+	return {
+		status: current.status === 'leased' ? 'leased' : 'pending',
+		errorCode: current.status === 'leased' ? 'OUTBOX_LEASED' : undefined
+	}
 }
 
 export async function processEntrySyncOutbox(
