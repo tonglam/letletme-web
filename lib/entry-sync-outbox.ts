@@ -19,6 +19,14 @@ export const ENTRY_SYNC_OUTBOX_BATCH_SIZE = 10
 export const ENTRY_SYNC_OUTBOX_CONCURRENCY = 2
 export const ENTRY_SYNC_OUTBOX_RUN_BUDGET_MS = 20_000
 export const ENTRY_SYNC_OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000
+// A syntactically valid but nonexistent entry (or another permanent client
+// input failure) cannot be repaired by retrying forever. Keep the row pending
+// for observability, make three bounded attempts, then park it until a new
+// generation is recorded by a fresh binding/sync request.
+const ENTRY_SYNC_PERMANENT_FAILURE_MAX_ATTEMPTS = 3
+const ENTRY_SYNC_PERMANENT_FAILURE_PARK_UNTIL = new Date(
+	'9999-12-31T23:59:59.999Z'
+)
 
 const OUTBOX_CLEANUP_BATCH_SIZE = 500
 // Retention shares the hourly auth cleanup invocation. One 500-row batch
@@ -89,6 +97,10 @@ const isContractFailureCode = (errorCode: string | undefined): boolean =>
 	(errorCode?.startsWith('HTTP_4') === true &&
 		errorCode !== 'HTTP_408' &&
 		errorCode !== 'HTTP_429')
+
+const isPermanentInputFailureCode = (errorCode: string | undefined): boolean =>
+	errorCode?.startsWith('HTTP_4') === true &&
+	!['HTTP_401', 'HTTP_403', 'HTTP_408', 'HTTP_429'].includes(errorCode)
 
 const dueStatus = (table: EntrySyncOutboxTable, now: Date) =>
 	and(
@@ -242,10 +254,11 @@ const retryDelayMilliseconds = (
 	result: Extract<EntrySyncResult, { ok: false }>,
 	attempts: number
 ): number => {
-	// Authentication, malformed queued responses, and non-transient 4xx
-	// responses are configuration/contract failures. Keep retrying so an
-	// operator fix can recover the hand-off, but do not spin on them like a
-	// transient outage. 408 and 429 remain transient and use normal backoff.
+	// Authentication and malformed queued responses are configuration/contract
+	// failures. Keep retrying so an operator fix can recover the hand-off, but
+	// do not spin on them like a transient outage. Permanent client input
+	// failures are parked by settleClaim after a bounded number of attempts;
+	// 408 and 429 remain transient and use normal backoff.
 	if (isContractFailureCode(result.errorCode))
 		return 60 * 60 * 1_000
 	if (!result.retryable) return 60 * 60 * 1_000
@@ -293,9 +306,12 @@ async function settleClaim(
 		})
 	}
 
-	const nextAttemptAt = new Date(
-		now.getTime() + retryDelayMilliseconds(result, row.attempts)
-	)
+	const shouldParkPermanentFailure =
+		isPermanentInputFailureCode(result.errorCode) &&
+		row.attempts >= ENTRY_SYNC_PERMANENT_FAILURE_MAX_ATTEMPTS
+	const nextAttemptAt = shouldParkPermanentFailure
+		? ENTRY_SYNC_PERMANENT_FAILURE_PARK_UNTIL
+		: new Date(now.getTime() + retryDelayMilliseconds(result, row.attempts))
 	const updated = await db.transaction(async tx => {
 		await tx.execute(sql`SELECT set_config('statement_timeout', '3s', true)`)
 		await tx.execute(sql`SELECT set_config('lock_timeout', '1s', true)`)

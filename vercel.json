@@ -7,6 +7,9 @@
 		}
 	},
 	"functions": {
+		"app/api/**/*.ts": {
+			"maxDuration": 10
+		},
 		"app/api/graphql/route.ts": {
 			"maxDuration": 30
 		},
@@ -42,9 +45,6 @@
 		},
 		"app/api/cron/entry-sync-outbox/route.ts": {
 			"maxDuration": 30
-		},
-		"app/api/**/*.ts": {
-			"maxDuration": 10
 		}
 	},
 	"ignoreCommand": "node scripts/vercel-ignore-build.mjs",

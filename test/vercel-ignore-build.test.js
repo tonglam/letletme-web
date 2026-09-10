@@ -30,6 +30,11 @@ test('Vercel disables Git auto-deployment for every branch', () => {
 		'**': false,
 		main: false
 	})
+	const functionPatterns = Object.keys(config.functions)
+	assert.ok(
+		functionPatterns.indexOf('app/api/**/*.ts') <
+			functionPatterns.indexOf('app/api/tournaments/participants/route.ts')
+	)
 	assert.equal(
 		config.ignoreCommand,
 		'node scripts/vercel-ignore-build.mjs'
