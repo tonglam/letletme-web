@@ -289,8 +289,6 @@ async function settleClaim(
 	}
 	if (isContractFailureCode(result.errorCode)) {
 		console.error('[entry-sync-outbox] contract failure', {
-			entryId: row.entryId,
-			generation: row.generation,
 			errorCode: result.errorCode ?? 'INVALID_RESPONSE'
 		})
 	}
@@ -495,6 +493,7 @@ export async function getEntrySyncOutboxHealth(
 async function purgeDeliveredEntrySyncOutboxBatch(
 	now: Date
 ): Promise<{ deleted: number; lockSkipped: boolean }> {
+	const cutoff = new Date(now.getTime() - ENTRY_SYNC_OUTBOX_RETENTION_MS)
 	const result = await db.transaction(async tx => {
 		const [lock] = await tx.execute<{ locked: boolean }>(sql`
 			SELECT pg_try_advisory_xact_lock(hashtextextended(${OUTBOX_CLEANUP_LOCK_KEY}, 0)) AS locked
@@ -503,16 +502,22 @@ async function purgeDeliveredEntrySyncOutboxBatch(
 		await tx.execute(sql`SELECT set_config('statement_timeout', '3s', true)`)
 		await tx.execute(sql`SELECT set_config('lock_timeout', '1s', true)`)
 		const deleted = await tx.execute(sql`
-			DELETE FROM bauth.entry_sync_outbox
-			WHERE entry_id IN (
-				SELECT entry_id
+			WITH candidates AS (
+				SELECT entry_id, generation
 				FROM bauth.entry_sync_outbox
 				WHERE status = 'delivered'
-					AND updated_at <= ${new Date(now.getTime() - ENTRY_SYNC_OUTBOX_RETENTION_MS)}
+					AND updated_at <= ${cutoff}
 				ORDER BY updated_at, entry_id
 				LIMIT ${OUTBOX_CLEANUP_BATCH_SIZE}
+				FOR UPDATE SKIP LOCKED
 			)
-			RETURNING entry_id
+			DELETE FROM bauth.entry_sync_outbox AS outbox
+			USING candidates
+			WHERE outbox.entry_id = candidates.entry_id
+				AND outbox.generation = candidates.generation
+				AND outbox.status = 'delivered'
+				AND outbox.updated_at <= ${cutoff}
+			RETURNING outbox.entry_id
 		`)
 		return { deleted: deleted.length, lockSkipped: false }
 	})
