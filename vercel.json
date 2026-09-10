@@ -28,14 +28,14 @@
 		"app/api/ops/data-contracts/**/*.ts": {
 			"maxDuration": 30
 		},
+		"app/api/tournaments/**/*.ts": {
+			"maxDuration": 30
+		},
 		"app/api/tournaments/participants/route.ts": {
 			"maxDuration": 40
 		},
 		"app/api/tournaments/preview/route.ts": {
 			"maxDuration": 40
-		},
-		"app/api/tournaments/**/*.ts": {
-			"maxDuration": 30
 		},
 		"app/api/miniprogram/entry-sync/route.ts": {
 			"maxDuration": 30
