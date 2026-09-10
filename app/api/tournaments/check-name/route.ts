@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 
 import { getAuthorizationSession } from '@/lib/auth';
-import { tournamentApiFetch } from '@/lib/tournament/backend-client';
+import {
+  TournamentApiCancelledError,
+  TournamentApiTimeoutError,
+  tournamentApiFetch,
+} from '@/lib/tournament/backend-client';
 import { sanitizeTournamentNameCheckError } from '@/lib/tournament/public-response';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 export async function GET(request: Request) {
   let session;
@@ -44,6 +49,18 @@ export async function GET(request: Request) {
 			{ status: response.status },
 		);
   } catch (error) {
+    if (error instanceof TournamentApiTimeoutError) {
+      return NextResponse.json(
+        { available: false, message: 'Tournament service timed out.' },
+        { status: 504 },
+      );
+    }
+    if (error instanceof TournamentApiCancelledError) {
+      return NextResponse.json(
+        { available: false, message: 'Tournament request was cancelled.' },
+        { status: 499 },
+      );
+    }
     console.error('[tournaments] name check failed:', error);
     return NextResponse.json(
       { available: false, message: 'Tournament service is unavailable.' },

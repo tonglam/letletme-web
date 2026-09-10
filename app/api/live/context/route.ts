@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
@@ -9,6 +10,7 @@ import {
 } from '@/lib/graphql/operations/live'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 async function handleGet(request: Request) {
 	try {
@@ -49,7 +51,19 @@ async function handleGet(request: Request) {
 			}
 		}
 		return response
-	} catch {
+	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'Live context request timed out' },
+				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Live context request was cancelled' },
+				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
+			)
+		}
 		return NextResponse.json(
 			{ error: 'Live context unavailable' },
 			{ status: 503, headers: { 'Cache-Control': 'no-store' } }

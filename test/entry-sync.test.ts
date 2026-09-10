@@ -86,6 +86,7 @@ describe('requestEntryInfoSync', () => {
 		assert.deepEqual(result, {
 			ok: false,
 			retryable: false,
+			errorCode: 'INVALID_RESPONSE',
 			reason: 'entry sync contract requires HTTP 202, received 200'
 		})
 		assert.equal(fetchCalls[0].url, 'http://127.0.0.1:4001/entry-info/42/sync')
@@ -134,6 +135,24 @@ describe('requestEntryInfoSync', () => {
 		if (!result.ok) {
 			assert.match(result.reason, /500/)
 			assert.equal(result.retryable, true)
+		}
+	})
+
+	it('reports throttling responses as retryable and preserves Retry-After', async () => {
+		stubFetch(
+			async () =>
+				new Response('slow down', {
+					status: 429,
+					headers: { 'Retry-After': '37' }
+				})
+		)
+
+		const result = await requestEntryInfoSync(6953)
+
+		assert.equal(result.ok, false)
+		if (!result.ok) {
+			assert.equal(result.retryable, true)
+			assert.equal(result.retryAfterSeconds, 37)
 		}
 	})
 
@@ -190,6 +209,64 @@ describe('requestEntryInfoSync', () => {
 		assert.equal(result.ok, false)
 		if (!result.ok) assert.match(result.reason, /timed out/)
 	})
+
+	it('cancels a response body that stalls after headers', async () => {
+		let cancelled = false
+		stubFetch(
+			async () =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						pull: () => new Promise<void>(() => undefined),
+						cancel: () => {
+							cancelled = true
+						}
+					}),
+					{ status: 202 }
+				)
+		)
+
+		const result = await requestEntryInfoSync(6953, { timeoutMs: 5 })
+
+		assert.deepEqual(result, {
+			ok: false,
+			retryable: true,
+			errorCode: 'REQUEST_TIMEOUT',
+			reason: 'timed out after 0.005s: http://127.0.0.1:4001'
+		})
+		assert.equal(cancelled, true)
+	})
+
+	it('classifies a caller cancellation during response body reading', async () => {
+		const signalController = new AbortController()
+		let cancelled = false
+		stubFetch(
+			async () =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						pull: () => new Promise<void>(() => undefined),
+						cancel: () => {
+							cancelled = true
+						}
+					}),
+					{ status: 202 }
+				)
+		)
+
+		const resultPromise = requestEntryInfoSync(6953, {
+			timeoutMs: 500,
+			signal: signalController.signal
+		})
+		signalController.abort()
+		const result = await resultPromise
+
+		assert.deepEqual(result, {
+			ok: false,
+			retryable: true,
+			errorCode: 'REQUEST_CANCELLED',
+			reason: 'cancelled while syncing: http://127.0.0.1:4001'
+		})
+		assert.equal(cancelled, true)
+	})
 })
 
 describe('syncEntryAfterBind', () => {
@@ -204,23 +281,14 @@ describe('syncEntryAfterBind', () => {
 		assert.match(warnCalls[0], /\[entry-sync\]/)
 	})
 
-	it('retries a transient failure and succeeds on a later attempt', async () => {
-		let calls = 0
-		stubFetch(async () => {
-			calls += 1
-			return calls < 3
-				? new Response('boom', { status: 500 })
-				: new Response('{"success":true,"status":"queued","jobId":"job-3"}', {
-						status: 202
-					})
-		})
+	it('attempts a transient failure once and leaves retry to the durable outbox', async () => {
+		stubFetch(async () => new Response('boom', { status: 500 }))
 
 		await syncEntryAfterBind(6953, { retryDelaysMs: [1, 1] })
 
-		assert.equal(fetchCalls.length, 3)
-		assert.equal(warnCalls.length, 0)
-		assert.equal(infoCalls.length, 1)
-		assert.match(infoCalls[0], /\[entry-sync\] queued entry 6953 as job job-3/)
+		assert.equal(fetchCalls.length, 1)
+		assert.equal(warnCalls.length, 1)
+		assert.equal(infoCalls.length, 0)
 	})
 
 	it('does not retry non-retryable failures', async () => {
@@ -232,12 +300,12 @@ describe('syncEntryAfterBind', () => {
 		assert.equal(warnCalls.length, 1)
 	})
 
-	it('gives up after the configured attempts and reports the count', async () => {
+	it('reports one bounded attempt without sleeping or retrying', async () => {
 		stubFetch(async () => new Response('boom', { status: 503 }))
 
 		await syncEntryAfterBind(6953, { retryDelaysMs: [1, 1] })
 
-		assert.equal(fetchCalls.length, 3)
-		assert.match(warnCalls[0], /after 3 attempt\(s\)/)
+		assert.equal(fetchCalls.length, 1)
+		assert.match(warnCalls[0], /after 1 attempt\(s\)/)
 	})
 })

@@ -24,6 +24,7 @@ import { getTranslations } from 'next-intl/server'
 import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 type PageProps = { params: LocaleParams }
 

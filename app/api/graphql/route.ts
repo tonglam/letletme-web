@@ -40,6 +40,8 @@ const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
 const MAX_GRAPHQL_RESPONSE_BYTES = 8 * 1024 * 1024
 const SUCCESS_SIGNAL_SAMPLE_RATE = 0.01
 
+export const maxDuration = 30
+
 function noStoreJson(
 	body: unknown,
 	status: number,

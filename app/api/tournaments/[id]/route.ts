@@ -1,7 +1,9 @@
 import type { Session } from '@/lib/auth'
 import { PayloadTooLargeError, readBoundedJson } from '@/lib/http-security'
 import {
+	TournamentApiCancelledError,
 	TournamentApiConfigurationError,
+	TournamentApiTimeoutError,
 	tournamentApiFetch
 } from '@/lib/tournament/backend-client'
 import {
@@ -18,6 +20,7 @@ import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-respo
 import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 const MAX_UPDATE_BODY_BYTES = 8 * 1024
 
@@ -104,6 +107,12 @@ const proxyResponse = async (response: Response): Promise<NextResponse> => {
 const handleBackendError = (error: unknown): NextResponse => {
 	if (error instanceof TournamentApiConfigurationError) {
 		return errorResponse('Tournament service is not configured', 503)
+	}
+	if (error instanceof TournamentApiTimeoutError) {
+		return errorResponse('Tournament service timed out', 504)
+	}
+	if (error instanceof TournamentApiCancelledError) {
+		return errorResponse('Tournament request was cancelled', 499)
 	}
 
 	console.error('[tournament mutation] backend request failed:', error)

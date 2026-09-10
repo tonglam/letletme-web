@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { getVerifiedEntryContext } from '@/lib/session'
 import {
@@ -8,6 +9,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 function single(query: URLSearchParams, key: string): string | null {
 	const values = query.getAll(key)
@@ -51,7 +53,7 @@ export async function GET(
 					tournamentId: Number(id),
 					entryId
 				},
-				{ cache: 'no-store' }
+				{ cache: 'no-store', signal: request.signal }
 			)
 		const status = data.managedTournamentStatus
 		if (!status)
@@ -75,6 +77,24 @@ export async function GET(
 			headers: { 'Cache-Control': 'private, no-store, no-transform' }
 		})
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'GraphQL request timed out.' },
+				{
+					status: 504,
+					headers: { 'Cache-Control': 'private, no-store, no-transform' }
+				}
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Request was cancelled.' },
+				{
+					status: 499,
+					headers: { 'Cache-Control': 'private, no-store, no-transform' }
+				}
+			)
+		}
 		console.error(
 			'[tournament status] failed:',
 			error instanceof Error ? error.name : 'UnknownError'

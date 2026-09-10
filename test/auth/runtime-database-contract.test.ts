@@ -20,6 +20,7 @@ describe('Web runtime database boundary', () => {
 			baseline,
 			standaloneAccountMigration,
 			authEventMigration,
+			entrySyncOutboxMigration,
 			journal,
 			instrumentation,
 			environment,
@@ -28,6 +29,7 @@ describe('Web runtime database boundary', () => {
 			readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
 			readFile('drizzle/0003_graceful_husk.sql', 'utf8'),
 			readFile('drizzle/0004_auth_event.sql', 'utf8'),
+			readFile('drizzle/0005_entry_sync_outbox.sql', 'utf8'),
 			readFile('drizzle/meta/_journal.json', 'utf8'),
 			readFile('instrumentation.ts', 'utf8'),
 			readFile('.env.example', 'utf8'),
@@ -127,6 +129,13 @@ describe('Web runtime database boundary', () => {
 		assert.match(authEventMigration, /CREATE POLICY web_auth_event_delete_expired/)
 		assert.match(authEventMigration, /GRANT SELECT, INSERT, DELETE ON TABLE bauth\.auth_event/)
 		assert.doesNotMatch(authEventMigration, /GRANT[^;]+UPDATE[^;]+auth_event/)
+		assert.match(entrySyncOutboxMigration, /CREATE TABLE bauth\.entry_sync_outbox/)
+		assert.match(entrySyncOutboxMigration, /ENABLE ROW LEVEL SECURITY/)
+		assert.match(entrySyncOutboxMigration, /CREATE POLICY web_auth_runtime_all/)
+		assert.match(
+			entrySyncOutboxMigration,
+			/GRANT SELECT, INSERT, DELETE, UPDATE\s+ON TABLE bauth\.entry_sync_outbox/
+		)
 		assert.match(instrumentation, /validateWebRuntimeDatabaseConfiguration/)
 		assert.match(instrumentation, /DATABASE_URL must use/)
 		assert.match(
@@ -144,6 +153,7 @@ describe('Web runtime database boundary', () => {
 			'account',
 			'auth_event',
 			'bug_report_storage_nonces',
+			'entry_sync_outbox',
 			'fpl_entry_binding_challenges',
 			'fpl_entry_name_history',
 			'mini_program_account',

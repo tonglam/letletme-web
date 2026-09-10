@@ -1,11 +1,24 @@
 // NOTE: deliberately no 'server-only' import because the plain Node test suite
 // imports this module. It is server-side by usage through fpl-entry-binding.
 
-const ENTRY_SYNC_TIMEOUT_MS = 10_000
+import {
+	PayloadTooLargeError,
+	readBoundedResponseBytes,
+	ResponseReadAbortedError
+} from './http-response-body'
+
+export const ENTRY_SYNC_TIMEOUT_MS = 3_000
+const MAX_ENTRY_SYNC_RESPONSE_BYTES = 64 * 1024
 
 export type EntrySyncResult =
 	| { ok: true; status: 'queued'; jobId: string }
-	| { ok: false; reason: string; retryable: boolean }
+	| {
+			ok: false
+			reason: string
+			retryable: boolean
+			errorCode?: string
+			retryAfterSeconds?: number
+		}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -16,19 +29,43 @@ const getEntrySyncBaseUrl = (): string =>
 const getEntrySyncApiKey = (): string =>
 	(process.env.LETLETME_DATA_API_KEY || '').trim()
 
+const isAbortError = (error: unknown): boolean =>
+	error instanceof ResponseReadAbortedError ||
+	(error instanceof Error && error.name === 'AbortError')
+
+const parseRetryAfterSeconds = (value: string | null): number | undefined => {
+	if (!value) return undefined
+	const seconds = Number(value)
+	if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds)
+	const retryAt = Date.parse(value)
+	if (!Number.isFinite(retryAt)) return undefined
+	return Math.max(0, Math.ceil((retryAt - Date.now()) / 1_000))
+}
+
 /**
  * Ask letletme_data to pull an entry from the FPL API into entry_infos and the
- * EntryInfo:{season} Redis hash. Never throws — binding must not fail because
- * the sync service is down; the daily cron repairs the gap once it lands.
+ * EntryInfo:{season} Redis hash. The caller owns durable retry state; this
+ * function performs exactly one bounded hand-off attempt.
  */
 export async function requestEntryInfoSync(
 	entryId: number,
-	options?: { timeoutMs?: number }
+	options?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<EntrySyncResult> {
 	const timeoutMs = options?.timeoutMs ?? ENTRY_SYNC_TIMEOUT_MS
 	const baseUrl = getEntrySyncBaseUrl()
 	const controller = new AbortController()
-	const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+	let timedOut = false
+	let cancelledByCaller = false
+	const timeoutId = setTimeout(() => {
+		timedOut = true
+		controller.abort()
+	}, timeoutMs)
+	const abortFromCaller = () => {
+		cancelledByCaller = true
+		controller.abort()
+	}
+	if (options?.signal?.aborted) abortFromCaller()
+	else options?.signal?.addEventListener('abort', abortFromCaller, { once: true })
 
 	const headers = new Headers({ 'Content-Type': 'application/json' })
 	const apiKey = getEntrySyncApiKey()
@@ -41,28 +78,50 @@ export async function requestEntryInfoSync(
 			signal: controller.signal,
 			cache: 'no-store'
 		})
+		const responseText = new TextDecoder().decode(
+			await readBoundedResponseBytes(
+				res,
+				MAX_ENTRY_SYNC_RESPONSE_BYTES,
+				controller.signal
+			)
+		)
 		if (res.ok) {
 			if (res.status !== 202) {
 				return {
 					ok: false,
 					retryable: false,
+					errorCode: 'INVALID_RESPONSE',
 					reason: `entry sync contract requires HTTP 202, received ${res.status}`
 				}
 			}
 
-			const body: unknown = await res.json().catch(() => null)
+			let body: unknown = null
+			try {
+				body = JSON.parse(responseText)
+			} catch (error) {
+				if (isAbortError(error)) {
+					return {
+						ok: false,
+						retryable: true,
+						errorCode: 'REQUEST_TIMEOUT',
+						reason: `timed out after ${timeoutMs / 1000}s: ${baseUrl}`
+					}
+				}
+			}
 			if (
+				res.status === 202 &&
 				isRecord(body) &&
 				body.status === 'queued' &&
 				typeof body.jobId === 'string' &&
-				body.jobId.length > 0
+				body.jobId.trim().length > 0
 			) {
-				return { ok: true, status: 'queued', jobId: body.jobId }
+				return { ok: true, status: 'queued', jobId: body.jobId.trim() }
 			}
 
 			return {
 				ok: false,
 				retryable: true,
+				errorCode: 'INVALID_RESPONSE',
 				reason: 'invalid queued response from entry sync service'
 			}
 		}
@@ -70,55 +129,103 @@ export async function requestEntryInfoSync(
 			return {
 				ok: false,
 				retryable: false,
+				errorCode: `HTTP_${res.status}`,
 				reason: `auth rejected (${res.status}) — check LETLETME_DATA_API_KEY against Data's DATA_API_KEY_HASHES`
 			}
 		}
-		const snippet = (await res.text().catch(() => '')).slice(0, 120)
-		// 5xx is a transient service problem worth retrying; 4xx is not.
+		const snippet = responseText.slice(0, 120)
+		// 429/408 and 5xx are transient service problems worth retrying; other
+		// 4xx responses are configuration or contract failures.
 		return {
 			ok: false,
-			retryable: res.status >= 500,
+			retryable: res.status === 408 || res.status === 429 || res.status >= 500,
+			errorCode: `HTTP_${res.status}`,
+			retryAfterSeconds: parseRetryAfterSeconds(res.headers.get('retry-after')),
 			reason: `status ${res.status}${snippet ? `: ${snippet}` : ''}`
 		}
 	} catch (error) {
-		if (error instanceof Error && error.name === 'AbortError') {
+		if (isAbortError(error)) {
+			if (cancelledByCaller && !timedOut) {
+				return {
+					ok: false,
+					retryable: true,
+					errorCode: 'REQUEST_CANCELLED',
+					reason: `cancelled while syncing: ${baseUrl}`
+				}
+			}
 			return {
 				ok: false,
 				retryable: true,
+				errorCode: 'REQUEST_TIMEOUT',
 				reason: `timed out after ${timeoutMs / 1000}s: ${baseUrl}`
 			}
 		}
-		return { ok: false, retryable: true, reason: `unavailable: ${baseUrl}` }
+		if (error instanceof PayloadTooLargeError) {
+			return {
+				ok: false,
+				retryable: false,
+				errorCode: 'INVALID_RESPONSE',
+				reason: 'entry sync response exceeded the bounded response size'
+			}
+		}
+		return {
+			ok: false,
+			retryable: true,
+			errorCode: 'UPSTREAM_UNAVAILABLE',
+			reason: `unavailable: ${baseUrl}`
+		}
 	} finally {
 		clearTimeout(timeoutId)
+		options?.signal?.removeEventListener('abort', abortFromCaller)
 	}
 }
 
-const DEFAULT_RETRY_DELAYS_MS = [2_000, 5_000]
-
 /**
- * Sync with a small bounded retry: the common failure is the data service
- * cold-starting or restarting at bind time, which a couple of retries inside
- * the post-response window absorbs. Deliberately NOT a durable queue — if
- * all attempts fail, a later bind or scheduled entry scan repairs the gap.
+ * Perform the one immediate post-commit hand-off. Durable callers set
+ * `durable: true`, which claims and conditionally updates the outbox row; the
+ * default remains a small dependency-free helper for callers/tests that only
+ * need the direct Data request.
  */
 export async function syncEntryAfterBind(
 	entryId: number,
-	options?: { retryDelaysMs?: number[] }
-): Promise<void> {
-	const delays = options?.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS
-	let attempts = 1
-	let result = await requestEntryInfoSync(entryId)
-	while (!result.ok && result.retryable && attempts <= delays.length) {
-		await new Promise(resolve => setTimeout(resolve, delays[attempts - 1]))
-		result = await requestEntryInfoSync(entryId)
-		attempts += 1
+	options?: {
+		durable?: boolean
+		timeoutMs?: number
+		/** @deprecated retries are intentionally no longer performed in-request. */
+		retryDelaysMs?: number[]
 	}
+): Promise<void> {
+	if (options?.durable) {
+		try {
+			const { deliverEntrySyncOutboxNow } = await import(
+				'@/lib/entry-sync-outbox'
+			)
+			const delivery = await deliverEntrySyncOutboxNow(entryId)
+			if (delivery.status === 'delivered') {
+				console.info(
+					`[entry-sync] queued entry ${entryId} as job ${delivery.jobId}`
+				)
+			} else {
+				console.warn(
+					`[entry-sync] durable hand-off for entry ${entryId} remains ${delivery.status}: ${delivery.reason ?? 'pending retry'}`
+				)
+			}
+		} catch (error) {
+			console.warn(
+				`[entry-sync] durable hand-off failed for entry ${entryId}: ${error instanceof Error ? error.message : 'unknown error'}`
+			)
+		}
+		return
+	}
+
+	const result = await requestEntryInfoSync(entryId, {
+		timeoutMs: options?.timeoutMs ?? ENTRY_SYNC_TIMEOUT_MS
+	})
 	if (result.ok) {
 		console.info(`[entry-sync] queued entry ${entryId} as job ${result.jobId}`)
 	} else {
 		console.warn(
-			`[entry-sync] sync failed for entry ${entryId} after ${attempts} attempt(s): ${result.reason}`
+			`[entry-sync] sync failed for entry ${entryId} after 1 attempt(s): ${result.reason}`
 		)
 	}
 }

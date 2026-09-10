@@ -1,11 +1,11 @@
 [Unit]
-Description=LetLetMe expired authentication event cleanup
+Description=LetLetMe entry sync outbox delivery
 After=network-online.target letletme-web.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/libexec/letletme-auth-event-cleanup.sh
+ExecStart=/usr/local/libexec/letletme-entry-sync-outbox.sh
 TimeoutStartSec=30s
 NoNewPrivileges=true
 PrivateDevices=true

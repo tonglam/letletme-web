@@ -4,7 +4,12 @@ import {
 } from './public-response'
 
 export type TournamentCreationProxyOutcome =
-	'success' | 'upstream_rejected' | 'rejected' | 'timeout' | 'unavailable'
+	| 'success'
+	| 'upstream_rejected'
+	| 'rejected'
+	| 'timeout'
+	| 'cancelled'
+	| 'unavailable'
 
 export type TournamentCreationProxyReport = {
 	event: 'tournament_creation_proxy'

@@ -8,6 +8,7 @@ export const WEB_AUTH_RUNTIME_TABLES = [
 	'account',
 	'auth_event',
 	'bug_report_storage_nonces',
+	'entry_sync_outbox',
 	'fpl_entry_binding_challenges',
 	'fpl_entry_name_history',
 	'mini_program_account',

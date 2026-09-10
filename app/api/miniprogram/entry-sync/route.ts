@@ -1,7 +1,8 @@
 import { createHmac } from 'crypto'
-import { after } from 'next/server'
-
-import { syncEntryAfterBind } from '@/lib/entry-sync'
+import {
+	deliverEntrySyncOutboxNow,
+	enqueueEntrySyncRequest
+} from '@/lib/entry-sync-outbox'
 import { parseFplEntryId } from '@/lib/fpl-binding-core'
 import {
 	buildOpaqueRateLimitSubject,
@@ -18,6 +19,7 @@ import {
 } from '@/lib/miniprogram-route-security'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 const ENTRY_SYNC_WINDOW_SECONDS = 60 * 60
 const ENTRY_SYNC_MAX = 10
@@ -54,7 +56,41 @@ export async function POST(request: Request) {
 			throw new MiniProgramAuthError('Too many requests', 429, deviceRate.retryAfterSeconds)
 		}
 
-		after(() => syncEntryAfterBind(entryId))
+		let generation: number
+		try {
+			generation = await enqueueEntrySyncRequest(entryId)
+		} catch {
+			throw new MiniProgramAuthError(
+				'这次没法同步球队，请稍后再试',
+				503,
+				60,
+				'entry_sync_outbox_unavailable'
+			)
+		}
+		let delivery
+		try {
+			delivery = await deliverEntrySyncOutboxNow(
+				entryId,
+				generation,
+				new Date(),
+				request.signal
+			)
+		} catch {
+			throw new MiniProgramAuthError(
+				'这次没法同步球队，请稍后再试',
+				503,
+				60,
+				'entry_sync_outbox_unavailable'
+			)
+		}
+		if (delivery.status !== 'delivered') {
+			throw new MiniProgramAuthError(
+				'这次没法同步球队，请稍后再试',
+				503,
+				60,
+				'entry_sync_not_queued'
+			)
+		}
 		return miniProgramSuccessResponse({ success: true, queued: true, entryId })
 	} catch (error) {
 		return miniProgramErrorResponse(error, '这次没法同步球队，请稍后再试')

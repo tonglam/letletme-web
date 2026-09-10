@@ -44,10 +44,11 @@ Create these without committing them:
   archive with this key and extracts it into a root-owned directory before
   staging; do not enable automation without provisioning this file.
 - `CRON_SECRET` in `/etc/letletme/web.env` — a 32+ byte random bearer used
-  by the local systemd timer to call `/api/cron/auth-event-cleanup`. The
-  timer runs independently of authentication traffic and is installed by
-  `install-host.sh`; keep this value equal only to the host's own Web secret,
-  never to a client or public configuration value.
+  by the local systemd timers to call `/api/cron/auth-event-cleanup` and
+  `/api/cron/entry-sync-outbox`. The cleanup timer runs hourly and the outbox
+  delivery timer runs every minute, independently of authentication traffic.
+  Both are installed by `install-host.sh`; keep this value equal only to the
+  host's own Web secret, never to a client or public configuration value.
 
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` must be the same 32-byte base64 value at
 Vercel build time and Tencent build time. Do not put it in Git.
@@ -94,8 +95,9 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
 
 1. Run `TENCENT_DEPLOY_PUBLIC_KEY='<deploy-public-key>' ops/tencent/scripts/install-host.sh` once as root. This installs the
    `deploy` account and a sudo allow-list for the release wrapper; it does not
-   grant that account a general root shell. It also enables the daily
-   `letletme-auth-event-cleanup.timer` after the host-only `CRON_SECRET` is
+   grant that account a general root shell. It also enables the hourly
+   `letletme-auth-event-cleanup.timer` and
+   `letletme-entry-sync-outbox.timer` after the host-only `CRON_SECRET` is
    provisioned. After changing release tooling,
    rerun this installer before enabling automation. The workflow checks
    `sudo /usr/local/libexec/letletme-release version` and refuses to promote

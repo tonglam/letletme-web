@@ -5,9 +5,14 @@ import {
   buildOpaqueRateLimitSubject,
   checkDatabaseRateLimit,
 } from '@/lib/http-security';
-import { fetchLeagueParticipants } from '@/lib/tournament/create-server';
+import {
+  fetchLeagueParticipants,
+  LeagueParticipantsCancelledError,
+  LeagueParticipantsTimeoutError,
+} from '@/lib/tournament/create-server';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 40;
 
 export async function GET(request: Request) {
   let session;
@@ -53,9 +58,21 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await fetchLeagueParticipants(leagueUrl);
+    const result = await fetchLeagueParticipants(leagueUrl, request.signal);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    if (error instanceof LeagueParticipantsTimeoutError) {
+      return NextResponse.json(
+        { error: 'League participants request timed out.' },
+        { status: 504 },
+      );
+    }
+    if (error instanceof LeagueParticipantsCancelledError) {
+      return NextResponse.json(
+        { error: 'League participants request was cancelled.' },
+        { status: 499 },
+      );
+    }
     console.error(
       '[tournament participants] preview failed:',
       error instanceof Error ? error.name : 'UnknownError',

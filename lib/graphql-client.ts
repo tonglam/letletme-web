@@ -1,6 +1,10 @@
 import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
 import { resolveServerGraphQLEndpoint } from '@/lib/graphql-endpoint'
 import { publicGraphQLRequestMessage } from '@/lib/safe-errors'
+import {
+	readBoundedResponseBytes,
+	ResponseReadAbortedError
+} from '@/lib/http-response-body'
 
 const getGraphQLEndpoint = () => {
 	if (typeof window === 'undefined') {
@@ -53,6 +57,7 @@ export class GraphQLRequestError extends Error {
 }
 
 export const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
+const MAX_GRAPHQL_RESPONSE_BYTES = 8 * 1024 * 1024
 
 export const normalizeGraphQLTimeoutMs = (timeoutMs?: number): number =>
 	typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
@@ -281,10 +286,36 @@ async function doFetch<T>(
 
 		const response = await fetch(endpoint, fetchOptions)
 		requestId = response.headers.get('x-request-id') ?? undefined
-		const result = await response.json().catch(() => null)
+		let responseBytes: Uint8Array
+		try {
+			responseBytes = await readBoundedResponseBytes(
+				response,
+				MAX_GRAPHQL_RESPONSE_BYTES,
+				controller.signal
+			)
+		} catch (error) {
+			// An abort while consuming the body is part of the request boundary.
+			// Let the classifier below distinguish the platform deadline from a
+			// caller cancellation. Other reader failures stay network errors; only
+			// the JSON.parse call below can produce INVALID_RESPONSE.
+			throw error
+		}
+		let result: { errors?: unknown; data?: unknown } | null
+		try {
+			result = JSON.parse(new TextDecoder().decode(responseBytes))
+		} catch {
+			result = null
+		}
 		const normalizedErrors = normalizeGraphQLErrors(result?.errors)
 		const meaningfulErrors = normalizedErrors.filter(isMeaningfulGraphQLError)
 		const firstError = meaningfulErrors[0]
+
+		if (!result || typeof result !== 'object' || Array.isArray(result)) {
+			throw new GraphQLRequestError('GraphQL response was not valid JSON.', {
+				status: response.status,
+				code: 'INVALID_RESPONSE'
+			})
+		}
 
 		if (!response.ok) {
 			const code =
@@ -304,13 +335,6 @@ async function doFetch<T>(
 					...rateLimitMetadata(response)
 				}
 			)
-		}
-
-		if (!result || typeof result !== 'object') {
-			throw new GraphQLRequestError('GraphQL response was not valid JSON.', {
-				status: response.status,
-				code: 'INVALID_RESPONSE'
-			})
 		}
 
 		if (meaningfulErrors.length > 0) {
@@ -416,7 +440,10 @@ async function doFetch<T>(
 		return result.data as T
 	} catch (error) {
 		let normalizedError: unknown = error
-		if (error instanceof Error && error.name === 'AbortError') {
+		if (
+			error instanceof ResponseReadAbortedError ||
+			(error instanceof Error && error.name === 'AbortError')
+		) {
 			normalizedError = timedOut
 				? new GraphQLRequestError(
 						`GraphQL request timed out after ${safeTimeoutMs / 1_000}s`,

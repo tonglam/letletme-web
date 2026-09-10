@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LetLetMe entry sync outbox delivery every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00 UTC
+AccuracySec=15s
+Persistent=true
+Unit=letletme-entry-sync-outbox.service
+
+[Install]
+WantedBy=timers.target

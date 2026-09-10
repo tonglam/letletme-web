@@ -6,6 +6,7 @@ import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 export async function GET(
 	request: Request,
@@ -56,6 +57,18 @@ export async function GET(
 			headers: { 'Cache-Control': 'private, no-store' }
 		})
 	} catch (error) {
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			return NextResponse.json(
+				{ error: 'Comparison request timed out' },
+				{ status: 504, headers: { 'Cache-Control': 'private, no-store' } }
+			)
+		}
+		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
+			return NextResponse.json(
+				{ error: 'Comparison request was cancelled' },
+				{ status: 499, headers: { 'Cache-Control': 'private, no-store' } }
+			)
+		}
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
 			code === 'CLIENT_UPGRADE_REQUIRED'

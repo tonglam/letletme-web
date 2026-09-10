@@ -195,6 +195,8 @@ install -o root -g root -m 0750 \
 	"$script_dir/cleanup-release.sh" /usr/local/libexec/letletme-cleanup-release.sh
 install -o root -g root -m 0750 \
 	"$script_dir/auth-event-cleanup.sh" /usr/local/libexec/letletme-auth-event-cleanup.sh
+install -o root -g root -m 0750 \
+	"$script_dir/entry-sync-outbox.sh" /usr/local/libexec/letletme-entry-sync-outbox.sh
 install -o root -g root -m 0755 \
 	"$script_dir/letletme-release-wrapper.sh" /usr/local/libexec/letletme-release
 install -o root -g root -m 0644 \
@@ -203,6 +205,12 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
 	"$ops_dir/systemd/letletme-auth-event-cleanup.timer" \
 	/etc/systemd/system/letletme-auth-event-cleanup.timer
+install -o root -g root -m 0644 \
+	"$ops_dir/systemd/letletme-entry-sync-outbox.service" \
+	/etc/systemd/system/letletme-entry-sync-outbox.service
+install -o root -g root -m 0644 \
+	"$ops_dir/systemd/letletme-entry-sync-outbox.timer" \
+	/etc/systemd/system/letletme-entry-sync-outbox.timer
 install -o root -g root -m 0440 /dev/stdin /etc/sudoers.d/letletme-release <<'EOF'
 Defaults:deploy !setenv
 deploy ALL=(root) NOPASSWD: /usr/local/libexec/letletme-release
@@ -211,5 +219,6 @@ visudo --check --file=/etc/sudoers.d/letletme-release
 systemctl daemon-reload
 systemctl enable letletme-web.service nginx.service
 systemctl enable --now letletme-auth-event-cleanup.timer
+systemctl enable --now letletme-entry-sync-outbox.timer
 
 echo "Host prerequisites installed. Add web.env, TLS material and origin secrets before starting services."

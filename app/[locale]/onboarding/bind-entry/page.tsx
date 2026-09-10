@@ -10,6 +10,7 @@ import BindEntryForm from '@/app/onboarding/bind-entry/BindEntryForm'
 import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 type PageProps = {
 	params: LocaleParams

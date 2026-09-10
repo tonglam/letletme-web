@@ -58,6 +58,86 @@ test('executeQuery aborts a stalled request at the configured deadline', async (
 	}
 })
 
+test('executeQuery classifies a response body timeout as REQUEST_TIMEOUT', async () => {
+	const originalFetch = globalThis.fetch
+	let cancelled = false
+	globalThis.fetch = (async () =>
+		new Response(
+			new ReadableStream<Uint8Array>({
+				pull: () => new Promise<void>(() => undefined),
+				cancel: () => {
+					cancelled = true
+				}
+			})
+		)) as typeof fetch
+
+	try {
+		await assert.rejects(
+			executeQuery('query BodyTimeoutProbe { __typename }', undefined, {
+				timeoutMs: 5
+			}),
+			(error: unknown) =>
+				error instanceof GraphQLRequestError &&
+				error.code === 'REQUEST_TIMEOUT'
+		)
+		assert.equal(cancelled, true)
+	} finally {
+		globalThis.fetch = originalFetch
+	}
+})
+
+test('executeQuery classifies malformed JSON as INVALID_RESPONSE', async () => {
+	const originalFetch = globalThis.fetch
+	globalThis.fetch = (async () => new Response('not-json', { status: 200 })) as typeof fetch
+	try {
+		await assert.rejects(
+			executeQuery('query InvalidResponseProbe { __typename }'),
+			(error: unknown) =>
+				error instanceof GraphQLRequestError &&
+				error.code === 'INVALID_RESPONSE'
+		)
+	} finally {
+		globalThis.fetch = originalFetch
+	}
+})
+
+test('executeQuery classifies malformed JSON on an error status as INVALID_RESPONSE', async () => {
+	const originalFetch = globalThis.fetch
+	globalThis.fetch = (async () => new Response('upstream-html', { status: 502 })) as typeof fetch
+	try {
+		await assert.rejects(
+			executeQuery('query InvalidErrorResponseProbe { __typename }'),
+			(error: unknown) =>
+				error instanceof GraphQLRequestError &&
+				error.status === 502 &&
+				error.code === 'INVALID_RESPONSE'
+		)
+	} finally {
+		globalThis.fetch = originalFetch
+	}
+})
+
+test('executeQuery keeps a response reader failure as NETWORK_ERROR', async () => {
+	const originalFetch = globalThis.fetch
+	globalThis.fetch = (async () =>
+		new Response(
+			new ReadableStream<Uint8Array>({
+				pull: () => {
+					throw new Error('body reader failed')
+				}
+			})
+		)) as typeof fetch
+	try {
+		await assert.rejects(
+			executeQuery('query ReaderFailureProbe { __typename }'),
+			(error: unknown) =>
+				error instanceof GraphQLRequestError && error.code === 'NETWORK_ERROR'
+		)
+	} finally {
+		globalThis.fetch = originalFetch
+	}
+})
+
 test('extractOperationName supports named GraphQL operations', () => {
 	assert.equal(
 		extractOperationName('query NamedProbe { __typename }'),
