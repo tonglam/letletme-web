@@ -183,7 +183,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				if (ownsPage) await releaseThrottle?.()
 				if (ownsPage) await page.goto('about:blank', { waitUntil: 'commit' })
 			})(),
-			new Promise((_, reject) => { timer = setTimeout(() => { void page.close(); reject(new Error('Navigation observation exceeded 30000ms')) }, 30_000) })
+				new Promise((_, reject) => { timer = setTimeout(() => { if (ownsPage) void page.close(); reject(new Error('Navigation observation exceeded 30000ms')) }, 30_000) })
 		])
 	} catch (error) {
 		sample.error = error.message

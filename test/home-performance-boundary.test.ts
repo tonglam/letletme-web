@@ -254,6 +254,7 @@ it('uses the browser vitals build and the same page for navigation plus follow-u
 	assert.match(metrics, /options\.onResponse\?\.\(response\)/)
 	assert.match(metrics, /readySequence/)
 	assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
+	assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
 	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
 	assert.match(readFileSync('scripts/measure-competitions-performance.mjs', 'utf8'), /navigationComplete:/)
 	for (const name of [
