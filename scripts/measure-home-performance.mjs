@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
@@ -403,6 +403,9 @@ console.log(
 			coldLoads: measurements,
 			raw,
 			fixtureSwitches,
+			acceptance: {
+				navigationComplete: Object.values(raw).flat().every(run => navigationComplete(run.navigation))
+			},
 			concurrency: {
 				requests: concurrency,
 				status200: concurrentResponses.filter(response => response.status === 200)

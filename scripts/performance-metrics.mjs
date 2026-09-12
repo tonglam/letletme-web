@@ -28,7 +28,7 @@ export function isProductionMeasurementUrl(url) {
 	}
 }
 export function hasValidProductionIdentity(sample) {
-	return /^[a-f0-9]{40}$/i.test(sample?.releaseSha ?? '') && /^(?:vercel|tencent)$/i.test(sample?.origin ?? '')
+	return /^[a-f0-9]{40}$/i.test(sample?.releaseSha ?? '') && /^(?:vercel|tencent|overseas)$/i.test(sample?.origin ?? '')
 }
 export function navigationComplete(sample) {
 	const metricsComplete = sample?.status === 200 && !sample.error && ['lcpMs', 'cls', 'fcpMs', 'ttfbMs', 'readyMs'].every(key => typeof sample[key] === 'number' && Number.isFinite(sample[key]))
@@ -48,9 +48,12 @@ export function performanceMetadata() {
 /** The alias is used only by the existing interaction diagnostics. */
 export async function installVitals(page, alias = '__performanceMetrics') {
 	const initialize = ({ aliasName, captureTelemetry }) => {
-		const state = { lcp: null, cls: null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {} }
+		const existing = window.__performanceMetrics
+		const clsSupported = typeof PerformanceObserver !== 'undefined' && Array.isArray(PerformanceObserver.supportedEntryTypes) && PerformanceObserver.supportedEntryTypes.includes('layout-shift')
+		const state = existing ?? { lcp: null, cls: clsSupported ? 0 : null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {}, readySequence: {}, readyDetails: {} }
 		window[aliasName] = state
 		window.__performanceMetrics = state
+		if (existing) return
 		const notify = () => { void window.__capturePerformanceMetric?.({ ...state, documentUrl: location.href }) }
 		for (const [fn, key] of [['onLCP', 'lcp'], ['onCLS', 'cls'], ['onINP', 'inp'], ['onFCP', 'fcp'], ['onTTFB', 'ttfb']]) {
 			window.webVitals[fn](metric => { state[key] = metric.value; notify() }, { reportAllChanges: true })
@@ -69,6 +72,8 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 				const metric = JSON.parse(raw)
 				if (typeof metric.name === 'string' && typeof metric.value === 'number') {
 					state.ready[metric.name] = metric.value
+					state.readySequence[metric.name] = (state.readySequence[metric.name] ?? 0) + 1
+					state.readyDetails[metric.name] = metric
 					notify()
 				}
 			} catch {}
@@ -88,7 +93,7 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 			return fetch(input, init)
 		}
 	}
-	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: alias === '__performanceMetrics' })})` })
+	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: true })})` })
 }
 
 export async function throttleProfile(page, profile) {
@@ -175,7 +180,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				delete details.metrics
 				Object.assign(sample, details)
 				if (options.screenshot) await page.screenshot({ path: options.screenshot, fullPage: true })
-				await releaseThrottle?.()
+				if (ownsPage) await releaseThrottle?.()
 				if (ownsPage) await page.goto('about:blank', { waitUntil: 'commit' })
 			})(),
 			new Promise((_, reject) => { timer = setTimeout(() => { void page.close(); reject(new Error('Navigation observation exceeded 30000ms')) }, 30_000) })
@@ -188,6 +193,9 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 		if (ownContext) await context.close()
 	}
 	Object.assign(sample, { lcpMs: latest.lcp ?? null, cls: latest.cls ?? null, inpMs: latest.inp ?? null, fcpMs: latest.fcp ?? null, ttfbMs: latest.ttfb ?? null, observedLongTaskBlockingMs: latest.observedLongTaskBlockingMs ?? null, businessMetrics: latest.ready ?? {}, requests, errors })
+	const complete = navigationComplete(sample)
+	if (!complete && isProductionMeasurementUrl(sample.url) && !sample.error) sample.error = 'Production measurement missing valid release/origin identity or required navigation metric'
+	sample.navigationComplete = complete
 	sample.observationInterval = { startMs: 0, endMs: sample.endMs ?? null, endReason: sample.error ?? 'business ready plus 5000ms' }
 	sample.missing = Object.fromEntries(['lcpMs', 'cls', 'inpMs', 'fcpMs', 'ttfbMs', 'readyMs'].filter(key => sample[key] == null).map(key => [key, key === 'inpMs' ? 'no interaction in navigation phase' : sample.error ?? 'no observation']))
 	if (process.env.PERF_OUTPUT_DIR) {

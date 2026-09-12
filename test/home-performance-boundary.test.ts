@@ -241,6 +241,7 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	assert.equal(hasValidProductionIdentity(productionSample), false)
 	assert.equal(navigationComplete(productionSample), false)
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'vercel' }), true)
+	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'overseas' }), true)
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'untrusted-proxy' }), false)
 	assert.equal(isProductionMeasurementUrl('http://localhost:3200/explore/fixtures'), false)
 })
@@ -251,6 +252,10 @@ it('uses the browser vitals build and the same page for navigation plus follow-u
 	assert.match(metrics, /globalThis\.webVitals = webVitals/)
 	assert.match(metrics, /options\.page\?\.context\(\)/)
 	assert.match(metrics, /options\.onResponse\?\.\(response\)/)
+	assert.match(metrics, /readySequence/)
+	assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
+	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
+	assert.match(readFileSync('scripts/measure-competitions-performance.mjs', 'utf8'), /navigationComplete:/)
 	for (const name of [
 		'home',
 		'fixtures',

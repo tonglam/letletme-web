@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, distribution } from './performance-metrics.mjs'
+import { installVitals, measureNavigation, navigationComplete, performanceMetadata, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const origin = process.env.COMPETITIONS_PERF_ORIGIN ?? 'https://letletme.top'
@@ -158,7 +158,10 @@ console.log(
 			origin,
 			locale,
 			summary,
-			raw: measurements
+			raw: measurements,
+			acceptance: {
+				navigationComplete: Object.values(measurements).flat().every(value => navigationComplete(value.navigation))
+			}
 		},
 		null,
 		2

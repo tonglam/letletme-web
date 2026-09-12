@@ -115,10 +115,19 @@ async function measureRun(browser, profile, index) {
 		page,
 		onResponse: value => { response = value }
 	})
+	readyMetric = await page.evaluate(
+		name => window.__performanceMetrics?.ready?.[name] ?? null,
+		'GAMEWEEK_CONTENT_READY'
+	)
 	await waitForReady(page)
 	const telemetryDeadline = Date.now() + 5_000
-	while (readyMetric == null && Date.now() < telemetryDeadline)
+	while (readyMetric == null && Date.now() < telemetryDeadline) {
+		readyMetric = await page.evaluate(
+			name => window.__performanceMetrics?.ready?.[name] ?? null,
+			'GAMEWEEK_CONTENT_READY'
+		)
 		await page.waitForTimeout(50)
+	}
 	await page.waitForTimeout(250)
 	const initialReadyMetric = readyMetric
 

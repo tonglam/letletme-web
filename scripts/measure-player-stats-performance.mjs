@@ -95,6 +95,10 @@ async function measureClickInteraction(
 	action
 ) {
 	const metricOffset = metrics.length
+	const initialReadySequence = await page.evaluate(
+		name => window.__performanceMetrics?.readySequence?.[name] ?? 0,
+		metricName
+	)
 	const resourceOffset = await page.evaluate(
 		() => performance.getEntriesByType('resource').length
 	)
@@ -107,6 +111,18 @@ async function measureClickInteraction(
 				.slice(metricOffset)
 				.find(item => item?.name === metricName)
 			if (nextMetric) return nextMetric
+			const sharedMetric = await page.evaluate(
+				({ name, initialSequence }) => {
+					const sequence = window.__performanceMetrics?.readySequence?.[name] ?? 0
+					if (sequence <= initialSequence) return null
+					return window.__performanceMetrics?.readyDetails?.[name] ?? {
+						name,
+						value: window.__performanceMetrics?.ready?.[name]
+					}
+				},
+				{ name: metricName, initialSequence: initialReadySequence }
+			)
+			if (sharedMetric) return sharedMetric
 			await new Promise(resolve => setTimeout(resolve, 50))
 		}
 		return null
@@ -303,6 +319,11 @@ async function measureRun(browser, profile, scenario, index) {
 		onResponse: value => { response = value }
 	})
 	releaseSha = response?.headers()['x-letletme-release'] ?? releaseSha
+	readyMs = await page.evaluate(
+		name => window.__performanceMetrics?.ready?.[name] ?? null,
+		scenario.readyMetric
+	)
+	paintMs = readyMs
 	await page.waitForFunction(
 		metricName =>
 			performance.getEntriesByType('navigation').length > 0 &&
@@ -313,6 +334,11 @@ async function measureRun(browser, profile, scenario, index) {
 	)
 	const telemetryDeadline = Date.now() + 5_000
 	while (readyMs == null && Date.now() < telemetryDeadline) {
+		readyMs = await page.evaluate(
+			name => window.__performanceMetrics?.ready?.[name] ?? null,
+			scenario.readyMetric
+		)
+		paintMs = readyMs
 		await page.waitForTimeout(50)
 	}
 	await page.waitForTimeout(250)
