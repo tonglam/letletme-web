@@ -869,6 +869,192 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (
+			query.includes('GetEntryTournaments') ||
+			query.includes('GetPlatformAdminTournaments')
+		) {
+			json(response, 200, {
+				data: {
+					entryTournaments: [
+						{
+							id: 6,
+							name: 'E2E Classic League',
+							creator: 'E2E Manager',
+							adminEntryId: 15702,
+							leagueId: 314,
+							leagueType: 'CLASSIC',
+							sourceLeagueName: 'E2E Classic League',
+							totalTeamNum: 1,
+							tournamentMode: 'CLASSIC',
+							groupMode: 'POINTS_RACES',
+							groupTeamNum: null,
+							groupNum: null,
+							groupStartedEventId: null,
+							groupEndedEventId: null,
+							groupAutoAverages: false,
+							groupRounds: null,
+							groupPlayAgainstNum: null,
+							groupQualifyNum: null,
+							knockoutMode: null,
+							knockoutTeamNum: null,
+							knockoutRounds: null,
+							knockoutEventNum: null,
+							knockoutStartedEventId: null,
+							knockoutEndedEventId: null,
+							knockoutPlayAgainstNum: null,
+							state: 'ACTIVE',
+							rosterMode: 'STANDARD',
+							rosterSyncStatus: 'READY',
+							rosterLastSyncedAt: '2026-08-13T09:40:00.000Z',
+							officialScheduleHash: null,
+							officialScheduleSyncedAt: null,
+							officialScheduleLockedAt: null,
+							setupStatus: 'READY',
+							setupPhase: 'READY',
+							setupCompletedUnits: 1,
+							setupTotalUnits: 1,
+							setupProgressUpdatedAt: '2026-08-13T09:40:00.000Z',
+							setupProgressMode: 'TERMINAL',
+							setupAttempt: 1,
+							setupMaxAttempts: 3,
+							nextRetryAt: null,
+							standingsReadyAt: '2026-08-13T09:40:00.000Z',
+							profilesReadyAt: '2026-08-13T09:40:00.000Z',
+							insightsReadyAt: '2026-08-13T09:40:00.000Z',
+							setupHasWarnings: false,
+							warningSummaries: [],
+							setupStartedAt: '2026-08-13T09:39:00.000Z',
+							setupFinishedAt: '2026-08-13T09:40:00.000Z',
+							createdAt: '2026-08-01T00:00:00.000Z',
+							updatedAt: '2026-08-13T09:40:00.000Z'
+						}
+					]
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntryLiveCompetitionBoard')) {
+			const eventId = Number(variables.eventId) || 33
+			const tournamentId = Number(variables.tournamentId) || 6
+			const revision = 'e2e-competition-score-v1'
+			const score = {
+				eventPoints: 52,
+				netEventPoints: 52,
+				totalPoints: 1234,
+				totalScope: 'OVERALL',
+				transferCost: 0,
+				source: 'FPL_EVENT_LIVE',
+				calculationMode: 'PROJECTED_AUTOSUBS',
+				revisions: { input: revision },
+				times: {
+					sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+					contentUpdatedAt: '2026-08-13T09:40:00.000Z',
+					nextRefreshAt: '2026-08-13T09:45:00.000Z'
+				},
+				delivery: { state: 'FRESH' }
+			}
+			const row = {
+				availability: 'READY',
+				entry: 15702,
+				entryName: 'E2E United',
+				playerName: 'Test Manager',
+				liveRank: 1,
+				overallRank: 1,
+				teamValue: 1005,
+				chip: null,
+				transferCost: 0,
+				played: 11,
+				toPlay: 0,
+				captainId: 1,
+				captainName: 'Saka',
+				captainPoints: 12,
+				score
+			}
+			json(response, 200, {
+				data: {
+					entryLiveCompetitionBoard: {
+						head: {
+							season: '2627',
+							eventId,
+							tournamentId,
+							mode: 'CLASSIC',
+							availability: 'READY',
+							contentRevision: revision,
+							nextRefreshAt: '2026-08-13T09:45:00.000Z',
+							publication: {
+								revisions: {
+									publicationId: revision,
+									generation: 1,
+									scoreCore: revision
+								},
+								times: {
+									contentUpdatedAt: '2026-08-13T09:40:00.000Z',
+									nextRefreshAt: '2026-08-13T09:45:00.000Z'
+								}
+							},
+							delivery: { state: 'FRESH' }
+						},
+						totalEntries: 1,
+						filteredEntries: 1,
+						pageInfo: { hasNextPage: false, endCursor: null },
+						highestEventPoints: 52,
+						averageEventPoints: 52,
+						rows: [row],
+						viewerRow: row
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetLeagueLiveHead')) {
+			const eventId = Number(variables.eventId) || 33
+			const tournamentId = Number(variables.tournamentId) || 6
+			const revision = 'e2e-competition-score-v1'
+			json(response, 200, {
+				data: {
+					leagueLiveHead: {
+						season: '2627',
+						eventId,
+						tournamentId,
+						mode: 'CLASSIC',
+						availability: 'READY',
+						contentRevision: revision,
+						nextRefreshAt: '2026-08-13T09:45:00.000Z',
+						publication: {
+							revisions: {
+								publicationId: revision,
+								generation: 1,
+								roster: revision,
+								scoreCore: revision,
+								fixtureIdentity: revision,
+								entryInputSet: revision,
+								identity: revision,
+								officialRank: null,
+								rules: revision,
+								algorithm: revision,
+								content: revision
+							},
+							times: {
+								sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+								contentUpdatedAt: '2026-08-13T09:40:00.000Z',
+								publishedAt: '2026-08-13T09:40:00.000Z',
+								checkpointedAt: null,
+								servedAt: '2026-08-13T09:40:00.000Z',
+								staleAt: '2026-08-13T09:45:00.000Z',
+								nextRefreshAt: '2026-08-13T09:45:00.000Z'
+							}
+						},
+						delivery: {
+							state: 'FRESH',
+							servedFrom: 'REDIS_CURRENT',
+							reasonCodes: []
+						},
+						nextRefreshAt: '2026-08-13T09:45:00.000Z'
+					}
+				}
+			})
+			return
+		}
 
 		if (
 			query.includes('GetCurrentAndNextEvents') ||

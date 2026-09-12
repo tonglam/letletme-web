@@ -500,7 +500,6 @@ test('get-session exposes privacy-safe stage timings', async ({ request }) => {
 
 // These scenarios change the isolated GraphQL fixture and must run with one worker.
 test.describe('SSR remediation', () => {
-	test.use({ trace: 'on' })
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Run the fixture-control suite separately with one worker')
 	test.describe.configure({ mode: 'serial' })
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -566,7 +565,7 @@ test.describe('SSR remediation', () => {
 				if (pathname.includes('fixtures')) await page.getByRole('button', { name: 'Hardest first', exact: true }).click()
 				else await page.locator('#price-change-search').fill('Saka')
 				await expect(page.locator('#my-squad')).not.toContainText('Loading your squad', { timeout: 5000 })
-				await expect(page.locator('#my-squad [role=\"listitem\"]')).not.toHaveCount(0)
+				await expect(page.locator('#my-squad li')).not.toHaveCount(0)
 				if (pathname.includes('fixtures')) await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
 				else await expect(page.locator('#price-change-search')).toHaveValue('Saka')
 			} finally { await session.cleanup() }
@@ -689,6 +688,10 @@ test.describe('SSR remediation', () => {
 })
 
 test('canonical competition board and compatibility redirect preserve the committed selection', async ({ page }) => {
+	test.skip(
+		process.env.E2E_LIVE_HYDRATION !== '1',
+		'Uses the deterministic live competition fixture'
+	)
 	const session = await createSession({ entryId: 15702 })
 	try {
 		await addSessionCookie(page, session.cookie)
@@ -703,7 +706,8 @@ test('canonical competition board and compatibility redirect preserve the commit
 		expect(target.searchParams.get('created')).toBe('1')
 		const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
 		await expect(board).toBeVisible()
-		await expect(board.getByRole('table')).toBeVisible()
+		await expect(board.getByRole('list')).toBeVisible()
+		await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).first()).toBeVisible()
 		await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
 	} finally { await session.cleanup() }
 })

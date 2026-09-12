@@ -142,38 +142,41 @@ test('selection keeps committed detail while pending and reuses the server seed'
 })
 
 test.describe('SSR detail stream', () => {
-	test.use({ trace: 'on' })
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Run the fixture-control suite separately with one worker')
 	test.describe.configure({ mode: 'serial' })
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+	const runPlayerId = (offset: number): number =>
+		100_000 + (Date.now() % 1_000_000) * 10 + offset
 	async function control(rules: unknown[] = []) {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 	}
 	test.afterEach(async () => { await control() })
 
 	test('directory is interactive before a slow initial overview, and a new choice wins', async ({ page }, testInfo) => {
-		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [401] }, delayMs: 3500 }])
+		const initialPlayerId = runPlayerId(1)
+		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, delayMs: 3500 }])
 		const browserRequests: string[] = []
 		page.on('request', request => { if (request.url().includes('/api/player-stats/desk?')) browserRequests.push(request.url()) })
-		await page.goto('/explore/player-stats?p1=401', { waitUntil: 'commit' })
+		await page.goto(`/explore/player-stats?p1=${initialPlayerId}`, { waitUntil: 'commit' })
 		const players = page.getByRole('region', { name: 'Players', exact: true })
 		await expect(players).toBeVisible()
-		const initial = (await (await fetch(fixture)).json()).requests.find((row: { operation: string; variables: { playerIds?: number[] } }) => row.operation === 'GetPlayerStatsDeskOverview' && row.variables.playerIds?.[0] === 401)
+		const initial = (await (await fetch(fixture)).json()).requests.find((row: { operation: string; variables: { playerIds?: number[] } }) => row.operation === 'GetPlayerStatsDeskOverview' && row.variables.playerIds?.[0] === initialPlayerId)
 		expect(initial?.finishedAt).toBeNull()
 		await players.getByRole('button', { name: /^Palmer/ }).click()
 		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Palmer')
 		await expect(page).toHaveURL(/p1=2/)
-		await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { variables: { playerIds?: number[] } }) => row.variables.playerIds?.[0] === 401)?.finishedAt).toBeTruthy()
+		await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { variables: { playerIds?: number[] } }) => row.variables.playerIds?.[0] === initialPlayerId)?.finishedAt).toBeTruthy()
 		await expect(page.getByRole('region', { name: 'Player overall' })).not.toContainText('Saka')
 		await expect(page).toHaveURL(/p1=2/)
-		expect(browserRequests.filter(url => new URL(url).searchParams.get('playerIds') === '401')).toHaveLength(0)
+		expect(browserRequests.filter(url => new URL(url).searchParams.get('playerIds') === String(initialPlayerId))).toHaveLength(0)
 		await testInfo.attach('detail-stream-requests', { body: JSON.stringify((await (await fetch(fixture)).json()), null, 2), contentType: 'application/json' })
 	})
 
 	test('serves real overview HTML in a later response chunk without browser JavaScript', async ({ baseURL }, testInfo) => {
-		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [402] }, delayMs: 1800 }])
+		const initialPlayerId = runPlayerId(2)
+		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, delayMs: 1800 }])
 		const start = Date.now()
-		const response = await fetch(`${baseURL}/explore/player-stats?p1=402`)
+		const response = await fetch(`${baseURL}/explore/player-stats?p1=${initialPlayerId}`)
 		expect(response.status).toBe(200)
 		const reader = response.body!.getReader()
 		const decoder = new TextDecoder()
@@ -196,10 +199,11 @@ test.describe('SSR detail stream', () => {
 	})
 
 	test('a failed deep link settles once and offers an explicit retry', async ({ page }) => {
-		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [403] }, error: true }])
+		const initialPlayerId = runPlayerId(3)
+		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, error: true }])
 		let browserRequests = 0
 		page.on('request', request => { if (request.url().includes('/api/player-stats/desk?')) browserRequests++ })
-		await page.goto('/explore/player-stats?p1=403')
+		await page.goto(`/explore/player-stats?p1=${initialPlayerId}`)
 		const retry = page.getByRole('button', { name: 'Retry', exact: true })
 		await expect(retry).toBeVisible()
 		expect(browserRequests).toBe(0)
@@ -210,8 +214,9 @@ test.describe('SSR detail stream', () => {
 	})
 
 	test('clearing a comparison before its seed arrives keeps p2 cleared', async ({ page }) => {
-		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [404] }, delayMs: 2500 }])
-		await page.goto('/explore/player-stats?p1=2&p2=404', { waitUntil: 'commit' })
+		const initialPlayerId = runPlayerId(4)
+		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, delayMs: 2500 }])
+		await page.goto(`/explore/player-stats?p1=2&p2=${initialPlayerId}`, { waitUntil: 'commit' })
 		await page.getByRole('button', { name: 'Remove', exact: true }).click()
 		await expect(page).not.toHaveURL(/p2=/)
 		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Palmer')

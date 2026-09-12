@@ -149,13 +149,14 @@ jobs:
           E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - name: SSR slow-dependency and cache isolation E2E
-        run: npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts --grep 'SSR remediation|SSR detail stream' --workers=1
+        run: npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts --grep 'SSR remediation|SSR detail stream|canonical competition' --workers=1 --trace=on
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
           E2E_SSR_REMEDIATION: '1'
+          E2E_LIVE_HYDRATION: '1'
       - name: Preserve E2E evidence before the next test suite
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
