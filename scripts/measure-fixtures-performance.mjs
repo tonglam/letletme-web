@@ -106,10 +106,14 @@ try {
 				return {
 					lcpMs: window.__fixturesPerformance?.lcp ?? null,
 					cls: window.__fixturesPerformance?.cls ?? null,
+					phase: 'interaction',
+					inpMs: window.__fixturesPerformance?.inp ?? null,
+					fcpMs: window.__fixturesPerformance?.fcp ?? null,
+					observationInterval: { startMs: 0, endMs: performance.now() },
 					observedLongTaskBlockingMs: window.__fixturesPerformance?.observedLongTaskBlockingMs ?? null,
-					loadMs: navigation?.loadEventEnd ?? 0,
-					htmlResponseMs: navigation?.responseEnd ?? 0,
-					ttfbMs: navigation?.responseStart ?? 0
+					loadMs: navigation?.loadEventEnd ?? null,
+					htmlResponseMs: navigation?.responseEnd ?? null,
+					ttfbMs: navigation?.responseStart ?? null
 				}
 			})
 
@@ -139,6 +143,10 @@ try {
 
 			const final = await page.evaluate(() => ({
 				cls: window.__fixturesPerformance?.cls ?? null,
+				phase: 'interaction',
+				inpMs: window.__fixturesPerformance?.inp ?? null,
+				fcpMs: window.__fixturesPerformance?.fcp ?? null,
+				observationInterval: { startMs: 0, endMs: performance.now() },
 				observedLongTaskBlockingMs: window.__fixturesPerformance?.observedLongTaskBlockingMs ?? null,
 				horizontalOverflow:
 					document.documentElement.scrollWidth > window.innerWidth

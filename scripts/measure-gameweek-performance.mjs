@@ -185,9 +185,13 @@ async function measureRun(browser, profile, index) {
 		return {
 			lcpMs: window.__gameweekPerformance?.lcp ?? null,
 			cls: window.__gameweekPerformance?.cls ?? null,
+			phase: 'interaction',
+			inpMs: window.__gameweekPerformance?.inp ?? null,
+			fcpMs: window.__gameweekPerformance?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
 			observedLongTaskBlockingMs: window.__gameweekPerformance?.observedLongTaskBlockingMs ?? null,
-			ttfbMs: navigation?.responseStart ?? 0,
-			htmlResponseMs: navigation?.responseEnd ?? 0,
+			ttfbMs: navigation?.responseStart ?? null,
+			htmlResponseMs: navigation?.responseEnd ?? null,
 			horizontalOverflow:
 				document.documentElement.scrollWidth > window.innerWidth
 		}

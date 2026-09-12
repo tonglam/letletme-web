@@ -233,10 +233,14 @@ async function measureColdLoad(browser, profile, index) {
 		)
 		return {
 			lcpMs: window.__homePerformance?.lcp ?? null,
+			phase: 'interaction',
+			inpMs: window.__homePerformance?.inp ?? null,
+			fcpMs: window.__homePerformance?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
 			observedLongTaskBlockingMs: window.__homePerformance?.observedLongTaskBlockingMs ?? null,
 			cls: window.__homePerformance?.cls ?? null,
-			loadMs: navigation?.loadEventEnd ?? 0,
-			ttfbMs: navigation?.responseStart ?? 0,
+			loadMs: navigation?.loadEventEnd ?? null,
+			ttfbMs: navigation?.responseStart ?? null,
 			htmlBytes,
 			jsBytes,
 			fontBytes,

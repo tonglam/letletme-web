@@ -73,9 +73,13 @@ async function measure(browser, profile, index) {
 		return {
 			lcpMs: window.__trendsPerf?.lcp ?? null,
 			cls: window.__trendsPerf?.cls ?? null,
+			phase: 'interaction',
+			inpMs: window.__trendsPerf?.inp ?? null,
+			fcpMs: window.__trendsPerf?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
 			observedLongTaskBlockingMs: window.__trendsPerf?.observedLongTaskBlockingMs ?? null,
-			ttfbMs: nav?.responseStart ?? 0,
-			htmlResponseMs: nav?.responseEnd ?? 0,
+			ttfbMs: nav?.responseStart ?? null,
+			htmlResponseMs: nav?.responseEnd ?? null,
 			horizontalOverflow:
 				document.documentElement.scrollWidth > window.innerWidth
 		}

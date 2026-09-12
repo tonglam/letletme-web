@@ -67,9 +67,13 @@ async function measureRun(browser, profile, index) {
 		return {
 			lcpMs: window.__marketPerformance?.lcp ?? null,
 			cls: window.__marketPerformance?.cls ?? null,
+			phase: 'interaction',
+			inpMs: window.__marketPerformance?.inp ?? null,
+			fcpMs: window.__marketPerformance?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
 			observedLongTaskBlockingMs: window.__marketPerformance?.observedLongTaskBlockingMs ?? null,
-			ttfbMs: navigation?.responseStart ?? 0,
-			htmlResponseMs: navigation?.responseEnd ?? 0
+			ttfbMs: navigation?.responseStart ?? null,
+			htmlResponseMs: navigation?.responseEnd ?? null
 		}
 	})
 
@@ -126,6 +130,10 @@ async function measureRun(browser, profile, index) {
 
 	const final = await page.evaluate(() => ({
 		observedSessionCls: window.__marketPerformance?.cls ?? null,
+		phase: 'interaction',
+		inpMs: window.__marketPerformance?.inp ?? null,
+		fcpMs: window.__marketPerformance?.fcp ?? null,
+		observationInterval: { startMs: 0, endMs: performance.now() },
 		observedLongTaskBlockingMs: window.__marketPerformance?.observedLongTaskBlockingMs ?? null,
 		horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth
 	}))

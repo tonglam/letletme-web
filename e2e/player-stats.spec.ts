@@ -142,6 +142,7 @@ test('selection keeps committed detail while pending and reuses the server seed'
 })
 
 test.describe('SSR detail stream', () => {
+	test.use({ trace: 'on' })
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Run the fixture-control suite separately with one worker')
 	test.describe.configure({ mode: 'serial' })
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`

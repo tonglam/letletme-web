@@ -314,7 +314,7 @@ test('the no-JavaScript sign-out fallback preserves the Chinese locale', async (
 		await addSessionCookie(page, session.cookie)
 		await page.goto('/zh-CN')
 		const navigation = page.getByRole('navigation')
-		await navigation.getByText('E2E Manager', { exact: true }).first().click()
+		// Streamed account content requires JavaScript; the pending slot retains a native logout form.
 		await navigation.getByRole('button', { name: '退出登录' }).click()
 
 		await expect(page).toHaveURL(url => url.pathname === '/zh-CN')
@@ -500,6 +500,7 @@ test('get-session exposes privacy-safe stage timings', async ({ request }) => {
 
 // These scenarios change the isolated GraphQL fixture and must run with one worker.
 test.describe('SSR remediation', () => {
+	test.use({ trace: 'on' })
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Run the fixture-control suite separately with one worker')
 	test.describe.configure({ mode: 'serial' })
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -568,6 +569,32 @@ test.describe('SSR remediation', () => {
 				await expect(page.locator('#my-squad [role=\"listitem\"]')).not.toHaveCount(0)
 				if (pathname.includes('fixtures')) await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
 				else await expect(page.locator('#price-change-search')).toHaveValue('Saka')
+			} finally { await session.cleanup() }
+		})
+	}
+
+	for (const scenario of ['history', 'identity-pagination']) {
+		test(`the total budget stops subsequent ${scenario} requests`, async ({ page }, testInfo) => {
+			const session = await createSession({ entryId: 15702 })
+			const historyRule = { operation: 'GetEntryHistory', data: { entryHistory: { results: [33, 32, 31, 30, 29, 28].map(eventId => ({ eventId })), history: [] } } }
+			const rules = scenario === 'history' ? [historyRule, { operation: 'GetEntryEventResult', delayMs: 1400, error: true }] : [
+				historyRule,
+				{ operation: 'GetEntryEventResult', data: { entryEventResult: { eventPicks: [{ element: null, webName: 'Unknown Player', teamShortName: 'ARS', elementTypeName: 'MIDFIELDER', position: 1, multiplier: 1, isCaptain: false, isViceCaptain: false }] } } },
+				{ operation: 'GetPlayersForPicker', delayMs: 1400, data: { players: Array.from({ length: 200 }, (_, id) => ({ id: id + 1, webName: `Directory ${id}`, team: { shortName: 'ARS' } })) } }
+			]
+			await control(rules)
+			try {
+				await addSessionCookie(page, session.cookie)
+				await page.goto('/explore/price-predictions#my-squad', { waitUntil: 'commit' })
+				await expect(page.locator('#my-squad').getByRole('button', { name: 'Refresh and retry' })).toBeVisible({ timeout: 6500 })
+				const operation = scenario === 'history' ? 'GetEntryEventResult' : 'GetPlayersForPicker'
+				await expect.poll(async () => (await observations()).filter(row => row.operation === operation).at(-1)?.abortedAt).toBeTruthy()
+				const rows = (await observations()).filter(row => row.operation === operation)
+				const keys = rows.map(row => row.variables[scenario === 'history' ? 'eventId' : 'offset'])
+				expect(keys).toEqual(scenario === 'history' ? [33, 32, 31, 30] : [0, 200, 400, 600])
+				await new Promise(resolve => setTimeout(resolve, 150))
+				expect((await observations()).filter(row => row.operation === operation)).toHaveLength(rows.length)
+				await testInfo.attach(`${scenario}-deadline`, { body: JSON.stringify(rows, null, 2), contentType: 'application/json' })
 			} finally { await session.cleanup() }
 		})
 	}
@@ -661,22 +688,22 @@ test.describe('SSR remediation', () => {
 	})
 })
 
-test('canonical competition board and compatibility redirect preserve the committed selection', async ({ page, request }) => {
+test('canonical competition board and compatibility redirect preserve the committed selection', async ({ page }) => {
 	const session = await createSession({ entryId: 15702 })
 	try {
-	await addSessionCookie(page, session.cookie)
-	const redirect = await request.get('/live/competitions/6?gw=1&created=1', { maxRedirects: 0, headers: { Cookie: session.cookie } })
-	expect([307, 308]).toContain(redirect.status())
-	const target = new URL(redirect.headers().location, 'http://localhost')
-	expect(target.pathname).toBe('/live/competitions')
-	expect(target.searchParams.get('tournamentId')).toBe('6')
-	expect(target.searchParams.get('gw')).toBe('1')
-	expect(target.searchParams.get('created')).toBe('1')
-	await page.goto(target.pathname + target.search)
-	await expect(page).toHaveURL(/\/live\/competitions\?/)
-	const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
-	await expect(board).toBeVisible()
-	await expect(board.getByRole('table')).toBeVisible()
-	await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
+		await addSessionCookie(page, session.cookie)
+		// Next can deliver this redirect in a streamed HTML response (HTTP 200).
+		// Verify the browser destination and committed board, not just the status.
+		await page.goto('/live/competitions/6?gw=1&created=1')
+		await expect(page).toHaveURL(/\/live\/competitions\?/)
+		const target = new URL(page.url())
+		expect(target.pathname).toBe('/live/competitions')
+		expect(target.searchParams.get('tournamentId')).toBe('6')
+		expect(target.searchParams.get('gw')).toBe('1')
+		expect(target.searchParams.get('created')).toBe('1')
+		const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+		await expect(board).toBeVisible()
+		await expect(board.getByRole('table')).toBeVisible()
+		await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
 	} finally { await session.cleanup() }
 })

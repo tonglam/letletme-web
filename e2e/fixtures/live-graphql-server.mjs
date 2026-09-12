@@ -619,6 +619,10 @@ const server = createServer((request, response) => {
 			})
 			if (response.destroyed) return
 		}
+		if (rule?.data) {
+			json(response, 200, { data: rule.data })
+			return
+		}
 		if (rule?.error) {
 			json(response, 200, { errors: [{ message: 'Injected fixture failure' }] })
 			return

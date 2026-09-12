@@ -5,6 +5,7 @@ import { getCurrentSession, hasSessionCookieHint } from '@/lib/session'
 import { GuestNavigationActions, GuestAccountActions } from './GuestNavigationActions'
 import { LogoMark, LogoWordmark } from './Logo'
 import { NavigationActions } from './NavigationActions'
+import { SignOutForm } from './SignOutForm'
 
 export async function Navbar() {
 	const [t, hasSessionCookie, locale] = await Promise.all([
@@ -39,12 +40,12 @@ export async function Navbar() {
 				<div className="flex items-center gap-1.5">
 					<GuestNavigationActions
 						desktopAccount={hasSessionCookie ? (
-							<Suspense fallback={<AccountPlaceholder />}>
+							<Suspense fallback={<AccountPlaceholder homeHref={homeHref} />}>
 								<AccountSlot session={displaySession} />
 							</Suspense>
 						) : undefined}
 						mobileAccount={hasSessionCookie ? (
-							<Suspense fallback={<AccountPlaceholder />}>
+							<Suspense fallback={<AccountPlaceholder homeHref={homeHref} />}>
 								<AccountSlot session={displaySession} mobile />
 							</Suspense>
 						) : undefined}
@@ -55,8 +56,20 @@ export async function Navbar() {
 	)
 }
 
-function AccountPlaceholder() {
-	return <span className="block h-9 w-36 animate-pulse rounded-md bg-fascia-foreground/10" aria-hidden="true" />
+async function AccountPlaceholder({ homeHref }: { homeHref: string }) {
+	const t = await getTranslations('Navigation')
+	return <>
+		<span data-account-placeholder className="block h-9 w-36 animate-pulse rounded-md bg-fascia-foreground/10" aria-hidden="true" />
+		<noscript>
+			<style>{'[data-account-placeholder]{display:none}'}</style>
+			<SignOutForm
+				label={t('signOut')}
+				pendingLabel={t('signingOut')}
+				errorLabel={t('signOutFailed')}
+				redirectHref={homeHref}
+			/>
+		</noscript>
+	</>
 }
 
 async function AccountSlot({ session, mobile = false }: {

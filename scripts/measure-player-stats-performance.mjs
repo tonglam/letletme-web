@@ -319,23 +319,27 @@ async function measureRun(browser, profile, scenario, index) {
 		response?.headers()['content-encoding'] != null
 			? encodedDocumentBytes || responseBody.byteLength
 			: brotliCompressSync(responseBody).byteLength
-	const values = await page.evaluate(() => {
-		const navigation = performance.getEntriesByType('navigation')[0]
-		return {
-			fcpMs: window.__playerStatsPerformance?.fcp ?? null,
-			lcpMs: window.__playerStatsPerformance?.lcp ?? null,
-			cls: window.__playerStatsPerformance?.cls ?? null,
-			observedLongTaskBlockingMs: window.__playerStatsPerformance?.observedLongTaskBlockingMs ?? null,
-			ttfbMs: navigation?.responseStart ?? 0,
-			htmlResponseMs: navigation?.responseEnd ?? 0,
-			horizontalOverflow:
-				document.documentElement.scrollWidth > window.innerWidth
-		}
-	})
+
 	const interactions =
 		scenario.name === 'directory'
 			? await runSamePageInteractions(page, telemetry)
 			: []
+	const values = await page.evaluate(() => {
+		const navigation = performance.getEntriesByType('navigation')[0]
+		return {
+			lcpMs: window.__playerStatsPerformance?.lcp ?? null,
+			cls: window.__playerStatsPerformance?.cls ?? null,
+			phase: 'interaction',
+			inpMs: window.__playerStatsPerformance?.inp ?? null,
+			fcpMs: window.__playerStatsPerformance?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
+			observedLongTaskBlockingMs: window.__playerStatsPerformance?.observedLongTaskBlockingMs ?? null,
+			ttfbMs: navigation?.responseStart ?? null,
+			htmlResponseMs: navigation?.responseEnd ?? null,
+			horizontalOverflow:
+				document.documentElement.scrollWidth > window.innerWidth
+		}
+	})
 	const deskDurationMs =
 		deskResponses.find(item => item.durationMs != null)?.durationMs ?? null
 	const deskCacheStatuses = deskResponses.map(item => item.cacheStatus)

@@ -156,6 +156,14 @@ jobs:
           E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
           E2E_SSR_REMEDIATION: '1'
+      - name: Preserve E2E evidence before the next test suite
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-checkpoint-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Live match hydration E2E
         run: npm run test:e2e:hydration
         env:

@@ -84,9 +84,13 @@ async function measure(browser, path, index) {
 		return {
 			lcp: window.__competitionPerf.lcp,
 			cls: window.__competitionPerf.cls,
-			observedLongTaskBlockingMs: window.__competitionPerf.observedLongTaskBlockingMs,
-			ttfb: navigation?.responseStart ?? 0,
-			html: navigation?.responseEnd ?? 0,
+			phase: 'interaction',
+			inpMs: window.__competitionPerf?.inp ?? null,
+			fcpMs: window.__competitionPerf?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
+			observedLongTaskBlockingMs: window.__competitionPerf?.observedLongTaskBlockingMs ?? null,
+			ttfb: navigation?.responseStart ?? null,
+			html: navigation?.responseEnd ?? null,
 			overflow: document.documentElement.scrollWidth > innerWidth
 		}
 	})
