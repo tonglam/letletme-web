@@ -93,4 +93,17 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(clientSource, /statsContext\.status === 'STALE'/)
 		assert.match(viewSource, /STALE: t\('playerState\.coverage\.stale'\)/)
 	})
+
+	it('retries a streamed deep-link hash after the detail target mounts', async () => {
+		const source = await readFile(
+			new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url),
+			'utf8'
+		)
+		assert.match(source, /playerStatsSectionFromHash\(window\.location\.hash\)/)
+		assert.match(source, /document\.getElementById\(`ps-\$\{section\}`\)/)
+		assert.match(source, /element\.scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/)
+		assert.match(source, /attempts >= 20/)
+		assert.match(source, /addEventListener\('hashchange', scheduleHashScroll\)/)
+		assert.match(source, /addEventListener\('popstate', scheduleHashScroll\)/)
+	})
 })

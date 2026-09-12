@@ -261,6 +261,9 @@ it('uses the browser vitals build and the same page for navigation plus follow-u
 	assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
 	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
 	assert.match(readFileSync('scripts/measure-competitions-performance.mjs', 'utf8'), /navigationComplete:/)
+	const homeMeasurement = readFileSync('scripts/measure-home-performance.mjs', 'utf8')
+	assert.doesNotMatch(homeMeasurement, /throttleMobile\(/)
+	assert.match(homeMeasurement, /throttleProfile\(page, profile\)/)
 	for (const name of [
 		'home',
 		'fixtures',

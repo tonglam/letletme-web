@@ -124,7 +124,6 @@ async function measureColdLoad(browser, profile, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	await applySessionCookie(context)
 	const page = await context.newPage()
-	if (profile.slow4g) await throttleMobile(page)
 	let requestCount = 0
 	const routeReady = new Map()
 	page.on('request', request => {

@@ -19,6 +19,7 @@ import { usePlayerStatsPersonalSeed } from './PlayerStatsPersonalSeedContext'
 import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
 import {
 	buildPlayerStatsQueryString,
+	playerStatsSectionFromHash,
 } from './_lib/player-stats-url'
 
 const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
@@ -162,6 +163,42 @@ export default function PlayerStatsClient({
 	}, [deepLinkReady, syncUrl])
 
 	useEffect(() => { setDeepLinkReady(true) }, [deepLinkKey])
+
+	useEffect(() => {
+		if (!deepLinkReady || (initialPlayerIds.p1 != null && !initialDeskSettled)) return
+		let cancelled = false
+		let generation = 0
+		const scheduleHashScroll = () => {
+			const currentGeneration = ++generation
+			const section = playerStatsSectionFromHash(window.location.hash)
+			if (!section) return
+			let attempts = 0
+			const scrollToHashTarget = () => {
+				if (cancelled || currentGeneration !== generation) return
+				const element = document.getElementById(`ps-${section}`)
+				if (element) {
+					window.requestAnimationFrame(() => {
+						if (!cancelled && currentGeneration === generation) {
+							element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+						}
+					})
+					return
+				}
+				if (attempts >= 20) return
+				attempts += 1
+				window.setTimeout(scrollToHashTarget, 50)
+			}
+			scrollToHashTarget()
+		}
+		scheduleHashScroll()
+		window.addEventListener('hashchange', scheduleHashScroll)
+		window.addEventListener('popstate', scheduleHashScroll)
+		return () => {
+			cancelled = true
+			window.removeEventListener('hashchange', scheduleHashScroll)
+			window.removeEventListener('popstate', scheduleHashScroll)
+		}
+	}, [deepLinkReady, initialDeskSettled, initialPlayerIds.p1, deepLinkKey])
 
 	const admitFirstSeed = firstPlayer.admitInitialSeed
 	const admitSecondSeed = secondPlayer.admitInitialSeed
