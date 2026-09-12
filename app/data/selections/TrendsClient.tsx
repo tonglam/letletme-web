@@ -33,6 +33,10 @@ import {
 	trendAvailabilityLabelKey,
 	trendAvailabilityMessageKey
 } from './_lib/trend-availability'
+import {
+	getTrendDisplayRows,
+	TOP_RANK_LIMIT
+} from './_lib/trend-display'
 import type {
 	TrendAccess,
 	TrendCohort,
@@ -59,7 +63,6 @@ type Props = {
 	initialDeskError?: boolean
 }
 
-const TOP_RANK_LIMIT = 12
 const PERSONAL_SQUAD_SIZE = 15
 
 type TrendView =
@@ -192,8 +195,8 @@ function SignalRow({
 	const metric = row.percentage ?? row.count
 	const width =
 		metric != null && Number.isFinite(metric) && maxMetric > 0
-			? Math.max(5, Math.min(100, (metric / maxMetric) * 100))
-			: 5
+			? Math.max(0, Math.min(100, (metric / maxMetric) * 100))
+			: 0
 	return (
 		<li className="group/row grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0 sm:gap-3">
 			<span className="font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
@@ -249,11 +252,7 @@ function SignalCard({
 	const title = t(labelKeys[section.capability] ?? 'unknownCapability')
 	const personalExposure = section.capability === 'PERSONAL_EXPOSURE'
 	const rows = section.rows
-	const displayRows = rows
-		? personalExposure
-			? rows
-			: rows.slice(0, TOP_RANK_LIMIT)
-		: null
+	const displayRows = getTrendDisplayRows(section)
 	const maxMetric = Math.max(
 		1,
 		...(displayRows ?? [])
@@ -330,7 +329,7 @@ function SignalCard({
 						</button>
 					) : null}
 				</div>
-			) : rows.length === 0 ? (
+			) : displayRows?.length === 0 ? (
 				<div className="mt-4 rounded-xl border border-dashed border-border/80 bg-muted/20 p-4 text-sm text-muted-foreground">
 					{t(
 						availability === 'CONFIRMED_EMPTY'
@@ -823,7 +822,8 @@ export default function TrendsClient({
 		]
 		for (const section of committed.sections) {
 			lines.push(t(labelKeys[section.capability] ?? 'title'))
-			if (!section.rows || section.rows.length === 0) {
+			const rows = getTrendDisplayRows(section)
+			if (rows === null || rows.length === 0) {
 				lines.push(t('noData'))
 			} else {
 				lines.push(
@@ -831,16 +831,11 @@ export default function TrendsClient({
 						? t('templatePlayers')
 						: section.capability === 'PERSONAL_EXPOSURE'
 							? t('squadPicks', {
-									shown: section.rows.length,
+									shown: rows.length,
 									expected: PERSONAL_SQUAD_SIZE
 								})
 							: t('topRanked', { count: TOP_RANK_LIMIT })
 				)
-				const rows =
-					section.capability === 'TEMPLATE' ||
-					section.capability === 'PERSONAL_EXPOSURE'
-						? section.rows
-						: section.rows.slice(0, TOP_RANK_LIMIT)
 				for (const row of rows) {
 					const role = row.isCaptain
 						? ` · ${t('roleCaptain')}`
