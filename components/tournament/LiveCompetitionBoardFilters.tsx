@@ -73,6 +73,10 @@ function isSelectionIndexRow(
 		typeof row.position === 'string' &&
 		typeof row.count === 'number' &&
 		Number.isFinite(row.count) &&
+		typeof row.captainCount === 'number' &&
+		Number.isSafeInteger(row.captainCount) &&
+		row.captainCount >= 0 &&
+		row.captainCount <= row.count &&
 		typeof row.percentage === 'number' &&
 		Number.isFinite(row.percentage)
 	)
@@ -118,6 +122,7 @@ const rowToPlayerOption = (
 })
 
 type LivePositionFilter = Position | 'ALL'
+type SelectionIndexStatus = 'loading' | 'ready' | 'unavailable' | 'recovering'
 
 const livePositionOptions: LivePositionFilter[] = [
 	'ALL',
@@ -361,8 +366,9 @@ export function LiveCompetitionBoardFilters({
 	const t = useTranslations('Filters')
 	const liveT = useTranslations('LiveTournament')
 	const [rows, setRows] = useState<TournamentSelectionIndexRow[]>([])
-	const [loading, setLoading] = useState(true)
-	const [loadError, setLoadError] = useState(false)
+	const [selectionIndexStatus, setSelectionIndexStatus] =
+		useState<SelectionIndexStatus>('loading')
+	const [selectionIndexRetryNonce, setSelectionIndexRetryNonce] = useState(0)
 	const [applying, setApplying] = useState(false)
 	const [draft, setDraft] = useState<LiveBoardFilterState>(() =>
 		cloneFilters(value)
@@ -388,8 +394,8 @@ export function LiveCompetitionBoardFilters({
 
 	useEffect(() => {
 		const controller = new AbortController()
-		setLoading(true)
-		setLoadError(false)
+		setSelectionIndexStatus('loading')
+		setRows([])
 		const params = new URLSearchParams({
 			eventId: String(eventId),
 			scoreCoreRevision
@@ -417,6 +423,12 @@ export function LiveCompetitionBoardFilters({
 				if (!Array.isArray(next) || !next.every(isSelectionIndexRow)) {
 					throw new Error('selection-index:invalid')
 				}
+				if (next.length === 0) {
+					setRows([])
+					setSelectionIndexStatus('unavailable')
+					return
+				}
+				setSelectionIndexStatus('ready')
 				setRows(next)
 			})
 			.catch(error => {
@@ -427,20 +439,26 @@ export function LiveCompetitionBoardFilters({
 					requestError.code === 'LIVE_SCORE_REVISION_GONE'
 				) {
 					setRows([])
-					setLoadError(false)
+					setSelectionIndexStatus('recovering')
 					void onRevisionGone?.()
 					return
 				}
 				console.warn('Tournament selection index unavailable', {
 					name: error instanceof Error ? error.name : 'UnknownError'
 				})
-				setLoadError(true)
-			})
-			.finally(() => {
-				if (!controller.signal.aborted) setLoading(false)
+				setSelectionIndexStatus('unavailable')
 			})
 		return () => controller.abort()
-	}, [eventId, onRevisionGone, scoreCoreRevision, tournamentId])
+	}, [
+		eventId,
+		onRevisionGone,
+		scoreCoreRevision,
+		selectionIndexRetryNonce,
+		tournamentId
+	])
+	const selectionIndexLoading =
+		selectionIndexStatus === 'loading' || selectionIndexStatus === 'recovering'
+	const selectionIndexUnavailable = selectionIndexStatus === 'unavailable'
 
 	const selectedOwnerIds = useMemo(
 		() => draft.ownership?.playerIds ?? [],
@@ -454,6 +472,18 @@ export function LiveCompetitionBoardFilters({
 					right.count - left.count ||
 					left.playerName.localeCompare(right.playerName)
 			),
+		[rows]
+	)
+	const captainOptions = useMemo(
+		() =>
+			[...rows]
+				.filter(player => player.captainCount > 0)
+				.sort(
+					(left, right) =>
+						right.captainCount - left.captainCount ||
+						right.count - left.count ||
+						left.playerName.localeCompare(right.playerName)
+				),
 		[rows]
 	)
 	const playersById = useMemo(
@@ -563,9 +593,14 @@ export function LiveCompetitionBoardFilters({
 		commitFilters(next)
 	}
 
-	const addCaptain = () => {
-		const playerId = Number(pendingCaptain)
-		if (!playerId || selectedCaptainIds.has(playerId)) return
+	const addCaptain = (candidate = pendingCaptain) => {
+		const playerId = Number(candidate)
+		if (
+			!playerId ||
+			selectedCaptainIds.has(playerId) ||
+			selectedCaptainIds.size >= 15
+		)
+			return
 		const next = cloneFilters(draft)
 		next.captainPlayerIds = [...next.captainPlayerIds, playerId].slice(0, 15)
 		setPendingCaptain('')
@@ -728,7 +763,7 @@ export function LiveCompetitionBoardFilters({
 							</Badge>
 						) : null}
 					</div>
-					{loading || applying ? (
+					{selectionIndexLoading || applying ? (
 						<span
 							className="text-xs text-muted-foreground"
 							role="status"
@@ -738,10 +773,26 @@ export function LiveCompetitionBoardFilters({
 					) : null}
 				</div>
 
-				{loadError ? (
-					<p className="text-xs text-destructive">
-						{liveT('filterOptionsUnavailable')}
-					</p>
+				{selectionIndexUnavailable ? (
+					<div className="flex flex-wrap items-center gap-2">
+						<p
+							className="text-xs text-destructive"
+							role="alert"
+						>
+							{liveT('filterOptionsUnavailable')}
+						</p>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={controlsDisabled || selectionIndexLoading}
+							onClick={() =>
+								setSelectionIndexRetryNonce(current => current + 1)
+							}
+						>
+							{liveT('refresh')}
+						</Button>
+					</div>
 				) : null}
 
 				<div className="space-y-2 rounded-lg border border-border/60 p-3">
@@ -781,17 +832,21 @@ export function LiveCompetitionBoardFilters({
 
 				<div className="space-y-2 rounded-lg border border-border/60 p-3">
 					<p className="text-sm font-medium">{liveT('filterByCaptain')}</p>
-					<div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+					<div className="grid gap-2">
 						<Select
 							value={pendingCaptain}
-							onValueChange={setPendingCaptain}
-							disabled={controlsDisabled || loading || rows.length === 0}
+							onValueChange={value => addCaptain(value)}
+							disabled={
+								controlsDisabled ||
+								selectionIndexLoading ||
+								captainOptions.length === 0
+							}
 						>
 							<SelectTrigger aria-label={liveT('filterCaptain')}>
 								<SelectValue placeholder={liveT('filterByCaptain')} />
 							</SelectTrigger>
 							<SelectContent className="max-h-72">
-								{playerOptions
+								{captainOptions
 									.filter(player => !selectedCaptainIds.has(player.playerId))
 									.map(player => (
 										<SelectItem
@@ -804,19 +859,6 @@ export function LiveCompetitionBoardFilters({
 									))}
 							</SelectContent>
 						</Select>
-						<Button
-							type="button"
-							variant="outline"
-							disabled={
-								controlsDisabled ||
-								!pendingCaptain ||
-								selectedCaptainIds.size >= 15
-							}
-							onClick={addCaptain}
-						>
-							<Plus className="size-4" />
-							{liveT('addCaptain')}
-						</Button>
 					</div>
 					<div className="flex flex-wrap gap-2">
 						{draft.captainPlayerIds.map(playerId => {
@@ -960,7 +1002,7 @@ export function LiveCompetitionBoardFilters({
 					</div>
 				)}
 
-				{isPlayerPickerOpen ? (
+				{isPlayerPickerOpen && selectionIndexStatus === 'ready' ? (
 					<LiveSelectionPlayerPicker
 						key={`${tournamentId}:${eventId}:${scoreCoreRevision}`}
 						rows={rows}
