@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
@@ -64,18 +64,6 @@ async function applySessionCookie(context) {
 			sameSite: 'Lax'
 		}
 	])
-}
-
-async function throttleMobile(page) {
-	const session = await page.context().newCDPSession(page)
-	await session.send('Network.enable')
-	await session.send('Network.emulateNetworkConditions', {
-		offline: false,
-		latency: 150,
-		downloadThroughput: (1.6 * 1024 * 1024) / 8,
-		uploadThroughput: (750 * 1024) / 8,
-		connectionType: 'cellular4g'
-	})
 }
 
 function fixtureRequestTransport(request) {
@@ -283,10 +271,11 @@ async function measureColdLoad(browser, profile, index) {
 
 async function measureFixtureSwitch(browser, profile) {
 	const context = await browser.newContext({ viewport: profile.viewport })
+	let releaseThrottle
 	try {
 		await applySessionCookie(context)
 		const page = await context.newPage()
-		if (profile.slow4g) await throttleMobile(page)
+		releaseThrottle = profile.slow4g ? await throttleProfile(page, profile) : null
 		let fixtureRequests = 0
 		const fixtureTransports = new Set()
 		page.on('request', request => {
@@ -354,6 +343,7 @@ async function measureFixtureSwitch(browser, profile) {
 			cachedSwitchRequests: fixtureRequests - requestsAfterFirst
 		}
 	} finally {
+		if (releaseThrottle) await releaseThrottle().catch(() => {})
 		await context.close()
 	}
 }
