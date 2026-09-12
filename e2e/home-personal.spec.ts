@@ -71,7 +71,7 @@ async function createSession(
 	}
 }
 
-async function useCookie(page: Page, cookie: string): Promise<void> {
+async function addSessionCookie(page: Page, cookie: string): Promise<void> {
 	const separator = cookie.indexOf('=')
 	await page.context().addCookies([
 		{
@@ -108,7 +108,7 @@ test('guest Home renders without reserving or hydrating personal content', async
 test('an invalid session cookie degrades to the public Home instead of 500', async ({
 	page
 }) => {
-	await useCookie(
+	await addSessionCookie(
 		page,
 		'__Secure-letletme.session_token=invalid-cookie-signature'
 	)
@@ -123,7 +123,7 @@ test('a verified session without an FPL binding gets the existing bind prompt', 
 }) => {
 	const session = await createSession()
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		const response = await page.goto('/')
 		expect(response?.headers()['cache-control']).toContain('private')
 		await expect(
@@ -144,7 +144,7 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 }) => {
 	const session = await createSession({ entryId: 15702 })
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.goto('/')
 		const main = page.locator('#main-content')
 		await expect(main.getByText('E2E United')).toBeVisible()
@@ -221,10 +221,11 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 		}
 	})
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.goto('/explore/fixtures')
 
 		await expect(page.locator('[data-page-fdr-legend="true"]')).toHaveCount(1)
+		await page.locator('#my-squad summary').click()
 		const pitch = page.locator('[data-schedule-pitch="true"]')
 		await expect(pitch).toBeVisible()
 		const initialRequestCount = fixtureWindowRequests.length
@@ -273,7 +274,7 @@ test('the server-rendered signed navigation logs out through a same-origin POST'
 }) => {
 	const session = await createSession({ entryId: 15702 })
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.goto('/')
 		const navigation = page.getByRole('navigation')
 		await navigation.getByText('E2E Manager', { exact: true }).first().click()
@@ -310,7 +311,7 @@ test('the no-JavaScript sign-out fallback preserves the Chinese locale', async (
 	})
 	const page = await context.newPage()
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.goto('/zh-CN')
 		const navigation = page.getByRole('navigation')
 		await navigation.getByText('E2E Manager', { exact: true }).first().click()
@@ -333,7 +334,7 @@ test('the signed account disclosure closes on profile navigation', async ({
 }) => {
 	const session = await createSession({ entryId: 15702 })
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.goto('/')
 		const navigation = page.getByRole('navigation')
 		const accountDisclosure = navigation
@@ -358,7 +359,7 @@ test('a failed navbar sign-out stays in the app with a visible error', async ({
 }) => {
 	const session = await createSession({ entryId: 15702 })
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.route('**/api/session/logout', route =>
 			route.fulfill({
 				status: 502,
@@ -390,7 +391,7 @@ test('personal GraphQL failures preserve the Home shell and unavailable states',
 }) => {
 	const session = await createSession({ entryId: 909090 })
 	try {
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		const response = await page.goto('/')
 		expect(response?.status()).toBe(200)
 		const main = page.locator('#main-content')
@@ -414,7 +415,7 @@ test('Home league ranks never start an H2H polling request', async ({
 	})
 	try {
 		await page.clock.install()
-		await useCookie(page, session.cookie)
+		await addSessionCookie(page, session.cookie)
 		await page.goto('/')
 		await expect(page.locator('[data-home-league-ranks-ready]')).toBeVisible()
 		await page.clock.fastForward(61_000)
@@ -495,4 +496,187 @@ test('get-session exposes privacy-safe stage timings', async ({ request }) => {
 	expect(serverTiming).toContain('auth_session;dur=')
 	expect(serverTiming).toContain('auth_database;dur=')
 	expect(serverTiming).toContain('auth_total;dur=')
+})
+
+// These scenarios change the isolated GraphQL fixture and must run with one worker.
+test.describe('SSR remediation', () => {
+	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Run the fixture-control suite separately with one worker')
+	test.describe.configure({ mode: 'serial' })
+	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+	type Observation = { operation: string; variables: Record<string, unknown>; startedAt: number; finishedAt: number | null; abortedAt: number | null }
+	async function control(rules: unknown[] = [], reset = true) {
+		const response = await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules, reset }) })
+		expect(response.ok).toBe(true)
+	}
+	async function observations(): Promise<Observation[]> {
+		return (await (await fetch(fixture)).json()).requests
+	}
+	test.afterEach(async () => { await control() })
+
+	for (const pathname of ['/explore/fixtures', '/explore/price-predictions']) {
+		test(`${pathname} keeps the public table interactive during the total squad budget`, async ({ page }, testInfo) => {
+			const session = await createSession({ entryId: 15702 })
+			await control([
+				{ operation: 'GetEntryHistory', delayMs: 3500 },
+				{ operation: 'GetEntryEventResult', delayMs: 3500 },
+				{ operation: 'GetFixturePlanningSignals', delayMs: 4500 },
+				{ operation: 'GetFixturePlanningOwnershipGameweek', delayMs: 4500 }
+			])
+			try {
+				await addSessionCookie(page, session.cookie)
+				await page.goto(pathname, { waitUntil: 'commit' })
+				const squad = page.locator('#my-squad')
+				await expect(squad).toBeVisible()
+				await expect(squad).not.toHaveAttribute('open', '')
+				await squad.locator('summary').click()
+				await expect(squad).toContainText('Loading your squad')
+				if (pathname.includes('fixtures')) {
+					await page.getByRole('button', { name: 'Hardest first', exact: true }).click()
+					await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
+				} else {
+					await page.locator('#price-change-search').fill('Saka')
+					await expect(page.locator('#price-change-search')).toHaveValue('Saka')
+				}
+				const before = await observations()
+				expect(before.find(row => row.operation === 'GetEntryHistory')?.finishedAt).toBeNull()
+				await expect(squad.getByRole('button', { name: 'Refresh and retry' })).toBeVisible({ timeout: 6500 })
+				await expect(squad).toHaveAttribute('open', '')
+				if (pathname.includes('fixtures')) await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
+				else await expect(page.locator('#price-change-search')).toHaveValue('Saka')
+				await expect.poll(async () => (await observations()).find(row => row.operation === 'GetEntryEventResult')?.abortedAt).toBeTruthy()
+				const after = await observations()
+				expect(after.filter(row => row.operation === 'GetEntryEventResult')).toHaveLength(1)
+				const history = after.find(row => row.operation === 'GetEntryHistory')!
+				const event = after.find(row => row.operation === 'GetEntryEventResult')!
+				expect(event.abortedAt! - history.startedAt).toBeLessThan(5600)
+				await testInfo.attach('squad-request-timeline', { body: JSON.stringify(after, null, 2), contentType: 'application/json' })
+				await page.screenshot({ path: testInfo.outputPath('public-ready-squad-timeout.png'), fullPage: true })
+			} finally { await session.cleanup() }
+		})
+
+		test(`${pathname} preserves filtering and expansion after a successful late seed`, async ({ page }) => {
+			const session = await createSession({ entryId: 15702 })
+			await control([{ operation: 'GetEntryHistory', delayMs: 2000 }])
+			try {
+				await addSessionCookie(page, session.cookie)
+				await page.goto(`${pathname}#my-squad`, { waitUntil: 'commit' })
+				await expect(page.locator('#my-squad')).toHaveAttribute('open', '')
+				await expect(page.locator('#my-squad')).toContainText('Loading your squad')
+				if (pathname.includes('fixtures')) await page.getByRole('button', { name: 'Hardest first', exact: true }).click()
+				else await page.locator('#price-change-search').fill('Saka')
+				await expect(page.locator('#my-squad')).not.toContainText('Loading your squad', { timeout: 5000 })
+				await expect(page.locator('#my-squad [role=\"listitem\"]')).not.toHaveCount(0)
+				if (pathname.includes('fixtures')) await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
+				else await expect(page.locator('#price-change-search')).toHaveValue('Saka')
+			} finally { await session.cleanup() }
+		})
+	}
+
+	test('anonymous, unbound and invalid sessions do not issue squad history queries', async ({ page }) => {
+		const session = await createSession()
+		try {
+			for (const cookie of [null, session.cookie, '__Secure-letletme.session_token=invalid-signature']) {
+				await page.context().clearCookies()
+				if (cookie) await addSessionCookie(page, cookie)
+				await control()
+				await page.goto('/explore/price-predictions#my-squad')
+				await expect(page.locator('#my-squad')).not.toContainText('Loading your squad')
+				expect((await observations()).filter(row => row.operation === 'GetEntryHistory')).toEqual([])
+			}
+		} finally { await session.cleanup() }
+	})
+
+	test('slow display session leaves the same theme, language and mobile menu nodes usable', async ({ page }) => {
+		const session = await createSession({ entryId: 15702 })
+		const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+		let unlock!: () => void
+		let locked!: () => void
+		const acquired = new Promise<void>(resolve => { locked = resolve })
+		const gate = new Promise<void>(resolve => { unlock = resolve })
+		const transaction = sql.begin(async tx => {
+			await tx`LOCK TABLE bauth.session IN ACCESS EXCLUSIVE MODE`
+			locked()
+			await gate
+		})
+		try {
+			await acquired
+			await addSessionCookie(page, session.cookie)
+			await page.setViewportSize({ width: 390, height: 844 })
+			await page.goto('/explore/fixtures', { waitUntil: 'commit' })
+			const theme = page.locator('[data-theme-picker]')
+			await expect(theme).not.toHaveAttribute('inert', '', { timeout: 3000 })
+			await page.evaluate(() => {
+				for (const selector of ['[data-theme-picker]', '[data-locale-picker]', '[data-navigation-mobile]']) document.querySelector(selector)!.setAttribute('data-original-node', 'true')
+			})
+			await theme.locator('summary').click()
+			await theme.locator('[data-theme-choice="dark"]').click()
+			await expect(page.locator('html')).toHaveClass(/dark/)
+			await page.locator('[data-navigation-mobile] > summary').click()
+			await expect(page.locator('[data-navigation-mobile]')).toHaveAttribute('open', '')
+			unlock()
+			await transaction
+			await expect(page.locator('[data-navigation-mobile]')).toContainText('E2E Manager')
+			await expect(page.locator('[data-original-node="true"]')).toHaveCount(3)
+			await theme.locator('summary').click()
+			await theme.locator('[data-theme-choice="light"]').click()
+			await expect(page.locator('html')).not.toHaveClass(/dark/)
+		} finally { unlock(); await transaction; await sql.end(); await session.cleanup() }
+	})
+
+	test('MINE Trends never shares cache entries between two verified users', async ({ request }) => {
+		const sessions = await Promise.all([createSession({ entryId: 15702 }), createSession({ entryId: 31056 })])
+		await control()
+		try {
+			for (const session of sessions) {
+				for (let visit = 0; visit < 2; visit++) {
+					const response = await request.get('/explore/selections?cohort=competition:778&gw=21', { headers: { Cookie: session.cookie } })
+					expect(response.status()).toBe(200)
+				}
+			}
+			const rows = await observations()
+			expect(rows.filter(row => row.operation === 'TrendCohortSnapshot' && row.variables.access === 'MINE' && row.variables.eventId === 21)).toHaveLength(4)
+			expect(rows.filter(row => row.operation === 'TrendCohorts' && row.variables.access === 'MINE')).toHaveLength(4)
+		} finally { await Promise.all(sessions.map(session => session.cleanup())) }
+	})
+
+	test('PUBLIC Trends reuses actual upstream reads across signature times and coalesces cold parameters', async ({ request }, testInfo) => {
+		await control([{ operation: 'TrendCohortSnapshot', variables: { eventId: 17 }, delayMs: 1000 }])
+		const url = '/explore/selections?cohort=competition:777&gw=17'
+		const responses = await Promise.all([request.get(url), request.get(url), request.get(url)])
+		for (const response of responses) expect(response.status()).toBe(200)
+		let reads = (await observations()).filter(row => row.operation === 'TrendCohortSnapshot' && row.variables.eventId === 17)
+		expect(reads).toHaveLength(1)
+		await new Promise(resolve => setTimeout(resolve, 1100))
+		await request.get(url)
+		reads = (await observations()).filter(row => row.operation === 'TrendCohortSnapshot' && row.variables.eventId === 17)
+		expect(reads).toHaveLength(1)
+		await request.get('/explore/selections?cohort=competition:777&gw=18')
+		expect((await observations()).filter(row => row.operation === 'TrendCohortSnapshot' && row.variables.eventId === 18)).toHaveLength(1)
+		await control([{ operation: 'TrendCohortSnapshot', variables: { eventId: 19 }, error: true }], false)
+		await request.get('/explore/selections?gw=19')
+		await control([], false)
+		await request.get('/explore/selections?gw=19')
+		expect((await observations()).filter(row => row.operation === 'TrendCohortSnapshot' && row.variables.eventId === 19)).toHaveLength(2)
+		await testInfo.attach('trends-cache-reads', { body: JSON.stringify(await observations(), null, 2), contentType: 'application/json' })
+	})
+})
+
+test('canonical competition board and compatibility redirect preserve the committed selection', async ({ page, request }) => {
+	const session = await createSession({ entryId: 15702 })
+	try {
+	await addSessionCookie(page, session.cookie)
+	const redirect = await request.get('/live/competitions/6?gw=1&created=1', { maxRedirects: 0, headers: { Cookie: session.cookie } })
+	expect([307, 308]).toContain(redirect.status())
+	const target = new URL(redirect.headers().location, 'http://localhost')
+	expect(target.pathname).toBe('/live/competitions')
+	expect(target.searchParams.get('tournamentId')).toBe('6')
+	expect(target.searchParams.get('gw')).toBe('1')
+	expect(target.searchParams.get('created')).toBe('1')
+	await page.goto(target.pathname + target.search)
+	await expect(page).toHaveURL(/\/live\/competitions\?/)
+	const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+	await expect(board).toBeVisible()
+	await expect(board.getByRole('table')).toBeVisible()
+	await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
+	} finally { await session.cleanup() }
 })

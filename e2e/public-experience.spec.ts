@@ -837,3 +837,41 @@ test('sign-in page has no detectable accessibility violations', async ({
 	const accessibility = await new AxeBuilder({ page }).analyze()
 	expect(accessibility.violations).toEqual([])
 })
+
+
+test('the shared collector reports session-window CLS and missing navigation interaction as null', async ({ page }) => {
+	const { installVitals } = await import('../scripts/performance-metrics.mjs')
+	await installVitals(page)
+	await page.addInitScript(() => {
+		const observed = { sum: 0, max: 0 }
+		Object.assign(window, { testShifts: observed })
+		new PerformanceObserver(list => {
+			for (const item of list.getEntries()) {
+				const entry = item as PerformanceEntry & { hadRecentInput: boolean; value: number }
+				if (!entry.hadRecentInput) { observed.sum += entry.value; observed.max = Math.max(observed.max, entry.value) }
+			}
+		}).observe({ type: 'layout-shift', buffered: true })
+	})
+	await page.route('**/__collector-test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Collector test</title><div id="target" style="width:80vw;height:200px;background:#086">Stable visible content</div>' }))
+	await page.goto('/__collector-test')
+	await page.waitForTimeout(300)
+	await page.evaluate(() => { document.getElementById('target')!.style.marginTop = '100px' })
+	await page.waitForTimeout(1300)
+	await page.evaluate(() => { document.getElementById('target')!.style.marginTop = '0px' })
+	await page.waitForTimeout(300)
+	const result = await page.evaluate(() => {
+		const state = window as unknown as { __performanceMetrics: { cls: number; inp: number | null }; testShifts: { sum: number; max: number } }
+		return { ...state.__performanceMetrics, ...state.testShifts }
+	})
+	expect(result.sum).toBeGreaterThan(result.max)
+	expect(result.cls).toBeCloseTo(result.max, 5)
+	expect(result.inp).toBeNull()
+})
+
+
+test('anonymous competition redirects cannot be counted as successful content measurements', async ({ browser, baseURL }) => {
+	const { measureNavigation } = await import('../scripts/performance-metrics.mjs')
+	const sample = await measureNavigation(browser, { name: 'desktop', viewport: { width: 1440, height: 900 } }, `${baseURL}/live/competitions?tournamentId=6`)
+	expect(sample.error).toContain('Unexpected response or redirect')
+	expect(sample.readyMs).toBeNull()
+})

@@ -140,7 +140,7 @@ const playerDetail = playerId => {
 		pickerPlayers.find(candidate => candidate.id === playerId) ??
 		pickerPlayers[0]
 	return {
-		id: player.id,
+		id: playerId,
 		webName: player.webName,
 		teamShortName: player.team.shortName,
 		elementType: 3,
@@ -553,7 +553,28 @@ const liveScore = (eventPoints = 22, revision = 'a'.repeat(64)) => ({
 
 let recoveryEntryRequestCount = 0
 
+// Isolated fixture controls: never part of the Web production server.
+let performanceRules = []
+let performanceRequests = []
 const server = createServer((request, response) => {
+	if (request.url === '/__performance' && request.method === 'GET') {
+		json(response, 200, { requests: performanceRequests })
+		return
+	}
+	if (request.url === '/__performance' && request.method === 'POST') {
+		let body = ''
+		request.setEncoding('utf8')
+		request.on('data', chunk => { body += chunk })
+		request.on('end', () => {
+			try {
+				const control = JSON.parse(body)
+				performanceRules = control.rules ?? []
+				if (control.reset !== false) performanceRequests = []
+				json(response, 200, { ok: true })
+			} catch { json(response, 400, { error: 'Invalid fixture control' }) }
+		})
+		return
+	}
 	if (request.method === 'GET' && request.url === '/health') {
 		json(response, 200, { ok: true })
 		return
@@ -568,7 +589,7 @@ const server = createServer((request, response) => {
 	request.on('data', chunk => {
 		raw += chunk
 	})
-	request.on('end', () => {
+	request.on('end', async () => {
 		let query = ''
 		let variables = {}
 		try {
@@ -580,6 +601,26 @@ const server = createServer((request, response) => {
 					: {}
 		} catch {
 			json(response, 400, { errors: [{ message: 'Invalid JSON' }] })
+			return
+		}
+
+		const operation = query.match(/(?:query|mutation)\s+(\w+)/)?.[1] ?? 'anonymous'
+		const observation = { operation, variables, startedAt: Date.now(), finishedAt: null, abortedAt: null }
+		performanceRequests.push(observation)
+		response.once('finish', () => { observation.finishedAt = Date.now() })
+		response.once('close', () => { if (!response.writableFinished) observation.abortedAt = Date.now() })
+		const rule = performanceRules.find(rule =>
+			operation === rule.operation && Object.entries(rule.variables ?? {}).every(([key, value]) => JSON.stringify(variables[key]) === JSON.stringify(value))
+		)
+		if (rule?.delayMs) {
+			await new Promise(resolve => {
+				const timer = setTimeout(resolve, rule.delayMs)
+				response.once('close', () => { clearTimeout(timer); resolve() })
+			})
+			if (response.destroyed) return
+		}
+		if (rule?.error) {
+			json(response, 200, { errors: [{ message: 'Injected fixture failure' }] })
 			return
 		}
 
@@ -1168,11 +1209,13 @@ const server = createServer((request, response) => {
 					trendCohorts: {
 						season: '2627',
 						revision: 'e2e-trends-catalog-v1',
+						state: 'PUBLISHED',
+						sourceCheckedAt: '2026-08-13T09:40:00.000Z',
 						cohorts: [
 							{
-								id: 'competition:777',
+								id: variables.access === 'MINE' ? 'competition:778' : 'competition:777',
 								kind: 'TRACKED_OFFICIAL_COMPETITION',
-								access: 'PUBLIC',
+								access: variables.access === 'MINE' ? 'MINE' : 'PUBLIC',
 								displayName: 'E2E Public League',
 								setupStatus: 'READY',
 								exact: true,
@@ -1198,7 +1241,7 @@ const server = createServer((request, response) => {
 			const cohort = {
 				id: String(variables.cohortId || 'competition:777'),
 				kind: 'TRACKED_OFFICIAL_COMPETITION',
-				access: 'PUBLIC',
+				access: variables.access === 'MINE' ? 'MINE' : 'PUBLIC',
 				displayName: 'E2E Public League',
 				setupStatus: 'READY',
 				exact: true,

@@ -148,6 +148,14 @@ jobs:
           E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+      - name: SSR slow-dependency and cache isolation E2E
+        run: npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts --grep 'SSR remediation|SSR detail stream' --workers=1
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+          E2E_SSR_REMEDIATION: '1'
       - name: Live match hydration E2E
         run: npm run test:e2e:hydration
         env:
