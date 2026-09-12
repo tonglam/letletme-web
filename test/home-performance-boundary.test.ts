@@ -37,6 +37,14 @@ const bindEntry = readFileSync(
 	'app/onboarding/bind-entry/BindEntryForm.tsx',
 	'utf8'
 )
+const fixturesClient = readFileSync(
+	'app/data/fixtures/FixturesClient.tsx',
+	'utf8'
+)
+const tournamentClient = readFileSync(
+	'app/live/tournaments/TournamentClient.tsx',
+	'utf8'
+)
 
 describe('Home first-screen performance boundary', () => {
 	it('starts the revision-pinned public bootstrap before child rendering', () => {
@@ -206,6 +214,21 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(proxy, /private, no-store, no-transform/)
 	})
 
+	it('keeps the optional squad seed pending until its read resolves', () => {
+		assert.doesNotMatch(fixturesClient, /squad\?\.state \?\? 'unavailable'/)
+		assert.match(
+			fixturesClient,
+			/squad == null \? \(\s*t\('squadLoading'\)\s*\) : squadState === 'unavailable'/
+		)
+	})
+
+	it('does not publish a canonical competition ready marker for a last-good board', () => {
+		assert.match(
+			tournamentClient,
+			/competitionBoardReady = Boolean\([\s\S]*?standingsReady &&\s*!showingLastGood &&/
+		)
+	})
+
 	it('measures concurrent Home completion after consuming every response stream', () => {
 		const measurement = readFileSync(
 			'scripts/measure-home-performance.mjs',
@@ -246,8 +269,8 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	assert.equal(isProductionMeasurementUrl('http://localhost:3200/explore/fixtures'), false)
 })
 
-it('uses the browser vitals build and the same page for navigation plus follow-up probes', () => {
-	const metrics = readFileSync('scripts/performance-metrics.mjs', 'utf8')
+	it('uses the browser vitals build and the same page for navigation plus follow-up probes', () => {
+		const metrics = readFileSync('scripts/performance-metrics.mjs', 'utf8')
 	assert.match(metrics, /web-vitals\.iife\.js/)
 	assert.match(metrics, /globalThis\.webVitals = webVitals/)
 	assert.match(metrics, /options\.page\?\.context\(\)/)
@@ -257,8 +280,11 @@ it('uses the browser vitals build and the same page for navigation plus follow-u
 	assert.match(metrics, /finishLongTaskObservation\(page\)/)
 	assert.match(metrics, /requests: requests\.slice\(\)/)
 	assert.match(metrics, /page\.off\('requestfinished'/)
-	assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
-	assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
+		assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
+		assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
+		assert.match(metrics, /observationTask = \(async \(\) =>/)
+		assert.match(metrics, /cancelObservation\?\.\(timeoutError\)/)
+		assert.match(metrics, /await observationTask\?\.catch\(\(\) => \{\}\)/)
 	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
 	assert.match(readFileSync('scripts/measure-competitions-performance.mjs', 'utf8'), /navigationComplete:/)
 	const homeMeasurement = readFileSync('scripts/measure-home-performance.mjs', 'utf8')

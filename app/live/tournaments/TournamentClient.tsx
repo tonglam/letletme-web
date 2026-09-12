@@ -1325,6 +1325,7 @@ export default function TournamentClient({
 
 	const competitionBoardReady = Boolean(
 		selectedTournament && selectionRestoreComplete && standingsReady &&
+		!showingLastGood &&
 		(selectedTournamentIsOfficialH2H
 			? officialH2HReady && officialH2HReadyScopeKey === scopeKey
 			: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)

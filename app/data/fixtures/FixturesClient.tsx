@@ -384,7 +384,10 @@ export default function FixturesClient({
 	const { squad, market: marketSignals } = useFixturesSeed()
 	const mySquadPicks = useMemo(() => squad?.picks ?? [], [squad])
 	const mySquadKeys = useMemo(() => squadPickKeys(mySquadPicks), [mySquadPicks])
-	const squadState = squad?.state ?? 'unavailable'
+	// Keep the unresolved seed distinct from a completed, unavailable read. The
+	// public actions area must not claim that a linked squad failed while the
+	// optional personal request is still pending.
+	const squadState = squad?.state
 	const hasLinkedEntry = squad != null && squad.state !== 'unbound'
 	const [squadOpen, setSquadOpen] = useState(false)
 	useEffect(() => {
@@ -902,7 +905,9 @@ export default function FixturesClient({
 							</div>
 							{squadKeySet.size === 0 ? (
 								<p className="max-w-sm text-caption leading-4 text-muted-foreground">
-									{squadState === 'unavailable' ? (
+									{squad == null ? (
+										t('squadLoading')
+									) : squadState === 'unavailable' ? (
 										t('actionsMySquadLoadFailed')
 									) : squadState === 'not-published' ? (
 										t('mySquadNotPublished')

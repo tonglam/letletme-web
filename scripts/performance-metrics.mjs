@@ -149,15 +149,31 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 	const sample = { ...performanceMetadata(), browserVersion: browser.version(), profile: profile.name, viewport: profile.viewport, cpuRate: profile.name === 'mobile' ? 4 : 1, network: profile.name === 'mobile' ? '150ms RTT / 1.6Mbps down / 750Kbps up' : 'unthrottled', browserCache: options.browserCache ?? 'cold', serverCache: options.serverCache ?? 'uncontrolled', url: String(url), phase: 'navigation', status: null, readyMs: null, lcpMs: null, cls: null, inpMs: null, fcpMs: null, ttfbMs: null, htmlResponseMs: null, observedLongTaskBlockingMs: null, error: null }
 	let timer
 	let releaseThrottle
+	let observationTask
+	let observationFinished = false
+	let cancelObservation
+	const observationCancelled = new Promise((_, reject) => {
+		cancelObservation = reject
+	})
+	const awaitObservation = promise =>
+		Promise.race([promise, observationCancelled])
 	try {
-		await Promise.race([
-			(async () => {
-				await page.exposeBinding('__capturePerformanceMetric', (_, metric) => { if (metric.documentUrl !== 'about:blank') latest = metric })
-				await installVitals(page)
-				releaseThrottle = await throttleProfile(page, profile)
+		observationTask = (async () => {
+			try {
+				await awaitObservation(
+					page.exposeBinding('__capturePerformanceMetric', (_, metric) => {
+						if (metric.documentUrl !== 'about:blank') latest = metric
+					})
+				)
+				await awaitObservation(installVitals(page))
+				releaseThrottle = await awaitObservation(
+					throttleProfile(page, profile)
+				)
 				const target = new URL(url)
 				target.searchParams.set('_perfSource', 'synthetic')
-				const response = await page.goto(target.href, { waitUntil: 'commit' })
+				const response = await awaitObservation(
+					page.goto(target.href, { waitUntil: 'commit' })
+				)
 				options.onResponse?.(response)
 				sample.status = response?.status() ?? null
 				sample.releaseSha = response?.headers()['x-letletme-release'] ?? null
@@ -167,36 +183,106 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				if (sample.status !== 200 || actual.pathname !== target.pathname || (target.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== target.searchParams.get('tournamentId'))) throw new Error('Unexpected response or redirect')
 				const metric = options.readyMetric ?? readyMetricFor(url)
 				if (metric) {
-					await page.waitForFunction(name => typeof window.__performanceMetrics?.ready?.[name] === 'number', metric)
-					sample.readyMs = await page.evaluate(name => window.__performanceMetrics.ready[name], metric)
+					await awaitObservation(
+						page.waitForFunction(
+							name =>
+								typeof window.__performanceMetrics?.ready?.[name] ===
+								'number',
+							metric
+						)
+					)
+					sample.readyMs = await awaitObservation(
+						page.evaluate(
+							name => window.__performanceMetrics.ready[name],
+							metric
+						)
+					)
 				} else {
-					await page.locator('[data-letletme-contract="price_changes"][data-status="READY"]').waitFor({ state: 'attached' })
-					await page.locator('#price-change-search').waitFor({ state: 'visible' })
-					sample.readyMs = await page.evaluate(() => performance.now())
+					await awaitObservation(
+						page
+							.locator(
+								'[data-letletme-contract="price_changes"][data-status="READY"]'
+							)
+							.waitFor({ state: 'attached' })
+					)
+					await awaitObservation(
+						page.locator('#price-change-search').waitFor({ state: 'visible' })
+					)
+					sample.readyMs = await awaitObservation(
+						page.evaluate(() => performance.now())
+					)
 				}
 				if (target.pathname.endsWith('/live/competitions') && options.requireCompetitionMarker !== false) {
-					await page.locator(`[data-competition-perf-ready="detail"][data-competition-tournament-id="${target.searchParams.get('tournamentId')}"]`).waitFor({ state: 'visible' })
+					await awaitObservation(
+						page
+							.locator(
+								`[data-competition-perf-ready="detail"][data-competition-tournament-id="${target.searchParams.get('tournamentId')}"]`
+							)
+							.waitFor({ state: 'visible' })
+					)
 				}
-				await page.waitForTimeout(5_000)
-				const details = await page.evaluate(ownsNavigationPage => {
-					if (ownsNavigationPage) window.__finishLongTaskObservation?.()
-					else window.__snapshotLongTaskObservation?.()
-					const nav = performance.getEntriesByType('navigation')[0]
-					return { endMs: performance.now(), htmlResponseMs: nav?.responseEnd || null, loadMs: nav?.loadEventEnd || null, horizontalOverflow: document.documentElement.scrollWidth > innerWidth, resources: performance.getEntriesByType('resource').map(r => ({ path: new URL(r.name).pathname, initiatorType: r.initiatorType, startTime: r.startTime, responseEnd: r.responseEnd, transferSize: r.transferSize, encodedBodySize: r.encodedBodySize, decodedBodySize: r.decodedBodySize })), metrics: window.__performanceMetrics }
-				}, ownsPage)
+				await awaitObservation(page.waitForTimeout(5_000))
+				const details = await awaitObservation(
+					page.evaluate(ownsNavigationPage => {
+						if (ownsNavigationPage) window.__finishLongTaskObservation?.()
+						else window.__snapshotLongTaskObservation?.()
+						const nav = performance.getEntriesByType('navigation')[0]
+						return {
+							endMs: performance.now(),
+							htmlResponseMs: nav?.responseEnd || null,
+							loadMs: nav?.loadEventEnd || null,
+							horizontalOverflow:
+								document.documentElement.scrollWidth > innerWidth,
+							resources: performance
+								.getEntriesByType('resource')
+								.map(r => ({
+									path: new URL(r.name).pathname,
+									initiatorType: r.initiatorType,
+									startTime: r.startTime,
+									responseEnd: r.responseEnd,
+									transferSize: r.transferSize,
+									encodedBodySize: r.encodedBodySize,
+									decodedBodySize: r.decodedBodySize
+								})),
+							metrics: window.__performanceMetrics
+						}
+					}, ownsPage)
+				)
 				latest = details.metrics
 				delete details.metrics
 				Object.assign(sample, details)
-				if (options.screenshot) await page.screenshot({ path: options.screenshot, fullPage: true })
+				if (options.screenshot)
+					await awaitObservation(
+						page.screenshot({ path: options.screenshot, fullPage: true })
+					)
 				if (ownsPage) await releaseThrottle?.()
-				if (ownsPage) await page.goto('about:blank', { waitUntil: 'commit' })
-			})(),
-				new Promise((_, reject) => { timer = setTimeout(() => { if (ownsPage) void page.close(); reject(new Error('Navigation observation exceeded 30000ms')) }, 30_000) })
+				if (ownsPage)
+					await awaitObservation(
+						page.goto('about:blank', { waitUntil: 'commit' })
+					)
+			} finally {
+				observationFinished = true
+			}
+		})()
+		await Promise.race([
+			observationTask,
+			new Promise((_, reject) => {
+				timer = setTimeout(() => {
+					if (observationFinished) return
+					const timeoutError = new Error(
+						'Navigation observation exceeded 30000ms'
+					)
+					cancelObservation?.(timeoutError)
+					if (ownsPage) void page.close()
+					reject(timeoutError)
+				}, 30_000)
+			})
 		])
 	} catch (error) {
 		sample.error = error.message
 	} finally {
 		clearTimeout(timer)
+		await observationTask?.catch(() => {})
 		page.off('pageerror', onPageError)
 		page.off('requestfinished', onRequestFinished)
 		if (ownsPage) await page.close().catch(() => {})
