@@ -1,4 +1,4 @@
-import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -353,6 +353,7 @@ async function measureRun(browser, profile, scenario, index) {
 		scenario.name === 'directory'
 			? await runSamePageInteractions(page, telemetry)
 			: []
+	await finishLongTaskObservation(page)
 	const values = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {

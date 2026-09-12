@@ -1,4 +1,4 @@
-import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -131,6 +131,7 @@ async function measureRun(browser, profile, index) {
 		availabilityRequestCount = marketRequestCount - beforeAvailability
 	}
 
+	await finishLongTaskObservation(page)
 	const final = await page.evaluate(() => ({
 		observedSessionCls: window.__marketPerformance?.cls ?? null,
 		phase: 'interaction',

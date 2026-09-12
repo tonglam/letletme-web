@@ -63,6 +63,7 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 			const add = entries => { for (const entry of entries) state.observedLongTaskBlockingMs += Math.max(0, entry.duration - 50) }
 			const observer = new PerformanceObserver(list => { add(list.getEntries()); notify() })
 			observer.observe({ type: 'longtask', buffered: true })
+			window.__snapshotLongTaskObservation = () => { add(observer.takeRecords()) }
 			window.__finishLongTaskObservation = () => { add(observer.takeRecords()); observer.disconnect() }
 		}
 		if (!captureTelemetry) return
@@ -108,6 +109,10 @@ export async function throttleProfile(page, profile) {
 	}
 }
 
+export async function finishLongTaskObservation(page) {
+	await page.evaluate(() => window.__finishLongTaskObservation?.())
+}
+
 export function readyMetricFor(url) {
 	const parsed = new URL(url)
 	const pathname = parsed.pathname
@@ -134,11 +139,13 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 	page.setDefaultTimeout(30_000)
 	let latest = {}
 	const errors = []
-	page.on('pageerror', error => errors.push(error.message))
+	const onPageError = error => errors.push(error.message)
+	page.on('pageerror', onPageError)
 	const requests = []
-	page.on('requestfinished', request => {
+	const onRequestFinished = request => {
 		requests.push({ path: new URL(request.url()).pathname, type: request.resourceType(), method: request.method(), timing: request.timing() })
-	})
+	}
+	page.on('requestfinished', onRequestFinished)
 	const sample = { ...performanceMetadata(), browserVersion: browser.version(), profile: profile.name, viewport: profile.viewport, cpuRate: profile.name === 'mobile' ? 4 : 1, network: profile.name === 'mobile' ? '150ms RTT / 1.6Mbps down / 750Kbps up' : 'unthrottled', browserCache: options.browserCache ?? 'cold', serverCache: options.serverCache ?? 'uncontrolled', url: String(url), phase: 'navigation', status: null, readyMs: null, lcpMs: null, cls: null, inpMs: null, fcpMs: null, ttfbMs: null, htmlResponseMs: null, observedLongTaskBlockingMs: null, error: null }
 	let timer
 	let releaseThrottle
@@ -171,11 +178,12 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 					await page.locator(`[data-competition-perf-ready="detail"][data-competition-tournament-id="${target.searchParams.get('tournamentId')}"]`).waitFor({ state: 'visible' })
 				}
 				await page.waitForTimeout(5_000)
-				const details = await page.evaluate(() => {
-					window.__finishLongTaskObservation?.()
+				const details = await page.evaluate(ownsNavigationPage => {
+					if (ownsNavigationPage) window.__finishLongTaskObservation?.()
+					else window.__snapshotLongTaskObservation?.()
 					const nav = performance.getEntriesByType('navigation')[0]
 					return { endMs: performance.now(), htmlResponseMs: nav?.responseEnd || null, loadMs: nav?.loadEventEnd || null, horizontalOverflow: document.documentElement.scrollWidth > innerWidth, resources: performance.getEntriesByType('resource').map(r => ({ path: new URL(r.name).pathname, initiatorType: r.initiatorType, startTime: r.startTime, responseEnd: r.responseEnd, transferSize: r.transferSize, encodedBodySize: r.encodedBodySize, decodedBodySize: r.decodedBodySize })), metrics: window.__performanceMetrics }
-				})
+				}, ownsPage)
 				latest = details.metrics
 				delete details.metrics
 				Object.assign(sample, details)
@@ -189,10 +197,12 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 		sample.error = error.message
 	} finally {
 		clearTimeout(timer)
+		page.off('pageerror', onPageError)
+		page.off('requestfinished', onRequestFinished)
 		if (ownsPage) await page.close().catch(() => {})
 		if (ownContext) await context.close()
 	}
-	Object.assign(sample, { lcpMs: latest.lcp ?? null, cls: latest.cls ?? null, inpMs: latest.inp ?? null, fcpMs: latest.fcp ?? null, ttfbMs: latest.ttfb ?? null, observedLongTaskBlockingMs: latest.observedLongTaskBlockingMs ?? null, businessMetrics: latest.ready ?? {}, requests, errors })
+	Object.assign(sample, { lcpMs: latest.lcp ?? null, cls: latest.cls ?? null, inpMs: latest.inp ?? null, fcpMs: latest.fcp ?? null, ttfbMs: latest.ttfb ?? null, observedLongTaskBlockingMs: latest.observedLongTaskBlockingMs ?? null, businessMetrics: latest.ready ?? {}, requests: requests.slice(), errors: errors.slice() })
 	const complete = navigationComplete(sample)
 	if (!complete && isProductionMeasurementUrl(sample.url) && !sample.error) sample.error = 'Production measurement missing valid release/origin identity or required navigation metric'
 	sample.navigationComplete = complete

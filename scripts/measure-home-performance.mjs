@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
+import { finishLongTaskObservation, installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
@@ -199,6 +199,7 @@ async function measureColdLoad(browser, profile, index) {
 	if (elapsedAfterLoad < 1_000) {
 		await page.waitForTimeout(1_000 - elapsedAfterLoad)
 	}
+	await finishLongTaskObservation(page)
 	const browserMetrics = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		const resources = performance.getEntriesByType('resource')

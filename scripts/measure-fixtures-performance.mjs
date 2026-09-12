@@ -1,4 +1,4 @@
-import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -144,6 +144,7 @@ try {
 			const cachedWindowRequestCount =
 				windowRequestCount - beforeCachedWindow
 
+			await finishLongTaskObservation(page)
 			const final = await page.evaluate(() => ({
 				cls: window.__fixturesPerformance?.cls ?? null,
 				phase: 'interaction',

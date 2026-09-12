@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, navigationComplete, performanceMetadata, distribution } from './performance-metrics.mjs'
+import { finishLongTaskObservation, installVitals, measureNavigation, navigationComplete, performanceMetadata, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const origin = process.env.COMPETITIONS_PERF_ORIGIN ?? 'https://letletme.top'
@@ -82,6 +82,7 @@ async function measure(browser, path, index) {
 		)
 	}
 	await page.waitForTimeout(500)
+	await finishLongTaskObservation(page)
 	const metrics = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {

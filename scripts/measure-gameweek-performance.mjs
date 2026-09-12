@@ -1,4 +1,4 @@
-import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -192,6 +192,7 @@ async function measureRun(browser, profile, index) {
 		response?.headers()['content-encoding'] != null
 			? encodedDocumentBytes || responseBody.byteLength
 			: brotliCompressSync(responseBody).byteLength
+	await finishLongTaskObservation(page)
 	const values = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {
