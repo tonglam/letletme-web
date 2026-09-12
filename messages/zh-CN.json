@@ -1223,7 +1223,8 @@
 			"creativity": "创造力",
 			"threat": "威胁度",
 			"ictIndex": "ICT 指数"
-		}
+		},
+		"retry": "重试"
 	},
 	"Common": {
 		"skipToContent": "跳到主要内容",
@@ -1617,7 +1618,11 @@
 		"noChange": "无变化",
 		"transfersInShort": "转入 {count}",
 		"transfersOutShort": "转出 {count}",
-		"selectForHistory": "选择球员查看身价数据。"
+		"selectForHistory": "选择球员查看身价数据。",
+		"squadLoading": "正在读取你的阵容…",
+		"squadExpand": "查看阵容",
+		"squadCollapse": "收起",
+		"squadRetry": "刷新重试"
 	},
 	"Fixtures": {
 		"title": "赛程",
@@ -1742,7 +1747,11 @@
 		"shareCopyImage": "复制为图片",
 		"shareImageComingSoon": "图片分享即将上线。",
 		"shareNone": "无",
-		"shareFooter": "{url}"
+		"shareFooter": "{url}",
+		"squadLoading": "正在读取你的阵容…",
+		"squadExpand": "查看阵容",
+		"squadCollapse": "收起",
+		"squadRetry": "刷新重试"
 	},
 	"Selections": {
 		"title": "趋势",

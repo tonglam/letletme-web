@@ -11,19 +11,13 @@ import {
 	loadFixturePlanningSignals
 } from '@/lib/fixture-planning-seed-server'
 import type { FixturePlanningFixture } from '@/lib/fixture-window'
-import { type FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
-import { type TeamForPickerItem } from '@/lib/graphql/operations/players'
 import {
 	resolveFixturePlanningGameweek,
 	resolveFixturePlanningHorizon
 } from '@/lib/review-gameweek'
-import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
-import {
-	squadPickKeys,
-	type SquadLoadState,
-	type SquadPickSeed
-} from '@/lib/squad-picks'
-import { getVerifiedEntryContext } from '@/lib/session'
+import { loadPersonalSquadSeed } from '@/lib/load-entry-squad-picks'
+import { Suspense } from 'react'
+import { FixturesSeedProvider, FixturesSeedCommit } from '@/app/data/fixtures/FixturesSeedContext'
 import { unstable_rethrow } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -40,103 +34,72 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
+
+async function MarketStream({ navigationId, promise }: {
+	navigationId: string
+	promise: ReturnType<typeof loadFixturePlanningSignals>
+}) {
+	const market = await promise.catch(() => null)
+	return <FixturesSeedCommit navigationId={navigationId} update={{ market: {
+		mostSelected: market?.marketPulse?.mostSelected ?? [],
+		transferMovers: market?.marketPulse?.transferMovers ?? []
+	} }} />
+}
+async function OwnershipStream({ navigationId, promise }: {
+	navigationId: string
+	promise: ReturnType<typeof loadFixturePlanningGameweekOwnership>
+}) {
+	const ownership = await promise.catch(() => null)
+	return <FixturesSeedCommit navigationId={navigationId} update={{ market: {
+		gameweekOwnership: ownership?.marketOwnershipOverview ?? null
+	} }} />
+}
+async function SquadStream({ navigationId, promise }: {
+	navigationId: string
+	promise: ReturnType<typeof loadPersonalSquadSeed>
+}) {
+	return <FixturesSeedCommit navigationId={navigationId} update={{ squad: await promise }} />
+}
+
 async function renderFixturesPage({ params }: PageProps) {
 	await getPageLocale(params)
-
-	const [events, { session, entryId }] = await Promise.all([
-		getCurrentAndNextEvents(),
-		getVerifiedEntryContext()
-	])
+	const eventsPromise = getCurrentAndNextEvents()
+	const events = await eventsPromise
 	const fromGw = resolveFixturePlanningGameweek(events)
-
-	if (fromGw == null || fromGw <= 0) {
-		return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />
-	}
-
+	if (fromGw == null || fromGw <= 0) return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />
 	const horizon = resolveFixturePlanningHorizon(fromGw, DEFAULT_FDR_HORIZON)
-	if (horizon == null) {
-		return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />
-	}
+	if (horizon == null) return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />
 
-	const fixturesByEvent: Record<number, FixturePlanningFixture[]> = {}
-	let marketSignals: FixturePlanningMarketSignals | null = null
-	let mySquadKeys: string[] = []
-	let mySquadPicks: SquadPickSeed[] = []
-	let squadState: SquadLoadState = entryId != null ? 'not-published' : 'unbound'
-	let knownTeams: TeamForPickerItem[] = []
+	// Schedule the public window before optional personal and market work.
+	const windowPromise = loadFixtureWindow(fromGw, horizon)
+	const teamsPromise = loadFixtureTeams().catch(() => ({ teams: [] }))
+	const squadPromise = loadPersonalSquadSeed(eventsPromise)
+	const marketPromise = loadFixturePlanningSignals()
+	const ownershipPromise = loadFixturePlanningGameweekOwnership()
+	// The stream readers may render after these promises settle.
+	void marketPromise.catch(() => undefined)
+	void ownershipPromise.catch(() => undefined)
+	let fixturesByEvent: Record<number, FixturePlanningFixture[]> = {}
 	let unknownEventIds: number[] = []
-
 	try {
-		const [
-			fixtureWindow,
-			market,
-			gameweekOwnership,
-			squadResult,
-			teamsResponse
-		] = await Promise.all([
-			loadFixtureWindow(fromGw, horizon),
-			loadFixturePlanningSignals().catch(err => {
-				console.error('[fixtures] market pulse seed failed:', err)
-				return null
-			}),
-			loadFixturePlanningGameweekOwnership().catch(err => {
-				console.error('[fixtures] gameweek ownership seed failed:', err)
-				return null
-			}),
-			entryId != null && session
-				? loadEntrySquadPicks(session, entryId, events).catch(err => {
-						console.error('[fixtures] entry picks seed failed:', err)
-						return {
-							picks: [] as SquadPickSeed[],
-							state: 'unavailable' as const
-						}
-					})
-				: Promise.resolve({
-						picks: [] as SquadPickSeed[],
-						state: 'unbound' as const
-					}),
-			loadFixtureTeams().catch(err => {
-				console.error('[fixtures] team directory seed failed:', err)
-				return { teams: [] }
-			})
-		])
-
-		Object.entries(fixtureWindow.fixturesByEvent).forEach(([id, fixtures]) => {
-			fixturesByEvent[Number(id)] = fixtures
-		})
-		unknownEventIds = fixtureWindow.unknownEventIds
-		const hasMarketSignals = market != null || gameweekOwnership != null
-		marketSignals = hasMarketSignals
-			? {
-					mostSelected: market?.marketPulse?.mostSelected ?? [],
-					transferMovers: market?.marketPulse?.transferMovers ?? [],
-					gameweekOwnership: gameweekOwnership?.marketOwnershipOverview ?? null,
-					rollingOwnership: null
-				}
-			: null
-		mySquadPicks = squadResult.picks
-		squadState = squadResult.state
-		knownTeams = teamsResponse.teams ?? []
+		const window = await windowPromise
+		fixturesByEvent = window.fixturesByEvent
+		unknownEventIds = window.unknownEventIds
 	} catch (error) {
 		unstable_rethrow(error)
-		console.error('[fixtures] RSC seed failed:', error)
+		console.error('[fixtures] public window unavailable:', error)
 	}
-
-	mySquadKeys = squadPickKeys(mySquadPicks)
-
+	const { teams } = await teamsPromise
+	const navigationId = crypto.randomUUID()
 	return (
-		<FixturesClient
-			fromGw={fromGw}
-			initialHorizon={horizon}
-			initialFixturesByEvent={fixturesByEvent}
-			initialUnknownEventIds={unknownEventIds}
-			marketSignals={marketSignals}
-			knownTeams={knownTeams}
-			mySquadKeys={mySquadKeys}
-			mySquadPicks={mySquadPicks}
-			hasLinkedEntry={entryId != null || mySquadPicks.length > 0}
-			squadState={squadState}
-		/>
+		<FixturesSeedProvider navigationId={navigationId}>
+			<FixturesClient fromGw={fromGw} initialHorizon={horizon}
+				initialFixturesByEvent={fixturesByEvent} initialUnknownEventIds={unknownEventIds}
+				knownTeams={teams ?? []} />
+			<Suspense fallback={null}><SquadStream navigationId={navigationId} promise={squadPromise} /></Suspense>
+			<Suspense fallback={null}><MarketStream navigationId={navigationId} promise={marketPromise} /></Suspense>
+			<Suspense fallback={null}><OwnershipStream navigationId={navigationId} promise={ownershipPromise} /></Suspense>
+		</FixturesSeedProvider>
 	)
 }
 

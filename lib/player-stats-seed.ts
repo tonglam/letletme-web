@@ -19,7 +19,7 @@ import {
 	type PlayerStatsBootstrapResponse,
 	type PlayerStatsSnapshotStatus
 } from '@/lib/graphql/operations/players'
-import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
+import { loadPersonalSquadSeed } from '@/lib/load-entry-squad-picks'
 import {
 	buildMarketCompareCandidates,
 	type MarketCompareCandidate
@@ -32,7 +32,6 @@ import {
 import type { RequestTiming } from '@/lib/request-timing'
 import type { ReviewGameweekAnchorSource } from '@/lib/review-gameweek'
 import type { SquadPickSeed } from '@/lib/squad-picks'
-import { getVerifiedEntryContext } from '@/lib/session'
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
@@ -230,10 +229,6 @@ export async function loadPlayerStatsPersonalSeed(
 	const review = reviewContext(bootstrap.context, bootstrap.statsContext)
 	if (review.anchorGw == null || review.anchorGw <= 0) return null
 
-	const sessionPromise = measure(timing, 'session', getVerifiedEntryContext)
-	// Keep the authorization lookup from becoming an unhandled rejection if a
-	// later personal task fails.
-	void sessionPromise.catch(() => undefined)
 	const marketPromise = measure(timing, 'market', () =>
 		loadFixturePlanningSignals().catch(error => {
 			console.error('[player-stats-seed] market signals failed:', error)
@@ -249,21 +244,9 @@ export async function loadPlayerStatsPersonalSeed(
 	const fixturePromise = measure(timing, 'fixture', () =>
 		loadFixtureWindows(review.anchorGw!, horizon)
 	)
-	const squadPromise = (async () => {
-		const { session, entryId } = await sessionPromise
-		if (entryId == null || !session) {
-			return { picks: [] as SquadPickSeed[], state: 'unbound' as const }
-		}
-		return measure(timing, 'squad', () =>
-			loadEntrySquadPicks(session, entryId, bootstrap.events).catch(error => {
-				console.error('[player-stats-seed] entry picks failed:', error)
-				return {
-					picks: [] as SquadPickSeed[],
-					state: 'unavailable' as const
-				}
-			})
-		)
-	})()
+	const squadPromise = measure(timing, 'squad', () =>
+		loadPersonalSquadSeed(Promise.resolve(bootstrap.events))
+	)
 
 	const [windows, market, gameweekOwnership, squadResult] = await Promise.all([
 		fixturePromise,

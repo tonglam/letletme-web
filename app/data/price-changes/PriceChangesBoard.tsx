@@ -1,5 +1,7 @@
 'use client'
 
+import { usePriceChangesPersonalSeed } from './PriceChangesPersonalSeedContext'
+
 import { PriceChangeShareCard } from '@/app/data/price-changes/PriceChangeShareCard'
 import { formatPriceChangeShareText } from '@/app/data/price-changes/_lib/price-change-share'
 import { PriceChangeSquadPitch } from '@/app/data/price-changes/PriceChangeSquadPitch'
@@ -55,7 +57,6 @@ import {
 } from '@/lib/price-change-sorting'
 import { buildPriceChangeFilterUrl } from '@/lib/price-change-filter-url'
 import { selectPriceChangeSquadPlayers } from '@/app/data/price-changes/_lib/price-change-share'
-import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { useRouter } from 'next/navigation'
@@ -271,9 +272,6 @@ export function PriceChangesBoard({
 	board,
 	locale,
 	initialTimeLeft,
-	mySquadElementIds,
-	mySquadPicks,
-	mySquadState,
 	initialScope = DEFAULT_PRICE_CHANGE_SCOPE,
 	initialMovement = 'all',
 	isOfficialUpdating = false
@@ -281,14 +279,22 @@ export function PriceChangesBoard({
 	board: PriceChangeBoard
 	locale: string
 	initialTimeLeft: TimeLeft
-	mySquadElementIds: number[]
-	mySquadPicks: SquadPickSeed[]
-	mySquadState: SquadLoadState
 	initialScope?: PriceChangeScope
 	initialMovement?: PriceChangeMovementFilter
 	isOfficialUpdating?: boolean
 }) {
 	const t = useTranslations('PriceChanges')
+	const { seed: personalSeed } = usePriceChangesPersonalSeed()
+	const mySquadPicks = useMemo(() => personalSeed?.picks ?? [], [personalSeed])
+	const mySquadElementIds = useMemo(() => mySquadPicks.flatMap(pick => pick.elementId == null ? [] : [pick.elementId]), [mySquadPicks])
+	const mySquadState = personalSeed?.state ?? 'unavailable'
+	const [squadOpen, setSquadOpen] = useState(false)
+	useEffect(() => {
+		const reveal = () => { if (window.location.hash === '#my-squad') setSquadOpen(true) }
+		reveal()
+		window.addEventListener('hashchange', reveal)
+		return () => window.removeEventListener('hashchange', reveal)
+	}, [])
 	const router = useRouter()
 	const [isRefreshing, startRefresh] = useTransition()
 	const hydrated = useHydrated()
@@ -694,6 +700,13 @@ export function PriceChangesBoard({
 				</div>
 			</div>
 
+			<details id="my-squad" open={squadOpen} onToggle={event => setSquadOpen(event.currentTarget.open)} className="rounded-lg border bg-card">
+				<summary className="flex h-12 cursor-pointer items-center justify-between gap-3 px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+					<span>{t('mySquadTab')}</span>
+					<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">{personalSeed == null ? t('squadLoading') : t(squadOpen ? 'squadCollapse' : 'squadExpand')}</span>
+				</summary>
+				{squadOpen ? <div className="border-t p-4" aria-busy={personalSeed == null}>
+					{personalSeed == null ? <div className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div> : <>
 			{mySquadPicks.length > 0 ? (
 				<div className="flex justify-end">
 					<ShareActions
@@ -709,6 +722,11 @@ export function PriceChangesBoard({
 				squadState={mySquadState}
 				shareRef={mySquadShareRef}
 			/>
+
+						{mySquadState === 'unavailable' ? <button type="button" className="mt-3 text-sm underline" onClick={() => startRefresh(() => router.refresh())}>{t('squadRetry')}</button> : null}
+					</>}
+				</div> : null}
+			</details>
 
 			<Card className="overflow-hidden border-border/80 shadow-sm">
 				<div className="border-b border-border/70 bg-muted/10 p-4 sm:p-5">

@@ -46,7 +46,8 @@ describe('public GraphQL cache contract', () => {
 		assert.match(server, /options\?: Omit<ExecuteQueryOptions/)
 		assert.doesNotMatch(operations, /period:\s*ROLLING_7D/)
 		assert.doesNotMatch(operations, /GetFixturePlanningOwnershipRolling/)
-		assert.match(fixtures, /rollingOwnership: null/)
+		assert.match(await read('app/data/fixtures/FixturesSeedContext.tsx'), /rollingOwnership: null/)
+		assert.doesNotMatch(fixtures, /ROLLING_7D/)
 		assert.match(playerStats, /rollingOwnership: null/)
 		assert.doesNotMatch(en, /rolling-seven-day market signals/)
 		assert.doesNotMatch(zh, /近 7 日周期/)
@@ -184,7 +185,7 @@ describe('public GraphQL cache contract', () => {
 		assert.match(seed, /const bootstrap = await bootstrapPromise/)
 		assert.ok(
 			seed.indexOf('const bootstrap = await bootstrapPromise') <
-				seed.indexOf('const sessionPromise = measure')
+				seed.indexOf('loadPersonalSquadSeed(Promise.resolve(bootstrap.events))')
 		)
 		assert.match(page, /navigationId = createPerformanceCorrelationId\('nav'\)/)
 		assert.match(page, /navigationId\}/)

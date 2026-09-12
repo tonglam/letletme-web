@@ -14,6 +14,44 @@ export type EntrySquadPicksResult = {
 	state: Exclude<SquadLoadState, 'unbound'>
 }
 
+export type PersonalSquadSeed = { picks: SquadPickSeed[]; state: SquadLoadState }
+export type SquadReadBudget = { deadlineAt: number; signal: AbortSignal }
+
+export function squadReadOptions(budget: SquadReadBudget) {
+	budget.signal.throwIfAborted()
+	const timeoutMs = budget.deadlineAt - Date.now()
+	if (timeoutMs <= 0) throw new DOMException('Squad read deadline exceeded', 'TimeoutError')
+	return { timeoutMs, signal: budget.signal }
+}
+
+/** One deadline for identity, history, candidate GWs and missing player IDs. */
+export async function runSquadReadWithinBudget(
+	read: (budget: SquadReadBudget) => Promise<PersonalSquadSeed>,
+	timeoutMs = 5_000
+): Promise<PersonalSquadSeed> {
+	const controller = new AbortController()
+	const budget = { deadlineAt: Date.now() + timeoutMs, signal: controller.signal }
+	let timer: ReturnType<typeof setTimeout> | undefined
+	try {
+		return await Promise.race([
+			read(budget).then(result => {
+				squadReadOptions(budget)
+				return result
+			}),
+			new Promise<PersonalSquadSeed>(resolve => {
+				timer = setTimeout(() => {
+					controller.abort(new DOMException('Squad read deadline exceeded', 'TimeoutError'))
+					resolve({ picks: [], state: 'unavailable' })
+				}, timeoutMs)
+			})
+		])
+	} catch {
+		return { picks: [], state: 'unavailable' }
+	} finally {
+		clearTimeout(timer)
+	}
+}
+
 export type SquadPickSeed = {
 	elementId: number | null
 	webName: string

@@ -314,7 +314,7 @@ describe('fixture section sharing', () => {
 
 		assert.match(
 			page,
-			/<SectionHead[\s\S]*id="my-squad-heading"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
+			/<details[\s\S]*id="my-squad"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
 		)
 		assert.match(page, /imageRef=\{mySquadShareRef\}/)
 		assert.match(page, /data-page-fdr-legend="true"/)

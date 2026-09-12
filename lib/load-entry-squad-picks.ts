@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { getVerifiedEntryContext, hasSessionCookieHint } from '@/lib/session'
+import { getCurrentAndNextEvents } from '@/lib/events'
 import type { Session } from '@/lib/auth'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import type { EventsResponse } from '@/lib/graphql/operations/events'
@@ -12,6 +14,10 @@ import {
 import { resolveSquadPickElementIds } from '@/lib/squad-pick-resolve'
 import {
 	classifyEntrySquadPicks,
+	runSquadReadWithinBudget,
+	squadReadOptions,
+	type PersonalSquadSeed,
+	type SquadReadBudget,
 	squadPickEventCandidates,
 	squadPicksFromEntry,
 	type EntrySquadPicksResult,
@@ -22,7 +28,12 @@ export async function loadEntrySquadPicks(
 	session: Session,
 	entryId: number,
 	events: EventsResponse | null | undefined,
+	budget?: SquadReadBudget,
 ): Promise<EntrySquadPicksResult> {
+	if (!budget) {
+		const result = await runSquadReadWithinBudget(next => loadEntrySquadPicks(session, entryId, events, next))
+		return { picks: result.picks, state: result.state === 'unbound' ? 'unavailable' : result.state }
+	}
 	let requestFailed = false
 	let history: EntryHistoryResponse | null = null
 	try {
@@ -30,7 +41,7 @@ export async function loadEntrySquadPicks(
 			session,
 			GET_ENTRY_HISTORY,
 			{ entryId },
-			{ cache: 'no-store' }
+			{ cache: 'no-store', ...squadReadOptions(budget) }
 		)
 	} catch (err) {
 		requestFailed = true
@@ -44,13 +55,14 @@ export async function loadEntrySquadPicks(
 	const candidates = squadPickEventCandidates(events, historyEventIds)
 
 	for (const eventId of candidates) {
+		squadReadOptions(budget)
 		let result: EntryEventResultResponse
 		try {
 			result = await executeServerQueryWithSession<EntryEventResultResponse>(
 				session,
 				GET_ENTRY_EVENT_RESULT,
 				{ entryId, eventId },
-				{ cache: 'no-store' }
+				{ cache: 'no-store', ...squadReadOptions(budget) }
 			)
 		} catch (err) {
 			requestFailed = true
@@ -62,7 +74,7 @@ export async function loadEntrySquadPicks(
 		if (picks.length > 0) {
 			try {
 				let seeds: SquadPickSeed[] = squadPicksFromEntry(picks)
-				seeds = await resolveSquadPickElementIds(seeds)
+				seeds = await resolveSquadPickElementIds(seeds, budget)
 				return classifyEntrySquadPicks(seeds, requestFailed)
 			} catch (err) {
 				console.error('[squad-picks] player identity resolution failed:', err)
@@ -72,4 +84,16 @@ export async function loadEntrySquadPicks(
 	}
 
 	return classifyEntrySquadPicks([], requestFailed)
+}
+
+export function loadPersonalSquadSeed(eventsPromise?: Promise<EventsResponse | null>): Promise<PersonalSquadSeed> {
+	return runSquadReadWithinBudget(async budget => {
+		if (!(await hasSessionCookieHint())) return { picks: [], state: 'unbound' }
+		squadReadOptions(budget)
+		const [identity, events] = await Promise.all([getVerifiedEntryContext(), eventsPromise ?? getCurrentAndNextEvents()])
+		squadReadOptions(budget)
+		if (!identity.session || identity.entryId == null) return { picks: [], state: 'unbound' }
+		squadReadOptions(budget)
+		return loadEntrySquadPicks(identity.session, identity.entryId, events, budget)
+	})
 }

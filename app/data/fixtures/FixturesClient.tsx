@@ -9,9 +9,7 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
-import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
-import { buildSquadTeamExposure } from '@/lib/squad-picks'
+import { squadPickKeys, buildSquadTeamExposure } from '@/lib/squad-picks'
 import {
 	buildFixtureWindowRanges,
 	isFixtureWindowResponse,
@@ -36,6 +34,8 @@ import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
 import { TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import { useRouter } from 'next/navigation'
+import { useFixturesSeed } from './FixturesSeedContext'
 import {
 	useCallback,
 	useEffect,
@@ -371,25 +371,28 @@ export default function FixturesClient({
 	initialHorizon = DEFAULT_FDR_HORIZON,
 	initialFixturesByEvent,
 	initialUnknownEventIds = [],
-	marketSignals,
-	knownTeams,
-	mySquadKeys = [],
-	mySquadPicks = [],
-	hasLinkedEntry = false,
-	squadState = hasLinkedEntry ? 'not-published' : 'unbound'
+	knownTeams
 }: {
 	fromGw: number
 	initialHorizon?: FdrHorizon
 	initialFixturesByEvent: Record<number, FixturePlanningFixture[]>
 	initialUnknownEventIds?: number[]
-	marketSignals: FixturePlanningMarketSignals | null
 	knownTeams: FdrTeamIdentity[]
-	mySquadKeys?: string[]
-	mySquadPicks?: SquadPickSeed[]
-	hasLinkedEntry?: boolean
-	squadState?: SquadLoadState
 }) {
 	const t = useTranslations('Fixtures')
+	const router = useRouter()
+	const { squad, market: marketSignals } = useFixturesSeed()
+	const mySquadPicks = useMemo(() => squad?.picks ?? [], [squad])
+	const mySquadKeys = useMemo(() => squadPickKeys(mySquadPicks), [mySquadPicks])
+	const squadState = squad?.state ?? 'unavailable'
+	const hasLinkedEntry = squad != null && squad.state !== 'unbound'
+	const [squadOpen, setSquadOpen] = useState(false)
+	useEffect(() => {
+		const reveal = () => { if (window.location.hash === '#my-squad') setSquadOpen(true) }
+		reveal()
+		window.addEventListener('hashchange', reveal)
+		return () => window.removeEventListener('hashchange', reveal)
+	}, [])
 	const teamFdrShareRef = useRef<HTMLDivElement | null>(null)
 	const mySquadShareRef = useRef<HTMLElement | null>(null)
 
@@ -775,37 +778,25 @@ export default function FixturesClient({
 						)}
 					</section>
 
-					{/* My squad FDR */}
-					<Card
-						id="my-squad"
-						role="region"
-						aria-labelledby="my-squad-heading"
-						className="mb-8 scroll-mt-36 p-4 sm:p-5"
-					>
-						<SectionHead
-							id="my-squad-heading"
-							title={t('mySquadTitle')}
-							action={
-								mySquadPicks.length > 0 ? (
-									<ShareActions
-										text={t('mySquadTitle')}
-										imageRef={mySquadShareRef}
-										title={t('mySquadTitle')}
-										actions={['image']}
-									/>
-								) : null
-							}
-						/>
-						<MySquadFdrDesk
-							picks={mySquadPicks}
-							teams={model.teams}
-							fromGw={fromGw}
-							horizon={horizon}
-							hasLinkedEntry={hasLinkedEntry}
-							squadState={squadState}
-							shareRef={mySquadShareRef}
-						/>
-					</Card>
+					{/* Optional squad data never displaces the public matrix on arrival. */}
+					<details id="my-squad" open={squadOpen}
+						onToggle={event => setSquadOpen(event.currentTarget.open)}
+						className="mb-4 scroll-mt-36 rounded-lg border bg-card">
+						<summary className="flex h-12 cursor-pointer items-center justify-between gap-3 px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+							<span>{t('mySquadTitle')}</span>
+							<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">
+								{squad == null ? t('squadLoading') : t(squadOpen ? 'squadCollapse' : 'squadExpand')}
+							</span>
+						</summary>
+						{squadOpen ? <div className="border-t p-4 sm:p-5" aria-busy={squad == null}>
+							{squad == null ? <div className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div> : <>
+								{mySquadPicks.length > 0 ? <div className="mb-3 flex justify-end"><ShareActions text={t('mySquadTitle')} imageRef={mySquadShareRef} title={t('mySquadTitle')} actions={['image']} /></div> : null}
+								<MySquadFdrDesk picks={mySquadPicks} teams={model.teams} fromGw={fromGw} horizon={horizon}
+									hasLinkedEntry={hasLinkedEntry} squadState={squadState} shareRef={mySquadShareRef} />
+								{squadState === 'unavailable' ? <button type="button" className="mt-3 text-sm underline" onClick={() => startTransition(() => router.refresh())}>{t('squadRetry')}</button> : null}
+							</>}
+						</div> : null}
+					</details>
 
 					{/* Team FDR matrix */}
 					<Card
