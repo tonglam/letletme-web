@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -181,19 +181,20 @@ console.log(
 			measurements,
 			raw: rawMeasurements,
 			acceptance: {
+				navigationComplete: allRuns.every(run => navigationComplete(run.navigation)),
 				mobileLcp:
-					mobile.lcpMs.p50 <= 2_500 && mobile.lcpMs.max <= 3_000,
-				mobileObservedBlocking: mobile.observedLongTaskBlockingMs.max <= 100,
-				mobileCls: mobile.cls.max <= 0.02,
+					atMost(mobile.lcpMs.p50, 2_500) && atMost(mobile.lcpMs.max, 3_000),
+				mobileObservedBlocking: atMost(mobile.observedLongTaskBlockingMs.max, 100),
+				mobileCls: atMost(mobile.cls.max, 0.02),
 				documentTransferBytes: allRuns.every(
-					run => run.documentBytes <= 51 * 1024
+					run => atMost(run.documentBytes, 51 * 1024)
 				),
 				htmlResponse:
-					percentile(allRuns.map(run => run.htmlResponseMs), 95) <= 2_000,
+					atMost(percentile(allRuns.map(run => run.htmlResponseMs), 95), 2_000),
 				firstWindow:
 					allRuns.every(run => run.firstWindowRequestCount === 1) &&
-					percentile(allRuns.map(run => run.firstWindowMs), 50) <= 1_000 &&
-					percentile(allRuns.map(run => run.firstWindowMs), 95) <= 1_500,
+					atMost(percentile(allRuns.map(run => run.firstWindowMs), 50), 1_000) &&
+					atMost(percentile(allRuns.map(run => run.firstWindowMs), 95), 1_500),
 				cachedWindow: allRuns.every(
 					run => run.cachedWindowRequestCount === 0
 				),

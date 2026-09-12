@@ -217,7 +217,17 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(measurement, /GetEventFixtures/)
 		assert.match(measurement, /firstSwitchTransports/)
 		assert.match(measurement, /waitForCommittedFixtureEvent/)
-		assert.match(measurement, /observed: values\.length/)
+		assert.match(readFileSync('scripts/performance-metrics.mjs', 'utf8'), /observed: values\.length/)
 		assert.match(measurement, /waitForReadyMetric/)
 	})
+})
+
+it('performance acceptance rejects missing values and preserves missing sample counts', async () => {
+	const { atMost, distribution, navigationComplete } = await import('../scripts/performance-metrics.mjs')
+	assert.equal(atMost(null, 2500), false)
+	assert.equal(atMost(undefined, 2500), false)
+	assert.equal(atMost(NaN, 2500), false)
+	assert.equal(atMost(0, 2500), true)
+	assert.deepEqual(distribution([{ lcp: null }, { lcp: 100 }, { lcp: 300 }], 'lcp'), { observed: 2, missing: 1, p50: 100, min: 100, max: 300 })
+	assert.equal(navigationComplete({ status: 200, error: null, lcpMs: null, cls: 0, fcpMs: 1, ttfbMs: 1, readyMs: 1 }), false)
 })

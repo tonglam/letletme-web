@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -398,60 +398,61 @@ console.log(
 			measurements,
 			raw,
 			acceptance: {
+				navigationComplete: allRuns.every(run => navigationComplete(run.navigation)),
 				mobileLcp:
-					mobile.directory.lcpMs.p50 <= 2_500 &&
-					mobile.directory.lcpMs.max <= 3_000,
-				mobileObservedBlocking: raw.mobile.directory.every(run => run.observedLongTaskBlockingMs <= 100),
-				cls: allRuns.every(run => run.cls <= 0.02),
+					atMost(mobile.directory.lcpMs.p50, 2_500) &&
+					atMost(mobile.directory.lcpMs.max, 3_000),
+				mobileObservedBlocking: raw.mobile.directory.every(run => atMost(run.navigation.observedLongTaskBlockingMs, 100)),
+				cls: allRuns.every(run => atMost(run.navigation.cls, 0.02)),
 				htmlResponse:
-					percentile(
+					atMost(percentile(
 						allRuns.map(run => run.htmlResponseMs),
 						95
-					) <= 2_000,
+					), 2_000),
 				defaultDocument: Object.values(raw).every(profile =>
-					profile.directory.every(run => run.documentBytes <= 51 * 1024)
+					profile.directory.every(run => atMost(run.documentBytes, 51 * 1024))
 				),
 				directoryReady: Object.values(raw).every(
 					profile =>
-						percentile(
+						atMost(percentile(
 							profile.directory.map(run => run.readyMs),
 							95
-						) <= 1_000
+						), 1_000)
 				),
 				detailReady: Object.values(raw).every(
 					profile =>
-						percentile(
+						atMost(percentile(
 							profile.detail.map(run => run.readyMs),
 							95
-						) <= 1_500
+						), 1_500)
 				),
 				compareReady: Object.values(raw).every(
 					profile =>
-						percentile(
+						atMost(percentile(
 							profile.compare.map(run => run.readyMs),
 							95
-						) <= 1_500
+						), 1_500)
 				),
 				directoryPaint: Object.values(raw).every(
 					profile =>
-						percentile(
+						atMost(percentile(
 							profile.directory.map(run => run.paintMs),
 							95
-						) <= 1_000
+						), 1_000)
 				),
 				detailPaint: Object.values(raw).every(
 					profile =>
-						percentile(
+						atMost(percentile(
 							profile.detail.map(run => run.paintMs),
 							95
-						) <= 1_500
+						), 1_500)
 				),
 				comparePaint: Object.values(raw).every(
 					profile =>
-						percentile(
+						atMost(percentile(
 							profile.compare.map(run => run.paintMs),
 							95
-						) <= 1_500
+						), 1_500)
 				),
 				samePageInteraction: Object.values(raw).every(profile =>
 					profile.directory.every(run =>

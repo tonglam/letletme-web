@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -237,23 +237,24 @@ console.log(
 			measurements,
 			raw,
 			acceptance: {
-				mobileLcp: mobile.lcpMs.p50 <= 2_500 && mobile.lcpMs.max <= 3_000,
-				mobileObservedBlocking: mobile.observedLongTaskBlockingMs.max <= 100,
-				cls: allRuns.every(run => run.cls <= 0.02),
+				navigationComplete: allRuns.every(run => navigationComplete(run.navigation)),
+				mobileLcp: atMost(mobile.lcpMs.p50, 2_500) && atMost(mobile.lcpMs.max, 3_000),
+				mobileObservedBlocking: atMost(mobile.observedLongTaskBlockingMs.max, 100),
+				cls: allRuns.every(run => atMost(run.navigation.cls, 0.02)),
 				htmlResponse:
-					percentile(
+					atMost(percentile(
 						allRuns.map(run => run.htmlResponseMs),
 						95
-					) <= 2_000,
+					), 2_000),
 				documentTransferBytes: allRuns.every(
-					run => run.documentBytes <= 51 * 1024
+					run => atMost(run.documentBytes, 51 * 1024)
 				),
 				firstDeskReady:
 					selectableRuns.length === 0 ||
 					selectableRuns.every(
 						run =>
 							typeof run.deskSwitchReadyMs === 'number' &&
-							run.deskSwitchReadyMs <= 1_500
+							atMost(run.deskSwitchReadyMs, 1_500)
 					),
 				firstDeskRequest:
 					selectableRuns.length === 0 ||

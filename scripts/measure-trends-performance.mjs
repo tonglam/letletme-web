@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -134,12 +134,13 @@ console.log(
 			measurements,
 			raw,
 			acceptance: {
+				navigationComplete: Object.values(raw).flat().every(run => navigationComplete(run.navigation)),
 				mobileLcp:
-					measurements.mobile.lcpMs.p50 <= 2500 &&
-					measurements.mobile.lcpMs.max <= 3000,
-				mobileObservedBlocking: measurements.mobile.observedLongTaskBlockingMs.max <= 100,
+					atMost(measurements.mobile.lcpMs.p50, 2500) &&
+					atMost(measurements.mobile.lcpMs.max, 3000),
+				mobileObservedBlocking: atMost(measurements.mobile.observedLongTaskBlockingMs.max, 100),
 				cls: Object.values(measurements).every(
-					measurement => measurement.cls.max <= 0.02
+					measurement => atMost(measurement.cls.max, 0.02)
 				),
 				cachedSwitch: Object.values(measurements).every(measurement =>
 					measurement.cachedSwitchRequests.every(count => count === 0)

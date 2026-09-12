@@ -1,4 +1,4 @@
-import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -194,21 +194,22 @@ console.log(
 			measurements,
 			raw,
 			acceptance: {
+				navigationComplete: allRuns.every(run => navigationComplete(run.navigation)),
 				mobileLcp:
-					measurements.mobile.lcpMs.p50 <= 2500 &&
-					measurements.mobile.lcpMs.max <= 3000,
-				mobileObservedBlocking: measurements.mobile.observedLongTaskBlockingMs.max <= 100,
-				cls: allRuns.every(run => run.cls <= 0.02),
+					atMost(measurements.mobile.lcpMs.p50, 2500) &&
+					atMost(measurements.mobile.lcpMs.max, 3000),
+				mobileObservedBlocking: atMost(measurements.mobile.observedLongTaskBlockingMs.max, 100),
+				cls: allRuns.every(run => atMost(run.navigation.cls, 0.02)),
 				htmlResponse:
-					percentile(
+					atMost(percentile(
 						allRuns.map(run => run.htmlResponseMs),
 						95
-					) <= 2000,
-				documentBytes: allRuns.every(run => run.documentBytes <= 135 * 1024),
+					), 2000),
+				documentBytes: allRuns.every(run => atMost(run.documentBytes, 135 * 1024)),
 				rawDocumentBytes: allRuns.every(
-					run => run.rawDocumentBytes <= 135 * 1024
+					run => atMost(run.rawDocumentBytes, 135 * 1024)
 				),
-				initialRequests: allRuns.every(run => run.marketRequestCount <= 30),
+				initialRequests: allRuns.every(run => atMost(run.marketRequestCount, 30)),
 				noPlayerStatsPrefetch: allRuns.every(
 					run => run.playerStatsPrefetchCount === 0
 				),
