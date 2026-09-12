@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
@@ -12,7 +13,9 @@ import { menuItems } from './config'
  * Public navigation is rendered on the server and has no Better Auth client.
  * Native details elements provide keyboard-operable menus without hydration.
  */
-export async function GuestNavigationActions() {
+export async function GuestNavigationActions({
+	desktopAccount, mobileAccount
+}: { desktopAccount?: ReactNode; mobileAccount?: ReactNode } = {}) {
 	const t = await getTranslations('Navigation')
 
 	return (
@@ -58,15 +61,9 @@ export async function GuestNavigationActions() {
 					</details>
 					)
 				))}
-				<Button
-					size="sm"
-					className="ml-2 font-display text-xs font-semibold uppercase tracking-caps shadow-sticker-sm transition-transform hover:-translate-y-px"
-					asChild
-				>
-					<Link href="/auth/login" prefetch={false}>
-						{t('login')}
-					</Link>
-				</Button>
+				<div className="ml-2 flex h-9 w-36 items-center justify-end" data-navigation-account="desktop">
+					{desktopAccount ?? <GuestAccountActions />}
+				</div>
 			</div>
 
 			<LanguageSwitcher />
@@ -111,6 +108,16 @@ export async function GuestNavigationActions() {
 						</section>
 						)
 					))}
+					{mobileAccount ?? <GuestAccountActions mobile />}
+				</div>
+			</details>
+		</NavigationDisclosureController>
+	)
+}
+
+export async function GuestAccountActions({ mobile = false }: { mobile?: boolean }) {
+	const t = await getTranslations('Navigation')
+	return mobile ? (
 					<NavigationMenuLink
 						href="/auth/login"
 						prefetch={false}
@@ -119,8 +126,15 @@ export async function GuestNavigationActions() {
 						<UserCircle aria-hidden="true" className="size-4" />
 						{t('login')}
 					</NavigationMenuLink>
-				</div>
-			</details>
-		</NavigationDisclosureController>
+	) : (
+				<Button
+					size="sm"
+					className="ml-2 font-display text-xs font-semibold uppercase tracking-caps shadow-sticker-sm transition-transform hover:-translate-y-px"
+					asChild
+				>
+					<Link href="/auth/login" prefetch={false}>
+						{t('login')}
+					</Link>
+				</Button>
 	)
 }

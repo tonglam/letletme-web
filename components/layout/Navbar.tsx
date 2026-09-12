@@ -1,7 +1,8 @@
+import { Suspense } from 'react'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { getCurrentSession, hasSessionCookieHint } from '@/lib/session'
-import { GuestNavigationActions } from './GuestNavigationActions'
+import { GuestNavigationActions, GuestAccountActions } from './GuestNavigationActions'
 import { LogoMark, LogoWordmark } from './Logo'
 import { NavigationActions } from './NavigationActions'
 
@@ -13,13 +14,13 @@ export async function Navbar() {
 	])
 	const homeHref = localizePathname('/', locale as AppLocale)
 	const displaySession = hasSessionCookie
-		? await getCurrentSession().catch(error => {
+		? getCurrentSession().catch(error => {
 				console.warn('[navbar-session] display session unavailable', {
 					error: error instanceof Error ? error.name : 'UnknownError'
 				})
 				return null
 			})
-		: null
+		: Promise.resolve(null)
 
 	return (
 		<nav
@@ -36,13 +37,34 @@ export async function Navbar() {
 				</a>
 
 				<div className="flex items-center gap-1.5">
-					{displaySession?.user ? (
-						<NavigationActions user={displaySession.user} />
-					) : (
-						<GuestNavigationActions />
-					)}
+					<GuestNavigationActions
+						desktopAccount={hasSessionCookie ? (
+							<Suspense fallback={<AccountPlaceholder />}>
+								<AccountSlot session={displaySession} />
+							</Suspense>
+						) : undefined}
+						mobileAccount={hasSessionCookie ? (
+							<Suspense fallback={<AccountPlaceholder />}>
+								<AccountSlot session={displaySession} mobile />
+							</Suspense>
+						) : undefined}
+					/>
 				</div>
 			</div>
 		</nav>
 	)
+}
+
+function AccountPlaceholder() {
+	return <span className="block h-9 w-36 animate-pulse rounded-md bg-fascia-foreground/10" aria-hidden="true" />
+}
+
+async function AccountSlot({ session, mobile = false }: {
+	session: ReturnType<typeof getCurrentSession>
+	mobile?: boolean
+}) {
+	const resolved = await session
+	return resolved?.user
+		? <NavigationActions user={resolved.user} mobile={mobile} />
+		: <GuestAccountActions mobile={mobile} />
 }
