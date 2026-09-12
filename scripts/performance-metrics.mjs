@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url'
 import path from 'node:path'
 
 const require = createRequire(import.meta.url)
-const vitalsSource = readFileSync(require.resolve('web-vitals'), 'utf8')
+const vitalsModulePath = require.resolve('web-vitals')
+const vitalsSource = readFileSync(path.join(path.dirname(vitalsModulePath), 'web-vitals.iife.js'), 'utf8')
 export const performanceProfiles = [
 	{ name: 'desktop', viewport: { width: 1440, height: 900 } },
 	{ name: 'mobile', viewport: { width: 390, height: 844 } }
@@ -18,8 +19,21 @@ export function percentile(values, p) {
 export function atMost(value, limit) {
 	return typeof value === 'number' && Number.isFinite(value) && value <= limit
 }
+export function isProductionMeasurementUrl(url) {
+	try {
+		const hostname = new URL(String(url)).hostname.toLowerCase()
+		return hostname === 'letletme.top' || hostname.endsWith('.letletme.top')
+	} catch {
+		return false
+	}
+}
+export function hasValidProductionIdentity(sample) {
+	return /^[a-f0-9]{40}$/i.test(sample?.releaseSha ?? '') && /^(?:vercel|tencent)$/i.test(sample?.origin ?? '')
+}
 export function navigationComplete(sample) {
-	return sample?.status === 200 && !sample.error && ['lcpMs', 'cls', 'fcpMs', 'ttfbMs', 'readyMs'].every(key => typeof sample[key] === 'number' && Number.isFinite(sample[key]))
+	const metricsComplete = sample?.status === 200 && !sample.error && ['lcpMs', 'cls', 'fcpMs', 'ttfbMs', 'readyMs'].every(key => typeof sample[key] === 'number' && Number.isFinite(sample[key]))
+	if (!metricsComplete) return false
+	return !isProductionMeasurementUrl(sample.url) || hasValidProductionIdentity(sample)
 }
 export function distribution(runs, field) {
 	const values = runs.map(run => run[field]).filter(value => typeof value === 'number' && Number.isFinite(value))
@@ -74,7 +88,7 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 			return fetch(input, init)
 		}
 	}
-	await page.addInitScript({ content: `${vitalsSource}\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: alias === '__performanceMetrics' })})` })
+	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: alias === '__performanceMetrics' })})` })
 }
 
 export async function throttleProfile(page, profile) {
@@ -105,12 +119,13 @@ export function readyMetricFor(url) {
 	return 'HOME_MARKET_READY'
 }
 
-/** A dedicated navigation, without clicks. Page hide finalizes web-vitals. */
+/** A dedicated navigation, without clicks. Page hide finalizes web-vitals. Pass page to keep follow-up probes on this navigation. */
 export async function measureNavigation(browser, profile, url, options = {}) {
-	const ownContext = !options.context
-	const context = options.context ?? await browser.newContext({ viewport: profile.viewport, storageState: options.storageState })
-	if (options.prepareContext) await options.prepareContext(context)
-	const page = await context.newPage()
+	const ownContext = !options.context && !options.page
+	const ownsPage = !options.page
+	const context = options.context ?? options.page?.context() ?? await browser.newContext({ viewport: profile.viewport, storageState: options.storageState })
+	if (options.prepareContext && !options.page) await options.prepareContext(context)
+	const page = options.page ?? await context.newPage()
 	page.setDefaultTimeout(30_000)
 	let latest = {}
 	const errors = []
@@ -131,6 +146,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				const target = new URL(url)
 				target.searchParams.set('_perfSource', 'synthetic')
 				const response = await page.goto(target.href, { waitUntil: 'commit' })
+				options.onResponse?.(response)
 				sample.status = response?.status() ?? null
 				sample.releaseSha = response?.headers()['x-letletme-release'] ?? null
 				sample.origin = response?.headers()['x-letletme-origin'] ?? null
@@ -160,7 +176,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				Object.assign(sample, details)
 				if (options.screenshot) await page.screenshot({ path: options.screenshot, fullPage: true })
 				await releaseThrottle?.()
-				await page.goto('about:blank', { waitUntil: 'commit' })
+				if (ownsPage) await page.goto('about:blank', { waitUntil: 'commit' })
 			})(),
 			new Promise((_, reject) => { timer = setTimeout(() => { void page.close(); reject(new Error('Navigation observation exceeded 30000ms')) }, 30_000) })
 		])
@@ -168,7 +184,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 		sample.error = error.message
 	} finally {
 		clearTimeout(timer)
-		await page.close().catch(() => {})
+		if (ownsPage) await page.close().catch(() => {})
 		if (ownContext) await context.close()
 	}
 	Object.assign(sample, { lcpMs: latest.lcp ?? null, cls: latest.cls ?? null, inpMs: latest.inp ?? null, fcpMs: latest.fcp ?? null, ttfbMs: latest.ttfb ?? null, observedLongTaskBlockingMs: latest.observedLongTaskBlockingMs ?? null, businessMetrics: latest.ready ?? {}, requests, errors })

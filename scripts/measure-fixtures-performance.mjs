@@ -93,8 +93,11 @@ try {
 				`${profile.name}-${index}-${Date.now()}`
 			)
 			runUrl.searchParams.set('_perfSource', 'synthetic')
-			const navigation = await measureNavigation(browser, profile, runUrl.toString())
-			const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+			let response
+			const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+				page,
+				onResponse: value => { response = value }
+			})
 			await page.waitForTimeout(500)
 			const responseBody = response ? await response.body() : Buffer.alloc(0)
 			const documentBytes =

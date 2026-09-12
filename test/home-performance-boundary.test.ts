@@ -223,11 +223,44 @@ describe('Home first-screen performance boundary', () => {
 })
 
 it('performance acceptance rejects missing values and preserves missing sample counts', async () => {
-	const { atMost, distribution, navigationComplete } = await import('../scripts/performance-metrics.mjs')
+	const {
+		atMost,
+		distribution,
+		hasValidProductionIdentity,
+		isProductionMeasurementUrl,
+		navigationComplete
+	} = await import('../scripts/performance-metrics.mjs')
 	assert.equal(atMost(null, 2500), false)
 	assert.equal(atMost(undefined, 2500), false)
 	assert.equal(atMost(NaN, 2500), false)
 	assert.equal(atMost(0, 2500), true)
 	assert.deepEqual(distribution([{ lcp: null }, { lcp: 100 }, { lcp: 300 }], 'lcp'), { observed: 2, missing: 1, p50: 100, min: 100, max: 300 })
 	assert.equal(navigationComplete({ status: 200, error: null, lcpMs: null, cls: 0, fcpMs: 1, ttfbMs: 1, readyMs: 1 }), false)
+	const productionSample = { status: 200, error: null, url: 'https://letletme.top/explore/fixtures', lcpMs: 1, cls: 0, fcpMs: 1, ttfbMs: 1, readyMs: 1 }
+	assert.equal(isProductionMeasurementUrl(productionSample.url), true)
+	assert.equal(hasValidProductionIdentity(productionSample), false)
+	assert.equal(navigationComplete(productionSample), false)
+	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'vercel' }), true)
+	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'untrusted-proxy' }), false)
+	assert.equal(isProductionMeasurementUrl('http://localhost:3200/explore/fixtures'), false)
+})
+
+it('uses the browser vitals build and the same page for navigation plus follow-up probes', () => {
+	const metrics = readFileSync('scripts/performance-metrics.mjs', 'utf8')
+	assert.match(metrics, /web-vitals\.iife\.js/)
+	assert.match(metrics, /globalThis\.webVitals = webVitals/)
+	assert.match(metrics, /options\.page\?\.context\(\)/)
+	assert.match(metrics, /options\.onResponse\?\.\(response\)/)
+	for (const name of [
+		'home',
+		'fixtures',
+		'gameweek',
+		'market',
+		'player-stats',
+		'trends',
+		'competitions'
+	]) {
+		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
+		assert.match(source, /measureNavigation\([\s\S]*\{[\s\S]*page,[\s\S]*onResponse/)
+	}
 })

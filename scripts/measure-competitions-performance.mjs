@@ -62,8 +62,11 @@ async function measure(browser, path, index) {
 	const url = new URL(`${origin}/${locale}${path}`)
 	url.searchParams.set('_competitionsPerf', `${path}-${index}-${Date.now()}`)
 	url.searchParams.set('_perfSource', 'synthetic')
-	const navigation = await measureNavigation(browser, { name: 'mobile', viewport: { width: 390, height: 844 } }, url.toString(), { storageState })
-	const response = await page.goto(url.toString(), { waitUntil: 'load' })
+	let response
+	const navigation = await measureNavigation(browser, { name: 'mobile', viewport: { width: 390, height: 844 } }, url.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
 	const expected = new URL(`${origin}/${locale}${path}`)
 	const actual = new URL(page.url())
 	if (actual.origin !== expected.origin || actual.pathname !== expected.pathname || (expected.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== tournamentId)) {

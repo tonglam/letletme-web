@@ -297,8 +297,11 @@ async function measureRun(browser, profile, scenario, index) {
 		`${profile.name}-${scenario.name}-${index}-${Date.now()}`
 	)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
-	const navigation = await measureNavigation(browser, profile, runUrl.toString())
-	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+	let response
+	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
 	releaseSha = response?.headers()['x-letletme-release'] ?? releaseSha
 	await page.waitForFunction(
 		metricName =>

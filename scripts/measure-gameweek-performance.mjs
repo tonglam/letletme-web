@@ -110,8 +110,11 @@ async function measureRun(browser, profile, index) {
 		`${profile.name}-${index}-${Date.now()}`
 	)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
-	const navigation = await measureNavigation(browser, profile, runUrl.toString())
-	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+	let response
+	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
 	await waitForReady(page)
 	const telemetryDeadline = Date.now() + 5_000
 	while (readyMetric == null && Date.now() < telemetryDeadline)

@@ -192,8 +192,11 @@ async function measureColdLoad(browser, profile, index) {
 	const runUrl = new URL(baseUrl)
 	runUrl.searchParams.set('cold', `${profile.name}-${index}`)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
-	const navigation = await measureNavigation(browser, profile, baseUrl, { prepareContext: applySessionCookie })
-	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+	let response
+	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
 	const readySamples = new Map()
 	if (sessionCookie) {
 		const names = ['HOME_TEAM_DESK_READY', 'HOME_LEAGUE_RANKS_READY']
