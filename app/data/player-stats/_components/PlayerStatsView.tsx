@@ -44,7 +44,7 @@ import {
 	PlayerDetailSkeleton
 } from './PlayerStatPrimitives'
 
-interface PlayerStatsViewProps {
+export interface PlayerStatsViewProps {
 	selectedPlayer: PlayerDirectoryOption | null
 	selectedComparison: PlayerDirectoryOption | null
 	player: PlayerDetailData | null
@@ -749,6 +749,13 @@ export function PlayerStatsView({
 		scrollToPlayerStatsSection(section)
 	}, [])
 
+	if (error && !player) return (
+		<div className="rounded-xl border bg-card px-6 py-8 text-center" role="alert">
+			<p className="text-sm text-destructive">{error}</p>
+			<Button className="mt-3" variant="outline" onClick={retryPlayerData}>{t('retry')}</Button>
+		</div>
+	)
+
 	if (!selectedPlayer) {
 		return (
 			<div className="rounded-xl border border-dashed border-border/70 px-6 py-12 text-center">
@@ -787,6 +794,7 @@ export function PlayerStatsView({
 				role="alert"
 			>
 				<p className="text-sm text-destructive">{requestError}</p>
+				<Button className="mt-3" variant="outline" onClick={retryPlayerData}>{t('retry')}</Button>
 			</div>
 		)
 	}

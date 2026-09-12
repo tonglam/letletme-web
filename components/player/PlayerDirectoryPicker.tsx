@@ -159,7 +159,7 @@ const ownBandToGraphql = (band: OwnBand): PlayerPickerOwnershipBand | null => {
 	}
 }
 
-const toPickerPlayer = (
+export const toPickerPlayer = (
 	player: PlayerDirectoryItem
 ): PlayerDirectoryOption => ({
 	id: player.id.toString(),
