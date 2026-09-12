@@ -1,9 +1,10 @@
+import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
 const runCount = Number.parseInt(process.env.HOME_PERF_RUNS ?? '5', 10)
 const concurrency = Number.parseInt(
-	process.env.HOME_PERF_CONCURRENCY ?? '20',
+	process.env.HOME_PERF_CONCURRENCY ?? '1',
 	10
 )
 const sessionCookie = process.env.HOME_PERF_SESSION_COOKIE?.trim() ?? ''
@@ -20,38 +21,18 @@ const profiles = [
 	{ name: 'mobile', viewport: { width: 390, height: 844 }, slow4g: true }
 ]
 
-function percentile(values, percentileValue) {
-	if (values.length === 0) return null
-	const ordered = [...values].sort((left, right) => left - right)
-	const index = Math.min(
-		ordered.length - 1,
-		Math.ceil((percentileValue / 100) * ordered.length) - 1
-	)
-	return Number(ordered[index].toFixed(2))
-}
 
-function distribution(runs, field) {
-	const values = runs
-		.map(run => run[field])
-		.filter(value => typeof value === 'number' && Number.isFinite(value))
-	return {
-		p50: percentile(values, 50),
-		p95: percentile(values, 95),
-		observed: values.length,
-		missing: runs.length - values.length
-	}
-}
 
 function summarize(runs) {
 	return {
 		runs: runs.length,
 		readinessExpected: Boolean(sessionCookie),
 		status200: runs.every(run => run.status === 200),
-		lcpMs: distribution(runs, 'lcpMs'),
-		tbtMs: distribution(runs, 'tbtMs'),
-		cls: distribution(runs, 'cls'),
+		lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
+		observedLongTaskBlockingMs: distribution(runs.map(run => run.navigation), 'observedLongTaskBlockingMs'),
+		cls: distribution(runs.map(run => run.navigation), 'cls'),
 		loadMs: distribution(runs, 'loadMs'),
-		ttfbMs: distribution(runs, 'ttfbMs'),
+		ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
 		teamDeskReadyMs: distribution(runs, 'teamDeskReadyMs'),
 		leagueRanksReadyMs: distribution(runs, 'leagueRanksReadyMs'),
 		transferredBytes: {
@@ -174,8 +155,8 @@ async function measureColdLoad(browser, profile, index) {
 			}
 		} catch {}
 	})
+	await installVitals(page, '__homePerformance')
 	await page.addInitScript(() => {
-		window.__homePerformance = { cls: 0, lcp: 0, tbt: 0, ready: {} }
 		const captureMetric = async body => {
 			try {
 				const raw =
@@ -206,26 +187,12 @@ async function measureColdLoad(browser, profile, index) {
 			if (String(input).includes('/api/vitals')) void captureMetric(init?.body)
 			return nativeFetch(input, init)
 		}
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				window.__homePerformance.lcp = entry.startTime
-			}
-		}).observe({ type: 'largest-contentful-paint', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				if (!entry.hadRecentInput) window.__homePerformance.cls += entry.value
-			}
-		}).observe({ type: 'layout-shift', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				window.__homePerformance.tbt += Math.max(0, entry.duration - 50)
-			}
-		}).observe({ type: 'longtask', buffered: true })
 	})
 	const navigationStartedAt = performance.now()
 	const runUrl = new URL(baseUrl)
 	runUrl.searchParams.set('cold', `${profile.name}-${index}`)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
+	const navigation = await measureNavigation(browser, profile, baseUrl, { prepareContext: applySessionCookie })
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	const readySamples = new Map()
 	if (sessionCookie) {
@@ -265,9 +232,9 @@ async function measureColdLoad(browser, profile, index) {
 			0
 		)
 		return {
-			lcpMs: window.__homePerformance?.lcp ?? 0,
-			tbtMs: window.__homePerformance?.tbt ?? 0,
-			cls: window.__homePerformance?.cls ?? 0,
+			lcpMs: window.__homePerformance?.lcp ?? null,
+			observedLongTaskBlockingMs: window.__homePerformance?.observedLongTaskBlockingMs ?? null,
+			cls: window.__homePerformance?.cls ?? null,
 			loadMs: navigation?.loadEventEnd ?? 0,
 			ttfbMs: navigation?.responseStart ?? 0,
 			htmlBytes,
@@ -290,6 +257,7 @@ async function measureColdLoad(browser, profile, index) {
 	})
 	await context.close()
 	return {
+		navigation,
 		status: response?.status() ?? 0,
 		requestCount,
 		...browserMetrics,
@@ -385,6 +353,7 @@ async function measureFixtureSwitch(browser, profile) {
 
 const browser = await chromium.launch({ headless: true })
 const measurements = {}
+const raw = {}
 const fixtureSwitches = {}
 try {
 	for (const profile of profiles) {
@@ -392,6 +361,7 @@ try {
 		for (let index = 0; index < runCount; index += 1) {
 			runs.push(await measureColdLoad(browser, profile, index))
 		}
+		raw[profile.name] = runs
 		measurements[profile.name] = summarize(runs)
 		fixtureSwitches[profile.name] = await measureFixtureSwitch(browser, profile)
 	}
@@ -421,9 +391,10 @@ console.log(
 	JSON.stringify(
 		{
 			url: new URL(baseUrl).origin,
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			audience: sessionCookie ? 'session-hint' : 'public',
 			coldLoads: measurements,
+			raw,
 			fixtureSwitches,
 			concurrency: {
 				requests: concurrency,

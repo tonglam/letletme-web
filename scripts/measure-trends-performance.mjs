@@ -1,3 +1,4 @@
+import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -11,50 +12,11 @@ const profiles = [
 	{ name: 'desktop', viewport: { width: 1440, height: 900 } },
 	{ name: 'mobile', viewport: { width: 390, height: 844 } }
 ]
-const percentile = (values, p) => {
-	const ordered = [...values].sort((a, b) => a - b)
-	return Number(
-		ordered[
-			Math.min(
-				ordered.length - 1,
-				Math.max(0, Math.ceil((p / 100) * ordered.length) - 1)
-			)
-		].toFixed(2)
-	)
-}
-const distribution = (runs, key) => ({
-	p50: percentile(
-		runs.map(run => run[key]),
-		50
-	),
-	p95: percentile(
-		runs.map(run => run[key]),
-		95
-	),
-	max: Number(Math.max(...runs.map(run => run[key])).toFixed(2))
-})
 
 async function measure(browser, profile, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	const page = await context.newPage()
-	await page.addInitScript(() => {
-		window.__trendsPerf = { lcp: 0, cls: 0, tbt: 0 }
-		new PerformanceObserver(list =>
-			list.getEntries().forEach(entry => {
-				window.__trendsPerf.lcp = entry.startTime
-			})
-		).observe({ type: 'largest-contentful-paint', buffered: true })
-		new PerformanceObserver(list =>
-			list.getEntries().forEach(entry => {
-				if (!entry.hadRecentInput) window.__trendsPerf.cls += entry.value
-			})
-		).observe({ type: 'layout-shift', buffered: true })
-		new PerformanceObserver(list =>
-			list.getEntries().forEach(entry => {
-				window.__trendsPerf.tbt += Math.max(0, entry.duration - 50)
-			})
-		).observe({ type: 'longtask', buffered: true })
-	})
+	await installVitals(page, '__trendsPerf')
 	const cdp = await context.newCDPSession(page)
 	await cdp.send('Network.enable')
 	let documentRequestId = null
@@ -74,6 +36,7 @@ async function measure(browser, profile, index) {
 	const url = new URL(targetUrl)
 	url.searchParams.set('_trendsPerf', `${profile.name}-${index}-${Date.now()}`)
 	url.searchParams.set('_perfSource', 'synthetic')
+	const navigation = await measureNavigation(browser, profile, url.toString())
 	const response = await page.goto(url.toString(), { waitUntil: 'load' })
 	await page.waitForTimeout(500)
 	const firstSelect = page.locator('select').nth(1)
@@ -108,9 +71,9 @@ async function measure(browser, profile, index) {
 	const values = await page.evaluate(() => {
 		const nav = performance.getEntriesByType('navigation')[0]
 		return {
-			lcpMs: window.__trendsPerf?.lcp ?? 0,
-			cls: window.__trendsPerf?.cls ?? 0,
-			tbtMs: window.__trendsPerf?.tbt ?? 0,
+			lcpMs: window.__trendsPerf?.lcp ?? null,
+			cls: window.__trendsPerf?.cls ?? null,
+			observedLongTaskBlockingMs: window.__trendsPerf?.observedLongTaskBlockingMs ?? null,
 			ttfbMs: nav?.responseStart ?? 0,
 			htmlResponseMs: nav?.responseEnd ?? 0,
 			horizontalOverflow:
@@ -123,10 +86,11 @@ async function measure(browser, profile, index) {
 		: brotliCompressSync(body).byteLength
 	await context.close()
 	return {
+		navigation,
 		status: response?.status() ?? 0,
 		...values,
 		documentBytes,
-		switchMs: switchMs ?? Number.POSITIVE_INFINITY,
+		switchMs: switchMs ?? null,
 		deskRequestCount: deskRequests,
 		firstSwitchRequests: deskRequests - before,
 		cachedSwitchRequests: deskRequests - beforeCached
@@ -150,10 +114,10 @@ const measurements = Object.fromEntries(
 		{
 			runs: runs.length,
 			status200: runs.every(run => run.status === 200),
-			lcpMs: distribution(runs, 'lcpMs'),
-			tbtMs: distribution(runs, 'tbtMs'),
-			cls: distribution(runs, 'cls'),
-			htmlResponseMs: distribution(runs, 'htmlResponseMs'),
+			lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
+			observedLongTaskBlockingMs: distribution(runs.map(run => run.navigation), 'observedLongTaskBlockingMs'),
+			cls: distribution(runs.map(run => run.navigation), 'cls'),
+			htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
 			documentBytes: distribution(runs, 'documentBytes'),
 			switchMs: distribution(runs, 'switchMs'),
 			firstSwitchRequests: runs.map(run => run.firstSwitchRequests),
@@ -166,15 +130,16 @@ console.log(
 	JSON.stringify(
 		{
 			url: new URL(targetUrl).origin + new URL(targetUrl).pathname,
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			measurements,
+			raw,
 			acceptance: {
 				mobileLcp:
 					measurements.mobile.lcpMs.p50 <= 2500 &&
-					measurements.mobile.lcpMs.p95 <= 3000,
-				mobileTbt: measurements.mobile.tbtMs.p95 <= 100,
+					measurements.mobile.lcpMs.max <= 3000,
+				mobileObservedBlocking: measurements.mobile.observedLongTaskBlockingMs.max <= 100,
 				cls: Object.values(measurements).every(
-					measurement => measurement.cls.p95 <= 0.02
+					measurement => measurement.cls.max <= 0.02
 				),
 				cachedSwitch: Object.values(measurements).every(measurement =>
 					measurement.cachedSwitchRequests.every(count => count === 0)

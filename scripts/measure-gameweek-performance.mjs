@@ -1,3 +1,4 @@
+import { installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -23,36 +24,17 @@ const profiles = [
 	{ name: 'mobile', viewport: { width: 390, height: 844 } }
 ]
 
-function percentile(values, percentileValue) {
-	const ordered = [...values].sort((left, right) => left - right)
-	const index = Math.min(
-		ordered.length - 1,
-		Math.ceil((percentileValue / 100) * ordered.length) - 1
-	)
-	return Number(ordered[Math.max(0, index)].toFixed(2))
-}
 
-function distribution(runs, field) {
-	const values = runs
-		.map(run => run[field])
-		.filter(value => typeof value === 'number' && Number.isFinite(value))
-	if (values.length === 0) return null
-	return {
-		p50: percentile(values, 50),
-		p95: percentile(values, 95),
-		max: Number(Math.max(...values).toFixed(2))
-	}
-}
 
 function summarize(runs) {
 	return {
 		runs: runs.length,
 		status200: runs.every(run => run.status === 200),
-		lcpMs: distribution(runs, 'lcpMs'),
-		tbtMs: distribution(runs, 'tbtMs'),
-		cls: distribution(runs, 'cls'),
-		ttfbMs: distribution(runs, 'ttfbMs'),
-		htmlResponseMs: distribution(runs, 'htmlResponseMs'),
+		lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
+		observedLongTaskBlockingMs: distribution(runs.map(run => run.navigation), 'observedLongTaskBlockingMs'),
+		cls: distribution(runs.map(run => run.navigation), 'cls'),
+		ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
+		htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
 		documentBytes: distribution(runs, 'documentBytes'),
 		initialContentReadyMs: distribution(runs, 'initialContentReadyMs'),
 		deskSwitchReadyMs: distribution(runs, 'deskSwitchReadyMs'),
@@ -92,24 +74,7 @@ async function waitForGameweekHeading(page, eventId) {
 async function measureRun(browser, profile, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	const page = await context.newPage()
-	await page.addInitScript(() => {
-		window.__gameweekPerformance = { cls: 0, lcp: 0, tbt: 0 }
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries())
-				window.__gameweekPerformance.lcp = entry.startTime
-		}).observe({ type: 'largest-contentful-paint', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				if (!entry.hadRecentInput)
-					window.__gameweekPerformance.cls += entry.value
-			}
-		}).observe({ type: 'layout-shift', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				window.__gameweekPerformance.tbt += Math.max(0, entry.duration - 50)
-			}
-		}).observe({ type: 'longtask', buffered: true })
-	})
+	await installVitals(page, '__gameweekPerformance')
 
 	const cdp = await context.newCDPSession(page)
 	await cdp.send('Network.enable')
@@ -145,6 +110,7 @@ async function measureRun(browser, profile, index) {
 		`${profile.name}-${index}-${Date.now()}`
 	)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
+	const navigation = await measureNavigation(browser, profile, runUrl.toString())
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	await waitForReady(page)
 	const telemetryDeadline = Date.now() + 5_000
@@ -217,9 +183,9 @@ async function measureRun(browser, profile, index) {
 	const values = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {
-			lcpMs: window.__gameweekPerformance?.lcp ?? 0,
-			cls: window.__gameweekPerformance?.cls ?? 0,
-			tbtMs: window.__gameweekPerformance?.tbt ?? 0,
+			lcpMs: window.__gameweekPerformance?.lcp ?? null,
+			cls: window.__gameweekPerformance?.cls ?? null,
+			observedLongTaskBlockingMs: window.__gameweekPerformance?.observedLongTaskBlockingMs ?? null,
 			ttfbMs: navigation?.responseStart ?? 0,
 			htmlResponseMs: navigation?.responseEnd ?? 0,
 			horizontalOverflow:
@@ -228,10 +194,11 @@ async function measureRun(browser, profile, index) {
 	})
 	await context.close()
 	return {
+		navigation,
 		status: response?.status() ?? 0,
 		...values,
 		documentBytes,
-		initialContentReadyMs: initialReadyMetric ?? 0,
+		initialContentReadyMs: initialReadyMetric ?? null,
 		deskSwitchReadyMs,
 		firstDeskRequestCount,
 		cachedDeskRequestCount,
@@ -265,12 +232,13 @@ console.log(
 	JSON.stringify(
 		{
 			url: new URL(targetUrl).origin + new URL(targetUrl).pathname,
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			targetEvent,
 			measurements,
+			raw,
 			acceptance: {
-				mobileLcp: mobile.lcpMs.p50 <= 2_500 && mobile.lcpMs.p95 <= 3_000,
-				mobileTbt: mobile.tbtMs.max <= 100,
+				mobileLcp: mobile.lcpMs.p50 <= 2_500 && mobile.lcpMs.max <= 3_000,
+				mobileObservedBlocking: mobile.observedLongTaskBlockingMs.max <= 100,
 				cls: allRuns.every(run => run.cls <= 0.02),
 				htmlResponse:
 					percentile(
