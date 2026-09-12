@@ -1048,7 +1048,7 @@ describe('live tournament filter visibility', () => {
 	})
 
 	it('keeps ownership and team-exposure filters reachable in the paged board', async () => {
-		const [clientSource, filtersSource] = await Promise.all([
+		const [clientSource, filtersSource, operationSource] = await Promise.all([
 			readFile(
 				new URL(
 					'../app/live/tournaments/TournamentClient.tsx',
@@ -1062,6 +1062,10 @@ describe('live tournament filter visibility', () => {
 					import.meta.url
 				),
 				'utf8'
+			),
+			readFile(
+				new URL('../lib/graphql/operations/tournaments.ts', import.meta.url),
+				'utf8'
 			)
 		])
 
@@ -1069,6 +1073,34 @@ describe('live tournament filter visibility', () => {
 		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
 		assert.match(filtersSource, /t\('playerOwnership'\)/)
 		assert.match(filtersSource, /t\('teamExposure'\)/)
+		assert.match(filtersSource, /captainCount > 0/)
+		assert.match(filtersSource, /onValueChange=\{value => addCaptain\(value\)\}/)
+		assert.match(filtersSource, /selectedCaptainIds\.size >= 15/)
+		assert.match(
+			operationSource,
+			/rows \{ playerId playerName teamId teamName teamShortName position count captainCount percentage \}/
+		)
+	})
+
+	it('does not present an empty selection index as a zero-player directory', async () => {
+		const source = await readFile(
+			new URL(
+				'../components/tournament/LiveCompetitionBoardFilters.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(
+			source,
+			/if \(next\.length === 0\) \{[\s\S]*setSelectionIndexStatus\('unavailable'\)/
+		)
+		assert.match(source, /selectionIndexRetryNonce/)
+		assert.match(
+			source,
+			/isPlayerPickerOpen && selectionIndexStatus === 'ready'/
+		)
+		assert.match(source, /setSelectionIndexStatus\('recovering'\)/)
 	})
 
 	it('keeps official H2H on its authoritative view and off the manager board', async () => {
