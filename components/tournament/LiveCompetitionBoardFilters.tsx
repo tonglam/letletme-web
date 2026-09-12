@@ -839,6 +839,7 @@ export function LiveCompetitionBoardFilters({
 							disabled={
 								controlsDisabled ||
 								selectionIndexLoading ||
+								selectedCaptainIds.size >= 15 ||
 								captainOptions.length === 0
 							}
 						>

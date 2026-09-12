@@ -1075,6 +1075,7 @@ describe('live tournament filter visibility', () => {
 		assert.match(filtersSource, /t\('teamExposure'\)/)
 		assert.match(filtersSource, /captainCount > 0/)
 		assert.match(filtersSource, /onValueChange=\{value => addCaptain\(value\)\}/)
+		assert.match(filtersSource, /selectedCaptainIds\.size >= 15/)
 		assert.match(
 			operationSource,
 			/rows \{ playerId playerName teamId teamName teamShortName position count captainCount percentage \}/
