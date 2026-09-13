@@ -82,7 +82,7 @@ function TournamentKindSelector({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
           <DropdownMenuContent
-            className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[16rem]"
+            className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[16rem] overflow-y-auto"
             align="start"
           >
             {tournaments.map((tournament) => {
