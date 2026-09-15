@@ -28,6 +28,7 @@ export function PlayerStatsInitialDesk({ promise, playerIds, eventId, onSeed, ch
 		player, comparison,
 		selectedPlayer: player ? playerDetailToDirectoryOption(player) : children.props.selectedPlayer,
 		selectedComparison: comparison ? playerDetailToDirectoryOption(comparison) : children.props.selectedComparison,
+		comparisonRequested: playerIds.p2 != null,
 		playerState: player && isCoreState(first?.state) ? withEmptyStateContext(first.state, player.elementType) : null,
 		comparisonState: comparison && isCoreState(second?.state) ? withEmptyStateContext(second.state, comparison.elementType) : null,
 		error: player ? null : t('loadFailed'),

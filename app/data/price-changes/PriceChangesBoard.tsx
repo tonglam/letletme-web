@@ -3,7 +3,11 @@
 import { usePriceChangesPersonalSeed } from './PriceChangesPersonalSeedContext'
 
 import { PriceChangeShareCard } from '@/app/data/price-changes/PriceChangeShareCard'
-import { formatPriceChangeShareText } from '@/app/data/price-changes/_lib/price-change-share'
+import {
+	formatPriceChangeShareText,
+	selectPriceChangeSquadPlayers,
+	type PriceChangeShareLabels
+} from '@/app/data/price-changes/_lib/price-change-share'
 import { PriceChangeSquadPitch } from '@/app/data/price-changes/PriceChangeSquadPitch'
 import { CountdownCard } from '@/components/home/CountdownCard'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
@@ -56,9 +60,9 @@ import {
 	type PriceChangeScope
 } from '@/lib/price-change-sorting'
 import { buildPriceChangeFilterUrl } from '@/lib/price-change-filter-url'
-import { selectPriceChangeSquadPlayers } from '@/app/data/price-changes/_lib/price-change-share'
 import { cn } from '@/lib/utils'
 import { useHydrated } from '@/hooks/use-hydrated'
+import type { PersonalSquadSeed } from '@/lib/squad-picks'
 import { useRouter } from 'next/navigation'
 import {
 	ArrowDown,
@@ -74,7 +78,15 @@ import {
 	Search
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import {
+	Suspense,
+	use,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useTransition
+} from 'react'
 
 const PAGE_SIZE = 20
 
@@ -117,6 +129,78 @@ function formatDeadline(
 		minute: '2-digit',
 		timeZoneName: 'short'
 	}).format(new Date(timestamp))
+}
+
+function PriceChangesSquadStream({
+	promise,
+	displayBoard,
+	locale,
+	hydrated,
+	shareLabels,
+	onRetry
+}: {
+	promise: Promise<PersonalSquadSeed>
+	displayBoard: PriceChangeBoard
+	locale: string
+	hydrated: boolean
+	shareLabels: PriceChangeShareLabels
+	onRetry: () => void
+}) {
+	const personalSeed = use(promise)
+	const t = useTranslations('PriceChanges')
+	const mySquadPicks = personalSeed.picks
+	const mySquadBoardPlayers = useMemo(
+		() => selectPriceChangeSquadPlayers(displayBoard.players, mySquadPicks),
+		[displayBoard.players, mySquadPicks]
+	)
+	const shareRef = useRef<HTMLDivElement | null>(null)
+	const squadShareText = useMemo(() => {
+		const shareUrl =
+			typeof window !== 'undefined'
+				? window.location.href
+				: `https://letletme.top/${locale}/explore/price-predictions`
+		return formatPriceChangeShareText({
+			players: mySquadBoardPlayers,
+			updatedAtLabel: hydrated
+				? formatLocalSnapshotTime(displayBoard.fetchedAt, locale)
+				: null,
+			deadlineLabel: formatDeadline(displayBoard.deadline, locale, hydrated),
+			labels: {
+				...shareLabels,
+				scope: t('mySquadTab'),
+				footer: shareUrl
+			}
+		})
+	}, [displayBoard.deadline, displayBoard.fetchedAt, hydrated, locale, mySquadBoardPlayers, shareLabels, t])
+
+	return (
+		<>
+			{mySquadPicks.length > 0 ? (
+				<div className="flex justify-end">
+					<ShareActions
+						text={squadShareText}
+						imageRef={shareRef}
+						title={`${t('title')} · ${t('mySquadTab')}`}
+					/>
+				</div>
+			) : null}
+			<PriceChangeSquadPitch
+				picks={mySquadPicks}
+				players={displayBoard.players}
+				squadState={personalSeed.state}
+				shareRef={shareRef}
+			/>
+			{personalSeed.state === 'unavailable' ? (
+				<button
+					type="button"
+					className="mt-3 text-sm underline"
+					onClick={onRetry}
+				>
+					{t('squadRetry')}
+				</button>
+			) : null}
+		</>
+	)
 }
 
 function isPersistableBoard(value: unknown): value is PriceChangeBoard {
@@ -274,7 +358,8 @@ export function PriceChangesBoard({
 	initialTimeLeft,
 	initialScope = DEFAULT_PRICE_CHANGE_SCOPE,
 	initialMovement = 'all',
-	isOfficialUpdating = false
+	isOfficialUpdating = false,
+	personalSeedPromise
 }: {
 	board: PriceChangeBoard
 	locale: string
@@ -282,12 +367,12 @@ export function PriceChangesBoard({
 	initialScope?: PriceChangeScope
 	initialMovement?: PriceChangeMovementFilter
 	isOfficialUpdating?: boolean
+	personalSeedPromise: Promise<PersonalSquadSeed>
 }) {
 	const t = useTranslations('PriceChanges')
 	const { seed: personalSeed } = usePriceChangesPersonalSeed()
 	const mySquadPicks = useMemo(() => personalSeed?.picks ?? [], [personalSeed])
 	const mySquadElementIds = useMemo(() => mySquadPicks.flatMap(pick => pick.elementId == null ? [] : [pick.elementId]), [mySquadPicks])
-	const mySquadState = personalSeed?.state ?? 'unavailable'
 	const [squadOpen, setSquadOpen] = useState(false)
 	useEffect(() => {
 		const reveal = () => { if (window.location.hash === '#my-squad') setSquadOpen(true) }
@@ -316,7 +401,6 @@ export function PriceChangesBoard({
 	const isUpdatingNotice = isOfficialUpdating && displayBoard.status !== 'READY'
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
 	const shareRef = useRef<HTMLDivElement | null>(null)
-	const mySquadShareRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
 		try {
@@ -487,10 +571,6 @@ export function PriceChangesBoard({
 			locale
 		})
 	}, [displayBoard.players, locale, movement, mySquad, scope, sort])
-	const mySquadBoardPlayers = useMemo(
-		() => selectPriceChangeSquadPlayers(displayBoard.players, mySquadPicks),
-		[displayBoard.players, mySquadPicks]
-	)
 	const snapshotUpdatedAtLabel = useMemo(
 		() =>
 			hydrated ? formatLocalSnapshotTime(displayBoard.fetchedAt, locale) : null,
@@ -541,31 +621,6 @@ export function PriceChangesBoard({
 		shareScopePlayers,
 		snapshotUpdatedAtLabel
 	])
-	const squadShareText = useMemo(() => {
-		const shareUrl =
-			typeof window !== 'undefined'
-				? window.location.href
-				: `https://letletme.top/${locale}/explore/price-predictions`
-		return formatPriceChangeShareText({
-			players: mySquadBoardPlayers,
-			updatedAtLabel: snapshotUpdatedAtLabel,
-			deadlineLabel: formatDeadline(displayBoard.deadline, locale, hydrated),
-			labels: {
-				...shareLabels,
-				scope: t('mySquadTab'),
-				footer: shareUrl
-			}
-		})
-	}, [
-		displayBoard.deadline,
-		hydrated,
-		locale,
-		mySquadBoardPlayers,
-		shareLabels,
-		snapshotUpdatedAtLabel,
-		t
-	])
-
 	return (
 		<div className="space-y-5">
 			<CountdownCard
@@ -703,29 +758,20 @@ export function PriceChangesBoard({
 			<details id="my-squad" open={squadOpen} onToggle={event => setSquadOpen(event.currentTarget.open)} className="rounded-lg border bg-card">
 				<summary className="flex h-12 cursor-pointer items-center justify-between gap-3 px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
 					<span>{t('mySquadTab')}</span>
-					<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">{personalSeed == null ? t('squadLoading') : t(squadOpen ? 'squadCollapse' : 'squadExpand')}</span>
+					<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">{t(squadOpen ? 'squadCollapse' : 'squadExpand')}</span>
 				</summary>
-				{squadOpen ? <div className="border-t p-4" aria-busy={personalSeed == null}>
-					{personalSeed == null ? <div className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div> : <>
-			{mySquadPicks.length > 0 ? (
-				<div className="flex justify-end">
-					<ShareActions
-						text={squadShareText}
-						imageRef={mySquadShareRef}
-						title={`${t('title')} · ${t('mySquadTab')}`}
-					/>
+				<div className="border-t p-4">
+					<Suspense fallback={<div className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
+						<PriceChangesSquadStream
+							promise={personalSeedPromise}
+							displayBoard={displayBoard}
+							locale={locale}
+							hydrated={hydrated}
+							shareLabels={shareLabels}
+							onRetry={() => startRefresh(() => router.refresh())}
+						/>
+					</Suspense>
 				</div>
-			) : null}
-			<PriceChangeSquadPitch
-				picks={mySquadPicks}
-				players={displayBoard.players}
-				squadState={mySquadState}
-				shareRef={mySquadShareRef}
-			/>
-
-						{mySquadState === 'unavailable' ? <button type="button" className="mt-3 text-sm underline" onClick={() => startRefresh(() => router.refresh())}>{t('squadRetry')}</button> : null}
-					</>}
-				</div> : null}
 			</details>
 
 			<Card className="overflow-hidden border-border/80 shadow-sm">

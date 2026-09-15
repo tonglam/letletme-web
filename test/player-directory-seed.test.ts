@@ -106,4 +106,22 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(source, /addEventListener\('hashchange', scheduleHashScroll\)/)
 		assert.match(source, /addEventListener\('popstate', scheduleHashScroll\)/)
 	})
+
+	it('keeps a missing deep-link comparison visible as an actionable error', async () => {
+		const [clientSource, initialDeskSource, viewSource] = await Promise.all([
+			readFile(new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url), 'utf8'),
+			readFile(new URL('../app/data/player-stats/PlayerStatsInitialDesk.tsx', import.meta.url), 'utf8'),
+			readFile(new URL('../app/data/player-stats/_components/PlayerStatsView.tsx', import.meta.url), 'utf8')
+		])
+
+		assert.match(clientSource, /const comparisonRequested = Boolean\([\s\S]*initialPlayerIds\.p2 != null\)/)
+		assert.match(clientSource, /comparisonRequested=\{comparisonRequested\}/)
+		const retryStart = clientSource.indexOf('retryPlayerData={() =>')
+		const retryEnd = clientSource.indexOf('loadEvidence=', retryStart)
+		const retry = clientSource.slice(retryStart, retryEnd)
+		assert.match(retry, /secondSelectPlayerById\(initialPlayerIds\.p2[\s\S]*batchPlayerIds/)
+		assert.match(initialDeskSource, /comparisonRequested: playerIds\.p2 != null/)
+		assert.match(viewSource, /const comparisonMissing = comparisonRequested && !comparison/)
+		assert.match(viewSource, /comparisonRequested && isComparisonLoading && comparisonMissing/)
+	})
 })

@@ -95,7 +95,7 @@ async function renderFixturesPage({ params }: PageProps) {
 		<FixturesSeedProvider navigationId={navigationId}>
 			<FixturesClient fromGw={fromGw} initialHorizon={horizon}
 				initialFixturesByEvent={fixturesByEvent} initialUnknownEventIds={unknownEventIds}
-				knownTeams={teams ?? []} />
+				knownTeams={teams ?? []} squadPromise={squadPromise} />
 			<Suspense fallback={null}><SquadStream navigationId={navigationId} promise={squadPromise} /></Suspense>
 			<Suspense fallback={null}><MarketStream navigationId={navigationId} promise={marketPromise} /></Suspense>
 			<Suspense fallback={null}><OwnershipStream navigationId={navigationId} promise={ownershipPromise} /></Suspense>

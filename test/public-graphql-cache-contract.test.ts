@@ -201,8 +201,28 @@ describe('public GraphQL cache contract', () => {
 		assert.match(retry, /firstPlayer\.selectPlayer\([\s\S]*bypassCache: true/)
 		assert.match(
 			retry,
-			/secondPlayer\.selectPlayer\([\s\S]*batchPlayerIds\s*\n\s*\)/
+			/secondPlayer\.selectPlayer\([\s\S]*retryBatchPlayerIds\s*\n\s*\)/
 		)
 		assert.doesNotMatch(retry, /secondPlayer\.selectPlayer\([\s\S]*bypassCache/)
+	})
+
+	it('streams personal squad content into initial HTML before hydration', async () => {
+		const [fixturesPage, fixturesClient, priceChangesPage, priceChangesBoard] =
+			await Promise.all([
+				read('app/[locale]/explore/fixtures/page.tsx'),
+				read('app/data/fixtures/FixturesClient.tsx'),
+				read('app/[locale]/explore/price-predictions/page.tsx'),
+				read('app/data/price-changes/PriceChangesBoard.tsx')
+			])
+
+		assert.match(fixturesPage, /<FixturesClient[\s\S]*squadPromise=\{squadPromise\}/)
+		assert.match(fixturesClient, /function FixturesSquadStream[\s\S]*const squad = use\(promise\)/)
+		assert.match(fixturesClient, /<Suspense fallback=\{<div[\s\S]*<FixturesSquadStream[\s\S]*promise=\{squadPromise\}/)
+		assert.doesNotMatch(fixturesClient, /\{squadOpen \? <div/)
+
+		assert.match(priceChangesPage, /<PriceChangesBoard[\s\S]*personalSeedPromise=\{personalPromise\}/)
+		assert.match(priceChangesBoard, /function PriceChangesSquadStream[\s\S]*const personalSeed = use\(promise\)/)
+		assert.match(priceChangesBoard, /<Suspense fallback=\{<div[\s\S]*<PriceChangesSquadStream[\s\S]*promise=\{personalSeedPromise\}/)
+		assert.doesNotMatch(priceChangesBoard, /\{squadOpen \? <div/)
 	})
 })

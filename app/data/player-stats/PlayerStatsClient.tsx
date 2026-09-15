@@ -385,6 +385,10 @@ export default function PlayerStatsClient({
 				: t('personalContextUnavailable')
 
 	const showInitialDesk = initialPlayerIds.p1 != null && !initialDeskSettled && firstPlayer.selectionVersion === 0 && secondPlayer.selectionVersion === 0
+	const comparisonRequested = Boolean(
+		secondPlayer.selectedPlayer ||
+		(secondPlayer.selectionVersion === 0 && initialPlayerIds.p2 != null)
+	)
 	const detailView = (initialPlayerIds.p1 != null ||
 			firstPlayer.selectedPlayer ||
 			firstPlayer.isLoading ||
@@ -392,6 +396,7 @@ export default function PlayerStatsClient({
 				<PlayerStatsView
 					selectedPlayer={firstPlayer.selectedPlayer}
 					selectedComparison={secondPlayer.selectedPlayer}
+					comparisonRequested={comparisonRequested}
 					player={firstPlayer.playerDetail}
 					comparison={secondPlayer.playerDetail}
 					playerState={firstPlayer.playerStateProfile}
@@ -405,28 +410,38 @@ export default function PlayerStatsClient({
 					stateError={firstPlayer.stateError}
 					comparisonStateError={secondPlayer.stateError}
 					retryPlayerData={() => {
-						if (!firstPlayer.selectedPlayer) {
-							if (initialPlayerIds.p1 != null) void firstSelectPlayerById(initialPlayerIds.p1)
-							return
-						}
-						const batchPlayerIds = [
+						const retryBatchPlayerIds = [
 							firstSelectedPlayerId,
-							secondSelectedPlayerId
+							secondSelectedPlayerId,
+							initialPlayerIds.p1,
+							initialPlayerIds.p2
 						]
 							.map(Number)
 							.filter(value => Number.isInteger(value) && value > 0)
-						firstPlayer.selectPlayer(
-							firstPlayer.selectedPlayer,
-							batchPlayerIds,
-							{
-								bypassCache: true
+						if (!firstPlayer.selectedPlayer) {
+							if (initialPlayerIds.p1 != null) {
+								void firstSelectPlayerById(initialPlayerIds.p1, {
+									batchPlayerIds: retryBatchPlayerIds
+								})
 							}
-						)
+						} else {
+							firstPlayer.selectPlayer(
+								firstPlayer.selectedPlayer,
+								retryBatchPlayerIds,
+								{
+									bypassCache: true
+								}
+							)
+						}
 						if (secondPlayer.selectedPlayer) {
 							secondPlayer.selectPlayer(
 								secondPlayer.selectedPlayer,
-								batchPlayerIds
+								retryBatchPlayerIds
 							)
+						} else if (comparisonRequested && initialPlayerIds.p2 != null) {
+							void secondSelectPlayerById(initialPlayerIds.p2, {
+								batchPlayerIds: retryBatchPlayerIds
+							})
 						}
 					}}
 					loadEvidence={section =>

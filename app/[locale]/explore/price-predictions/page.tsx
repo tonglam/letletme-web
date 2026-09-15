@@ -184,6 +184,7 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 					initialScope={initialScope}
 					initialMovement={initialMovement}
 					isOfficialUpdating={isOfficialUpdating}
+					personalSeedPromise={personalPromise}
 				/>
 			</div>
 		</PageShell>

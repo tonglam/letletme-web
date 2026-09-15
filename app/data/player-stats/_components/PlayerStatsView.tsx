@@ -47,6 +47,7 @@ import {
 export interface PlayerStatsViewProps {
 	selectedPlayer: PlayerDirectoryOption | null
 	selectedComparison: PlayerDirectoryOption | null
+	comparisonRequested: boolean
 	player: PlayerDetailData | null
 	comparison: PlayerDetailData | null
 	playerState: PlayerStateProfileData | null
@@ -598,6 +599,7 @@ function MarketSummary({
 export function PlayerStatsView({
 	selectedPlayer,
 	selectedComparison,
+	comparisonRequested,
 	player,
 	comparison,
 	playerState,
@@ -778,11 +780,11 @@ export function PlayerStatsView({
 	const requestPending = isLoading || isComparisonLoading
 	const requestError = error ?? comparisonError
 	const primaryMissing = !player
-	const comparisonMissing = Boolean(selectedComparison && !comparison)
+	const comparisonMissing = comparisonRequested && !comparison
 
 	if (
 		(isLoading && primaryMissing) ||
-		(selectedComparison && isComparisonLoading && comparisonMissing)
+		(comparisonRequested && isComparisonLoading && comparisonMissing)
 	) {
 		return <PlayerDetailSkeleton />
 	}
