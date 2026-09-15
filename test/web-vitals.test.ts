@@ -320,6 +320,10 @@ describe('privacy-safe web vitals', () => {
 					reasonCode: 'unknown',
 					measurementKind: 'request',
 					samplingProbability: 1,
+					metricName: 'PLAYER_DESK_RESPONSE',
+					navigationId: 'nav-12345678',
+					interactionId: 'interaction-12345678',
+					cacheStatus: 'stale',
 					errorClass: 'TypeError',
 					fingerprint: 'runtime.TypeError.unknown',
 					occurrenceCount: 3,
@@ -331,6 +335,20 @@ describe('privacy-safe web vitals', () => {
 		const parsed = parseClientSignalBatchV2(batch, now)
 		assert.equal(parsed?.ingestRelease, 'unknown')
 		assert.equal(parsed?.samples[0]?.occurrenceCount, 3)
+		assert.deepEqual(
+			{
+				metricName: parsed?.samples[0]?.metricName,
+				navigationId: parsed?.samples[0]?.navigationId,
+				interactionId: parsed?.samples[0]?.interactionId,
+				cacheStatus: parsed?.samples[0]?.cacheStatus
+			},
+			{
+				metricName: 'PLAYER_DESK_RESPONSE',
+				navigationId: 'nav-12345678',
+				interactionId: 'interaction-12345678',
+				cacheStatus: 'stale'
+			}
+		)
 		assert.deepEqual(withServerReleaseV2(parsed!, 'web-server-sha'), {
 			...parsed,
 			ingestRelease: 'web-server-sha'
