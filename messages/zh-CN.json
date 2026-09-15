@@ -1724,7 +1724,7 @@
 		"actionsTitle": "赛程复核候选",
 		"actionsHint": "仅按官方 FDR 与当前 Market 可见度中性分组，不构成买入或卖出建议。",
 		"actionsLoading": "正在读取当前市场信号…",
-		"noScriptHint": "互动式赛程详情需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
+		"actionsNoScriptHint": "互动式赛程候选需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
 		"actionsPosLabel": "位置",
 		"actionsPosAll": "全部",
 		"actionsMySquadEmpty": "绑定 FPL 阵容后，可在此高亮你的球员。",
@@ -1755,7 +1755,7 @@
 		"shareNone": "无",
 		"shareFooter": "{url}",
 		"squadLoading": "正在读取你的阵容…",
-		"noScriptHint": "互动式阵容详情需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
+		"squadNoScriptHint": "互动式阵容赛程详情需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
 		"squadExpand": "查看阵容",
 		"squadCollapse": "收起",
 		"squadRetry": "刷新重试"

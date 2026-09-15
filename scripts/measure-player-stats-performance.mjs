@@ -56,7 +56,7 @@ function summarize(runs) {
 		status200: runs.every(run => run.status === 200),
 		lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
 		fcpMs: distribution(runs.map(run => run.navigation), 'fcpMs'),
-		observedLongTaskBlockingMs: distribution(runs.map(run => run.navigation), 'observedLongTaskBlockingMs'),
+		observedLongTaskBlockingMs: distribution(runs, 'observedLongTaskBlockingMs'),
 		cls: distribution(runs.map(run => run.navigation), 'cls'),
 		ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
 		htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
@@ -436,7 +436,7 @@ console.log(
 				mobileLcp:
 					atMost(mobile.directory.lcpMs.p50, 2_500) &&
 					atMost(mobile.directory.lcpMs.max, 3_000),
-				mobileObservedBlocking: raw.mobile.directory.every(run => atMost(run.navigation.observedLongTaskBlockingMs, 100)),
+				mobileObservedBlocking: raw.mobile.directory.every(run => atMost(run.observedLongTaskBlockingMs, 100)),
 				cls: allRuns.every(run => atMost(run.navigation.cls, 0.02)),
 				htmlResponse:
 					atMost(percentile(

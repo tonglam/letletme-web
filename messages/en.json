@@ -1724,7 +1724,7 @@
 		"actionsTitle": "Fixture review candidates",
 		"actionsHint": "Neutral review groups based only on official FDR and current Market visibility — not buy or sell advice.",
 		"actionsLoading": "Loading current market signals…",
-		"noScriptHint": "Interactive fixture details require JavaScript. The public fixture matrix above remains available.",
+		"actionsNoScriptHint": "Interactive fixture candidates require JavaScript. The public fixture matrix above remains available.",
 		"actionsPosLabel": "Position",
 		"actionsPosAll": "All",
 		"actionsMySquadEmpty": "Link an FPL entry to highlight your squad here.",
@@ -1755,7 +1755,7 @@
 		"shareNone": "None",
 		"shareFooter": "{url}",
 		"squadLoading": "Loading your squad…",
-		"noScriptHint": "Interactive squad details require JavaScript. The public fixture matrix above remains available.",
+		"squadNoScriptHint": "Interactive squad fixture details require JavaScript. The public fixture matrix above remains available.",
 		"squadExpand": "View squad",
 		"squadCollapse": "Collapse",
 		"squadRetry": "Refresh and retry"

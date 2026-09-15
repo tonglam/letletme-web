@@ -640,7 +640,7 @@ function FixturesActionsFallback() {
 			<FixturesNoScriptResult
 				marker="fixtures-actions"
 				title={t('actionsTitle')}
-				message={t('noScriptHint')}
+				message={t('actionsNoScriptHint')}
 			/>
 		</>
 	)
@@ -660,7 +660,7 @@ function FixturesSquadFallback() {
 			<FixturesNoScriptResult
 				marker="fixtures-squad"
 				title={t('mySquadTitle')}
-				message={t('noScriptHint')}
+				message={t('squadNoScriptHint')}
 			/>
 		</>
 	)
