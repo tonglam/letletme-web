@@ -144,6 +144,23 @@ type RuntimeErrorAggregate = {
 const seenRuntimeErrorObjects = new WeakSet<object>()
 const runtimeErrorAggregates = new Map<string, RuntimeErrorAggregate>()
 const MAX_RUNTIME_ERROR_FINGERPRINT_LENGTH = 128
+const LEGACY_INTERACTION_METRIC_NAMES = new Set([
+	'MARKET_SEARCH_READY',
+	'MARKET_HISTORY_READY',
+	'MARKET_AVAILABILITY_READY',
+	'TRENDS_SWITCH_READY'
+])
+
+export function defaultMeasurementKind(
+	metricName: string,
+	interactionId?: string
+): ClientSignalMeasurementKind {
+	return interactionId ||
+		metricName === 'INP' ||
+		LEGACY_INTERACTION_METRIC_NAMES.has(metricName)
+		? 'interaction'
+		: 'initial_navigation'
+}
 
 type RuntimeErrorDimensions = Pick<
 	RuntimeErrorAggregate,
@@ -326,11 +343,9 @@ export function reportBrowserPerformanceMetric(
 				reasonCode:
 					metric.reasonCode ??
 					(metric.result ? reasonCodeForResult(metric.result) : 'none'),
-				measurementKind:
-					metric.measurementKind ??
-					(metric.interactionId || metric.name === 'INP'
-						? 'interaction'
-						: 'initial_navigation'),
+					measurementKind:
+						metric.measurementKind ??
+						defaultMeasurementKind(metric.name, metric.interactionId),
 				samplingProbability: options.always ? 1 : getSampleRate(),
 				...(metric.navigationId === undefined
 					? {}
@@ -395,10 +410,10 @@ function flushRuntimeErrorAggregate(aggregationKey: string): void {
 }
 
 function runtimeErrorBuildLocation(error: unknown): string {
-	if (!error || typeof error !== 'object' || !('stack' in error))
-		return 'unknown'
+	if (!error || typeof error !== 'object') return 'unknown'
 	let stack: unknown
 	try {
+		if (!('stack' in error)) return 'unknown'
 		stack = error.stack
 	} catch {
 		return 'unknown'
@@ -474,41 +489,6 @@ function runtimeErrorIsFlushed(aggregate: RuntimeErrorAggregate): boolean {
 	)
 }
 
-function mergePendingRuntimeErrorIntoIncoming(
-	aggregate: RuntimeErrorAggregate,
-	occurrenceCount: number,
-	firstObservedAt: string,
-	lastObservedAt: string
-): {
-	occurrenceCount: number
-	firstObservedAt: string
-	lastObservedAt: string
-} {
-	if (!runtimeErrorHasPendingOccurrences(aggregate)) {
-		return { occurrenceCount, firstObservedAt, lastObservedAt }
-	}
-	const pendingCount = aggregate.occurrenceCount - aggregate.reportedCount
-	const aggregateFirst = aggregate.firstObservedAt
-	const incomingFirst = Date.parse(firstObservedAt)
-	const pendingFirst =
-		aggregateFirst === null ? Number.NaN : Date.parse(aggregateFirst)
-	const aggregateLast = Date.parse(aggregate.lastObservedAt)
-	const incomingLast = Date.parse(lastObservedAt)
-	return {
-		occurrenceCount: occurrenceCount + pendingCount,
-		firstObservedAt:
-			Number.isFinite(pendingFirst) &&
-			(!Number.isFinite(incomingFirst) || pendingFirst < incomingFirst)
-				? (aggregateFirst ?? firstObservedAt)
-				: firstObservedAt,
-		lastObservedAt:
-			Number.isFinite(aggregateLast) &&
-			(!Number.isFinite(incomingLast) || aggregateLast > incomingLast)
-				? aggregate.lastObservedAt
-				: lastObservedAt
-	}
-}
-
 function mergeRuntimeErrorIntoOther(
 	dimensions: RuntimeErrorDimensions,
 	occurrenceCount: number,
@@ -551,7 +531,13 @@ function mergeRuntimeErrorIntoOther(
 			candidate.fingerprint === 'runtime.other' &&
 			!runtimeErrorIsFlushed(candidate)
 	)
-	if (existingOverflow) {
+	if (
+		existingOverflow &&
+		existingOverflow[1].page === dimensions.page &&
+		existingOverflow[1].surface === dimensions.surface &&
+		existingOverflow[1].deviceGroup === dimensions.deviceGroup &&
+		existingOverflow[1].sampleSource === dimensions.sampleSource
+	) {
 		mergeRuntimeErrorCounts(
 			existingOverflow[1],
 			occurrenceCount,
@@ -568,17 +554,13 @@ function mergeRuntimeErrorIntoOther(
 		) ?? runtimeErrorAggregates.entries().next().value
 	if (oldest) {
 		const [oldestKey, evicted] = oldest
-		const merged = mergePendingRuntimeErrorIntoIncoming(
-			evicted,
-			occurrenceCount,
-			firstObservedAt,
-			lastObservedAt
-		)
 		if (evicted.timer) globalThis.clearTimeout(evicted.timer)
+		// Flush before eviction so a pending aggregate is never re-labelled with
+		// the incoming page/device/source dimensions.
+		if (runtimeErrorHasPendingOccurrences(evicted)) {
+			flushRuntimeErrorAggregate(oldestKey)
+		}
 		runtimeErrorAggregates.delete(oldestKey)
-		occurrenceCount = merged.occurrenceCount
-		firstObservedAt = merged.firstObservedAt
-		lastObservedAt = merged.lastObservedAt
 	}
 	runtimeErrorAggregates.set(aggregationKey, {
 		errorClass: 'other',

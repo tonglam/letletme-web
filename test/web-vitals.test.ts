@@ -7,6 +7,7 @@ import {
 	parseWebVitalPayload,
 	resolveWebVitalSource
 } from '../lib/analytics/web-vitals'
+import { defaultMeasurementKind } from '../lib/analytics/client-vitals'
 import {
 	parseClientSignalBatch,
 	parseClientSignalBatchV2,
@@ -29,6 +30,13 @@ const validMetric = {
 }
 
 describe('privacy-safe web vitals', () => {
+	it('keeps legacy interaction markers in the interaction cohort', () => {
+		assert.equal(defaultMeasurementKind('TRENDS_SWITCH_READY'), 'interaction')
+		assert.equal(defaultMeasurementKind('MARKET_SEARCH_READY'), 'interaction')
+		assert.equal(defaultMeasurementKind('MARKET_HISTORY_READY'), 'interaction')
+		assert.equal(defaultMeasurementKind('MARKET_AVAILABILITY_READY'), 'interaction')
+		assert.equal(defaultMeasurementKind('FIXTURES_WINDOW_READY'), 'initial_navigation')
+	})
 	it('accepts public custom-domain beacons behind the Vercel origin', () => {
 		assert.equal(
 			isTrustedSameSiteRequest(

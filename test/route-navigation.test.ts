@@ -183,4 +183,22 @@ describe('route ready navigation clock', () => {
 			'initial_navigation'
 		)
 	})
+
+	it('consumes a background resume clock for identity-keyed readiness', () => {
+		const startedAt = performance.now()
+		markBackgroundResumeStart('/explore/fixtures', startedAt)
+		assert.equal(
+			measureRouteReadyDuration(
+				'/explore/fixtures',
+				startedAt + 450,
+				0,
+				'revision-1'
+			),
+			450
+		)
+		assert.equal(
+			routeReadyMeasurementKind('/explore/fixtures', 0, 'revision-2'),
+			'initial_navigation'
+		)
+	})
 })
