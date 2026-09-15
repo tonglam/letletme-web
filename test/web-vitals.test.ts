@@ -481,6 +481,78 @@ describe('privacy-safe web vitals', () => {
 		)
 	})
 
+	it('flushes pending runtime errors on pagehide and expires object dedupe', async () => {
+		const globalObject = globalThis as typeof globalThis &
+			Record<string, unknown>
+		const previousWindow = globalObject.window
+		const previousDocument = globalObject.document
+		const previousNavigator = globalObject.navigator
+		const previousNow = Date.now
+		const listeners = new Map<string, () => void>()
+		const beacons: Blob[] = []
+		let now = Date.parse('2026-08-27T00:00:00.000Z')
+
+		Object.defineProperty(globalObject, 'window', {
+			configurable: true,
+			value: {
+				innerWidth: 1280,
+				location: { pathname: '/live/matches', search: '' },
+				addEventListener(type: string, listener: () => void) {
+					listeners.set(type, listener)
+				}
+			}
+		})
+		Object.defineProperty(globalObject, 'document', {
+			configurable: true,
+			value: {
+				documentElement: { dataset: {} },
+				visibilityState: 'visible',
+				addEventListener() {}
+			}
+		})
+		Object.defineProperty(globalObject, 'navigator', {
+			configurable: true,
+			value: {
+				webdriver: false,
+				sendBeacon(_url: string, body: Blob) {
+					beacons.push(body)
+					return true
+				}
+			}
+		})
+		Date.now = () => now
+
+		try {
+			const { reportBrowserRuntimeError } =
+				await import('../lib/analytics/client-vitals')
+			const error = new Error('same object')
+			reportBrowserRuntimeError(error)
+			listeners.get('pagehide')?.()
+			assert.equal(beacons.length, 1)
+			assert.match(await beacons[0].text(), /"metric":"runtime_error"/)
+
+			now += 60_001
+			reportBrowserRuntimeError(error)
+			listeners.get('pagehide')?.()
+			assert.equal(beacons.length, 2)
+		} finally {
+			Date.now = previousNow
+			const restore = (key: string, value: unknown) => {
+				if (value === undefined) {
+					Reflect.deleteProperty(globalObject, key)
+					return
+				}
+				Object.defineProperty(globalObject, key, {
+					configurable: true,
+					value
+				})
+			}
+			restore('window', previousWindow)
+			restore('document', previousDocument)
+			restore('navigator', previousNavigator)
+		}
+	})
+
 	it('exposes fixed SSR contract markers for live and price surfaces', async () => {
 		const [live, price] = await Promise.all([
 			readFile(

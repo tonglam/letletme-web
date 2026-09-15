@@ -412,7 +412,10 @@ function installRuntimeErrorLifecycleHandlers(): void {
 	}
 	runtimeErrorLifecycleHandlersInstalled = true
 	const flushWhenHidden = () => {
-		if (typeof document === 'undefined' || document.visibilityState === 'hidden') {
+		if (
+			typeof document === 'undefined' ||
+			document.visibilityState === 'hidden'
+		) {
 			flushPendingRuntimeErrors()
 		}
 	}
@@ -596,7 +599,10 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 	const nowMs = Date.now()
 	if (error && typeof error === 'object') {
 		const seenAt = seenRuntimeErrorObjects.get(error)
-		if (seenAt !== undefined && nowMs - seenAt < RUNTIME_ERROR_DEDUPE_WINDOW_MS) {
+		if (
+			seenAt !== undefined &&
+			nowMs - seenAt < RUNTIME_ERROR_DEDUPE_WINDOW_MS
+		) {
 			return
 		}
 		seenRuntimeErrorObjects.set(error, nowMs)
