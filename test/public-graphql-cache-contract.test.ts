@@ -177,10 +177,11 @@ describe('public GraphQL cache contract', () => {
 	})
 
 	it('keeps personal Player Stats work behind the public bootstrap', async () => {
-		const [seed, page, client] = await Promise.all([
+		const [seed, page, client, globals] = await Promise.all([
 			read('lib/player-stats-seed.ts'),
 			read('app/[locale]/explore/player-stats/page.tsx'),
-			read('app/data/player-stats/PlayerStatsClient.tsx')
+			read('app/data/player-stats/PlayerStatsClient.tsx'),
+			read('app/globals.css')
 		])
 		assert.match(seed, /const bootstrap = await bootstrapPromise/)
 		assert.ok(
@@ -189,15 +190,20 @@ describe('public GraphQL cache contract', () => {
 		)
 		assert.match(page, /navigationId = createPerformanceCorrelationId\('nav'\)/)
 		assert.match(page, /navigationId\}/)
-		assert.match(page, /const initialDeskSeed\s*=\s*[\s\S]*: await timing[\s\S]*loadPlayerStatsDesk/)
-		assert.match(page, /<PlayerStatsClient[\s\S]*initialDeskSeed=\{initialDeskSeed\}/)
+		assert.match(page, /const initialDeskSeedPromise\s*=\s*[\s\S]*loadPlayerStatsDesk/)
+		assert.match(page, /<PlayerStatsClient[\s\S]*initialDeskSeedPromise=\{initialDeskSeedPromise\}/)
 		assert.ok(
-			page.indexOf('const initialDeskSeed') <
+			page.indexOf('const initialDeskSeedPromise') <
 				page.indexOf('const personalSeedPromise = loadPlayerStatsPersonalSeed')
 		)
 		assert.match(client, /void loadPlayerStatsView\(\)/)
 		assert.match(client, /interactionId: interaction\.interactionId/)
-		assert.doesNotMatch(client, /initialDeskSeedPromise|PlayerStatsInitialDesk/)
+		assert.match(client, /initialDeskSeedPromise/)
+		assert.match(client, /PlayerStatsInitialDesk/)
+		assert.match(client, /data-player-stats-ssr-boundary/)
+		assert.match(client, /data-player-stats-ssr-fallback/)
+		assert.match(globals, /\[hidden\]:has\(\[data-player-stats-ssr-detail\]\)/)
+		assert.match(globals, /body:has\(\[data-player-stats-ssr-detail\]\)[\s\S]*data-player-stats-ssr-fallback/)
 		const retryStart = client.indexOf('retryPlayerData={() =>')
 		const retryEnd = client.indexOf('loadEvidence=', retryStart)
 		const retry = client.slice(retryStart, retryEnd)

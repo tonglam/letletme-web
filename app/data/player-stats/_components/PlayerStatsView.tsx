@@ -45,6 +45,7 @@ import {
 } from './PlayerStatPrimitives'
 
 export interface PlayerStatsViewProps {
+	ssrStreamed?: boolean
 	selectedPlayer: PlayerDirectoryOption | null
 	selectedComparison: PlayerDirectoryOption | null
 	comparisonRequested: boolean
@@ -597,6 +598,7 @@ function MarketSummary({
 }
 
 export function PlayerStatsView({
+	ssrStreamed = false,
 	selectedPlayer,
 	selectedComparison,
 	comparisonRequested,
@@ -1017,6 +1019,7 @@ export function PlayerStatsView({
 	return (
 		<div
 			className="space-y-1"
+			data-player-stats-ssr-detail={ssrStreamed ? 'true' : undefined}
 			aria-busy={requestPending}
 		>
 			<div className="flex justify-end">

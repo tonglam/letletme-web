@@ -96,10 +96,10 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 
 	const directorySeed = bootstrap.directorySeed
 	const initialPlayerIds = { p1: initialP1, p2: initialP2 }
-	const initialDeskSeed =
+	const initialDeskSeedPromise =
 		initialP1 == null
-			? null
-			: await timing
+			? Promise.resolve(null)
+			: timing
 					.measure('desk', () =>
 						loadPlayerStatsDesk(
 							[initialP1, ...(initialP2 == null ? [] : [initialP2])],
@@ -125,8 +125,8 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 		durationMs: Number(timing.elapsedMs().toFixed(2)),
 		stages: timing.snapshot()
 	})
-	// Schedule personal work after the public directory and any deep-link detail
-	// seed resolve. The personal seed remains independently streamed.
+	// Schedule personal work after the public directory resolves. It does not
+	// block the independently streamed public detail seed.
 	const personalSeedPromise = loadPlayerStatsPersonalSeed(
 		Promise.resolve(bootstrap),
 		undefined,
@@ -170,7 +170,7 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 					<PlayerStatsClient key={navigationId}
 						directorySeed={directorySeed}
 						initialPlayerIds={initialPlayerIds}
-						initialDeskSeed={initialDeskSeed}
+						initialDeskSeedPromise={initialDeskSeedPromise}
 						navigationId={navigationId}
 					/>
 					<Suspense fallback={null}>

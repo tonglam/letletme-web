@@ -172,7 +172,7 @@ test.describe('SSR detail stream', () => {
 		await testInfo.attach('detail-stream-requests', { body: JSON.stringify((await (await fetch(fixture)).json()), null, 2), contentType: 'application/json' })
 	})
 
-	test('serves real overview HTML in a later response chunk without browser JavaScript', async ({ baseURL }, testInfo) => {
+	test('serves real overview HTML in a later response chunk without browser JavaScript', async ({ browser, baseURL }, testInfo) => {
 		const initialPlayerId = runPlayerId(2)
 		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, delayMs: 1800 }])
 		const start = Date.now()
@@ -195,6 +195,19 @@ test.describe('SSR detail stream', () => {
 		expect(detailMs).not.toBeNull()
 		expect(detailMs! - directoryMs!).toBeGreaterThan(1000)
 		expect(html).toContain('aria-label="Player overall"')
+		const noJsContext = await browser.newContext({ javaScriptEnabled: false })
+		const noJsPage = await noJsContext.newPage()
+		try {
+			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=${initialPlayerId}`)
+			const noJsDetail = noJsPage.locator('[aria-label="Player overall"]')
+			await expect(noJsDetail).toBeVisible()
+			await expect(noJsDetail).toContainText('Saka')
+			const noJsFallback = noJsPage.locator('[data-player-stats-ssr-fallback]')
+			await expect(noJsFallback).toHaveCount(1)
+			await expect(noJsFallback).toBeHidden()
+		} finally {
+			await noJsContext.close()
+		}
 		await testInfo.attach('ssr-stream-timing', { body: JSON.stringify({ directoryMs, detailMs, chunks }, null, 2), contentType: 'application/json' })
 	})
 
