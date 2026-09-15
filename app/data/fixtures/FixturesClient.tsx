@@ -391,7 +391,7 @@ function FixturesSquadStream({
 	const hasLinkedEntry = squad.state !== 'unbound'
 
 	return (
-		<>
+		<div data-ssr-stream-content="fixtures-squad">
 			{squad.picks.length > 0 ? (
 				<div className="mb-3 flex justify-end">
 					<ShareActions
@@ -420,7 +420,7 @@ function FixturesSquadStream({
 					{t('squadRetry')}
 				</button>
 			) : null}
-		</>
+		</div>
 	)
 }
 
@@ -482,11 +482,12 @@ function FixturesActionsStream({
 			: t('bucketEmpty')
 
 	return (
-		<Card
-			role="region"
-			aria-labelledby="fdr-actions"
-			className="mb-8 p-4 sm:p-5"
-		>
+		<div data-ssr-stream-content="fixtures-actions">
+			<Card
+				role="region"
+				aria-labelledby="fdr-actions"
+				className="mb-8 p-4 sm:p-5"
+			>
 			<SectionHead
 				id="fdr-actions"
 				title={t('actionsTitle')}
@@ -586,7 +587,8 @@ function FixturesActionsStream({
 					squadKeys={squadKeySet}
 				/>
 			</div>
-		</Card>
+			</Card>
+		</div>
 	)
 }
 
@@ -604,6 +606,7 @@ function FixturesActionsFallback() {
 				hint={t('actionsHint')}
 			/>
 			<div
+				data-ssr-stream-fallback="fixtures-actions"
 				className="min-h-24 rounded-lg border border-border/60 bg-muted/10 px-3 py-5 text-center text-sm text-muted-foreground"
 				aria-busy="true"
 				role="status"
@@ -1013,7 +1016,7 @@ export default function FixturesClient({
 							</span>
 						</summary>
 						<div className="border-t p-4 sm:p-5">
-							<Suspense fallback={<div className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
+							<Suspense fallback={<div data-ssr-stream-fallback="fixtures-squad" className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
 								<FixturesSquadStream
 									promise={squadPromise}
 									teams={model.teams}

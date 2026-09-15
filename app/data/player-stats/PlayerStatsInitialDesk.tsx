@@ -25,7 +25,7 @@ export function PlayerStatsInitialDesk({ promise, playerIds, eventId, onSeed, ch
 	const player = first?.overview ?? null
 	const comparison = second?.overview ?? null
 	return (
-		<div data-player-stats-ssr-container="true">
+		<div data-ssr-stream-content="player-stats" data-player-stats-ssr-container="true">
 			{cloneElement(children, {
 				ssrStreamed: true,
 				player, comparison,

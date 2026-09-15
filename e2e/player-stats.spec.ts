@@ -180,7 +180,7 @@ test.describe('SSR detail stream', () => {
 		expect(response.status).toBe(200)
 		const reader = response.body!.getReader()
 		const decoder = new TextDecoder()
-		let html = '', directoryMs: number | null = null, detailMs: number | null = null
+		let html = '', directoryMs: number | null = null, detailMs: number | null = null, fragmentAnchorMs: number | null = null
 		const chunks: Array<{ ms: number; bytes: number }> = []
 		for (;;) {
 			const { done, value } = await reader.read()
@@ -190,9 +190,12 @@ test.describe('SSR detail stream', () => {
 			chunks.push({ ms, bytes: value.length })
 			if (directoryMs == null && html.includes('aria-label="Players"')) directoryMs = ms
 			if (detailMs == null && html.includes('aria-label="Player overall"')) detailMs = ms
+			if (fragmentAnchorMs == null && html.includes('data-player-stats-noscript-anchor="history"')) fragmentAnchorMs = ms
 		}
 		expect(directoryMs).not.toBeNull()
 		expect(detailMs).not.toBeNull()
+		expect(fragmentAnchorMs).not.toBeNull()
+		expect(fragmentAnchorMs!).toBeLessThan(detailMs!)
 		expect(detailMs! - directoryMs!).toBeGreaterThan(1000)
 		expect(html).toContain('aria-label="Player overall"')
 		const noJsContext = await browser.newContext({ javaScriptEnabled: false })
@@ -205,6 +208,14 @@ test.describe('SSR detail stream', () => {
 			const noJsFallback = noJsPage.locator('[data-player-stats-ssr-fallback]')
 			await expect(noJsFallback).toHaveCount(1)
 			await expect(noJsFallback).toBeHidden()
+			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=${initialPlayerId}#ps-history`)
+			const noJsFragmentAnchor = noJsPage.locator('[data-player-stats-noscript-anchor="history"]')
+			await expect(noJsFragmentAnchor).toBeVisible()
+			const fragmentPosition = await noJsPage.evaluate(() => ({
+				top: document.querySelector('[data-player-stats-noscript-anchor="history"]')?.getBoundingClientRect().top ?? null
+			}))
+			expect(fragmentPosition.top).not.toBeNull()
+			expect(fragmentPosition.top!).toBeLessThan(220)
 		} finally {
 			await noJsContext.close()
 		}
@@ -224,6 +235,25 @@ test.describe('SSR detail stream', () => {
 		await retry.click()
 		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Saka')
 		expect(browserRequests).toBe(1)
+	})
+
+	test('reveals a failed deep link without browser JavaScript', async ({ browser, baseURL }) => {
+		const initialPlayerId = runPlayerId(5)
+		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, error: true }])
+		const noJsContext = await browser.newContext({ javaScriptEnabled: false })
+		const noJsPage = await noJsContext.newPage()
+		try {
+			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=${initialPlayerId}`)
+			const retry = noJsPage.getByRole('button', { name: 'Retry', exact: true })
+			const error = noJsPage.getByRole('alert').filter({ has: retry })
+			await expect(error).toBeVisible()
+			await expect(retry).toBeVisible()
+			const noJsFallback = noJsPage.locator('[data-player-stats-ssr-fallback]')
+			await expect(noJsFallback).toHaveCount(1)
+			await expect(noJsFallback).toBeHidden()
+		} finally {
+			await noJsContext.close()
+		}
 	})
 
 	test('clearing a comparison before its seed arrives keeps p2 cleared', async ({ page }) => {

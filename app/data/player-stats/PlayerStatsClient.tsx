@@ -31,6 +31,7 @@ const loadPlayerStatsView = () =>
 const PlayerStatsView = dynamic(loadPlayerStatsView, {
 	loading: () => (
 		<div
+			data-ssr-stream-fallback="player-stats-detail"
 			data-player-stats-ssr-fallback="true"
 			className="min-h-72 animate-pulse rounded-xl border border-border/70 bg-muted/20"
 			role="status"
@@ -631,7 +632,7 @@ export default function PlayerStatsClient({
 
 			{initialPlayerIds.p1 != null && !initialDeskSettled ? (
 				<div data-player-stats-ssr-boundary="true">
-					<Suspense fallback={showInitialDesk ? <div data-player-stats-ssr-fallback="true" className="min-h-72 animate-pulse rounded-xl border bg-muted/20" role="status">{t('loadingStats')}</div> : null}>
+					<Suspense fallback={showInitialDesk ? <div data-ssr-stream-fallback="player-stats-detail" data-player-stats-ssr-fallback="true" className="min-h-72 animate-pulse rounded-xl border bg-muted/20" role="status">{t('loadingStats')}</div> : null}>
 						<PlayerStatsInitialDesk promise={initialDeskSeedPromise} playerIds={initialPlayerIds} eventId={anchorGw} onSeed={admitDeskSeed}>
 							{showInitialDesk ? detailView : null}
 						</PlayerStatsInitialDesk>

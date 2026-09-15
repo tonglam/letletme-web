@@ -634,6 +634,7 @@ export function PlayerStatsView({
 	const t = useTranslations('PlayerStats')
 	const tl = useTranslations('PlayerStats.labels')
 	const common = useTranslations('Common')
+	const streamContentMarker = ssrStreamed ? 'player-stats-detail' : undefined
 	const dataSectionLabels = {
 		seasonStats: t('dataSectionSeasonStats'),
 		market: t('sectionNavMarket'),
@@ -754,7 +755,7 @@ export function PlayerStatsView({
 	}, [])
 
 	if (error && !player) return (
-		<div className="rounded-xl border bg-card px-6 py-8 text-center" role="alert">
+		<div data-ssr-stream-content={streamContentMarker} className="rounded-xl border bg-card px-6 py-8 text-center" role="alert">
 			<p className="text-sm text-destructive">{error}</p>
 			<Button className="mt-3" variant="outline" onClick={retryPlayerData}>{t('retry')}</Button>
 		</div>
@@ -762,7 +763,7 @@ export function PlayerStatsView({
 
 	if (!selectedPlayer) {
 		return (
-			<div className="rounded-xl border border-dashed border-border/70 px-6 py-12 text-center">
+			<div data-ssr-stream-content={streamContentMarker} className="rounded-xl border border-dashed border-border/70 px-6 py-12 text-center">
 				<span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
 					<User
 						className="size-6"
@@ -788,12 +789,13 @@ export function PlayerStatsView({
 		(isLoading && primaryMissing) ||
 		(comparisonRequested && isComparisonLoading && comparisonMissing)
 	) {
-		return <PlayerDetailSkeleton />
+		return <div data-ssr-stream-content={streamContentMarker}><PlayerDetailSkeleton /></div>
 	}
 
 	if (requestError && (primaryMissing || comparisonMissing)) {
 		return (
 			<div
+				data-ssr-stream-content={streamContentMarker}
 				className="rounded-xl border border-border/80 bg-card px-6 py-8 text-center shadow-sm"
 				role="alert"
 			>
@@ -1019,6 +1021,7 @@ export function PlayerStatsView({
 	return (
 		<div
 			className="space-y-1"
+			data-ssr-stream-content={streamContentMarker}
 			data-player-stats-ssr-detail={ssrStreamed ? 'true' : undefined}
 			aria-busy={requestPending}
 		>

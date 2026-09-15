@@ -704,13 +704,16 @@
 	/*
 	 * React keeps a streamed Suspense result in a hidden segment until its
 	 * reveal script runs. The public player desk is also meaningful with
-	 * JavaScript disabled, so expose only its resolved segment and remove the
-	 * loading fallback once that segment has arrived.
+	 * JavaScript disabled, so expose resolved segments and remove their loading
+	 * fallbacks once the corresponding content has arrived.
 	 */
-	[hidden]:has([data-player-stats-ssr-detail]) {
+	[hidden]:has([data-ssr-stream-content]) {
 		display: block !important;
 	}
-	body:has([data-player-stats-ssr-detail]) [data-player-stats-ssr-fallback] {
+	body:has([data-ssr-stream-content="player-stats-detail"]) [data-ssr-stream-fallback="player-stats-detail"],
+	body:has([data-ssr-stream-content="fixtures-squad"]) [data-ssr-stream-fallback="fixtures-squad"],
+	body:has([data-ssr-stream-content="fixtures-actions"]) [data-ssr-stream-fallback="fixtures-actions"],
+	body:has([data-ssr-stream-content="price-changes-squad"]) [data-ssr-stream-fallback="price-changes-squad"] {
 		display: none;
 	}
 }

@@ -108,16 +108,22 @@ describe('PlayerDirectorySeed', () => {
 	})
 
 	it('keeps a missing deep-link comparison visible as an actionable error', async () => {
-		const [clientSource, initialDeskSource, viewSource] = await Promise.all([
+		const [clientSource, initialDeskSource, viewSource, loadingSource] = await Promise.all([
 			readFile(new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url), 'utf8'),
 			readFile(new URL('../app/data/player-stats/PlayerStatsInitialDesk.tsx', import.meta.url), 'utf8'),
-			readFile(new URL('../app/data/player-stats/_components/PlayerStatsView.tsx', import.meta.url), 'utf8')
+			readFile(new URL('../app/data/player-stats/_components/PlayerStatsView.tsx', import.meta.url), 'utf8'),
+			readFile(new URL('../app/[locale]/explore/player-stats/loading.tsx', import.meta.url), 'utf8')
 		])
 
 		assert.match(clientSource, /const comparisonRequested = Boolean\([\s\S]*initialPlayerIds\.p2 != null\)/)
 		assert.match(clientSource, /comparisonRequested=\{comparisonRequested\}/)
 		assert.match(clientSource, /initialDeskSeedPromise/)
 		assert.match(clientSource, /PlayerStatsInitialDesk/)
+		assert.doesNotMatch(clientSource, /data-player-stats-noscript-anchor=/)
+		assert.match(loadingSource, /<noscript>[\s\S]*data-player-stats-noscript-anchor="history"/)
+		assert.match(initialDeskSource, /data-ssr-stream-content="player-stats"/)
+		assert.match(viewSource, /const streamContentMarker = ssrStreamed \? 'player-stats-detail'/)
+		assert.match(viewSource, /data-ssr-stream-content=\{streamContentMarker\}/)
 		const retryStart = clientSource.indexOf('retryPlayerData={() =>')
 		const retryEnd = clientSource.indexOf('loadEvidence=', retryStart)
 		const retry = clientSource.slice(retryStart, retryEnd)

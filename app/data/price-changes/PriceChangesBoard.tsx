@@ -174,7 +174,7 @@ function PriceChangesSquadStream({
 	}, [displayBoard.deadline, displayBoard.fetchedAt, hydrated, locale, mySquadBoardPlayers, shareLabels, t])
 
 	return (
-		<>
+		<div data-ssr-stream-content="price-changes-squad">
 			{mySquadPicks.length > 0 ? (
 				<div className="flex justify-end">
 					<ShareActions
@@ -199,7 +199,7 @@ function PriceChangesSquadStream({
 					{t('squadRetry')}
 				</button>
 			) : null}
-		</>
+		</div>
 	)
 }
 
@@ -761,7 +761,7 @@ export function PriceChangesBoard({
 					<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">{t(squadOpen ? 'squadCollapse' : 'squadExpand')}</span>
 				</summary>
 				<div className="border-t p-4">
-					<Suspense fallback={<div className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
+					<Suspense fallback={<div data-ssr-stream-fallback="price-changes-squad" className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
 						<PriceChangesSquadStream
 							promise={personalSeedPromise}
 							displayBoard={displayBoard}
