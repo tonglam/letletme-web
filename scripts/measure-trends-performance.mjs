@@ -123,7 +123,7 @@ const measurements = Object.fromEntries(
 			runs: runs.length,
 			status200: runs.every(run => run.status === 200),
 			lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
-			observedLongTaskBlockingMs: distribution(runs.map(run => run.navigation), 'observedLongTaskBlockingMs'),
+			observedLongTaskBlockingMs: distribution(runs, 'observedLongTaskBlockingMs'),
 			cls: distribution(runs.map(run => run.navigation), 'cls'),
 			htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
 			documentBytes: distribution(runs, 'documentBytes'),

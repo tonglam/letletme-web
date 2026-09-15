@@ -31,7 +31,7 @@ function summarize(runs) {
 		runs: runs.length,
 		status200: runs.every(run => run.status === 200),
 		lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
-		observedLongTaskBlockingMs: distribution(runs.map(run => run.navigation), 'observedLongTaskBlockingMs'),
+		observedLongTaskBlockingMs: distribution(runs, 'observedLongTaskBlockingMs'),
 		cls: distribution(runs.map(run => run.navigation), 'cls'),
 		ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
 		htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
