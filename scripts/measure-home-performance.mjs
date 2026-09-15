@@ -1,9 +1,10 @@
+import { finishLongTaskObservation, installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
 const runCount = Number.parseInt(process.env.HOME_PERF_RUNS ?? '5', 10)
 const concurrency = Number.parseInt(
-	process.env.HOME_PERF_CONCURRENCY ?? '20',
+	process.env.HOME_PERF_CONCURRENCY ?? '1',
 	10
 )
 const sessionCookie = process.env.HOME_PERF_SESSION_COOKIE?.trim() ?? ''
@@ -20,38 +21,18 @@ const profiles = [
 	{ name: 'mobile', viewport: { width: 390, height: 844 }, slow4g: true }
 ]
 
-function percentile(values, percentileValue) {
-	if (values.length === 0) return null
-	const ordered = [...values].sort((left, right) => left - right)
-	const index = Math.min(
-		ordered.length - 1,
-		Math.ceil((percentileValue / 100) * ordered.length) - 1
-	)
-	return Number(ordered[index].toFixed(2))
-}
 
-function distribution(runs, field) {
-	const values = runs
-		.map(run => run[field])
-		.filter(value => typeof value === 'number' && Number.isFinite(value))
-	return {
-		p50: percentile(values, 50),
-		p95: percentile(values, 95),
-		observed: values.length,
-		missing: runs.length - values.length
-	}
-}
 
 function summarize(runs) {
 	return {
 		runs: runs.length,
 		readinessExpected: Boolean(sessionCookie),
 		status200: runs.every(run => run.status === 200),
-		lcpMs: distribution(runs, 'lcpMs'),
-		tbtMs: distribution(runs, 'tbtMs'),
-		cls: distribution(runs, 'cls'),
+		lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
+		observedLongTaskBlockingMs: distribution(runs, 'observedLongTaskBlockingMs'),
+		cls: distribution(runs.map(run => run.navigation), 'cls'),
 		loadMs: distribution(runs, 'loadMs'),
-		ttfbMs: distribution(runs, 'ttfbMs'),
+		ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
 		teamDeskReadyMs: distribution(runs, 'teamDeskReadyMs'),
 		leagueRanksReadyMs: distribution(runs, 'leagueRanksReadyMs'),
 		transferredBytes: {
@@ -83,18 +64,6 @@ async function applySessionCookie(context) {
 			sameSite: 'Lax'
 		}
 	])
-}
-
-async function throttleMobile(page) {
-	const session = await page.context().newCDPSession(page)
-	await session.send('Network.enable')
-	await session.send('Network.emulateNetworkConditions', {
-		offline: false,
-		latency: 150,
-		downloadThroughput: (1.6 * 1024 * 1024) / 8,
-		uploadThroughput: (750 * 1024) / 8,
-		connectionType: 'cellular4g'
-	})
 }
 
 function fixtureRequestTransport(request) {
@@ -155,7 +124,6 @@ async function measureColdLoad(browser, profile, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	await applySessionCookie(context)
 	const page = await context.newPage()
-	if (profile.slow4g) await throttleMobile(page)
 	let requestCount = 0
 	const routeReady = new Map()
 	page.on('request', request => {
@@ -174,8 +142,8 @@ async function measureColdLoad(browser, profile, index) {
 			}
 		} catch {}
 	})
+	await installVitals(page, '__homePerformance')
 	await page.addInitScript(() => {
-		window.__homePerformance = { cls: 0, lcp: 0, tbt: 0, ready: {} }
 		const captureMetric = async body => {
 			try {
 				const raw =
@@ -206,27 +174,16 @@ async function measureColdLoad(browser, profile, index) {
 			if (String(input).includes('/api/vitals')) void captureMetric(init?.body)
 			return nativeFetch(input, init)
 		}
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				window.__homePerformance.lcp = entry.startTime
-			}
-		}).observe({ type: 'largest-contentful-paint', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				if (!entry.hadRecentInput) window.__homePerformance.cls += entry.value
-			}
-		}).observe({ type: 'layout-shift', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				window.__homePerformance.tbt += Math.max(0, entry.duration - 50)
-			}
-		}).observe({ type: 'longtask', buffered: true })
 	})
 	const navigationStartedAt = performance.now()
 	const runUrl = new URL(baseUrl)
 	runUrl.searchParams.set('cold', `${profile.name}-${index}`)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
-	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+	let response
+	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
 	const readySamples = new Map()
 	if (sessionCookie) {
 		const names = ['HOME_TEAM_DESK_READY', 'HOME_LEAGUE_RANKS_READY']
@@ -241,6 +198,7 @@ async function measureColdLoad(browser, profile, index) {
 	if (elapsedAfterLoad < 1_000) {
 		await page.waitForTimeout(1_000 - elapsedAfterLoad)
 	}
+	await finishLongTaskObservation(page)
 	const browserMetrics = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		const resources = performance.getEntriesByType('resource')
@@ -265,11 +223,15 @@ async function measureColdLoad(browser, profile, index) {
 			0
 		)
 		return {
-			lcpMs: window.__homePerformance?.lcp ?? 0,
-			tbtMs: window.__homePerformance?.tbt ?? 0,
-			cls: window.__homePerformance?.cls ?? 0,
-			loadMs: navigation?.loadEventEnd ?? 0,
-			ttfbMs: navigation?.responseStart ?? 0,
+			lcpMs: window.__homePerformance?.lcp ?? null,
+			phase: 'interaction',
+			inpMs: window.__homePerformance?.inp ?? null,
+			fcpMs: window.__homePerformance?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
+			observedLongTaskBlockingMs: window.__homePerformance?.observedLongTaskBlockingMs ?? null,
+			cls: window.__homePerformance?.cls ?? null,
+			loadMs: navigation?.loadEventEnd ?? null,
+			ttfbMs: navigation?.responseStart ?? null,
 			htmlBytes,
 			jsBytes,
 			fontBytes,
@@ -290,6 +252,7 @@ async function measureColdLoad(browser, profile, index) {
 	})
 	await context.close()
 	return {
+		navigation,
 		status: response?.status() ?? 0,
 		requestCount,
 		...browserMetrics,
@@ -308,10 +271,11 @@ async function measureColdLoad(browser, profile, index) {
 
 async function measureFixtureSwitch(browser, profile) {
 	const context = await browser.newContext({ viewport: profile.viewport })
+	let releaseThrottle
 	try {
 		await applySessionCookie(context)
 		const page = await context.newPage()
-		if (profile.slow4g) await throttleMobile(page)
+		releaseThrottle = profile.slow4g ? await throttleProfile(page, profile) : null
 		let fixtureRequests = 0
 		const fixtureTransports = new Set()
 		page.on('request', request => {
@@ -379,12 +343,14 @@ async function measureFixtureSwitch(browser, profile) {
 			cachedSwitchRequests: fixtureRequests - requestsAfterFirst
 		}
 	} finally {
+		if (releaseThrottle) await releaseThrottle().catch(() => {})
 		await context.close()
 	}
 }
 
 const browser = await chromium.launch({ headless: true })
 const measurements = {}
+const raw = {}
 const fixtureSwitches = {}
 try {
 	for (const profile of profiles) {
@@ -392,6 +358,7 @@ try {
 		for (let index = 0; index < runCount; index += 1) {
 			runs.push(await measureColdLoad(browser, profile, index))
 		}
+		raw[profile.name] = runs
 		measurements[profile.name] = summarize(runs)
 		fixtureSwitches[profile.name] = await measureFixtureSwitch(browser, profile)
 	}
@@ -421,10 +388,14 @@ console.log(
 	JSON.stringify(
 		{
 			url: new URL(baseUrl).origin,
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			audience: sessionCookie ? 'session-hint' : 'public',
 			coldLoads: measurements,
+			raw,
 			fixtureSwitches,
+			acceptance: {
+				navigationComplete: Object.values(raw).flat().every(run => navigationComplete(run.navigation))
+			},
 			concurrency: {
 				requests: concurrency,
 				status200: concurrentResponses.filter(response => response.status === 200)

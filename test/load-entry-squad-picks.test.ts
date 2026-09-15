@@ -3,6 +3,8 @@ import { describe, it } from 'node:test'
 import type { EventsResponse } from '../lib/graphql/operations/events'
 import {
 	classifyEntrySquadPicks,
+	runSquadReadWithinBudget,
+	squadReadOptions,
 	squadPickEventCandidates,
 	type SquadPickSeed
 } from '../lib/squad-picks'
@@ -64,4 +66,51 @@ describe('classifyEntrySquadPicks', () => {
 			state: 'ready'
 		})
 	})
+})
+
+
+describe('personal squad total deadline', () => {
+	it('aborts an in-flight HTTP read and returns unavailable rather than unpublished', async () => {
+		let signal: AbortSignal | undefined
+		const result = await runSquadReadWithinBudget(async budget => {
+			signal = squadReadOptions(budget).signal
+			await new Promise((_, reject) => signal!.addEventListener('abort', () => reject(signal!.reason)))
+			return { picks: [], state: 'not-published' }
+		}, 25)
+		assert.equal(signal?.aborted, true)
+		assert.deepEqual(result, { picks: [], state: 'unavailable' })
+	})
+	it('lets an uncancellable identity finish but prevents subsequent candidate and pagination requests', async () => {
+		let releaseIdentity!: () => void
+		let followUpRequests = 0
+		const identity = new Promise<void>(resolve => { releaseIdentity = resolve })
+		const result = await runSquadReadWithinBudget(async budget => {
+			await identity
+			squadReadOptions(budget)
+			followUpRequests++
+			return { picks: [], state: 'ready' }
+		}, 25)
+		releaseIdentity()
+		await new Promise(resolve => setImmediate(resolve))
+		assert.equal(result.state, 'unavailable')
+		assert.equal(followUpRequests, 0)
+	})
+	it('shrinks the remaining request timeout across serial reads and preserves domain success', async () => {
+		const result = await runSquadReadWithinBudget(async budget => {
+			const first = squadReadOptions(budget).timeoutMs
+			await new Promise(resolve => setTimeout(resolve, 15))
+			assert.ok(squadReadOptions(budget).timeoutMs < first)
+			return { picks: [], state: 'unbound' }
+		})
+		assert.equal(result.state, 'unbound')
+	})
+})
+
+it('rejects a completed result if synchronous work exhausted the deadline before timers could run', async () => {
+	const result = await runSquadReadWithinBudget(async () => {
+		const end = Date.now() + 15
+		while (Date.now() < end) { /* model a blocked event loop before completion */ }
+		return { picks: [], state: 'ready' }
+	}, 5)
+	assert.equal(result.state, 'unavailable')
 })

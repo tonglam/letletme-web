@@ -46,7 +46,8 @@ describe('public GraphQL cache contract', () => {
 		assert.match(server, /options\?: Omit<ExecuteQueryOptions/)
 		assert.doesNotMatch(operations, /period:\s*ROLLING_7D/)
 		assert.doesNotMatch(operations, /GetFixturePlanningOwnershipRolling/)
-		assert.match(fixtures, /rollingOwnership: null/)
+		assert.match(await read('app/data/fixtures/FixturesSeedContext.tsx'), /rollingOwnership: null/)
+		assert.doesNotMatch(fixtures, /ROLLING_7D/)
 		assert.match(playerStats, /rollingOwnership: null/)
 		assert.doesNotMatch(en, /rolling-seven-day market signals/)
 		assert.doesNotMatch(zh, /近 7 日周期/)
@@ -176,32 +177,72 @@ describe('public GraphQL cache contract', () => {
 	})
 
 	it('keeps personal Player Stats work behind the public bootstrap', async () => {
-		const [seed, page, client] = await Promise.all([
+		const [seed, page, client, globals] = await Promise.all([
 			read('lib/player-stats-seed.ts'),
 			read('app/[locale]/explore/player-stats/page.tsx'),
-			read('app/data/player-stats/PlayerStatsClient.tsx')
+			read('app/data/player-stats/PlayerStatsClient.tsx'),
+			read('app/globals.css')
 		])
 		assert.match(seed, /const bootstrap = await bootstrapPromise/)
 		assert.ok(
 			seed.indexOf('const bootstrap = await bootstrapPromise') <
-				seed.indexOf('const sessionPromise = measure')
+				seed.indexOf('loadPersonalSquadSeed(Promise.resolve(bootstrap.events))')
 		)
 		assert.match(page, /navigationId = createPerformanceCorrelationId\('nav'\)/)
 		assert.match(page, /navigationId\}/)
+		assert.match(page, /const initialDeskSeedPromise\s*=\s*[\s\S]*loadPlayerStatsDesk/)
+		assert.match(page, /<PlayerStatsClient[\s\S]*initialDeskSeedPromise=\{initialDeskSeedPromise\}/)
 		assert.ok(
-			page.indexOf('const initialDeskSeed') <
+			page.indexOf('const initialDeskSeedPromise') <
 				page.indexOf('const personalSeedPromise = loadPlayerStatsPersonalSeed')
 		)
 		assert.match(client, /void loadPlayerStatsView\(\)/)
 		assert.match(client, /interactionId: interaction\.interactionId/)
+		assert.match(client, /initialDeskSeedPromise/)
+		assert.match(client, /PlayerStatsInitialDesk/)
+		assert.match(client, /data-player-stats-ssr-boundary/)
+		assert.match(client, /data-player-stats-ssr-fallback/)
+		assert.doesNotMatch(globals, /\[hidden\]:has\(\[data-ssr-stream-content\]\)/)
+		assert.doesNotMatch(globals, /body:has\(\[data-ssr-stream-content=/)
+		assert.match(client, /PlayerStatsNoScriptResult[\s\S]*data-player-stats-noscript-result="true"/)
 		const retryStart = client.indexOf('retryPlayerData={() =>')
 		const retryEnd = client.indexOf('loadEvidence=', retryStart)
 		const retry = client.slice(retryStart, retryEnd)
 		assert.match(retry, /firstPlayer\.selectPlayer\([\s\S]*bypassCache: true/)
 		assert.match(
 			retry,
-			/secondPlayer\.selectPlayer\([\s\S]*batchPlayerIds\s*\n\s*\)/
+			/secondPlayer\.selectPlayer\([\s\S]*retryBatchPlayerIds\s*\n\s*\)/
 		)
 		assert.doesNotMatch(retry, /secondPlayer\.selectPlayer\([\s\S]*bypassCache/)
+	})
+
+	it('streams personal squad content into initial HTML before hydration', async () => {
+		const [fixturesPage, fixturesClient, priceChangesPage, priceChangesBoard] =
+			await Promise.all([
+				read('app/[locale]/explore/fixtures/page.tsx'),
+				read('app/data/fixtures/FixturesClient.tsx'),
+				read('app/[locale]/explore/price-predictions/page.tsx'),
+				read('app/data/price-changes/PriceChangesBoard.tsx')
+			])
+
+		assert.match(fixturesPage, /<FixturesClient[\s\S]*squadPromise=\{squadPromise\}/)
+		assert.match(fixturesPage, /const marketSignalsPromise(?::\s*Promise<FixturePlanningMarketSignals>)?\s*=\s*Promise\.all\([\s\S]*marketPromise[\s\S]*ownershipPromise/)
+		assert.match(fixturesPage, /<FixturesClient[\s\S]*marketSignalsPromise=\{marketSignalsPromise\}/)
+		assert.match(fixturesClient, /function FixturesSquadStream[\s\S]*const squad = use\(promise\)/)
+		assert.match(fixturesClient, /function FixturesSquadStream[\s\S]*data-ssr-stream-content="fixtures-squad"/)
+		assert.match(fixturesClient, /function FixturesSquadFallback[\s\S]*data-ssr-stream-fallback="fixtures-squad"[\s\S]*FixturesNoScriptResult/)
+		assert.match(fixturesClient, /<Suspense fallback=\{<FixturesSquadFallback \/>\}>[\s\S]*<FixturesSquadStream[\s\S]*promise=\{squadPromise\}/)
+		assert.match(fixturesClient, /function FixturesActionsStream[\s\S]*const marketSignals = use\(marketSignalsPromise\)/)
+		assert.match(fixturesClient, /function FixturesActionsStream[\s\S]*data-ssr-stream-content="fixtures-actions"/)
+		assert.match(fixturesClient, /function FixturesActionsFallback[\s\S]*data-ssr-stream-fallback="fixtures-actions"[\s\S]*actionsLoading[\s\S]*FixturesNoScriptResult/)
+		assert.match(fixturesClient, /<Suspense fallback=\{<FixturesActionsFallback \/>\}>[\s\S]*<FixturesActionsStream[\s\S]*marketSignalsPromise=\{marketSignalsPromise\}/)
+		assert.doesNotMatch(fixturesClient, /\{squadOpen \? <div/)
+
+		assert.match(priceChangesPage, /<PriceChangesBoard[\s\S]*personalSeedPromise=\{personalPromise\}/)
+		assert.match(priceChangesBoard, /function PriceChangesSquadStream[\s\S]*const personalSeed = use\(promise\)/)
+		assert.match(priceChangesBoard, /function PriceChangesSquadStream[\s\S]*data-ssr-stream-content="price-changes-squad"/)
+		assert.match(priceChangesBoard, /function PriceChangesSquadFallback[\s\S]*data-ssr-stream-fallback="price-changes-squad"[\s\S]*PriceChangesNoScriptResult/)
+		assert.match(priceChangesBoard, /<Suspense fallback=\{<PriceChangesSquadFallback \/>\}>[\s\S]*<PriceChangesSquadStream[\s\S]*promise=\{personalSeedPromise\}/)
+		assert.doesNotMatch(priceChangesBoard, /\{squadOpen \? <div/)
 	})
 })

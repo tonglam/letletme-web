@@ -60,7 +60,7 @@ function writeRecentPlayers(
 	}
 }
 
-function withEmptyStateContext(
+export function withEmptyStateContext(
 	core: PlayerStateOverviewData,
 	authoritativePosition: number
 ): PlayerStateProfileData {
@@ -136,7 +136,7 @@ function withEmptyStateContext(
 	}
 }
 
-function isCoreState(
+export function isCoreState(
 	state: PlayerStatsDeskNormalizedEntry['state']
 ): state is PlayerStateOverviewData {
 	return state != null && 'trend' in state && 'dimensions' in state
@@ -183,11 +183,13 @@ export function usePlayerDetailSlot({
 	storageKey,
 	eventId,
 	initialEntry = null,
+	initialPlayer = null,
 	navigationId
 }: {
 	storageKey: string
 	eventId?: number
 	initialEntry?: PlayerStatsDeskNormalizedEntry | null
+	initialPlayer?: PlayerDirectoryOption | null
 	navigationId?: string
 }) {
 	const t = useTranslations('PlayerStats')
@@ -199,7 +201,7 @@ export function usePlayerDetailSlot({
 		: null
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryOption | null>(() =>
-			initialDetail ? playerDetailToDirectoryOption(initialDetail) : null
+			initialDetail ? playerDetailToDirectoryOption(initialDetail) : initialPlayer
 		)
 	const [recentPlayers, setRecentPlayers] = useState<PlayerDirectoryOption[]>(
 		[]
@@ -228,6 +230,7 @@ export function usePlayerDetailSlot({
 	)
 	const stateContextLoadedRef = useRef(false)
 	const requestIdRef = useRef(0)
+	const [selectionVersion, setSelectionVersion] = useState(0)
 	const evidenceRequestIdRef = useRef(0)
 	const overviewControllerRef = useRef<AbortController | null>(null)
 	const evidenceControllerRef = useRef<AbortController | null>(null)
@@ -276,6 +279,7 @@ export function usePlayerDetailSlot({
 			abortRequests()
 			const requestId = requestIdRef.current + 1
 			requestIdRef.current = requestId
+			setSelectionVersion(requestId)
 			const controller = new AbortController()
 			overviewControllerRef.current = controller
 			setIsLoading(true)
@@ -573,6 +577,7 @@ export function usePlayerDetailSlot({
 
 	const clearSelection = useCallback(() => {
 		requestIdRef.current += 1
+		setSelectionVersion(requestIdRef.current)
 		abortRequests()
 		setSelectedPlayer(null)
 		setPlayerDetail(null)
@@ -589,6 +594,19 @@ export function usePlayerDetailSlot({
 		evidenceLoaded().clear()
 	}, [abortRequests, evidenceLoaded])
 
+	const admitInitialSeed = useCallback((entry: PlayerStatsDeskNormalizedEntry | null, scope: { navigationId: string; eventId: number; playerId: number }) => {
+		// A user request or explicit clear permanently supersedes this slot's seed.
+		if (requestIdRef.current !== 0 || scope.navigationId !== navigationId || scope.eventId !== eventId) return
+		const detail = entry?.playerId === scope.playerId ? entry.overview : null
+		if (!detail) { setError(t('loadFailed')); return }
+		setPlayerDetail(detail)
+		setSelectedPlayer(playerDetailToDirectoryOption(detail))
+		setPlayerStateProfile(isCoreState(entry?.state) ? withEmptyStateContext(entry.state, detail.elementType) : null)
+		setStateError(entry?.fieldStatuses?.state === 'TEMPORARILY_UNAVAILABLE' ? t('stateLoadFailed') : null)
+		setError(null)
+		if (detail.fixtures) evidenceLoaded().add('fixtures')
+	}, [eventId, navigationId, evidenceLoaded, t])
+
 	const clearRecent = useCallback(() => {
 		try {
 			window.localStorage.removeItem(storageKey)
@@ -599,6 +617,8 @@ export function usePlayerDetailSlot({
 	}, [storageKey])
 
 	return {
+		admitInitialSeed,
+		selectionVersion,
 		selectedPlayer,
 		recentPlayers,
 		playerDetail,

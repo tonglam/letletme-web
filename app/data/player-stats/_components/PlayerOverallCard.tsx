@@ -14,13 +14,15 @@ export function PlayerOverallCard({
 	comparison,
 	profile,
 	comparisonProfile,
-	anchorGw
+	anchorGw,
+	ssrStreamed = false
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
 	profile: PlayerStateProfileData | null
 	comparisonProfile: PlayerStateProfileData | null
 	anchorGw: number
+	ssrStreamed?: boolean
 }) {
 	return (
 		<PlayerSeasonTimeline
@@ -29,6 +31,7 @@ export function PlayerOverallCard({
 			profile={profile}
 			comparisonProfile={comparisonProfile}
 			anchorGw={anchorGw}
+			ssrStreamed={ssrStreamed}
 		/>
 	)
 }

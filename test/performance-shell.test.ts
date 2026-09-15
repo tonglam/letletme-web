@@ -115,3 +115,13 @@ describe('live matches media performance boundary', () => {
 		assert.match(matchesClient, /<div className="min-h-4">/)
 	})
 })
+
+it('streams only account slots while retaining one public navigation structure', () => {
+	const navbar = read('components/layout/Navbar.tsx')
+	const publicNavigation = read('components/layout/GuestNavigationActions.tsx')
+	assert.equal((navbar.match(/getCurrentSession\(\)/g) ?? []).length, 1)
+	assert.match(navbar, /desktopAccount=[\s\S]*<Suspense/)
+	assert.match(navbar, /mobileAccount=[\s\S]*<Suspense/)
+	assert.doesNotMatch(navbar, /await getCurrentSession|fallback=\{<GuestNavigationActions/)
+	for (const component of ['ThemeToggle', 'LanguageSwitcher']) assert.equal((publicNavigation.match(new RegExp(`<${component} \\/>`, 'g')) ?? []).length, 1)
+})

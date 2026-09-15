@@ -140,7 +140,7 @@ const playerDetail = playerId => {
 		pickerPlayers.find(candidate => candidate.id === playerId) ??
 		pickerPlayers[0]
 	return {
-		id: player.id,
+		id: playerId,
 		webName: player.webName,
 		teamShortName: player.team.shortName,
 		elementType: 3,
@@ -553,7 +553,28 @@ const liveScore = (eventPoints = 22, revision = 'a'.repeat(64)) => ({
 
 let recoveryEntryRequestCount = 0
 
+// Isolated fixture controls: never part of the Web production server.
+let performanceRules = []
+let performanceRequests = []
 const server = createServer((request, response) => {
+	if (request.url === '/__performance' && request.method === 'GET') {
+		json(response, 200, { requests: performanceRequests })
+		return
+	}
+	if (request.url === '/__performance' && request.method === 'POST') {
+		let body = ''
+		request.setEncoding('utf8')
+		request.on('data', chunk => { body += chunk })
+		request.on('end', () => {
+			try {
+				const control = JSON.parse(body)
+				performanceRules = control.rules ?? []
+				if (control.reset !== false) performanceRequests = []
+				json(response, 200, { ok: true })
+			} catch { json(response, 400, { error: 'Invalid fixture control' }) }
+		})
+		return
+	}
 	if (request.method === 'GET' && request.url === '/health') {
 		json(response, 200, { ok: true })
 		return
@@ -568,7 +589,7 @@ const server = createServer((request, response) => {
 	request.on('data', chunk => {
 		raw += chunk
 	})
-	request.on('end', () => {
+	request.on('end', async () => {
 		let query = ''
 		let variables = {}
 		try {
@@ -580,6 +601,30 @@ const server = createServer((request, response) => {
 					: {}
 		} catch {
 			json(response, 400, { errors: [{ message: 'Invalid JSON' }] })
+			return
+		}
+
+		const operation = query.match(/(?:query|mutation)\s+(\w+)/)?.[1] ?? 'anonymous'
+		const observation = { operation, variables, startedAt: Date.now(), finishedAt: null, abortedAt: null }
+		performanceRequests.push(observation)
+		response.once('finish', () => { observation.finishedAt = Date.now() })
+		response.once('close', () => { if (!response.writableFinished) observation.abortedAt = Date.now() })
+		const rule = performanceRules.find(rule =>
+			operation === rule.operation && Object.entries(rule.variables ?? {}).every(([key, value]) => JSON.stringify(variables[key]) === JSON.stringify(value))
+		)
+		if (rule?.delayMs) {
+			await new Promise(resolve => {
+				const timer = setTimeout(resolve, rule.delayMs)
+				response.once('close', () => { clearTimeout(timer); resolve() })
+			})
+			if (response.destroyed) return
+		}
+		if (rule?.data) {
+			json(response, 200, { data: rule.data })
+			return
+		}
+		if (rule?.error) {
+			json(response, 200, { errors: [{ message: 'Injected fixture failure' }] })
 			return
 		}
 
@@ -820,6 +865,192 @@ const server = createServer((request, response) => {
 			json(response, 200, {
 				data: {
 					playerStatsDesk: { eventId, horizon, entries }
+				}
+			})
+			return
+		}
+		if (
+			query.includes('GetEntryTournaments') ||
+			query.includes('GetPlatformAdminTournaments')
+		) {
+			json(response, 200, {
+				data: {
+					entryTournaments: [
+						{
+							id: 6,
+							name: 'E2E Classic League',
+							creator: 'E2E Manager',
+							adminEntryId: 15702,
+							leagueId: 314,
+							leagueType: 'CLASSIC',
+							sourceLeagueName: 'E2E Classic League',
+							totalTeamNum: 1,
+							tournamentMode: 'CLASSIC',
+							groupMode: 'POINTS_RACES',
+							groupTeamNum: null,
+							groupNum: null,
+							groupStartedEventId: null,
+							groupEndedEventId: null,
+							groupAutoAverages: false,
+							groupRounds: null,
+							groupPlayAgainstNum: null,
+							groupQualifyNum: null,
+							knockoutMode: null,
+							knockoutTeamNum: null,
+							knockoutRounds: null,
+							knockoutEventNum: null,
+							knockoutStartedEventId: null,
+							knockoutEndedEventId: null,
+							knockoutPlayAgainstNum: null,
+							state: 'ACTIVE',
+							rosterMode: 'STANDARD',
+							rosterSyncStatus: 'READY',
+							rosterLastSyncedAt: '2026-08-13T09:40:00.000Z',
+							officialScheduleHash: null,
+							officialScheduleSyncedAt: null,
+							officialScheduleLockedAt: null,
+							setupStatus: 'READY',
+							setupPhase: 'READY',
+							setupCompletedUnits: 1,
+							setupTotalUnits: 1,
+							setupProgressUpdatedAt: '2026-08-13T09:40:00.000Z',
+							setupProgressMode: 'TERMINAL',
+							setupAttempt: 1,
+							setupMaxAttempts: 3,
+							nextRetryAt: null,
+							standingsReadyAt: '2026-08-13T09:40:00.000Z',
+							profilesReadyAt: '2026-08-13T09:40:00.000Z',
+							insightsReadyAt: '2026-08-13T09:40:00.000Z',
+							setupHasWarnings: false,
+							warningSummaries: [],
+							setupStartedAt: '2026-08-13T09:39:00.000Z',
+							setupFinishedAt: '2026-08-13T09:40:00.000Z',
+							createdAt: '2026-08-01T00:00:00.000Z',
+							updatedAt: '2026-08-13T09:40:00.000Z'
+						}
+					]
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntryLiveCompetitionBoard')) {
+			const eventId = Number(variables.eventId) || 33
+			const tournamentId = Number(variables.tournamentId) || 6
+			const revision = 'e2e-competition-score-v1'
+			const score = {
+				eventPoints: 52,
+				netEventPoints: 52,
+				totalPoints: 1234,
+				totalScope: 'OVERALL',
+				transferCost: 0,
+				source: 'FPL_EVENT_LIVE',
+				calculationMode: 'PROJECTED_AUTOSUBS',
+				revisions: { input: revision },
+				times: {
+					sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+					contentUpdatedAt: '2026-08-13T09:40:00.000Z',
+					nextRefreshAt: '2026-08-13T09:45:00.000Z'
+				},
+				delivery: { state: 'FRESH' }
+			}
+			const row = {
+				availability: 'READY',
+				entry: 15702,
+				entryName: 'E2E United',
+				playerName: 'Test Manager',
+				liveRank: 1,
+				overallRank: 1,
+				teamValue: 1005,
+				chip: null,
+				transferCost: 0,
+				played: 11,
+				toPlay: 0,
+				captainId: 1,
+				captainName: 'Saka',
+				captainPoints: 12,
+				score
+			}
+			json(response, 200, {
+				data: {
+					entryLiveCompetitionBoard: {
+						head: {
+							season: '2627',
+							eventId,
+							tournamentId,
+							mode: 'CLASSIC',
+							availability: 'READY',
+							contentRevision: revision,
+							nextRefreshAt: '2026-08-13T09:45:00.000Z',
+							publication: {
+								revisions: {
+									publicationId: revision,
+									generation: 1,
+									scoreCore: revision
+								},
+								times: {
+									contentUpdatedAt: '2026-08-13T09:40:00.000Z',
+									nextRefreshAt: '2026-08-13T09:45:00.000Z'
+								}
+							},
+							delivery: { state: 'FRESH' }
+						},
+						totalEntries: 1,
+						filteredEntries: 1,
+						pageInfo: { hasNextPage: false, endCursor: null },
+						highestEventPoints: 52,
+						averageEventPoints: 52,
+						rows: [row],
+						viewerRow: row
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetLeagueLiveHead')) {
+			const eventId = Number(variables.eventId) || 33
+			const tournamentId = Number(variables.tournamentId) || 6
+			const revision = 'e2e-competition-score-v1'
+			json(response, 200, {
+				data: {
+					leagueLiveHead: {
+						season: '2627',
+						eventId,
+						tournamentId,
+						mode: 'CLASSIC',
+						availability: 'READY',
+						contentRevision: revision,
+						nextRefreshAt: '2026-08-13T09:45:00.000Z',
+						publication: {
+							revisions: {
+								publicationId: revision,
+								generation: 1,
+								roster: revision,
+								scoreCore: revision,
+								fixtureIdentity: revision,
+								entryInputSet: revision,
+								identity: revision,
+								officialRank: null,
+								rules: revision,
+								algorithm: revision,
+								content: revision
+							},
+							times: {
+								sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+								contentUpdatedAt: '2026-08-13T09:40:00.000Z',
+								publishedAt: '2026-08-13T09:40:00.000Z',
+								checkpointedAt: null,
+								servedAt: '2026-08-13T09:40:00.000Z',
+								staleAt: '2026-08-13T09:45:00.000Z',
+								nextRefreshAt: '2026-08-13T09:45:00.000Z'
+							}
+						},
+						delivery: {
+							state: 'FRESH',
+							servedFrom: 'REDIS_CURRENT',
+							reasonCodes: []
+						},
+						nextRefreshAt: '2026-08-13T09:45:00.000Z'
+					}
 				}
 			})
 			return
@@ -1168,11 +1399,13 @@ const server = createServer((request, response) => {
 					trendCohorts: {
 						season: '2627',
 						revision: 'e2e-trends-catalog-v1',
+						state: 'PUBLISHED',
+						sourceCheckedAt: '2026-08-13T09:40:00.000Z',
 						cohorts: [
 							{
-								id: 'competition:777',
+								id: variables.access === 'MINE' ? 'competition:778' : 'competition:777',
 								kind: 'TRACKED_OFFICIAL_COMPETITION',
-								access: 'PUBLIC',
+								access: variables.access === 'MINE' ? 'MINE' : 'PUBLIC',
 								displayName: 'E2E Public League',
 								setupStatus: 'READY',
 								exact: true,
@@ -1198,7 +1431,7 @@ const server = createServer((request, response) => {
 			const cohort = {
 				id: String(variables.cohortId || 'competition:777'),
 				kind: 'TRACKED_OFFICIAL_COMPETITION',
-				access: 'PUBLIC',
+				access: variables.access === 'MINE' ? 'MINE' : 'PUBLIC',
 				displayName: 'E2E Public League',
 				setupStatus: 'READY',
 				exact: true,

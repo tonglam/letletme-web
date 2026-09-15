@@ -10,14 +10,16 @@ import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import { useTranslations } from 'next-intl'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { toPickerPlayer } from '@/components/player/PlayerDirectoryPicker'
+import { PlayerStatsInitialDesk } from './PlayerStatsInitialDesk'
 import { MySquadRail } from './_components/MySquadRail'
 import { PlayerSelectionPanel } from './_components/PlayerSelectionPanel'
 import { usePlayerStatsPersonalSeed } from './PlayerStatsPersonalSeedContext'
 import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
 import {
 	buildPlayerStatsQueryString,
-	playerStatsSectionFromHash
+	playerStatsSectionFromHash,
 } from './_lib/player-stats-url'
 
 const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
@@ -29,6 +31,8 @@ const loadPlayerStatsView = () =>
 const PlayerStatsView = dynamic(loadPlayerStatsView, {
 	loading: () => (
 		<div
+			data-ssr-stream-fallback="player-stats-detail"
+			data-player-stats-ssr-fallback="true"
 			className="min-h-72 animate-pulse rounded-xl border border-border/70 bg-muted/20"
 			role="status"
 			aria-label="Loading player details"
@@ -36,57 +40,115 @@ const PlayerStatsView = dynamic(loadPlayerStatsView, {
 	)
 })
 
+type NoScriptPlayer = PlayerDirectorySeed['players'][number]
+
+function PlayerStatsNoScriptResult({
+	player,
+	playerId,
+	noScriptHint
+}: {
+	player: NoScriptPlayer | null
+	playerId: number
+	noScriptHint: string
+}) {
+	const t = useTranslations('PlayerStats')
+	const retryQuery = buildPlayerStatsQueryString({ p1: String(playerId) })
+	const sections = [
+		{ id: 'fixtures', title: t('fixturesTitle'), hint: t('fixturesHint') },
+		{ id: 'recent', title: t('recentTitle'), hint: t('recentHint') },
+		{ id: 'season', title: t('seasonTitle'), hint: t('seasonThrough', { gw: '—' }) },
+		{ id: 'process', title: t('processTitle'), hint: t('processHint') },
+		{ id: 'market', title: t('marketTitle'), hint: t('marketHint') },
+		{ id: 'coverage', title: t('sectionNavCoverage'), hint: t('playerState.coverage.unavailable') }
+	] as const
+	const playerLabel = player?.webName ?? `${t('playerOne')} #${playerId}`
+	const retryHref = retryQuery ? `?${retryQuery}` : '.'
+
+	return (
+		<noscript>
+			<style>{'[data-player-stats-ssr-fallback="true"] { display: none !important; }'}</style>
+			<div data-player-stats-noscript-result="true" className="space-y-4">
+				<section
+					id="ps-history"
+					data-player-stats-noscript-section="history"
+					aria-label={t('overallTitle')}
+					className="scroll-mt-36 rounded-xl border bg-card px-6 py-8"
+				>
+					<h2 className="font-display text-lg font-bold uppercase tracking-wide">
+						{playerLabel}
+					</h2>
+					<p className="mt-2 text-sm text-muted-foreground">
+						{noScriptHint}
+					</p>
+					<a
+						href={retryHref}
+						className="mt-3 inline-flex rounded-md border px-3 py-2 text-sm font-medium underline-offset-2 hover:underline"
+					>
+						{t('retry')}
+					</a>
+				</section>
+				{sections.map(section => (
+					<section
+						key={section.id}
+						id={`ps-${section.id}`}
+						data-player-stats-noscript-section={section.id}
+						className="scroll-mt-36 border-t border-border/60 pt-4"
+					>
+						<h2 className="eyebrow sm:text-caption">{section.title}</h2>
+						<p className="mt-1 text-sm text-muted-foreground">{section.hint}</p>
+					</section>
+				))}
+			</div>
+		</noscript>
+	)
+}
+
 export default function PlayerStatsClient({
 	initialPlayerIds,
 	directorySeed,
-	initialDeskSeed = null,
-	navigationId
+	initialDeskSeedPromise,
+	navigationId,
+	noScriptHint
 }: {
 	initialPlayerIds: { p1: number | null; p2: number | null }
 	directorySeed: PlayerDirectorySeed
-	initialDeskSeed?: PlayerStatsDeskResponse | null
+	initialDeskSeedPromise: Promise<PlayerStatsDeskResponse | null>
 	navigationId: string
+	noScriptHint: string
 }) {
 	const t = useTranslations('PlayerStats')
+	const [initialDeskSettled, setInitialDeskSettled] = useState(false)
 	const { seed: personalSeed, resolved: personalSeedResolved } =
 		usePlayerStatsPersonalSeed()
 	const { anchorGw, seasonStatsAvailable, seasonStatsStatus } = directorySeed
 	const mySquadPicks = personalSeed?.mySquadPicks ?? []
 	const marketCompareCandidates = personalSeed?.marketCompareCandidates
-	const initialFirstEntry = initialDeskSeed?.entries.find(
-		entry => entry.playerId === initialPlayerIds.p1
-	)
-	const initialSecondEntry = initialDeskSeed?.entries.find(
-		entry => entry.playerId === initialPlayerIds.p2
-	)
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
 		eventId: anchorGw,
-		initialEntry: initialFirstEntry,
+		initialPlayer: directorySeed.players.find(player => player.id === initialPlayerIds.p1) ? toPickerPlayer(directorySeed.players.find(player => player.id === initialPlayerIds.p1)!) : null,
 		navigationId
 	})
 	const secondPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_2,
 		eventId: anchorGw,
-		initialEntry: initialSecondEntry,
+		initialPlayer: directorySeed.players.find(player => player.id === initialPlayerIds.p2) ? toPickerPlayer(directorySeed.players.find(player => player.id === initialPlayerIds.p2)!) : null,
 		navigationId
 	})
 	const firstSelectPlayer = firstPlayer.selectPlayer
 	const firstSelectPlayerById = firstPlayer.selectPlayerById
-	const firstClearSelection = firstPlayer.clearSelection
 	const secondSelectPlayer = secondPlayer.selectPlayer
 	const secondSelectPlayerById = secondPlayer.selectPlayerById
 	const secondClearSelection = secondPlayer.clearSelection
 	const firstSelectedPlayerId = firstPlayer.selectedPlayer?.id
 	const secondSelectedPlayerId = secondPlayer.selectedPlayer?.id
-	const [compareOpen, setCompareOpen] = useState(false)
+	const [compareOpen, setCompareOpen] = useState(initialPlayerIds.p2 != null)
 	const [deepLinkReady, setDeepLinkReady] = useState(false)
 	const [directoryReady, setDirectoryReady] = useState(
 		directorySeed.playersState === 'ready'
 	)
 	const handleDirectoryReady = useCallback(() => setDirectoryReady(true), [])
 	const deepLinkKey = `${initialPlayerIds.p1 ?? ''}:${initialPlayerIds.p2 ?? ''}`
-	const deepLinkKeyRef = useRef<string | null>(null)
 	type InteractionClock = {
 		id: string
 		targetKey: string
@@ -149,107 +211,91 @@ export default function PlayerStatsClient({
 		[]
 	)
 
-	useEffect(() => {
-		if (!initialDeskSeed || initialDeskSeed.section !== 'overview') return
-		primePlayerStatsDeskCache(
-			{
-				playerIds: initialDeskSeed.entries.map(entry => entry.playerId),
-				eventId: initialDeskSeed.eventId,
-				horizon: initialDeskSeed.horizon,
-				section: 'overview'
-			},
-			initialDeskSeed
-		)
-	}, [initialDeskSeed])
 
 	const syncUrl = useCallback(() => {
 		if (typeof window === 'undefined') return
 		const params = buildPlayerStatsQueryString({
-			p1: firstPlayer.selectedPlayer?.id,
-			p2: secondPlayer.selectedPlayer?.id
+			p1: firstPlayer.selectedPlayer?.id ?? (firstPlayer.selectionVersion === 0 && initialPlayerIds.p1 != null ? String(initialPlayerIds.p1) : null),
+			p2: secondPlayer.selectedPlayer?.id ?? (secondPlayer.selectionVersion === 0 && initialPlayerIds.p2 != null ? String(initialPlayerIds.p2) : null)
 		})
 		const hash = window.location.hash
 		const path = window.location.pathname
 		const next = params ? `${path}?${params}${hash}` : `${path}${hash}`
 		window.history.replaceState(null, '', next)
-	}, [firstPlayer.selectedPlayer?.id, secondPlayer.selectedPlayer?.id])
+	}, [firstPlayer.selectedPlayer?.id, secondPlayer.selectedPlayer?.id, firstPlayer.selectionVersion, secondPlayer.selectionVersion, initialPlayerIds.p1, initialPlayerIds.p2])
 
 	useEffect(() => {
 		if (!deepLinkReady) return
 		syncUrl()
 	}, [deepLinkReady, syncUrl])
 
+	useEffect(() => { setDeepLinkReady(true) }, [deepLinkKey])
+
 	useEffect(() => {
-		if (deepLinkKeyRef.current === deepLinkKey) return
-		deepLinkKeyRef.current = deepLinkKey
-		setDeepLinkReady(false)
-		setDetailInteraction(null)
-		setCompareInteraction(null)
-
-		const seed = async () => {
-			if (initialPlayerIds.p1 == null) {
-				firstClearSelection()
-				secondClearSelection()
-				setCompareOpen(false)
-				setDeepLinkReady(true)
-				return
-			}
-			const initialSeedReady =
-				firstPlayer.playerDetail?.id === initialPlayerIds.p1 &&
-				(initialPlayerIds.p2 == null ||
-					secondPlayer.playerDetail?.id === initialPlayerIds.p2)
-			if (initialSeedReady) {
-				setCompareOpen(initialPlayerIds.p2 != null)
-				setDeepLinkReady(true)
-				const section = playerStatsSectionFromHash(window.location.hash)
-				if (section) {
-					window.requestAnimationFrame(() => {
-						document
-							.getElementById(`ps-${section}`)
-							?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-					})
-				}
-				return
-			}
-			const batchPlayerIds = [initialPlayerIds.p1, initialPlayerIds.p2].filter(
-				(value): value is number => value != null
-			)
-			const firstDetail = await firstSelectPlayerById(initialPlayerIds.p1, {
-				silentNotFound: true,
-				batchPlayerIds
-			})
-			if (firstDetail && initialPlayerIds.p2 != null) {
-				const secondDetail = await secondSelectPlayerById(initialPlayerIds.p2, {
-					silentNotFound: true,
-					batchPlayerIds
-				})
-				setCompareOpen(Boolean(secondDetail))
-			} else {
-				secondClearSelection()
-				setCompareOpen(false)
-			}
-			setDeepLinkReady(true)
+		if (!deepLinkReady || (initialPlayerIds.p1 != null && !initialDeskSettled)) return
+		let cancelled = false
+		let generation = 0
+		const scheduleHashScroll = () => {
+			const currentGeneration = ++generation
 			const section = playerStatsSectionFromHash(window.location.hash)
-			if (section) {
-				window.requestAnimationFrame(() => {
-					const el = document.getElementById(`ps-${section}`)
-					el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-				})
+			if (!section) return
+			let attempts = 0
+			const scrollToHashTarget = () => {
+				if (cancelled || currentGeneration !== generation) return
+				const element = document.getElementById(`ps-${section}`)
+				if (element) {
+					window.requestAnimationFrame(() => {
+						if (!cancelled && currentGeneration === generation) {
+							element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+						}
+					})
+					return
+				}
+				if (attempts >= 20) return
+				attempts += 1
+				window.setTimeout(scrollToHashTarget, 50)
 			}
+			scrollToHashTarget()
 		}
+		scheduleHashScroll()
+		window.addEventListener('hashchange', scheduleHashScroll)
+		window.addEventListener('popstate', scheduleHashScroll)
+		return () => {
+			cancelled = true
+			window.removeEventListener('hashchange', scheduleHashScroll)
+			window.removeEventListener('popstate', scheduleHashScroll)
+		}
+	}, [deepLinkReady, initialDeskSettled, initialPlayerIds.p1, deepLinkKey])
 
-		void seed()
-	}, [
-		initialPlayerIds.p1,
-		initialPlayerIds.p2,
-		deepLinkKey,
-		firstClearSelection,
-		firstSelectPlayerById,
-		secondSelectPlayerById,
-		secondClearSelection,
-		firstPlayer.playerDetail?.id,
-		secondPlayer.playerDetail?.id
-	])
+	const admitFirstSeed = firstPlayer.admitInitialSeed
+	const admitSecondSeed = secondPlayer.admitInitialSeed
+	const admitDeskSeed = useCallback((seed: PlayerStatsDeskResponse | null) => {
+		const matching = seed?.eventId === anchorGw ? seed : null
+		if (initialPlayerIds.p1 != null) {
+			admitFirstSeed(
+				matching?.entries.find(entry => entry.playerId === initialPlayerIds.p1) ?? null,
+				{ navigationId, eventId: anchorGw, playerId: initialPlayerIds.p1 }
+			)
+		}
+		if (initialPlayerIds.p2 != null) {
+			admitSecondSeed(
+				matching?.entries.find(entry => entry.playerId === initialPlayerIds.p2) ?? null,
+				{ navigationId, eventId: anchorGw, playerId: initialPlayerIds.p2 }
+			)
+		}
+		if (matching?.section === 'overview') {
+			primePlayerStatsDeskCache(
+				{
+					playerIds: matching.entries.map(entry => entry.playerId),
+					eventId: matching.eventId,
+					horizon: matching.horizon,
+					section: 'overview'
+				},
+				matching
+			)
+		}
+		setInitialDeskSettled(true)
+	}, [admitFirstSeed, admitSecondSeed, anchorGw, initialPlayerIds.p1, initialPlayerIds.p2, navigationId])
 
 	const playerOnePositionCode = useMemo(() => {
 		if (!firstPlayer.playerDetail) return null
@@ -418,6 +464,115 @@ export default function PlayerStatsClient({
 				? t('squadUnbound')
 				: t('personalContextUnavailable')
 
+	const initialPlayerId = initialPlayerIds.p1
+	const initialDirectoryPlayer =
+		initialPlayerId == null
+			? null
+			: directorySeed.players.find(player => player.id === initialPlayerId) ?? null
+	const showInitialDesk = initialPlayerId != null && !initialDeskSettled && firstPlayer.selectionVersion === 0 && secondPlayer.selectionVersion === 0
+	const comparisonRequested = Boolean(
+		secondPlayer.selectedPlayer ||
+		(secondPlayer.selectionVersion === 0 && initialPlayerIds.p2 != null)
+	)
+	const detailView = (initialPlayerIds.p1 != null ||
+			firstPlayer.selectedPlayer ||
+			firstPlayer.isLoading ||
+			firstPlayer.error ? (
+				<PlayerStatsView
+					selectedPlayer={firstPlayer.selectedPlayer}
+					selectedComparison={secondPlayer.selectedPlayer}
+					comparisonRequested={comparisonRequested}
+					player={firstPlayer.playerDetail}
+					comparison={secondPlayer.playerDetail}
+					playerState={firstPlayer.playerStateProfile}
+					comparisonState={secondPlayer.playerStateProfile}
+					isLoading={firstPlayer.isLoading}
+					isComparisonLoading={secondPlayer.isLoading}
+					isStateLoading={firstPlayer.isStateLoading}
+					isComparisonStateLoading={secondPlayer.isStateLoading}
+					error={firstPlayer.error}
+					comparisonError={secondPlayer.error}
+					stateError={firstPlayer.stateError}
+					comparisonStateError={secondPlayer.stateError}
+					retryPlayerData={() => {
+						const retryBatchPlayerIds = [
+							firstSelectedPlayerId,
+							secondSelectedPlayerId,
+							initialPlayerIds.p1,
+							initialPlayerIds.p2
+						]
+							.map(Number)
+							.filter(value => Number.isInteger(value) && value > 0)
+						if (!firstPlayer.selectedPlayer) {
+							if (initialPlayerIds.p1 != null) {
+								void firstSelectPlayerById(initialPlayerIds.p1, {
+									batchPlayerIds: retryBatchPlayerIds
+								})
+							}
+						} else {
+							firstPlayer.selectPlayer(
+								firstPlayer.selectedPlayer,
+								retryBatchPlayerIds,
+								{
+									bypassCache: true
+								}
+							)
+						}
+						if (secondPlayer.selectedPlayer) {
+							secondPlayer.selectPlayer(
+								secondPlayer.selectedPlayer,
+								retryBatchPlayerIds
+							)
+						} else if (comparisonRequested && initialPlayerIds.p2 != null) {
+							void secondSelectPlayerById(initialPlayerIds.p2, {
+								batchPlayerIds: retryBatchPlayerIds
+							})
+						}
+					}}
+					loadEvidence={section =>
+						firstPlayer.loadEvidence(
+							section,
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					loadComparisonEvidence={section =>
+						secondPlayer.loadEvidence(
+							section,
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					loadStateContext={() =>
+						firstPlayer.loadStateContext(
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					loadComparisonStateContext={() =>
+						secondPlayer.loadStateContext(
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					isEvidenceLoading={firstPlayer.isEvidenceLoading}
+					isComparisonEvidenceLoading={secondPlayer.isEvidenceLoading}
+					isStateContextLoading={firstPlayer.isStateContextLoading}
+					isComparisonStateContextLoading={secondPlayer.isStateContextLoading}
+					evidenceError={firstPlayer.evidenceError}
+					comparisonEvidenceError={secondPlayer.evidenceError}
+					stateContextError={firstPlayer.stateContextError}
+					comparisonStateContextError={secondPlayer.stateContextError}
+					anchorGw={anchorGw}
+					seasonStatsAvailable={seasonStatsAvailable}
+					seasonStatsStatus={seasonStatsStatus}
+				/>
+			) : null)
+
 	return (
 		<>
 			<RouteReadyMarker
@@ -479,6 +634,13 @@ export default function PlayerStatsClient({
 				goodMs={1_000}
 				poorMs={1_500}
 			/>
+			{initialPlayerId != null && !initialDeskSettled ? (
+				<PlayerStatsNoScriptResult
+					player={initialDirectoryPlayer}
+					playerId={initialPlayerId}
+					noScriptHint={noScriptHint}
+				/>
+			) : null}
 			<div
 				className={cn(
 					'mb-4 h-44 overflow-y-auto rounded-lg border border-border/60 px-3 py-3 sm:h-36',
@@ -521,7 +683,7 @@ export default function PlayerStatsClient({
 				}}
 				compareOpen={compareOpen}
 				onAddCompare={() => setCompareOpen(true)}
-				canCompare={Boolean(firstPlayer.playerDetail)}
+				canCompare={Boolean(firstPlayer.selectedPlayer || (initialPlayerIds.p1 != null && firstPlayer.selectionVersion === 0))}
 				statsAvailable={pickerStatsAvailable}
 				directorySeed={directorySeed}
 				onDirectoryReady={handleDirectoryReady}
@@ -545,90 +707,16 @@ export default function PlayerStatsClient({
 				}
 			/>
 
-			{initialPlayerIds.p1 != null ||
-			firstPlayer.selectedPlayer ||
-			firstPlayer.isLoading ||
-			firstPlayer.error ? (
-				<PlayerStatsView
-					selectedPlayer={firstPlayer.selectedPlayer}
-					selectedComparison={secondPlayer.selectedPlayer}
-					player={firstPlayer.playerDetail}
-					comparison={secondPlayer.playerDetail}
-					playerState={firstPlayer.playerStateProfile}
-					comparisonState={secondPlayer.playerStateProfile}
-					isLoading={firstPlayer.isLoading}
-					isComparisonLoading={secondPlayer.isLoading}
-					isStateLoading={firstPlayer.isStateLoading}
-					isComparisonStateLoading={secondPlayer.isStateLoading}
-					error={firstPlayer.error}
-					comparisonError={secondPlayer.error}
-					stateError={firstPlayer.stateError}
-					comparisonStateError={secondPlayer.stateError}
-					retryPlayerData={() => {
-						if (!firstPlayer.selectedPlayer) return
-						const batchPlayerIds = [
-							firstSelectedPlayerId,
-							secondSelectedPlayerId
-						]
-							.map(Number)
-							.filter(value => Number.isInteger(value) && value > 0)
-						firstPlayer.selectPlayer(
-							firstPlayer.selectedPlayer,
-							batchPlayerIds,
-							{
-								bypassCache: true
-							}
-						)
-						if (secondPlayer.selectedPlayer) {
-							secondPlayer.selectPlayer(
-								secondPlayer.selectedPlayer,
-								batchPlayerIds
-							)
-						}
-					}}
-					loadEvidence={section =>
-						firstPlayer.loadEvidence(
-							section,
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
-					}
-					loadComparisonEvidence={section =>
-						secondPlayer.loadEvidence(
-							section,
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
-					}
-					loadStateContext={() =>
-						firstPlayer.loadStateContext(
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
-					}
-					loadComparisonStateContext={() =>
-						secondPlayer.loadStateContext(
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
-					}
-					isEvidenceLoading={firstPlayer.isEvidenceLoading}
-					isComparisonEvidenceLoading={secondPlayer.isEvidenceLoading}
-					isStateContextLoading={firstPlayer.isStateContextLoading}
-					isComparisonStateContextLoading={secondPlayer.isStateContextLoading}
-					evidenceError={firstPlayer.evidenceError}
-					comparisonEvidenceError={secondPlayer.evidenceError}
-					stateContextError={firstPlayer.stateContextError}
-					comparisonStateContextError={secondPlayer.stateContextError}
-					anchorGw={anchorGw}
-					seasonStatsAvailable={seasonStatsAvailable}
-					seasonStatsStatus={seasonStatsStatus}
-				/>
+			{initialPlayerId != null && !initialDeskSettled ? (
+				<div data-player-stats-ssr-boundary="true">
+					<Suspense fallback={showInitialDesk ? <div data-ssr-stream-fallback="player-stats-detail" data-player-stats-ssr-fallback="true" className="min-h-72 animate-pulse rounded-xl border bg-muted/20" role="status">{t('loadingStats')}</div> : null}>
+						<PlayerStatsInitialDesk promise={initialDeskSeedPromise} playerIds={initialPlayerIds} eventId={anchorGw} onSeed={admitDeskSeed}>
+							{showInitialDesk ? detailView : null}
+						</PlayerStatsInitialDesk>
+					</Suspense>
+				</div>
 			) : null}
+			{showInitialDesk ? null : detailView}
 		</>
 	)
 }

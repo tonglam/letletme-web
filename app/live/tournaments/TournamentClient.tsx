@@ -1323,6 +1323,14 @@ export default function TournamentClient({
 		shareUrl
 	])
 
+	const competitionBoardReady = Boolean(
+		selectedTournament && selectionRestoreComplete && standingsReady &&
+		!showingLastGood &&
+		(selectedTournamentIsOfficialH2H
+			? officialH2HReady && officialH2HReadyScopeKey === scopeKey
+			: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)
+	)
+
 	if (entryId <= 0) {
 		return (
 			<PageShell>
@@ -1344,17 +1352,14 @@ export default function TournamentClient({
 
 	return (
 		<PageShell>
-			<div className="container mx-auto max-w-4xl px-4 py-8">
+			<div className="container mx-auto max-w-4xl px-4 py-8"
+				data-competition-perf-ready={competitionBoardReady ? "detail" : undefined}
+				data-competition-tournament-id={selectedTournamentId ?? undefined}
+				data-competition-gameweek={selectedGameweek}
+			>
 				<RouteReadyMarker
 					name="LIVE_COMPETITION_BOARD_READY"
-					ready={Boolean(
-						selectedTournament &&
-						selectionRestoreComplete &&
-						standingsReady &&
-						(selectedTournamentIsOfficialH2H
-							? officialH2HReady && officialH2HReadyScopeKey === scopeKey
-							: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)
-					)}
+					ready={competitionBoardReady}
 					audienceHint="session-hint"
 					goodMs={1500}
 					poorMs={2500}

@@ -7,7 +7,7 @@ import {
 	GET_PLAYERS_FOR_PICKER,
 	type PlayersForPickerResponse,
 } from '@/lib/graphql/operations/players'
-import type { SquadPickSeed } from '@/lib/squad-picks'
+import { squadReadOptions, type SquadPickSeed, type SquadReadBudget } from '@/lib/squad-picks'
 
 const PICKER_PAGE_SIZE = 200
 const PICKER_MAX_PAGES = 20
@@ -16,19 +16,20 @@ const PICKER_MAX_PAGES = 20
  * Build webName|teamShortName → FPL element id for squad matching.
  * Used when entry picks omit the `element` field.
  */
-export async function buildPlayerIdBySquadKey(): Promise<Map<string, number>> {
+export async function buildPlayerIdBySquadKey(budget?: SquadReadBudget): Promise<Map<string, number>> {
 	const map = new Map<string, number>()
 
 	for (let page = 0; page < PICKER_MAX_PAGES; page += 1) {
+		const readOptions = budget ? squadReadOptions(budget) : {}
 		const offset = page * PICKER_PAGE_SIZE
 		const response = await executePublicServerQuery<PlayersForPickerResponse>(
 			'player-stats',
 			GET_PLAYERS_FOR_PICKER,
 			{ filter: {}, limit: PICKER_PAGE_SIZE, offset },
-			publicFetchOptions({
+			{ ...publicFetchOptions({
 				revalidate: RevalidateSeconds.publicStats,
 				tags: [CacheTag.fixtures],
-			}),
+			}), ...readOptions },
 		)
 
 		const batch = response.players ?? []
@@ -59,9 +60,10 @@ export function fillMissingSquadElementIds(
 
 export async function resolveSquadPickElementIds(
 	picks: SquadPickSeed[],
+	budget?: SquadReadBudget,
 ): Promise<SquadPickSeed[]> {
 	const missing = picks.some(p => p.elementId == null)
 	if (!missing) return picks
-	const idByKey = await buildPlayerIdBySquadKey()
+	const idByKey = await buildPlayerIdBySquadKey(budget)
 	return fillMissingSquadElementIds(picks, idByKey)
 }

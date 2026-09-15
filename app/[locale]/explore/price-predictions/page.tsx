@@ -5,7 +5,6 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { withCapacityRunForRequest } from '@/lib/capacity-run'
-import { getCurrentAndNextEvents } from '@/lib/events'
 import { EMPTY_PRICE_CHANGE_BOARD } from '@/lib/graphql/operations/price-changes'
 import { computeTimeLeft } from '@/lib/home-deadline'
 import {
@@ -13,13 +12,9 @@ import {
 } from '@/lib/live-context-server'
 import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
-import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
-import type {
-	EntrySquadPicksResult,
-	SquadLoadState,
-	SquadPickSeed
-} from '@/lib/squad-picks'
-import { getVerifiedEntryContext } from '@/lib/session'
+import { loadPersonalSquadSeed } from '@/lib/load-entry-squad-picks'
+import { PriceChangesPersonalSeedProvider, PriceChangesPersonalSeedCommit } from '@/app/data/price-changes/PriceChangesPersonalSeedContext'
+import { Suspense } from 'react'
 import { getTranslations } from 'next-intl/server'
 import {
 	DEFAULT_PRICE_CHANGE_SCOPE,
@@ -114,39 +109,9 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 			response: { priceChangeBoard: EMPTY_PRICE_CHANGE_BOARD },
 			error,
 		}))
-	const [events, identity] = await Promise.all([
-		getCurrentAndNextEvents(),
-		getVerifiedEntryContext()
-	])
-
-	let mySquadElementIds: number[] = []
-	let mySquadPicks: SquadPickSeed[] = []
-	let mySquadState: SquadLoadState =
-		identity.entryId != null ? 'not-published' : 'unbound'
-	let squadPromise: Promise<EntrySquadPicksResult | null> =
-		Promise.resolve(null)
-	if (identity.session && identity.entryId != null) {
-		squadPromise = loadEntrySquadPicks(
-			identity.session,
-			identity.entryId,
-			events
-		).catch(error => {
-			console.error('[price-changes] squad seed failed:', error)
-			return null
-		})
-	}
-
-	const [{ response: boardResponse, error: boardError }, squad] =
-		await Promise.all([boardPromise, squadPromise])
-	if (squad) {
-		mySquadPicks = squad.picks
-		mySquadElementIds = squad.picks
-			.map(pick => pick.elementId)
-			.filter((id): id is number => id != null && id > 0)
-		mySquadState = squad.state
-	} else if (identity.session && identity.entryId != null) {
-		mySquadState = 'unavailable'
-	}
+	const personalPromise = loadPersonalSquadSeed()
+	const navigationId = crypto.randomUUID()
+	const { response: boardResponse, error: boardError } = await boardPromise
 
 	const board = boardResponse.priceChangeBoard
 	const optionalLivePageContext =
@@ -173,6 +138,7 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 					: t('unavailable')
 
 	return (
+		<PriceChangesPersonalSeedProvider navigationId={navigationId}>
 		<PageShell>
 			<PriceChangesContractMarker
 				status={
@@ -215,18 +181,25 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 					board={board}
 					locale={locale}
 					initialTimeLeft={initialTimeLeft}
-					mySquadElementIds={mySquadElementIds}
-					mySquadPicks={mySquadPicks}
-					mySquadState={mySquadState}
 					initialScope={initialScope}
 					initialMovement={initialMovement}
 					isOfficialUpdating={isOfficialUpdating}
+					personalSeedPromise={personalPromise}
 				/>
 			</div>
 		</PageShell>
+		<Suspense fallback={null}><PersonalSquadStream navigationId={navigationId} promise={personalPromise} /></Suspense>
+		</PriceChangesPersonalSeedProvider>
 	)
 }
 
 export default async function PriceChangesPage(props: PageProps) {
 	return withCapacityRunForRequest(() => renderPriceChangesPage(props))
+}
+
+async function PersonalSquadStream({ navigationId, promise }: {
+	navigationId: string
+	promise: ReturnType<typeof loadPersonalSquadSeed>
+}) {
+	return <PriceChangesPersonalSeedCommit navigationId={navigationId} seed={await promise} />
 }

@@ -93,4 +93,44 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(clientSource, /statsContext\.status === 'STALE'/)
 		assert.match(viewSource, /STALE: t\('playerState\.coverage\.stale'\)/)
 	})
+
+	it('retries a deep-link hash after the detail target mounts', async () => {
+		const source = await readFile(
+			new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url),
+			'utf8'
+		)
+		assert.match(source, /playerStatsSectionFromHash\(window\.location\.hash\)/)
+		assert.match(source, /document\.getElementById\(`ps-\$\{section\}`\)/)
+		assert.match(source, /element\.scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/)
+		assert.match(source, /attempts >= 20/)
+		assert.match(source, /addEventListener\('hashchange', scheduleHashScroll\)/)
+		assert.match(source, /addEventListener\('popstate', scheduleHashScroll\)/)
+	})
+
+	it('keeps a missing deep-link comparison visible as an actionable error', async () => {
+		const [clientSource, initialDeskSource, viewSource] = await Promise.all([
+			readFile(new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url), 'utf8'),
+			readFile(new URL('../app/data/player-stats/PlayerStatsInitialDesk.tsx', import.meta.url), 'utf8'),
+			readFile(new URL('../app/data/player-stats/_components/PlayerStatsView.tsx', import.meta.url), 'utf8')
+		])
+
+		assert.match(clientSource, /const comparisonRequested = Boolean\([\s\S]*initialPlayerIds\.p2 != null\)/)
+		assert.match(clientSource, /comparisonRequested=\{comparisonRequested\}/)
+		assert.match(clientSource, /initialDeskSeedPromise/)
+		assert.match(clientSource, /PlayerStatsInitialDesk/)
+		assert.doesNotMatch(clientSource, /data-player-stats-noscript-anchor=/)
+		assert.match(clientSource, /function PlayerStatsNoScriptResult[\s\S]*data-player-stats-noscript-result="true"/)
+		assert.match(clientSource, /data-player-stats-noscript-section="history"/)
+		assert.match(initialDeskSource, /data-ssr-stream-content="player-stats"/)
+		assert.match(viewSource, /const streamContentMarker = ssrStreamed \? 'player-stats-detail'/)
+		assert.match(viewSource, /data-ssr-stream-content=\{streamContentMarker\}/)
+		const retryStart = clientSource.indexOf('retryPlayerData={() =>')
+		const retryEnd = clientSource.indexOf('loadEvidence=', retryStart)
+		const retry = clientSource.slice(retryStart, retryEnd)
+		assert.match(retry, /secondSelectPlayerById\(initialPlayerIds\.p2[\s\S]*batchPlayerIds/)
+		assert.match(initialDeskSource, /comparisonRequested: playerIds\.p2 != null/)
+		assert.match(initialDeskSource, /comparisonError: playerIds\.p2 != null && !comparison/)
+		assert.match(viewSource, /const comparisonMissing = comparisonRequested && !comparison/)
+		assert.match(viewSource, /comparisonRequested && isComparisonLoading && comparisonMissing/)
+	})
 })

@@ -1,9 +1,11 @@
+import { Suspense } from 'react'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { getCurrentSession, hasSessionCookieHint } from '@/lib/session'
-import { GuestNavigationActions } from './GuestNavigationActions'
+import { GuestNavigationActions, GuestAccountActions } from './GuestNavigationActions'
 import { LogoMark, LogoWordmark } from './Logo'
 import { NavigationActions } from './NavigationActions'
+import { SignOutForm } from './SignOutForm'
 
 export async function Navbar() {
 	const [t, hasSessionCookie, locale] = await Promise.all([
@@ -13,13 +15,13 @@ export async function Navbar() {
 	])
 	const homeHref = localizePathname('/', locale as AppLocale)
 	const displaySession = hasSessionCookie
-		? await getCurrentSession().catch(error => {
+		? getCurrentSession().catch(error => {
 				console.warn('[navbar-session] display session unavailable', {
 					error: error instanceof Error ? error.name : 'UnknownError'
 				})
 				return null
 			})
-		: null
+		: Promise.resolve(null)
 
 	return (
 		<nav
@@ -36,13 +38,46 @@ export async function Navbar() {
 				</a>
 
 				<div className="flex items-center gap-1.5">
-					{displaySession?.user ? (
-						<NavigationActions user={displaySession.user} />
-					) : (
-						<GuestNavigationActions />
-					)}
+					<GuestNavigationActions
+						desktopAccount={hasSessionCookie ? (
+							<Suspense fallback={<AccountPlaceholder homeHref={homeHref} />}>
+								<AccountSlot session={displaySession} />
+							</Suspense>
+						) : undefined}
+						mobileAccount={hasSessionCookie ? (
+							<Suspense fallback={<AccountPlaceholder homeHref={homeHref} />}>
+								<AccountSlot session={displaySession} mobile />
+							</Suspense>
+						) : undefined}
+					/>
 				</div>
 			</div>
 		</nav>
 	)
+}
+
+async function AccountPlaceholder({ homeHref }: { homeHref: string }) {
+	const t = await getTranslations('Navigation')
+	return <>
+		<span data-account-placeholder className="block h-9 w-36 animate-pulse rounded-md bg-fascia-foreground/10" aria-hidden="true" />
+		<noscript>
+			<style>{'[data-account-placeholder]{display:none}'}</style>
+			<SignOutForm
+				label={t('signOut')}
+				pendingLabel={t('signingOut')}
+				errorLabel={t('signOutFailed')}
+				redirectHref={homeHref}
+			/>
+		</noscript>
+	</>
+}
+
+async function AccountSlot({ session, mobile = false }: {
+	session: ReturnType<typeof getCurrentSession>
+	mobile?: boolean
+}) {
+	const resolved = await session
+	return resolved?.user
+		? <NavigationActions user={resolved.user} mobile={mobile} />
+		: <GuestAccountActions mobile={mobile} />
 }
