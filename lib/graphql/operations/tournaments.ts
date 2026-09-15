@@ -1027,7 +1027,7 @@ export const GET_TOURNAMENT_SELECTION_INDEX = `
   query GetTournamentSelectionIndex($entryId: Int!, $tournamentId: Int!, $ref: LivePublicationRefInput!) {
     tournamentSelectionIndex(entryId: $entryId, tournamentId: $tournamentId, ref: $ref) {
       tournamentId eventId scoreCoreRevision
-      rows { playerId playerName teamId teamName teamShortName position count percentage }
+      rows { playerId playerName teamId teamName teamShortName position count captainCount percentage }
     }
   }
 `
@@ -1040,6 +1040,7 @@ export interface TournamentSelectionIndexRow {
 	teamShortName: string
 	position: string
 	count: number
+	captainCount: number
 	percentage: number
 }
 
