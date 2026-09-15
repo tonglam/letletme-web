@@ -142,9 +142,10 @@ type RuntimeErrorAggregate = {
 	reportedCount: number
 	timer: ReturnType<typeof globalThis.setTimeout> | null
 }
-const seenRuntimeErrorObjects = new WeakSet<object>()
+const seenRuntimeErrorObjects = new WeakMap<object, number>()
 const runtimeErrorAggregates = new Map<string, RuntimeErrorAggregate>()
 const MAX_RUNTIME_ERROR_FINGERPRINT_LENGTH = 128
+let runtimeErrorLifecycleHandlersInstalled = false
 
 type RuntimeErrorDimensions = Pick<
 	RuntimeErrorAggregate,
@@ -393,6 +394,34 @@ function flushRuntimeErrorAggregate(aggregationKey: string): void {
 	aggregate.firstObservedAt = null
 }
 
+function flushPendingRuntimeErrors(): void {
+	runtimeErrorAggregates.forEach((aggregate, aggregationKey) => {
+		if (aggregate.timer) {
+			globalThis.clearTimeout(aggregate.timer)
+			aggregate.timer = null
+		}
+		if (runtimeErrorHasPendingOccurrences(aggregate)) {
+			flushRuntimeErrorAggregate(aggregationKey)
+		}
+	})
+}
+
+function installRuntimeErrorLifecycleHandlers(): void {
+	if (runtimeErrorLifecycleHandlersInstalled || typeof window === 'undefined') {
+		return
+	}
+	runtimeErrorLifecycleHandlersInstalled = true
+	const flushWhenHidden = () => {
+		if (typeof document === 'undefined' || document.visibilityState === 'hidden') {
+			flushPendingRuntimeErrors()
+		}
+	}
+	window.addEventListener('pagehide', flushPendingRuntimeErrors)
+	if (typeof document !== 'undefined') {
+		document.addEventListener('visibilitychange', flushWhenHidden)
+	}
+}
+
 function runtimeErrorBuildLocation(error: unknown): string {
 	if (!error || typeof error !== 'object') return 'unknown'
 	let stack: unknown
@@ -563,9 +592,14 @@ function mergeRuntimeErrorIntoOther(
 /** Report controlled runtime-error dimensions; never serialize the thrown value. */
 export function reportBrowserRuntimeError(error?: unknown): void {
 	if (typeof window === 'undefined' || typeof navigator === 'undefined') return
+	installRuntimeErrorLifecycleHandlers()
+	const nowMs = Date.now()
 	if (error && typeof error === 'object') {
-		if (seenRuntimeErrorObjects.has(error)) return
-		seenRuntimeErrorObjects.add(error)
+		const seenAt = seenRuntimeErrorObjects.get(error)
+		if (seenAt !== undefined && nowMs - seenAt < RUNTIME_ERROR_DEDUPE_WINDOW_MS) {
+			return
+		}
+		seenRuntimeErrorObjects.set(error, nowMs)
 	}
 	let errorName: unknown
 	if (error && typeof error === 'object') {

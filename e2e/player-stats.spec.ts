@@ -81,15 +81,33 @@ test('two-player deep link is server-seeded with zero browser desk requests', as
 	await expect(overall).toContainText('Palmer')
 	expect(deskRequests).toBe(0)
 	await expect
-		.poll(
-			() =>
-				routeReadySamples(reportedVitals).filter(
-					sample =>
-						sample.metric === 'route_ready_ms' &&
-						sample.surface === 'player_stats'
-				).length >= 2
+		.poll(() =>
+			routeReadySamples(reportedVitals).filter(
+				sample =>
+					sample.metric === 'route_ready_ms' &&
+					sample.surface === 'player_stats'
+			)
 		)
-		.toBe(true)
+		.toHaveLength(2)
+	const routeReady = routeReadySamples(reportedVitals).filter(
+		sample =>
+			sample.metric === 'route_ready_ms' && sample.surface === 'player_stats'
+	)
+	expect(new Set(routeReady.map(sample => sample.metricName))).toEqual(
+		new Set(['PLAYER_DIRECTORY_READY', 'PLAYER_DIRECTORY_PAINT'])
+	)
+	expect(routeReady).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+			metricName: 'PLAYER_DIRECTORY_READY',
+			measurementKind: 'initial_navigation'
+		}),
+		expect.objectContaining({
+			metricName: 'PLAYER_DIRECTORY_PAINT',
+			measurementKind: 'initial_navigation'
+		})
+	])
+	)
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth
