@@ -107,7 +107,7 @@ function DeskSection({
 	hint,
 	children
 }: {
-	id: string
+	id?: string
 	title: string
 	hint?: string
 	children: ReactNode
@@ -867,7 +867,7 @@ export function PlayerStatsView({
 		if (activeSection === 'fixtures') {
 			return (
 				<DeskSection
-					id="ps-fixtures"
+					id={ssrStreamed ? undefined : 'ps-fixtures'}
 					title={t('fixturesTitle')}
 					hint={t('fixturesHint')}
 				>
@@ -886,7 +886,7 @@ export function PlayerStatsView({
 		if (activeSection === 'recent' && hasSeasonStats) {
 			return (
 				<DeskSection
-					id="ps-recent"
+					id={ssrStreamed ? undefined : 'ps-recent'}
 					title={t('recentTitle')}
 					hint={t('recentHint')}
 				>
@@ -900,7 +900,7 @@ export function PlayerStatsView({
 		if (activeSection === 'season' && hasSeasonStats) {
 			return (
 				<DeskSection
-					id="ps-season"
+					id={ssrStreamed ? undefined : 'ps-season'}
 					title={t('seasonTitle')}
 					hint={
 						samePosition || !comparison
@@ -935,7 +935,7 @@ export function PlayerStatsView({
 		if (activeSection === 'process' && hasSeasonStats) {
 			return (
 				<DeskSection
-					id="ps-process"
+					id={ssrStreamed ? undefined : 'ps-process'}
 					title={t('processTitle')}
 					hint={
 						comparison && !samePosition
@@ -1109,6 +1109,7 @@ export function PlayerStatsView({
 					profile={playerState}
 					comparisonProfile={comparisonState}
 					anchorGw={anchorGw}
+					ssrStreamed={ssrStreamed}
 				/>
 
 				<PlayerFplProfile
@@ -1214,7 +1215,7 @@ export function PlayerStatsView({
 											comparisonProfile={comparisonState}
 										/>
 									)}
-									<div id="ps-market">
+									<div id={ssrStreamed ? undefined : 'ps-market'}>
 										<DeskSection
 											id="ps-market-section"
 											title={t('marketTitle')}

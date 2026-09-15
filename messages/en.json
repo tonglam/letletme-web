@@ -952,6 +952,7 @@
 		"shareNone": "None",
 		"shareFooter": "{url}",
 		"loadingStats": "Loading player statistics",
+		"noScriptHint": "Interactive player details require JavaScript. The selected player and section links remain available above.",
 		"currentGameweekUnavailable": "The current gameweek is unavailable.",
 		"loadFailed": "Failed to load player data.",
 		"playerNotFound": "That player is unavailable or no longer valid.",
@@ -1620,6 +1621,7 @@
 		"transfersOutShort": "{count} out",
 		"selectForHistory": "Select a player to view available price data.",
 		"squadLoading": "Loading your squad…",
+		"noScriptHint": "Interactive squad details require JavaScript. The public price-change board above remains available.",
 		"squadExpand": "View squad",
 		"squadCollapse": "Collapse",
 		"squadRetry": "Refresh and retry"
@@ -1720,6 +1722,7 @@
 		"actionsTitle": "Fixture review candidates",
 		"actionsHint": "Neutral review groups based only on official FDR and current Market visibility — not buy or sell advice.",
 		"actionsLoading": "Loading current market signals…",
+		"noScriptHint": "Interactive fixture details require JavaScript. The public fixture matrix above remains available.",
 		"actionsPosLabel": "Position",
 		"actionsPosAll": "All",
 		"actionsMySquadEmpty": "Link an FPL entry to highlight your squad here.",
@@ -1750,6 +1753,7 @@
 		"shareNone": "None",
 		"shareFooter": "{url}",
 		"squadLoading": "Loading your squad…",
+		"noScriptHint": "Interactive squad details require JavaScript. The public fixture matrix above remains available.",
 		"squadExpand": "View squad",
 		"squadCollapse": "Collapse",
 		"squadRetry": "Refresh and retry"

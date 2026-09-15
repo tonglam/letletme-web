@@ -952,6 +952,7 @@
 		"shareNone": "无",
 		"shareFooter": "{url}",
 		"loadingStats": "正在加载球员数据",
+		"noScriptHint": "互动式球员详情需要启用 JavaScript；上方仍保留所选球员和区块链接。",
 		"currentGameweekUnavailable": "暂时无法确认当前轮次。",
 		"loadFailed": "球员数据加载失败。",
 		"playerNotFound": "该球员不可用或链接已失效。",
@@ -1620,6 +1621,7 @@
 		"transfersOutShort": "转出 {count}",
 		"selectForHistory": "选择球员查看身价数据。",
 		"squadLoading": "正在读取你的阵容…",
+		"noScriptHint": "互动式阵容详情需要启用 JavaScript；上方公共身价变化面板仍可查看。",
 		"squadExpand": "查看阵容",
 		"squadCollapse": "收起",
 		"squadRetry": "刷新重试"
@@ -1720,6 +1722,7 @@
 		"actionsTitle": "赛程复核候选",
 		"actionsHint": "仅按官方 FDR 与当前 Market 可见度中性分组，不构成买入或卖出建议。",
 		"actionsLoading": "正在读取当前市场信号…",
+		"noScriptHint": "互动式赛程详情需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
 		"actionsPosLabel": "位置",
 		"actionsPosAll": "全部",
 		"actionsMySquadEmpty": "绑定 FPL 阵容后，可在此高亮你的球员。",
@@ -1750,6 +1753,7 @@
 		"shareNone": "无",
 		"shareFooter": "{url}",
 		"squadLoading": "正在读取你的阵容…",
+		"noScriptHint": "互动式阵容详情需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
 		"squadExpand": "查看阵容",
 		"squadCollapse": "收起",
 		"squadRetry": "刷新重试"

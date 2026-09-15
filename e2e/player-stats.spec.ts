@@ -189,8 +189,8 @@ test.describe('SSR detail stream', () => {
 			const ms = Date.now() - start
 			chunks.push({ ms, bytes: value.length })
 			if (directoryMs == null && html.includes('aria-label="Players"')) directoryMs = ms
-			if (detailMs == null && html.includes('aria-label="Player overall"')) detailMs = ms
-			if (fragmentAnchorMs == null && html.includes('data-player-stats-noscript-anchor="history"')) fragmentAnchorMs = ms
+			if (detailMs == null && html.includes('data-player-stats-ssr-detail="true"')) detailMs = ms
+			if (fragmentAnchorMs == null && html.includes('data-player-stats-noscript-section="history"')) fragmentAnchorMs = ms
 		}
 		expect(directoryMs).not.toBeNull()
 		expect(detailMs).not.toBeNull()
@@ -201,18 +201,20 @@ test.describe('SSR detail stream', () => {
 		const noJsContext = await browser.newContext({ javaScriptEnabled: false })
 		const noJsPage = await noJsContext.newPage()
 		try {
-			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=${initialPlayerId}`)
-			const noJsDetail = noJsPage.locator('[aria-label="Player overall"]')
+			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=1`)
+			const noJsDetail = noJsPage.locator('[data-player-stats-noscript-result="true"] [aria-label="Player overall"]')
 			await expect(noJsDetail).toBeVisible()
 			await expect(noJsDetail).toContainText('Saka')
 			const noJsFallback = noJsPage.locator('[data-player-stats-ssr-fallback]')
-			await expect(noJsFallback).toHaveCount(1)
-			await expect(noJsFallback).toBeHidden()
+			expect(await noJsFallback.count()).toBeGreaterThan(0)
+			for (const fallback of await noJsFallback.all()) {
+				await expect(fallback).toBeHidden()
+			}
 			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=${initialPlayerId}#ps-history`)
-			const noJsFragmentAnchor = noJsPage.locator('[data-player-stats-noscript-anchor="history"]')
+			const noJsFragmentAnchor = noJsPage.locator('[data-player-stats-noscript-section="history"]')
 			await expect(noJsFragmentAnchor).toBeVisible()
 			const fragmentPosition = await noJsPage.evaluate(() => ({
-				top: document.querySelector('[data-player-stats-noscript-anchor="history"]')?.getBoundingClientRect().top ?? null
+				top: document.querySelector('[data-player-stats-noscript-section="history"]')?.getBoundingClientRect().top ?? null
 			}))
 			expect(fragmentPosition.top).not.toBeNull()
 			expect(fragmentPosition.top!).toBeLessThan(220)
@@ -237,20 +239,21 @@ test.describe('SSR detail stream', () => {
 		expect(browserRequests).toBe(1)
 	})
 
-	test('reveals a failed deep link without browser JavaScript', async ({ browser, baseURL }) => {
-		const initialPlayerId = runPlayerId(5)
-		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, error: true }])
+	test('shows a truthful no-script terminal for a failed deep link', async ({ browser, baseURL }) => {
+		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [1] }, error: true }])
 		const noJsContext = await browser.newContext({ javaScriptEnabled: false })
 		const noJsPage = await noJsContext.newPage()
 		try {
-			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=${initialPlayerId}`)
-			const retry = noJsPage.getByRole('button', { name: 'Retry', exact: true })
-			const error = noJsPage.getByRole('alert').filter({ has: retry })
-			await expect(error).toBeVisible()
+			await noJsPage.goto(`${baseURL}/explore/player-stats?p1=1`)
+			const terminal = noJsPage.locator('[data-player-stats-noscript-result="true"]')
+			const retry = noJsPage.getByRole('link', { name: 'Retry', exact: true })
+			await expect(terminal).toBeVisible()
 			await expect(retry).toBeVisible()
 			const noJsFallback = noJsPage.locator('[data-player-stats-ssr-fallback]')
-			await expect(noJsFallback).toHaveCount(1)
-			await expect(noJsFallback).toBeHidden()
+			expect(await noJsFallback.count()).toBeGreaterThan(0)
+			for (const fallback of await noJsFallback.all()) {
+				await expect(fallback).toBeHidden()
+			}
 		} finally {
 			await noJsContext.close()
 		}

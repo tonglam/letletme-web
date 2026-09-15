@@ -40,6 +40,67 @@ const PlayerStatsView = dynamic(loadPlayerStatsView, {
 	)
 })
 
+type NoScriptPlayer = PlayerDirectorySeed['players'][number]
+
+function PlayerStatsNoScriptResult({
+	player,
+	playerId
+}: {
+	player: NoScriptPlayer | null
+	playerId: number
+}) {
+	const t = useTranslations('PlayerStats')
+	const retryQuery = buildPlayerStatsQueryString({ p1: String(playerId) })
+	const sections = [
+		{ id: 'fixtures', title: t('fixturesTitle'), hint: t('fixturesHint') },
+		{ id: 'recent', title: t('recentTitle'), hint: t('recentHint') },
+		{ id: 'season', title: t('seasonTitle'), hint: t('seasonThrough', { gw: '—' }) },
+		{ id: 'process', title: t('processTitle'), hint: t('processHint') },
+		{ id: 'market', title: t('marketTitle'), hint: t('marketHint') },
+		{ id: 'coverage', title: t('sectionNavCoverage'), hint: t('playerState.coverage.unavailable') }
+	] as const
+	const playerLabel = player?.webName ?? `${t('playerOne')} #${playerId}`
+	const retryHref = retryQuery ? `?${retryQuery}` : '.'
+
+	return (
+		<noscript>
+			<style>{'[data-player-stats-ssr-fallback="true"] { display: none !important; }'}</style>
+			<div data-player-stats-noscript-result="true" className="space-y-4">
+				<section
+					id="ps-history"
+					data-player-stats-noscript-section="history"
+					aria-label={t('overallTitle')}
+					className="scroll-mt-36 rounded-xl border bg-card px-6 py-8"
+				>
+					<h2 className="font-display text-lg font-bold uppercase tracking-wide">
+						{playerLabel}
+					</h2>
+					<p className="mt-2 text-sm text-muted-foreground">
+						{t('noScriptHint')}
+					</p>
+					<a
+						href={retryHref}
+						className="mt-3 inline-flex rounded-md border px-3 py-2 text-sm font-medium underline-offset-2 hover:underline"
+					>
+						{t('retry')}
+					</a>
+				</section>
+				{sections.map(section => (
+					<section
+						key={section.id}
+						id={`ps-${section.id}`}
+						data-player-stats-noscript-section={section.id}
+						className="scroll-mt-36 border-t border-border/60 pt-4"
+					>
+						<h2 className="eyebrow sm:text-caption">{section.title}</h2>
+						<p className="mt-1 text-sm text-muted-foreground">{section.hint}</p>
+					</section>
+				))}
+			</div>
+		</noscript>
+	)
+}
+
 export default function PlayerStatsClient({
 	initialPlayerIds,
 	directorySeed,
@@ -399,7 +460,12 @@ export default function PlayerStatsClient({
 				? t('squadUnbound')
 				: t('personalContextUnavailable')
 
-	const showInitialDesk = initialPlayerIds.p1 != null && !initialDeskSettled && firstPlayer.selectionVersion === 0 && secondPlayer.selectionVersion === 0
+	const initialPlayerId = initialPlayerIds.p1
+	const initialDirectoryPlayer =
+		initialPlayerId == null
+			? null
+			: directorySeed.players.find(player => player.id === initialPlayerId) ?? null
+	const showInitialDesk = initialPlayerId != null && !initialDeskSettled && firstPlayer.selectionVersion === 0 && secondPlayer.selectionVersion === 0
 	const comparisonRequested = Boolean(
 		secondPlayer.selectedPlayer ||
 		(secondPlayer.selectionVersion === 0 && initialPlayerIds.p2 != null)
@@ -564,6 +630,12 @@ export default function PlayerStatsClient({
 				goodMs={1_000}
 				poorMs={1_500}
 			/>
+			{initialPlayerId != null && !initialDeskSettled ? (
+				<PlayerStatsNoScriptResult
+					player={initialDirectoryPlayer}
+					playerId={initialPlayerId}
+				/>
+			) : null}
 			<div
 				className={cn(
 					'mb-4 h-44 overflow-y-auto rounded-lg border border-border/60 px-3 py-3 sm:h-36',
@@ -630,7 +702,7 @@ export default function PlayerStatsClient({
 				}
 			/>
 
-			{initialPlayerIds.p1 != null && !initialDeskSettled ? (
+			{initialPlayerId != null && !initialDeskSettled ? (
 				<div data-player-stats-ssr-boundary="true">
 					<Suspense fallback={showInitialDesk ? <div data-ssr-stream-fallback="player-stats-detail" data-player-stats-ssr-fallback="true" className="min-h-72 animate-pulse rounded-xl border bg-muted/20" role="status">{t('loadingStats')}</div> : null}>
 						<PlayerStatsInitialDesk promise={initialDeskSeedPromise} playerIds={initialPlayerIds} eventId={anchorGw} onSeed={admitDeskSeed}>

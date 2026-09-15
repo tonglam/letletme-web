@@ -131,6 +131,50 @@ function formatDeadline(
 	}).format(new Date(timestamp))
 }
 
+function PriceChangesNoScriptResult({
+	marker,
+	title,
+	message
+}: {
+	marker: string
+	title: string
+	message: string
+}) {
+	return (
+		<noscript>
+			<style>{`[data-ssr-stream-fallback="${marker}"] { display: none !important; }`}</style>
+			<div
+				data-ssr-noscript-result={marker}
+				className="rounded-lg border border-border/70 bg-card px-4 py-5 text-sm"
+				role="status"
+			>
+				<p className="font-medium">{title}</p>
+				<p className="mt-1 text-muted-foreground">{message}</p>
+			</div>
+		</noscript>
+	)
+}
+
+function PriceChangesSquadFallback() {
+	const t = useTranslations('PriceChanges')
+	return (
+		<>
+			<div
+				data-ssr-stream-fallback="price-changes-squad"
+				className="min-h-48 animate-pulse rounded-lg bg-muted/40"
+				role="status"
+			>
+				{t('squadLoading')}
+			</div>
+			<PriceChangesNoScriptResult
+				marker="price-changes-squad"
+				title={t('mySquadTab')}
+				message={t('noScriptHint')}
+			/>
+		</>
+	)
+}
+
 function PriceChangesSquadStream({
 	promise,
 	displayBoard,
@@ -761,7 +805,7 @@ export function PriceChangesBoard({
 					<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">{t(squadOpen ? 'squadCollapse' : 'squadExpand')}</span>
 				</summary>
 				<div className="border-t p-4">
-					<Suspense fallback={<div data-ssr-stream-fallback="price-changes-squad" className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
+					<Suspense fallback={<PriceChangesSquadFallback />}>
 						<PriceChangesSquadStream
 							promise={personalSeedPromise}
 							displayBoard={displayBoard}

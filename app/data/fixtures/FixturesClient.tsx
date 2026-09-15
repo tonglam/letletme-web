@@ -373,6 +373,30 @@ function ActionColumn({
 	)
 }
 
+function FixturesNoScriptResult({
+	marker,
+	title,
+	message
+}: {
+	marker: string
+	title: string
+	message: string
+}) {
+	return (
+		<noscript>
+			<style>{`[data-ssr-stream-fallback="${marker}"] { display: none !important; }`}</style>
+			<div
+				data-ssr-noscript-result={marker}
+				className="rounded-lg border border-border/70 bg-card px-4 py-5 text-sm"
+				role="status"
+			>
+				<p className="font-medium">{title}</p>
+				<p className="mt-1 text-muted-foreground">{message}</p>
+			</div>
+		</noscript>
+	)
+}
+
 function FixturesSquadStream({
 	promise,
 	teams,
@@ -526,11 +550,9 @@ function FixturesActionsStream({
 						))}
 					</div>
 				</div>
-				{squadKeySet.size === 0 ? (
+				{squadKeySet.size === 0 && squad != null ? (
 					<p className="max-w-sm text-caption leading-4 text-muted-foreground">
-						{squad == null ? (
-							t('squadLoading')
-						) : squadState === 'unavailable' ? (
+						{squadState === 'unavailable' ? (
 							t('actionsMySquadLoadFailed')
 						) : squadState === 'not-published' ? (
 							t('mySquadNotPublished')
@@ -595,25 +617,52 @@ function FixturesActionsStream({
 function FixturesActionsFallback() {
 	const t = useTranslations('Fixtures')
 	return (
-		<Card
-			role="region"
-			aria-labelledby="fdr-actions"
-			className="mb-8 p-4 sm:p-5"
-		>
-			<SectionHead
-				id="fdr-actions"
-				title={t('actionsTitle')}
-				hint={t('actionsHint')}
-			/>
-			<div
+		<>
+			<Card
+				role="region"
+				aria-labelledby="fdr-actions"
+				className="mb-8 p-4 sm:p-5"
 				data-ssr-stream-fallback="fixtures-actions"
-				className="min-h-24 rounded-lg border border-border/60 bg-muted/10 px-3 py-5 text-center text-sm text-muted-foreground"
-				aria-busy="true"
+			>
+				<SectionHead
+					id="fdr-actions"
+					title={t('actionsTitle')}
+					hint={t('actionsHint')}
+				/>
+				<div
+					className="min-h-24 rounded-lg border border-border/60 bg-muted/10 px-3 py-5 text-center text-sm text-muted-foreground"
+					aria-busy="true"
+					role="status"
+				>
+					{t('actionsLoading')}
+				</div>
+			</Card>
+			<FixturesNoScriptResult
+				marker="fixtures-actions"
+				title={t('actionsTitle')}
+				message={t('noScriptHint')}
+			/>
+		</>
+	)
+}
+
+function FixturesSquadFallback() {
+	const t = useTranslations('Fixtures')
+	return (
+		<>
+			<div
+				data-ssr-stream-fallback="fixtures-squad"
+				className="min-h-48 animate-pulse rounded-lg bg-muted/40"
 				role="status"
 			>
-				{t('actionsLoading')}
+				{t('squadLoading')}
 			</div>
-		</Card>
+			<FixturesNoScriptResult
+				marker="fixtures-squad"
+				title={t('mySquadTitle')}
+				message={t('noScriptHint')}
+			/>
+		</>
 	)
 }
 
@@ -1016,7 +1065,7 @@ export default function FixturesClient({
 							</span>
 						</summary>
 						<div className="border-t p-4 sm:p-5">
-							<Suspense fallback={<div data-ssr-stream-fallback="fixtures-squad" className="min-h-48 animate-pulse rounded-lg bg-muted/40" role="status">{t('squadLoading')}</div>}>
+							<Suspense fallback={<FixturesSquadFallback />}>
 								<FixturesSquadStream
 									promise={squadPromise}
 									teams={model.teams}

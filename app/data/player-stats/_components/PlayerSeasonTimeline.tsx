@@ -439,13 +439,15 @@ export function PlayerSeasonTimeline({
 	comparison,
 	profile,
 	comparisonProfile,
-	anchorGw
+	anchorGw,
+	ssrStreamed = false
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
 	profile: PlayerStateProfileData | null
 	comparisonProfile: PlayerStateProfileData | null
 	anchorGw: number
+	ssrStreamed?: boolean
 }) {
 	const t = useTranslations('PlayerStats')
 	const isCompare = comparison !== null
@@ -470,7 +472,7 @@ export function PlayerSeasonTimeline({
 
 	return (
 		<section
-			id="ps-history"
+			id={ssrStreamed ? undefined : 'ps-history'}
 			aria-label={t('overallTitle')}
 			className="scroll-mt-36"
 		>
