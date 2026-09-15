@@ -5,11 +5,15 @@ import { describe, it } from 'node:test'
 import {
 	normalizeMetricPage,
 	parseWebVitalPayload,
-	resolveWebVitalSource
+	resolveWebVitalSource,
+	defaultMeasurementKind
 } from '../lib/analytics/web-vitals'
 import {
 	parseClientSignalBatch,
-	withServerRelease
+	parseClientSignalBatchV2,
+	normalizeClientSignalSamplingProbability,
+	withServerRelease,
+	withServerReleaseV2
 } from '../lib/client-signal-contract'
 import { isTrustedSameSiteRequest } from '../lib/request-origin'
 
@@ -26,6 +30,19 @@ const validMetric = {
 }
 
 describe('privacy-safe web vitals', () => {
+	it('keeps legacy interaction markers in the interaction cohort', () => {
+		assert.equal(defaultMeasurementKind('TRENDS_SWITCH_READY'), 'interaction')
+		assert.equal(defaultMeasurementKind('MARKET_SEARCH_READY'), 'interaction')
+		assert.equal(defaultMeasurementKind('MARKET_HISTORY_READY'), 'interaction')
+		assert.equal(
+			defaultMeasurementKind('MARKET_AVAILABILITY_READY'),
+			'interaction'
+		)
+		assert.equal(
+			defaultMeasurementKind('FIXTURES_WINDOW_READY'),
+			'initial_navigation'
+		)
+	})
 	it('accepts public custom-domain beacons behind the Vercel origin', () => {
 		assert.equal(
 			isTrustedSameSiteRequest(
@@ -298,6 +315,85 @@ describe('privacy-safe web vitals', () => {
 		)
 	})
 
+	it('accepts v2 diagnostics and fills ingest release only at the server boundary', () => {
+		const now = Date.parse('2026-08-27T00:00:00.000Z')
+		const batch = {
+			schemaVersion: 2,
+			batchId: '2b37a101-8f28-47ce-8c83-d5749a2f3ce7',
+			client: 'web',
+			clientRelease: 'web-build-abc123',
+			sentAt: '2026-08-27T00:00:00.000Z',
+			samples: [
+				{
+					observedAt: '2026-08-26T23:59:00.000Z',
+					surface: 'home',
+					metric: 'runtime_error',
+					deviceGroup: 'desktop',
+					sampleSource: 'real',
+					result: 'error',
+					reasonCode: 'unknown',
+					measurementKind: 'request',
+					samplingProbability: 1,
+					metricName: 'PLAYER_DESK_RESPONSE',
+					navigationId: 'nav-12345678',
+					interactionId: 'interaction-12345678',
+					cacheStatus: 'stale',
+					errorClass: 'TypeError',
+					fingerprint: 'runtime.TypeError.unknown',
+					occurrenceCount: 3,
+					firstObservedAt: '2026-08-26T23:58:00.000Z',
+					lastObservedAt: '2026-08-26T23:59:00.000Z'
+				}
+			]
+		} as const
+		const parsed = parseClientSignalBatchV2(batch, now)
+		assert.equal(parsed?.ingestRelease, 'unknown')
+		assert.equal(parsed?.samples[0]?.occurrenceCount, 3)
+		assert.deepEqual(
+			{
+				metricName: parsed?.samples[0]?.metricName,
+				navigationId: parsed?.samples[0]?.navigationId,
+				interactionId: parsed?.samples[0]?.interactionId,
+				cacheStatus: parsed?.samples[0]?.cacheStatus
+			},
+			{
+				metricName: 'PLAYER_DESK_RESPONSE',
+				navigationId: 'nav-12345678',
+				interactionId: 'interaction-12345678',
+				cacheStatus: 'stale'
+			}
+		)
+		assert.deepEqual(withServerReleaseV2(parsed!, 'web-server-sha'), {
+			...parsed,
+			ingestRelease: 'web-server-sha'
+		})
+		assert.equal(
+			parseClientSignalBatchV2(
+				{ ...batch, ingestRelease: 'forged-client-value' },
+				now
+			),
+			null
+		)
+		assert.equal(
+			parseClientSignalBatchV2(
+				{
+					...batch,
+					samples: [
+						{
+							...batch.samples[0],
+							occurrenceCount: 0,
+							message: 'secret'
+						}
+					]
+				},
+				now
+			),
+			null
+		)
+		assert.equal(normalizeClientSignalSamplingProbability(0.00001, 1), 0.0001)
+		assert.equal(normalizeClientSignalSamplingProbability(0, 1), 0)
+	})
+
 	it('accepts the bounded Live Matches V3 client telemetry dimensions', () => {
 		const now = Date.parse('2026-08-27T00:00:00.000Z')
 		const sample = {
@@ -383,6 +479,78 @@ describe('privacy-safe web vitals', () => {
 			}),
 			null
 		)
+	})
+
+	it('flushes pending runtime errors on pagehide and expires object dedupe', async () => {
+		const globalObject = globalThis as typeof globalThis &
+			Record<string, unknown>
+		const previousWindow = globalObject.window
+		const previousDocument = globalObject.document
+		const previousNavigator = globalObject.navigator
+		const previousNow = Date.now
+		const listeners = new Map<string, () => void>()
+		const beacons: Blob[] = []
+		let now = Date.parse('2026-08-27T00:00:00.000Z')
+
+		Object.defineProperty(globalObject, 'window', {
+			configurable: true,
+			value: {
+				innerWidth: 1280,
+				location: { pathname: '/live/matches', search: '' },
+				addEventListener(type: string, listener: () => void) {
+					listeners.set(type, listener)
+				}
+			}
+		})
+		Object.defineProperty(globalObject, 'document', {
+			configurable: true,
+			value: {
+				documentElement: { dataset: {} },
+				visibilityState: 'visible',
+				addEventListener() {}
+			}
+		})
+		Object.defineProperty(globalObject, 'navigator', {
+			configurable: true,
+			value: {
+				webdriver: false,
+				sendBeacon(_url: string, body: Blob) {
+					beacons.push(body)
+					return true
+				}
+			}
+		})
+		Date.now = () => now
+
+		try {
+			const { reportBrowserRuntimeError } =
+				await import('../lib/analytics/client-vitals')
+			const error = new Error('same object')
+			reportBrowserRuntimeError(error)
+			listeners.get('pagehide')?.()
+			assert.equal(beacons.length, 1)
+			assert.match(await beacons[0].text(), /"metric":"runtime_error"/)
+
+			now += 60_001
+			reportBrowserRuntimeError(error)
+			listeners.get('pagehide')?.()
+			assert.equal(beacons.length, 2)
+		} finally {
+			Date.now = previousNow
+			const restore = (key: string, value: unknown) => {
+				if (value === undefined) {
+					Reflect.deleteProperty(globalObject, key)
+					return
+				}
+				Object.defineProperty(globalObject, key, {
+					configurable: true,
+					value
+				})
+			}
+			restore('window', previousWindow)
+			restore('document', previousDocument)
+			restore('navigator', previousNavigator)
+		}
 	})
 
 	it('exposes fixed SSR contract markers for live and price surfaces', async () => {

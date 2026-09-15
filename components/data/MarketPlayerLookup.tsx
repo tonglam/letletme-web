@@ -259,6 +259,7 @@ export function MarketPlayerLookup({
 				name="MARKET_SEARCH_READY"
 				ready={searchReadyKey !== null}
 				readyKey={searchReadyKey ?? ''}
+				readyKeyKind="interaction"
 				audienceHint="public"
 				goodMs={600}
 				poorMs={1000}
@@ -267,6 +268,7 @@ export function MarketPlayerLookup({
 				name="MARKET_HISTORY_READY"
 				ready={historyReadyKey !== null}
 				readyKey={historyReadyKey ?? ''}
+				readyKeyKind="interaction"
 				audienceHint="public"
 				goodMs={500}
 				poorMs={1000}

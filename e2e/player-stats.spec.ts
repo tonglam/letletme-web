@@ -1,6 +1,18 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+function routeReadySamples(payloads: Array<Record<string, unknown>>) {
+	return payloads.flatMap(payload => {
+		const samples = payload.samples
+		return Array.isArray(samples)
+			? samples.filter(
+					(sample): sample is Record<string, unknown> =>
+						Boolean(sample) && typeof sample === 'object'
+				)
+			: []
+	})
+}
+
 test('player desk endpoint returns one cacheable batch and rejects invalid input', async ({
 	request
 }) => {
@@ -68,16 +80,32 @@ test('two-player deep link is server-seeded with zero browser desk requests', as
 	await expect(overall).toContainText('Saka')
 	await expect(overall).toContainText('Palmer')
 	expect(deskRequests).toBe(0)
+	const expectedRouteReadyNames = [
+		'PLAYER_COMPARE_PAINT',
+		'PLAYER_COMPARE_READY',
+		'PLAYER_DETAIL_PAINT',
+		'PLAYER_DETAIL_READY',
+		'PLAYER_DIRECTORY_PAINT',
+		'PLAYER_DIRECTORY_READY'
+	]
+	const playerStatsRouteReady = () =>
+		routeReadySamples(reportedVitals).filter(
+			sample => sample.metric === 'route_ready_ms' && sample.surface === 'player_stats'
+		)
 	await expect
 		.poll(() =>
-			reportedVitals.some(metric => metric.name === 'PLAYER_DETAIL_READY')
+			Array.from(
+				new Set(playerStatsRouteReady().map(sample => sample.metricName))
+			).sort()
 		)
-		.toBe(true)
-	await expect
-		.poll(() =>
-			reportedVitals.some(metric => metric.name === 'PLAYER_COMPARE_READY')
-		)
-		.toBe(true)
+		.toEqual(expectedRouteReadyNames)
+	const routeReady = playerStatsRouteReady()
+	expect(routeReady.map(sample => sample.metricName)).toEqual(
+		expect.arrayContaining(expectedRouteReadyNames)
+	)
+	expect(routeReady.every(sample => sample.measurementKind === 'initial_navigation')).toBe(
+		true
+	)
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth

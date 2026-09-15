@@ -194,6 +194,7 @@ export function MarketAvailabilityDisclosure({
 				name="MARKET_AVAILABILITY_READY"
 				ready={availabilityReadyKey !== null}
 				readyKey={availabilityReadyKey ?? ''}
+				readyKeyKind="interaction"
 				audienceHint="public"
 				goodMs={500}
 				poorMs={1000}

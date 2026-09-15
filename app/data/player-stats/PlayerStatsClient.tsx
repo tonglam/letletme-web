@@ -596,6 +596,9 @@ export default function PlayerStatsClient({
 				name="PLAYER_DETAIL_READY"
 				ready={playerDetailReady}
 				readyKey={playerDetailReadyKey}
+				readyKeyKind={
+					currentDetailInteraction ? 'interaction' : 'identity'
+				}
 				navigationId={navigationId}
 				interactionId={currentDetailInteraction?.id}
 				audienceHint="public"
@@ -606,6 +609,9 @@ export default function PlayerStatsClient({
 				name="PLAYER_DETAIL_PAINT"
 				ready={playerDetailReady}
 				readyKey={playerDetailReadyKey}
+				readyKeyKind={
+					currentDetailInteraction ? 'interaction' : 'identity'
+				}
 				elementTiming="player-detail-card"
 				navigationId={navigationId}
 				interactionId={currentDetailInteraction?.id}
@@ -617,6 +623,9 @@ export default function PlayerStatsClient({
 				name="PLAYER_COMPARE_READY"
 				ready={playerCompareReady}
 				readyKey={playerCompareReadyKey}
+				readyKeyKind={
+					currentCompareInteraction ? 'interaction' : 'identity'
+				}
 				navigationId={navigationId}
 				interactionId={currentCompareInteraction?.id}
 				audienceHint="public"
@@ -627,6 +636,9 @@ export default function PlayerStatsClient({
 				name="PLAYER_COMPARE_PAINT"
 				ready={playerCompareReady}
 				readyKey={playerCompareReadyKey}
+				readyKeyKind={
+					currentCompareInteraction ? 'interaction' : 'identity'
+				}
 				elementTiming="player-detail-card"
 				navigationId={navigationId}
 				interactionId={currentCompareInteraction?.id}

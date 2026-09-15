@@ -33,10 +33,7 @@ import {
 	trendAvailabilityLabelKey,
 	trendAvailabilityMessageKey
 } from './_lib/trend-availability'
-import {
-	getTrendDisplayRows,
-	TOP_RANK_LIMIT
-} from './_lib/trend-display'
+import { getTrendDisplayRows, TOP_RANK_LIMIT } from './_lib/trend-display'
 import type {
 	TrendAccess,
 	TrendCohort,
@@ -796,7 +793,8 @@ export default function TrendsClient({
 							: 'poor',
 				metricId: `trends-switch-${Date.now()}`,
 				page: window.location.pathname,
-				audienceHint: resolveAudienceHint()
+				audienceHint: resolveAudienceHint(),
+				measurementKind: 'interaction'
 			},
 			{ always: true }
 		)

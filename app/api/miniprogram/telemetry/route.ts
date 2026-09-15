@@ -1,12 +1,16 @@
 import { after, NextResponse } from 'next/server'
 
-import { parseClientSignalBatch } from '@/lib/client-signal-contract'
+import {
+	parseClientSignalBatch,
+	parseClientSignalBatchV2,
+	withServerReleaseV2
+} from '@/lib/client-signal-contract'
 import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
 import {
 	buildOpaqueRateLimitSubject,
 	checkDatabaseRateLimit,
 	PayloadTooLargeError,
-	readBoundedJson,
+	readBoundedJson
 } from '@/lib/http-security'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +24,7 @@ export async function POST(request: Request) {
 	if (!secret && process.env.NODE_ENV === 'production') {
 		return NextResponse.json(
 			{ accepted: false, error: 'Request safety checks are unavailable' },
-			{ status: 503, headers: { 'Cache-Control': 'no-store' } },
+			{ status: 503, headers: { 'Cache-Control': 'no-store' } }
 		)
 	}
 
@@ -30,7 +34,7 @@ export async function POST(request: Request) {
 				scope: 'mini-client-signals-ip',
 				subject: buildOpaqueRateLimitSubject(request.headers, secret),
 				limit: RATE_LIMIT,
-				windowSeconds: RATE_WINDOW_SECONDS,
+				windowSeconds: RATE_WINDOW_SECONDS
 			})
 			if (!rate.allowed) {
 				return NextResponse.json(
@@ -39,50 +43,68 @@ export async function POST(request: Request) {
 						status: 429,
 						headers: {
 							'Cache-Control': 'no-store',
-							'Retry-After': String(rate.retryAfterSeconds),
-						},
-					},
+							'Retry-After': String(rate.retryAfterSeconds)
+						}
+					}
 				)
 			}
 		}
 
-		const batch = parseClientSignalBatch(await readBoundedJson(request, MAX_BODY_BYTES))
+		const input = await readBoundedJson(request, MAX_BODY_BYTES)
+		const parsedV2 = parseClientSignalBatchV2(input)
+		const batch = parsedV2 ?? parseClientSignalBatch(input)
 		if (!batch || batch.client !== 'wechat_miniprogram') {
 			return NextResponse.json(
 				{ accepted: false, error: 'Invalid telemetry payload' },
-				{ status: 422, headers: { 'Cache-Control': 'no-store' } },
+				{ status: 422, headers: { 'Cache-Control': 'no-store' } }
 			)
 		}
 
-		after(() => forwardClientSignalBatch(batch))
+		after(() =>
+			forwardClientSignalBatch(
+				batch.schemaVersion === 2
+					? withServerReleaseV2(batch, releaseName())
+					: batch
+			)
+		)
 		return NextResponse.json(
 			{ accepted: true },
-			{ status: 202, headers: { 'Cache-Control': 'no-store' } },
+			{ status: 202, headers: { 'Cache-Control': 'no-store' } }
 		)
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError) {
 			return NextResponse.json(
 				{ accepted: false, error: 'Payload too large' },
-				{ status: 413, headers: { 'Cache-Control': 'no-store' } },
+				{ status: 413, headers: { 'Cache-Control': 'no-store' } }
 			)
 		}
 		if (error instanceof SyntaxError) {
 			return NextResponse.json(
 				{ accepted: false, error: 'Invalid JSON body' },
-				{ status: 400, headers: { 'Cache-Control': 'no-store' } },
+				{ status: 400, headers: { 'Cache-Control': 'no-store' } }
 			)
 		}
 		if (process.env.NODE_ENV === 'production') {
-			console.error('[client signals] ingress unavailable', error instanceof Error ? error.name : 'unknown')
+			console.error(
+				'[client signals] ingress unavailable',
+				error instanceof Error ? error.name : 'unknown'
+			)
 			return NextResponse.json(
 				{ accepted: false, error: 'Telemetry ingress unavailable' },
-				{ status: 503, headers: { 'Cache-Control': 'no-store' } },
+				{ status: 503, headers: { 'Cache-Control': 'no-store' } }
 			)
 		}
 		return NextResponse.json(
 			{ accepted: false, error: 'Invalid telemetry request' },
-			{ status: 400, headers: { 'Cache-Control': 'no-store' } },
+			{ status: 400, headers: { 'Cache-Control': 'no-store' } }
 		)
 	}
 }
 
+function releaseName(): string {
+	const release =
+		process.env.LETLETME_RELEASE_SHA?.trim() ||
+		process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
+		'local'
+	return release.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || 'local'
+}

@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { ClientSignalBatchV1 } from '@/lib/client-signal-contract'
+import type { ClientSignalBatchV1, ClientSignalBatchV2 } from '@/lib/client-signal-contract'
 import {
 	beginClientSignalForward,
 	createClientSignalForwardCircuit,
@@ -27,7 +27,7 @@ export function resetClientSignalForwarderForTests(): void {
 
 /** Best-effort forwarder: telemetry failure is never allowed to fail a user request. */
 export async function forwardClientSignalBatch(
-	batch: ClientSignalBatchV1
+	batch: ClientSignalBatchV1 | ClientSignalBatchV2
 ): Promise<void> {
 	const baseUrl = dataBaseUrl()
 	const apiKey = dataApiKey()

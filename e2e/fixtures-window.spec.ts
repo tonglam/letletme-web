@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test'
 
+function routeReadySamples(payloads: Array<Record<string, unknown>>) {
+	return payloads.flatMap(payload => {
+		const samples = payload.samples
+		return Array.isArray(samples)
+			? samples.filter(
+					(sample): sample is Record<string, unknown> =>
+						Boolean(sample) && typeof sample === 'object'
+				)
+			: []
+	})
+}
+
 test('public fixture window endpoint returns one cacheable compact window', async ({
 	request
 }) => {
@@ -153,15 +165,19 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 	await expect(page.getByRole('columnheader', { name: 'GW38' })).toBeVisible()
 	await expect
 		.poll(() =>
-			reportedVitals.some(metric => metric.name === 'FIXTURES_WINDOW_READY')
+			routeReadySamples(reportedVitals).some(
+				sample =>
+					sample.metric === 'route_ready_ms' && sample.surface === 'fixtures'
+			)
 		)
 		.toBe(true)
-	const windowMetric = reportedVitals.find(
-		metric => metric.name === 'FIXTURES_WINDOW_READY'
+	const windowMetric = routeReadySamples(reportedVitals).find(
+		sample =>
+			sample.metric === 'route_ready_ms' && sample.surface === 'fixtures'
 	)
-	expect(windowMetric?.page).toBe('/explore/fixtures')
+	expect(windowMetric?.result).toBe('ok')
+	expect(windowMetric?.samplingProbability).toBe(1)
 	expect(windowMetric?.value).toEqual(expect.any(Number))
-	expect(['good', 'needs-improvement', 'poor']).toContain(windowMetric?.rating)
 
 	await fiveGws.click()
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')

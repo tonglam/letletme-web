@@ -18,7 +18,7 @@ export default function ErrorPage({
 	const common = useTranslations('Common')
 
 	useEffect(() => {
-		reportBrowserRuntimeError()
+		reportBrowserRuntimeError(error)
 		console.error('[error boundary]', error)
 	}, [error])
 

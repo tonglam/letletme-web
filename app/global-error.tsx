@@ -15,7 +15,7 @@ export default function GlobalError({
 	reset: () => void
 }) {
 	useEffect(() => {
-		reportBrowserRuntimeError()
+		reportBrowserRuntimeError(error)
 		console.error('[global error boundary]', error)
 	}, [error])
 

@@ -1,6 +1,8 @@
 import {
 	parseClientRuntimePayload,
 	parseWebVitalPayload,
+	ROUTE_READY_METRIC_NAMES,
+	defaultMeasurementKind,
 	type ClientRuntimePayload,
 	type WebVitalPayload
 } from '@/lib/analytics/web-vitals'
@@ -12,14 +14,17 @@ import {
 } from '@/lib/http-security'
 import { isTrustedSameSiteRequest } from '@/lib/request-origin'
 import type {
-	ClientSignalBatchV1,
+	ClientSignalBatchV2,
 	ClientSignalDeviceGroup,
 	ClientSignalSurface,
 	ClientSignalMetric
 } from '@/lib/client-signal-contract'
 import {
+	normalizeClientSignalSamplingProbability,
 	parseClientSignalBatch,
-	withServerRelease
+	parseClientSignalBatchV2,
+	withServerRelease,
+	withServerReleaseV2
 } from '@/lib/client-signal-contract'
 import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
 import { randomUUID } from 'node:crypto'
@@ -47,8 +52,11 @@ export async function POST(request: Request) {
 		const input = await readBoundedJson(request, 4 * 1024)
 		const metric = parseWebVitalPayload(input)
 		const runtime = metric ? null : parseClientRuntimePayload(input)
-		const clientBatch = metric || runtime ? null : parseClientSignalBatch(input)
-		if (!metric && !runtime && clientBatch?.client !== 'web') {
+		const clientBatch =
+			metric || runtime
+				? null
+				: (parseClientSignalBatchV2(input) ?? parseClientSignalBatch(input))
+		if (!metric && !runtime && (!clientBatch || clientBatch.client !== 'web')) {
 			return NextResponse.json(
 				{ error: 'Invalid client telemetry payload' },
 				{ status: 400 }
@@ -91,7 +99,9 @@ export async function POST(request: Request) {
 			: runtime
 				? toRuntimeSignal(runtime)
 				: clientBatch
-					? withServerRelease(clientBatch, releaseName())
+					? clientBatch.schemaVersion === 2
+						? withServerReleaseV2(clientBatch, releaseName())
+						: withServerRelease(clientBatch, releaseName())
 					: null
 		if (signal) after(() => forwardClientSignalBatch(signal))
 		if (metric) {
@@ -162,7 +172,7 @@ function surfaceForPage(page: string): ClientSignalSurface {
 	if (page.includes('/live/points')) return 'live_entry'
 	if (page.includes('/live/competitions')) return 'live_entry'
 	if (page.includes('/live/')) return 'live_match'
-	if (page.includes('price')) return 'price_changes'
+	if (page.includes('price') || page.includes('market')) return 'price_changes'
 	if (page.includes('player')) return 'player_stats'
 	if (page.includes('fixture')) return 'fixtures'
 	if (page.includes('my-fpl') || page.includes('my_fpl')) return 'my_fpl'
@@ -174,8 +184,17 @@ function metricForWebVital(name: string): ClientSignalMetric | null {
 	if (name === 'LCP') return 'lcp_ms'
 	if (name === 'INP') return 'inp_ms'
 	if (name === 'CLS') return 'cls'
-	if (!['FCP', 'FID', 'TTFB'].includes(name)) return 'route_ready_ms'
+	if (ROUTE_READY_METRIC_NAMES.has(name)) return 'route_ready_ms'
 	return null
+}
+
+function legacyWebVitalSamplingProbability(name: string): number {
+	if (!['LCP', 'INP', 'CLS'].includes(name)) return 1
+	const configured = Number(process.env.NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE)
+	return normalizeClientSignalSamplingProbability(
+		configured,
+		process.env.NODE_ENV === 'production' ? 0.25 : 1
+	)
 }
 
 function signalSource(
@@ -186,10 +205,12 @@ function signalSource(
 	return null
 }
 
-function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
+function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV2 | null {
 	const metricName = metricForWebVital(metric.name)
 	const sampleSource = signalSource(metric.source)
 	if (!metricName || !sampleSource) return null
+	const samplingProbability = legacyWebVitalSamplingProbability(metric.name)
+	if (samplingProbability <= 0) return null
 	const deviceGroup: ClientSignalDeviceGroup =
 		metric.device === 'mobile' ||
 		metric.device === 'tablet' ||
@@ -197,10 +218,11 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
 			? metric.device
 			: 'unknown'
 	return {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		batchId: randomUUID(),
 		client: 'web',
-		release: releaseName(),
+		clientRelease: 'legacy',
+		ingestRelease: releaseName(),
 		sentAt: new Date().toISOString(),
 		samples: [
 			{
@@ -210,6 +232,22 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
 				deviceGroup,
 				sampleSource,
 				result: 'ok',
+				reasonCode: 'none',
+				measurementKind: defaultMeasurementKind(
+					metric.name,
+					metric.interactionId
+				),
+				samplingProbability,
+				metricName: metric.name,
+				...(metric.navigationId === undefined
+					? {}
+					: { navigationId: metric.navigationId }),
+				...(metric.interactionId === undefined
+					? {}
+					: { interactionId: metric.interactionId }),
+				...(metric.cacheStatus === undefined
+					? {}
+					: { cacheStatus: metric.cacheStatus }),
 				value: metric.value
 			}
 		]
@@ -218,14 +256,15 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
 
 function toRuntimeSignal(
 	runtime: ClientRuntimePayload
-): ClientSignalBatchV1 | null {
+): ClientSignalBatchV2 | null {
 	const sampleSource = signalSource(runtime.source)
 	if (!sampleSource) return null
 	return {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		batchId: randomUUID(),
 		client: 'web',
-		release: releaseName(),
+		clientRelease: 'legacy',
+		ingestRelease: releaseName(),
 		sentAt: new Date().toISOString(),
 		samples: [
 			{
@@ -234,7 +273,12 @@ function toRuntimeSignal(
 				metric: 'runtime_error',
 				deviceGroup: runtime.device,
 				sampleSource,
-				result: 'error'
+				result: 'error',
+				reasonCode: 'unknown',
+				measurementKind: 'request',
+				samplingProbability: 1,
+				errorClass: 'unknown',
+				fingerprint: 'runtime.unknown'
 			}
 		]
 	}

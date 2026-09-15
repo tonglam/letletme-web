@@ -6,6 +6,7 @@ import {
 	resolveAudienceHint,
 	resolveNavigationId
 } from '@/lib/analytics/client-vitals'
+import { markBackgroundResumeStart } from '@/lib/analytics/route-navigation'
 import { normalizeMetricPage } from '@/lib/analytics/web-vitals'
 import { usePathname } from 'next/navigation'
 import { useReportWebVitals } from 'next/web-vitals'
@@ -38,7 +39,27 @@ export function WebVitalsReporter() {
 	useReportWebVitals(reportWebVital)
 
 	useEffect(() => {
-		const reportRuntimeError = () => reportBrowserRuntimeError()
+		let wasHidden = document.visibilityState === 'hidden'
+		const onVisibilityChange = () => {
+			if (document.visibilityState === 'hidden') {
+				wasHidden = true
+				return
+			}
+			if (wasHidden) {
+				wasHidden = false
+				markBackgroundResumeStart(pathname)
+			}
+		}
+		document.addEventListener('visibilitychange', onVisibilityChange)
+		return () =>
+			document.removeEventListener('visibilitychange', onVisibilityChange)
+	}, [pathname])
+
+	useEffect(() => {
+		const reportRuntimeError = (event: Event) => {
+			const candidate = event as ErrorEvent & PromiseRejectionEvent
+			reportBrowserRuntimeError(candidate.error ?? candidate.reason)
+		}
 		window.addEventListener('error', reportRuntimeError)
 		window.addEventListener('unhandledrejection', reportRuntimeError)
 		return () => {
