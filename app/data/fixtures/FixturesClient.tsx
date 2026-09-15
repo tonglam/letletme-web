@@ -32,6 +32,7 @@ import {
 	type FdrTeamIdentity,
 	type TeamFdrRow
 } from '@/lib/fixtures-fdr'
+import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { resolveFixturePlanningHorizon } from '@/lib/review-gameweek'
 import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
@@ -423,13 +424,180 @@ function FixturesSquadStream({
 	)
 }
 
+function FixturesActionsStream({
+	marketSignalsPromise,
+	fixturesByEvent,
+	fromGw,
+	horizon,
+	knownTeams,
+	unknownEvents
+}: {
+	marketSignalsPromise: Promise<FixturePlanningMarketSignals>
+	fixturesByEvent: Map<number, FixturePlanningFixture[]>
+	fromGw: number
+	horizon: FdrHorizon
+	knownTeams: FdrTeamIdentity[]
+	unknownEvents: ReadonlySet<number>
+}) {
+	const marketSignals = use(marketSignalsPromise)
+	const { squad } = useFixturesSeed()
+	const t = useTranslations('Fixtures')
+	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
+	const model = useMemo(
+		() =>
+			buildFdrDeskModel(fixturesByEvent, {
+				fromGw,
+				horizon,
+				marketSignals,
+				knownTeams,
+				unknownEvents
+			}),
+		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
+	)
+	const filterByPos = useCallback(
+		(list: FdrReviewCandidate[]) => {
+			if (posFilter === 'ALL') return list
+			return list.filter(player => normalizePosition(player.position) === posFilter)
+		},
+		[posFilter]
+	)
+	const filteredCandidates = useMemo(
+		() => ({
+			differentialFavourable: filterByPos(
+				model.candidates.differentialFavourable
+			),
+			popularFavourable: filterByPos(model.candidates.popularFavourable),
+			popularDifficult: filterByPos(model.candidates.popularDifficult)
+		}),
+		[filterByPos, model.candidates]
+	)
+	const squadKeySet = useMemo(
+		() => new Set(squadPickKeys(squad?.picks ?? [])),
+		[squad]
+	)
+	const squadState = squad?.state
+	const bucketEmpty = (rawLen: number, filteredLen: number) =>
+		rawLen > 0 && filteredLen === 0
+			? t('bucketEmptyFiltered')
+			: t('bucketEmpty')
+
+	return (
+		<Card
+			role="region"
+			aria-labelledby="fdr-actions"
+			className="mb-8 p-4 sm:p-5"
+		>
+			<SectionHead
+				id="fdr-actions"
+				title={t('actionsTitle')}
+				hint={t('actionsHint')}
+			/>
+
+			<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<p className="mb-1.5 text-caption font-medium text-muted-foreground">
+						{t('actionsPosLabel')}
+					</p>
+					<div className="flex flex-wrap gap-1.5">
+						{(
+							[
+								['ALL', t('actionsPosAll')],
+								['GKP', 'GKP'],
+								['DEF', 'DEF'],
+								['MID', 'MID'],
+								['FWD', 'FWD']
+							] as const
+						).map(([id, label]) => (
+							<button
+								key={id}
+								type="button"
+								onClick={() => setPosFilter(id)}
+								className={cn(
+									'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+									posFilter === id
+										? 'border-success bg-success text-success-foreground'
+										: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
+								)}
+								aria-pressed={posFilter === id}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+				{squadKeySet.size === 0 ? (
+					<p className="max-w-sm text-caption leading-4 text-muted-foreground">
+						{squad == null ? (
+							t('squadLoading')
+						) : squadState === 'unavailable' ? (
+							t('actionsMySquadLoadFailed')
+						) : squadState === 'not-published' ? (
+							t('mySquadNotPublished')
+						) : (
+							<>
+								{t('actionsMySquadEmpty')}{' '}
+								<Link
+									href="/onboarding/bind-entry"
+									className="font-medium text-primary-ink underline-offset-2 hover:underline"
+								>
+									{t('actionsBindCta')}
+								</Link>
+							</>
+						)}
+					</p>
+				) : null}
+			</div>
+
+			<div className="grid gap-3 lg:grid-cols-3">
+				<ActionColumn
+					title={t('bucketDifferentialFavourable')}
+					hint={t('bucketDifferentialFavourableHint')}
+					icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
+					players={filteredCandidates.differentialFavourable}
+					empty={bucketEmpty(
+						model.candidates.differentialFavourable.length,
+						filteredCandidates.differentialFavourable.length
+					)}
+					tone="success"
+					squadKeys={squadKeySet}
+				/>
+				<ActionColumn
+					title={t('bucketPopularFavourable')}
+					hint={t('bucketPopularFavourableHint')}
+					icon={<Users className="size-3.5" aria-hidden="true" />}
+					players={filteredCandidates.popularFavourable}
+					empty={bucketEmpty(
+						model.candidates.popularFavourable.length,
+						filteredCandidates.popularFavourable.length
+					)}
+					tone="default"
+					squadKeys={squadKeySet}
+				/>
+				<ActionColumn
+					title={t('bucketPopularDifficult')}
+					hint={t('bucketPopularDifficultHint')}
+					icon={<TrendingDown className="size-3.5" aria-hidden="true" />}
+					players={filteredCandidates.popularDifficult}
+					empty={bucketEmpty(
+						model.candidates.popularDifficult.length,
+						filteredCandidates.popularDifficult.length
+					)}
+					tone="destructive"
+					squadKeys={squadKeySet}
+				/>
+			</div>
+		</Card>
+	)
+}
+
 export default function FixturesClient({
 	fromGw,
 	initialHorizon = DEFAULT_FDR_HORIZON,
 	initialFixturesByEvent,
 	initialUnknownEventIds = [],
 	knownTeams,
-	squadPromise
+	squadPromise,
+	marketSignalsPromise
 }: {
 	fromGw: number
 	initialHorizon?: FdrHorizon
@@ -437,15 +605,13 @@ export default function FixturesClient({
 	initialUnknownEventIds?: number[]
 	knownTeams: FdrTeamIdentity[]
 	squadPromise: Promise<PersonalSquadSeed>
+	marketSignalsPromise: Promise<FixturePlanningMarketSignals>
 }) {
 	const t = useTranslations('Fixtures')
-	const { squad, market: marketSignals } = useFixturesSeed()
+	const { squad } = useFixturesSeed()
 	const mySquadPicks = useMemo(() => squad?.picks ?? [], [squad])
 	const mySquadKeys = useMemo(() => squadPickKeys(mySquadPicks), [mySquadPicks])
 	// Keep the unresolved seed distinct from a completed, unavailable read. The
-	// public actions area must not claim that a linked squad failed while the
-	// optional personal request is still pending.
-	const squadState = squad?.state
 	const [squadOpen, setSquadOpen] = useState(false)
 	useEffect(() => {
 		const reveal = () => { if (window.location.hash === '#my-squad') setSquadOpen(true) }
@@ -458,7 +624,6 @@ export default function FixturesClient({
 	const [horizon, setHorizon] = useState<FdrHorizon>(initialHorizon)
 	const [pendingHorizon, setPendingHorizon] = useState<FdrHorizon | null>(null)
 	const [sort, setSort] = useState<'easiest' | 'hardest'>('easiest')
-	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState(false)
 	const [focusedTeamId, setFocusedTeamId] = useState<number | null>(null)
@@ -605,35 +770,11 @@ export default function FixturesClient({
 			buildFdrDeskModel(fixturesByEvent, {
 				fromGw,
 				horizon,
-				marketSignals,
 				knownTeams,
 				unknownEvents
 			}),
-		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
+		[fixturesByEvent, fromGw, horizon, knownTeams, unknownEvents]
 	)
-	const filterByPos = useCallback(
-		(list: FdrReviewCandidate[]) => {
-			if (posFilter === 'ALL') return list
-			return list.filter(p => normalizePosition(p.position) === posFilter)
-		},
-		[posFilter]
-	)
-
-	const filteredCandidates = useMemo(
-		() => ({
-			differentialFavourable: filterByPos(
-				model.candidates.differentialFavourable
-			),
-			popularFavourable: filterByPos(model.candidates.popularFavourable),
-			popularDifficult: filterByPos(model.candidates.popularDifficult)
-		}),
-		[filterByPos, model.candidates]
-	)
-
-	const bucketEmpty = (rawLen: number, filteredLen: number) =>
-		rawLen > 0 && filteredLen === 0
-			? t('bucketEmptyFiltered')
-			: t('bucketEmpty')
 
 	const best = model.easiest[0]
 	const worst = model.hardest[0]
@@ -918,126 +1059,16 @@ export default function FixturesClient({
 					</Card>
 
 					{/* Neutral fixture review candidates */}
-					<Card
-						role="region"
-						aria-labelledby="fdr-actions"
-						className="mb-8 p-4 sm:p-5"
-					>
-						<SectionHead
-							id="fdr-actions"
-							title={t('actionsTitle')}
-							hint={t('actionsHint')}
+					<Suspense fallback={null}>
+						<FixturesActionsStream
+							marketSignalsPromise={marketSignalsPromise}
+							fixturesByEvent={fixturesByEvent}
+							fromGw={fromGw}
+							horizon={horizon}
+							knownTeams={knownTeams}
+							unknownEvents={unknownEvents}
 						/>
-
-						<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<p className="mb-1.5 text-caption font-medium text-muted-foreground">
-									{t('actionsPosLabel')}
-								</p>
-								<div className="flex flex-wrap gap-1.5">
-									{(
-										[
-											['ALL', t('actionsPosAll')],
-											['GKP', 'GKP'],
-											['DEF', 'DEF'],
-											['MID', 'MID'],
-											['FWD', 'FWD']
-										] as const
-									).map(([id, label]) => (
-										<button
-											key={id}
-											type="button"
-											onClick={() => setPosFilter(id)}
-											className={cn(
-												'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-												posFilter === id
-													? 'border-success bg-success text-success-foreground'
-													: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
-											)}
-											aria-pressed={posFilter === id}
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							</div>
-							{squadKeySet.size === 0 ? (
-								<p className="max-w-sm text-caption leading-4 text-muted-foreground">
-									{squad == null ? (
-										t('squadLoading')
-									) : squadState === 'unavailable' ? (
-										t('actionsMySquadLoadFailed')
-									) : squadState === 'not-published' ? (
-										t('mySquadNotPublished')
-									) : (
-										<>
-											{t('actionsMySquadEmpty')}{' '}
-											<Link
-												href="/onboarding/bind-entry"
-												className="font-medium text-primary-ink underline-offset-2 hover:underline"
-											>
-												{t('actionsBindCta')}
-											</Link>
-										</>
-									)}
-								</p>
-							) : null}
-						</div>
-
-						<div className="grid gap-3 lg:grid-cols-3">
-							<ActionColumn
-								title={t('bucketDifferentialFavourable')}
-								hint={t('bucketDifferentialFavourableHint')}
-								icon={
-									<TrendingUp
-										className="size-3.5"
-										aria-hidden="true"
-									/>
-								}
-								players={filteredCandidates.differentialFavourable}
-								empty={bucketEmpty(
-									model.candidates.differentialFavourable.length,
-									filteredCandidates.differentialFavourable.length
-								)}
-								tone="success"
-								squadKeys={squadKeySet}
-							/>
-							<ActionColumn
-								title={t('bucketPopularFavourable')}
-								hint={t('bucketPopularFavourableHint')}
-								icon={
-									<Users
-										className="size-3.5"
-										aria-hidden="true"
-									/>
-								}
-								players={filteredCandidates.popularFavourable}
-								empty={bucketEmpty(
-									model.candidates.popularFavourable.length,
-									filteredCandidates.popularFavourable.length
-								)}
-								tone="default"
-								squadKeys={squadKeySet}
-							/>
-							<ActionColumn
-								title={t('bucketPopularDifficult')}
-								hint={t('bucketPopularDifficultHint')}
-								icon={
-									<TrendingDown
-										className="size-3.5"
-										aria-hidden="true"
-									/>
-								}
-								players={filteredCandidates.popularDifficult}
-								empty={bucketEmpty(
-									model.candidates.popularDifficult.length,
-									filteredCandidates.popularDifficult.length
-								)}
-								tone="destructive"
-								squadKeys={squadKeySet}
-							/>
-						</div>
-					</Card>
+					</Suspense>
 				</div>
 			</PageShell>
 		</>

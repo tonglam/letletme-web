@@ -216,8 +216,12 @@ describe('public GraphQL cache contract', () => {
 			])
 
 		assert.match(fixturesPage, /<FixturesClient[\s\S]*squadPromise=\{squadPromise\}/)
+		assert.match(fixturesPage, /const marketSignalsPromise(?::\s*Promise<FixturePlanningMarketSignals>)?\s*=\s*Promise\.all\([\s\S]*marketPromise[\s\S]*ownershipPromise/)
+		assert.match(fixturesPage, /<FixturesClient[\s\S]*marketSignalsPromise=\{marketSignalsPromise\}/)
 		assert.match(fixturesClient, /function FixturesSquadStream[\s\S]*const squad = use\(promise\)/)
 		assert.match(fixturesClient, /<Suspense fallback=\{<div[\s\S]*<FixturesSquadStream[\s\S]*promise=\{squadPromise\}/)
+		assert.match(fixturesClient, /function FixturesActionsStream[\s\S]*const marketSignals = use\(marketSignalsPromise\)/)
+		assert.match(fixturesClient, /<Suspense fallback=\{null\}>[\s\S]*<FixturesActionsStream[\s\S]*marketSignalsPromise=\{marketSignalsPromise\}/)
 		assert.doesNotMatch(fixturesClient, /\{squadOpen \? <div/)
 
 		assert.match(priceChangesPage, /<PriceChangesBoard[\s\S]*personalSeedPromise=\{personalPromise\}/)

@@ -11,6 +11,7 @@ import {
 	loadFixturePlanningSignals
 } from '@/lib/fixture-planning-seed-server'
 import type { FixturePlanningFixture } from '@/lib/fixture-window'
+import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
 import {
 	resolveFixturePlanningGameweek,
 	resolveFixturePlanningHorizon
@@ -76,6 +77,15 @@ async function renderFixturesPage({ params }: PageProps) {
 	const squadPromise = loadPersonalSquadSeed(eventsPromise)
 	const marketPromise = loadFixturePlanningSignals()
 	const ownershipPromise = loadFixturePlanningGameweekOwnership()
+	const marketSignalsPromise: Promise<FixturePlanningMarketSignals> = Promise.all([
+		marketPromise.catch(() => null),
+		ownershipPromise.catch(() => null)
+	]).then(([market, ownership]) => ({
+		mostSelected: market?.marketPulse?.mostSelected ?? [],
+		transferMovers: market?.marketPulse?.transferMovers ?? [],
+		gameweekOwnership: ownership?.marketOwnershipOverview ?? null,
+		rollingOwnership: null
+	}))
 	// The stream readers may render after these promises settle.
 	void marketPromise.catch(() => undefined)
 	void ownershipPromise.catch(() => undefined)
@@ -95,7 +105,8 @@ async function renderFixturesPage({ params }: PageProps) {
 		<FixturesSeedProvider navigationId={navigationId}>
 			<FixturesClient fromGw={fromGw} initialHorizon={horizon}
 				initialFixturesByEvent={fixturesByEvent} initialUnknownEventIds={unknownEventIds}
-				knownTeams={teams ?? []} squadPromise={squadPromise} />
+				knownTeams={teams ?? []} squadPromise={squadPromise}
+				marketSignalsPromise={marketSignalsPromise} />
 			<Suspense fallback={null}><SquadStream navigationId={navigationId} promise={squadPromise} /></Suspense>
 			<Suspense fallback={null}><MarketStream navigationId={navigationId} promise={marketPromise} /></Suspense>
 			<Suspense fallback={null}><OwnershipStream navigationId={navigationId} promise={ownershipPromise} /></Suspense>
