@@ -3,6 +3,9 @@
 		"title": "LetLetMe — Fantasy Premier League 数据分析",
 		"description": "一站式查看 Fantasy Premier League 实时积分、球员分析和赛事工具。"
 	},
+	"NoScript": {
+		"playerStatsHint": "互动式球员详情需要启用 JavaScript；所选球员和区块摘要仍可查看。"
+	},
 	"PageMetadata": {
 		"forgotPasswordTitle": "重置密码",
 		"forgotPasswordDescription": "申请重置你的 LetLetMe 账户密码。",
@@ -1223,7 +1226,8 @@
 			"creativity": "创造力",
 			"threat": "威胁度",
 			"ictIndex": "ICT 指数"
-		}
+		},
+		"retry": "重试"
 	},
 	"Common": {
 		"skipToContent": "跳到主要内容",
@@ -1617,7 +1621,12 @@
 		"noChange": "无变化",
 		"transfersInShort": "转入 {count}",
 		"transfersOutShort": "转出 {count}",
-		"selectForHistory": "选择球员查看身价数据。"
+		"selectForHistory": "选择球员查看身价数据。",
+		"squadLoading": "正在读取你的阵容…",
+		"noScriptHint": "互动式阵容详情需要启用 JavaScript；上方公共身价变化面板仍可查看。",
+		"squadExpand": "查看阵容",
+		"squadCollapse": "收起",
+		"squadRetry": "刷新重试"
 	},
 	"Fixtures": {
 		"title": "赛程",
@@ -1714,6 +1723,8 @@
 		"emptyTeams": "本窗口暂无球队赛程。",
 		"actionsTitle": "赛程复核候选",
 		"actionsHint": "仅按官方 FDR 与当前 Market 可见度中性分组，不构成买入或卖出建议。",
+		"actionsLoading": "正在读取当前市场信号…",
+		"actionsNoScriptHint": "互动式赛程候选需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
 		"actionsPosLabel": "位置",
 		"actionsPosAll": "全部",
 		"actionsMySquadEmpty": "绑定 FPL 阵容后，可在此高亮你的球员。",
@@ -1742,7 +1753,12 @@
 		"shareCopyImage": "复制为图片",
 		"shareImageComingSoon": "图片分享即将上线。",
 		"shareNone": "无",
-		"shareFooter": "{url}"
+		"shareFooter": "{url}",
+		"squadLoading": "正在读取你的阵容…",
+		"squadNoScriptHint": "互动式阵容赛程详情需要启用 JavaScript；上方公共赛程矩阵仍可查看。",
+		"squadExpand": "查看阵容",
+		"squadCollapse": "收起",
+		"squadRetry": "刷新重试"
 	},
 	"Selections": {
 		"title": "趋势",

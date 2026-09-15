@@ -44,9 +44,11 @@ import {
 	PlayerDetailSkeleton
 } from './PlayerStatPrimitives'
 
-interface PlayerStatsViewProps {
+export interface PlayerStatsViewProps {
+	ssrStreamed?: boolean
 	selectedPlayer: PlayerDirectoryOption | null
 	selectedComparison: PlayerDirectoryOption | null
+	comparisonRequested: boolean
 	player: PlayerDetailData | null
 	comparison: PlayerDetailData | null
 	playerState: PlayerStateProfileData | null
@@ -105,7 +107,7 @@ function DeskSection({
 	hint,
 	children
 }: {
-	id: string
+	id?: string
 	title: string
 	hint?: string
 	children: ReactNode
@@ -596,8 +598,10 @@ function MarketSummary({
 }
 
 export function PlayerStatsView({
+	ssrStreamed = false,
 	selectedPlayer,
 	selectedComparison,
+	comparisonRequested,
 	player,
 	comparison,
 	playerState,
@@ -630,6 +634,7 @@ export function PlayerStatsView({
 	const t = useTranslations('PlayerStats')
 	const tl = useTranslations('PlayerStats.labels')
 	const common = useTranslations('Common')
+	const streamContentMarker = ssrStreamed ? 'player-stats-detail' : undefined
 	const dataSectionLabels = {
 		seasonStats: t('dataSectionSeasonStats'),
 		market: t('sectionNavMarket'),
@@ -749,9 +754,16 @@ export function PlayerStatsView({
 		scrollToPlayerStatsSection(section)
 	}, [])
 
+	if (error && !player) return (
+		<div data-ssr-stream-content={streamContentMarker} className="rounded-xl border bg-card px-6 py-8 text-center" role="alert">
+			<p className="text-sm text-destructive">{error}</p>
+			<Button className="mt-3" variant="outline" onClick={retryPlayerData}>{t('retry')}</Button>
+		</div>
+	)
+
 	if (!selectedPlayer) {
 		return (
-			<div className="rounded-xl border border-dashed border-border/70 px-6 py-12 text-center">
+			<div data-ssr-stream-content={streamContentMarker} className="rounded-xl border border-dashed border-border/70 px-6 py-12 text-center">
 				<span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
 					<User
 						className="size-6"
@@ -771,22 +783,24 @@ export function PlayerStatsView({
 	const requestPending = isLoading || isComparisonLoading
 	const requestError = error ?? comparisonError
 	const primaryMissing = !player
-	const comparisonMissing = Boolean(selectedComparison && !comparison)
+	const comparisonMissing = comparisonRequested && !comparison
 
 	if (
 		(isLoading && primaryMissing) ||
-		(selectedComparison && isComparisonLoading && comparisonMissing)
+		(comparisonRequested && isComparisonLoading && comparisonMissing)
 	) {
-		return <PlayerDetailSkeleton />
+		return <div data-ssr-stream-content={streamContentMarker}><PlayerDetailSkeleton /></div>
 	}
 
 	if (requestError && (primaryMissing || comparisonMissing)) {
 		return (
 			<div
+				data-ssr-stream-content={streamContentMarker}
 				className="rounded-xl border border-border/80 bg-card px-6 py-8 text-center shadow-sm"
 				role="alert"
 			>
 				<p className="text-sm text-destructive">{requestError}</p>
+				<Button className="mt-3" variant="outline" onClick={retryPlayerData}>{t('retry')}</Button>
 			</div>
 		)
 	}
@@ -853,7 +867,7 @@ export function PlayerStatsView({
 		if (activeSection === 'fixtures') {
 			return (
 				<DeskSection
-					id="ps-fixtures"
+					id={ssrStreamed ? undefined : 'ps-fixtures'}
 					title={t('fixturesTitle')}
 					hint={t('fixturesHint')}
 				>
@@ -872,7 +886,7 @@ export function PlayerStatsView({
 		if (activeSection === 'recent' && hasSeasonStats) {
 			return (
 				<DeskSection
-					id="ps-recent"
+					id={ssrStreamed ? undefined : 'ps-recent'}
 					title={t('recentTitle')}
 					hint={t('recentHint')}
 				>
@@ -886,7 +900,7 @@ export function PlayerStatsView({
 		if (activeSection === 'season' && hasSeasonStats) {
 			return (
 				<DeskSection
-					id="ps-season"
+					id={ssrStreamed ? undefined : 'ps-season'}
 					title={t('seasonTitle')}
 					hint={
 						samePosition || !comparison
@@ -921,7 +935,7 @@ export function PlayerStatsView({
 		if (activeSection === 'process' && hasSeasonStats) {
 			return (
 				<DeskSection
-					id="ps-process"
+					id={ssrStreamed ? undefined : 'ps-process'}
 					title={t('processTitle')}
 					hint={
 						comparison && !samePosition
@@ -1007,6 +1021,8 @@ export function PlayerStatsView({
 	return (
 		<div
 			className="space-y-1"
+			data-ssr-stream-content={streamContentMarker}
+			data-player-stats-ssr-detail={ssrStreamed ? 'true' : undefined}
 			aria-busy={requestPending}
 		>
 			<div className="flex justify-end">
@@ -1093,6 +1109,7 @@ export function PlayerStatsView({
 					profile={playerState}
 					comparisonProfile={comparisonState}
 					anchorGw={anchorGw}
+					ssrStreamed={ssrStreamed}
 				/>
 
 				<PlayerFplProfile
@@ -1198,7 +1215,7 @@ export function PlayerStatsView({
 											comparisonProfile={comparisonState}
 										/>
 									)}
-									<div id="ps-market">
+									<div id={ssrStreamed ? undefined : 'ps-market'}>
 										<DeskSection
 											id="ps-market-section"
 											title={t('marketTitle')}

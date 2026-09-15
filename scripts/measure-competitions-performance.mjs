@@ -1,3 +1,4 @@
+import { finishLongTaskObservation, installVitals, measureNavigation, navigationComplete, performanceMetadata, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const origin = process.env.COMPETITIONS_PERF_ORIGIN ?? 'https://letletme.top'
@@ -29,7 +30,7 @@ const paths = [
 	'/competitions/browse',
 	'/competitions/create',
 	`/competitions/${tournamentId}/manage`,
-	`/live/competitions/${tournamentId}`
+	`/live/competitions?tournamentId=${tournamentId}`
 ]
 
 function readySelector(path) {
@@ -42,15 +43,6 @@ function readySelector(path) {
 	return `[data-competition-perf-ready="detail"][data-competition-tournament-id="${tournamentId}"]`
 }
 
-function percentile(values, p) {
-	const sorted = [...values].sort((a, b) => a - b)
-	return sorted[
-		Math.min(
-			sorted.length - 1,
-			Math.max(0, Math.ceil((sorted.length * p) / 100) - 1)
-		)
-	]
-}
 
 async function measure(browser, path, index) {
 	const context = await browser.newContext({
@@ -58,24 +50,7 @@ async function measure(browser, path, index) {
 		storageState
 	})
 	const page = await context.newPage()
-	await page.addInitScript(() => {
-		window.__competitionPerf = { lcp: 0, cls: 0, tbt: 0 }
-		new PerformanceObserver(list =>
-			list.getEntries().forEach(entry => {
-				window.__competitionPerf.lcp = entry.startTime
-			})
-		).observe({ type: 'largest-contentful-paint', buffered: true })
-		new PerformanceObserver(list =>
-			list.getEntries().forEach(entry => {
-				if (!entry.hadRecentInput) window.__competitionPerf.cls += entry.value
-			})
-		).observe({ type: 'layout-shift', buffered: true })
-		new PerformanceObserver(list =>
-			list.getEntries().forEach(entry => {
-				window.__competitionPerf.tbt += Math.max(0, entry.duration - 50)
-			})
-		).observe({ type: 'longtask', buffered: true })
-	})
+	await installVitals(page, '__competitionPerf')
 	const requests = []
 	page.on('request', request =>
 		requests.push({
@@ -87,32 +62,45 @@ async function measure(browser, path, index) {
 	const url = new URL(`${origin}/${locale}${path}`)
 	url.searchParams.set('_competitionsPerf', `${path}-${index}-${Date.now()}`)
 	url.searchParams.set('_perfSource', 'synthetic')
-	const response = await page.goto(url.toString(), { waitUntil: 'load' })
-	if (!page.url().includes(`${origin}/${locale}${path}`)) {
+	let response
+	const navigation = await measureNavigation(browser, { name: 'mobile', viewport: { width: 390, height: 844 } }, url.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
+	const expected = new URL(`${origin}/${locale}${path}`)
+	const actual = new URL(page.url())
+	if (actual.origin !== expected.origin || actual.pathname !== expected.pathname || (expected.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== tournamentId)) {
 		throw new Error(
 			`Authenticated measurement was redirected away from ${path}: ${page.url()}`
 		)
 	}
 	const ready = page.locator(readySelector(path))
+	await ready.waitFor({ state: 'visible', timeout: 30_000 })
 	if ((await ready.count()) !== 1) {
 		throw new Error(
 			`Authenticated measurement did not load the expected competition state for ${path}`
 		)
 	}
 	await page.waitForTimeout(500)
+	await finishLongTaskObservation(page)
 	const metrics = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {
 			lcp: window.__competitionPerf.lcp,
 			cls: window.__competitionPerf.cls,
-			tbt: window.__competitionPerf.tbt,
-			ttfb: navigation?.responseStart ?? 0,
-			html: navigation?.responseEnd ?? 0,
+			phase: 'interaction',
+			inpMs: window.__competitionPerf?.inp ?? null,
+			fcpMs: window.__competitionPerf?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
+			observedLongTaskBlockingMs: window.__competitionPerf?.observedLongTaskBlockingMs ?? null,
+			ttfb: navigation?.responseStart ?? null,
+			html: navigation?.responseEnd ?? null,
 			overflow: document.documentElement.scrollWidth > innerWidth
 		}
 	})
 	const result = {
 		path,
+		navigation,
 		status: response?.status() ?? 0,
 		...metrics,
 		initialRequests: requests.filter(
@@ -151,38 +139,11 @@ const summary = Object.fromEntries(
 		{
 			runs: values.length,
 			status200: values.every(value => value.status === 200),
-			lcp: {
-				p50: percentile(
-					values.map(value => value.lcp),
-					50
-				),
-				p95: percentile(
-					values.map(value => value.lcp),
-					95
-				)
-			},
-			ttfb: {
-				p50: percentile(
-					values.map(value => value.ttfb),
-					50
-				),
-				p95: percentile(
-					values.map(value => value.ttfb),
-					95
-				)
-			},
-			html: {
-				p50: percentile(
-					values.map(value => value.html),
-					50
-				),
-				p95: percentile(
-					values.map(value => value.html),
-					95
-				)
-			},
-			maxTbt: Math.max(...values.map(value => value.tbt)),
-			maxCls: Math.max(...values.map(value => value.cls)),
+			lcpMs: distribution(values.map(value => value.navigation), 'lcpMs'),
+			ttfbMs: distribution(values.map(value => value.navigation), 'ttfbMs'),
+			htmlResponseMs: distribution(values.map(value => value.navigation), 'htmlResponseMs'),
+			observedLongTaskBlockingMs: distribution(values, 'observedLongTaskBlockingMs'),
+			cls: distribution(values.map(value => value.navigation), 'cls'),
 			initialRequests: values.map(value => value.initialRequests),
 			rscPrefetches: values.map(value => value.rscPrefetches),
 			playerStatsPrefetches: values.map(value => value.playerStatsPrefetches),
@@ -194,11 +155,14 @@ const summary = Object.fromEntries(
 console.log(
 	JSON.stringify(
 		{
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			origin,
 			locale,
 			summary,
-			raw: measurements
+			raw: measurements,
+			acceptance: {
+				navigationComplete: Object.values(measurements).flat().every(value => navigationComplete(value.navigation))
+			}
 		},
 		null,
 		2

@@ -311,12 +311,14 @@ describe('fixture section sharing', () => {
 				'utf8'
 			)
 		])
+		const squadStream = page.slice(
+			page.indexOf('function FixturesSquadStream')
+		)
 
 		assert.match(
-			page,
-			/<SectionHead[\s\S]*id="my-squad-heading"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
+			squadStream,
+			/<ShareActions[\s\S]*imageRef=\{shareRef\}[\s\S]*actions=\{\['image'\]\}/
 		)
-		assert.match(page, /imageRef=\{mySquadShareRef\}/)
 		assert.match(page, /data-page-fdr-legend="true"/)
 		assert.doesNotMatch(page, /\/\* FDR legend \*\//)
 		assert.match(
@@ -934,15 +936,18 @@ describe('price prediction share scopes', () => {
 				'utf8'
 			)
 		])
+		const squadStream = board.slice(
+			board.indexOf('function PriceChangesSquadStream')
+		)
 
-		assert.match(board, /mySquadBoardPlayers/)
+		assert.match(squadStream, /mySquadBoardPlayers/)
 		assert.match(
-			board,
-			/<ShareActions[\s\S]*text=\{squadShareText\}[\s\S]*imageRef=\{mySquadShareRef\}/
+			squadStream,
+			/<ShareActions[\s\S]*text=\{squadShareText\}[\s\S]*imageRef=\{shareRef\}/
 		)
 		assert.match(
-			board,
-			/<PriceChangeSquadPitch[\s\S]*shareRef=\{mySquadShareRef\}/
+			squadStream,
+			/<PriceChangeSquadPitch[\s\S]*shareRef=\{shareRef\}/
 		)
 		assert.match(squad, /ref=\{shareRef\}/)
 	})

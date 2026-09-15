@@ -37,6 +37,14 @@ const bindEntry = readFileSync(
 	'app/onboarding/bind-entry/BindEntryForm.tsx',
 	'utf8'
 )
+const fixturesClient = readFileSync(
+	'app/data/fixtures/FixturesClient.tsx',
+	'utf8'
+)
+const tournamentClient = readFileSync(
+	'app/live/tournaments/TournamentClient.tsx',
+	'utf8'
+)
 
 describe('Home first-screen performance boundary', () => {
 	it('starts the revision-pinned public bootstrap before child rendering', () => {
@@ -206,6 +214,19 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(proxy, /private, no-store, no-transform/)
 	})
 
+	it('keeps the optional squad seed pending until its read resolves', () => {
+		assert.doesNotMatch(fixturesClient, /squad\?\.state \?\? 'unavailable'/)
+		assert.match(fixturesClient, /squadKeySet\.size === 0 && squad != null/)
+		assert.match(fixturesClient, /squadState === 'unavailable'/)
+	})
+
+	it('does not publish a canonical competition ready marker for a last-good board', () => {
+		assert.match(
+			tournamentClient,
+			/competitionBoardReady = Boolean\([\s\S]*?standingsReady &&\s*!showingLastGood &&/
+		)
+	})
+
 	it('measures concurrent Home completion after consuming every response stream', () => {
 		const measurement = readFileSync(
 			'scripts/measure-home-performance.mjs',
@@ -217,7 +238,69 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(measurement, /GetEventFixtures/)
 		assert.match(measurement, /firstSwitchTransports/)
 		assert.match(measurement, /waitForCommittedFixtureEvent/)
-		assert.match(measurement, /observed: values\.length/)
+		assert.match(readFileSync('scripts/performance-metrics.mjs', 'utf8'), /observed: values\.length/)
 		assert.match(measurement, /waitForReadyMetric/)
 	})
+})
+
+it('performance acceptance rejects missing values and preserves missing sample counts', async () => {
+	const {
+		atMost,
+		distribution,
+		hasValidProductionIdentity,
+		isProductionMeasurementUrl,
+		navigationComplete
+	} = await import('../scripts/performance-metrics.mjs')
+	assert.equal(atMost(null, 2500), false)
+	assert.equal(atMost(undefined, 2500), false)
+	assert.equal(atMost(NaN, 2500), false)
+	assert.equal(atMost(0, 2500), true)
+	assert.deepEqual(distribution([{ lcp: null }, { lcp: 100 }, { lcp: 300 }], 'lcp'), { observed: 2, missing: 1, p50: 100, min: 100, max: 300 })
+	assert.equal(navigationComplete({ status: 200, error: null, lcpMs: null, cls: 0, fcpMs: 1, ttfbMs: 1, readyMs: 1 }), false)
+	const productionSample = { status: 200, error: null, url: 'https://letletme.top/explore/fixtures', lcpMs: 1, cls: 0, fcpMs: 1, ttfbMs: 1, readyMs: 1 }
+	assert.equal(isProductionMeasurementUrl(productionSample.url), true)
+	assert.equal(hasValidProductionIdentity(productionSample), false)
+	assert.equal(navigationComplete(productionSample), false)
+	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'vercel' }), true)
+	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'overseas' }), true)
+	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'untrusted-proxy' }), false)
+	assert.equal(isProductionMeasurementUrl('http://localhost:3200/explore/fixtures'), false)
+})
+
+	it('uses the browser vitals build and the same page for navigation plus follow-up probes', () => {
+		const metrics = readFileSync('scripts/performance-metrics.mjs', 'utf8')
+	assert.match(metrics, /web-vitals\.iife\.js/)
+	assert.match(metrics, /globalThis\.webVitals = webVitals/)
+	assert.match(metrics, /options\.page\?\.context\(\)/)
+	assert.match(metrics, /options\.onResponse\?\.\(response\)/)
+	assert.match(metrics, /readySequence/)
+	assert.match(metrics, /snapshotLongTaskObservation/)
+	assert.match(metrics, /finishLongTaskObservation\(page\)/)
+	assert.match(metrics, /requests: requests\.slice\(\)/)
+	assert.match(metrics, /page\.off\('requestfinished'/)
+		assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
+		assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
+		assert.match(metrics, /observationTask = \(async \(\) =>/)
+		assert.match(metrics, /cancelObservation\?\.\(timeoutError\)/)
+		assert.match(metrics, /await observationTask\?\.catch\(\(\) => \{\}\)/)
+		assert.match(metrics, /target\.searchParams\.has\('gw'\)[\s\S]*actual\.searchParams\.get\('gw'\)/)
+		assert.match(metrics, /const expectedGameweek = target\.searchParams\.get\('gw'\)/)
+		assert.match(metrics, /data-competition-gameweek=/)
+	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
+	assert.match(readFileSync('scripts/measure-competitions-performance.mjs', 'utf8'), /navigationComplete:/)
+	const homeMeasurement = readFileSync('scripts/measure-home-performance.mjs', 'utf8')
+	assert.doesNotMatch(homeMeasurement, /throttleMobile\(/)
+	assert.match(homeMeasurement, /throttleProfile\(page, profile\)/)
+	for (const name of [
+		'home',
+		'fixtures',
+		'gameweek',
+		'market',
+		'player-stats',
+		'trends',
+		'competitions'
+	]) {
+		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
+		assert.match(source, /measureNavigation\([\s\S]*\{[\s\S]*page,[\s\S]*onResponse/)
+	}
 })

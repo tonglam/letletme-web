@@ -3,6 +3,9 @@
 		"title": "LetLetMe — Fantasy Premier League analytics",
 		"description": "Fantasy Premier League live points, player analytics, and competition tools in one focused workspace."
 	},
+	"NoScript": {
+		"playerStatsHint": "Interactive player details require JavaScript. The selected player and section summaries remain available."
+	},
 	"PageMetadata": {
 		"forgotPasswordTitle": "Reset password",
 		"forgotPasswordDescription": "Request a password reset for your LetLetMe account.",
@@ -1223,7 +1226,8 @@
 			"creativity": "Creativity",
 			"threat": "Threat",
 			"ictIndex": "ICT Index"
-		}
+		},
+		"retry": "Retry"
 	},
 	"Common": {
 		"skipToContent": "Skip to main content",
@@ -1617,7 +1621,12 @@
 		"noChange": "No change",
 		"transfersInShort": "{count} in",
 		"transfersOutShort": "{count} out",
-		"selectForHistory": "Select a player to view available price data."
+		"selectForHistory": "Select a player to view available price data.",
+		"squadLoading": "Loading your squad…",
+		"noScriptHint": "Interactive squad details require JavaScript. The public price-change board above remains available.",
+		"squadExpand": "View squad",
+		"squadCollapse": "Collapse",
+		"squadRetry": "Refresh and retry"
 	},
 	"Fixtures": {
 		"title": "Fixtures",
@@ -1714,6 +1723,8 @@
 		"emptyTeams": "No team fixtures in this window yet.",
 		"actionsTitle": "Fixture review candidates",
 		"actionsHint": "Neutral review groups based only on official FDR and current Market visibility — not buy or sell advice.",
+		"actionsLoading": "Loading current market signals…",
+		"actionsNoScriptHint": "Interactive fixture candidates require JavaScript. The public fixture matrix above remains available.",
 		"actionsPosLabel": "Position",
 		"actionsPosAll": "All",
 		"actionsMySquadEmpty": "Link an FPL entry to highlight your squad here.",
@@ -1742,7 +1753,12 @@
 		"shareCopyImage": "Copy as image",
 		"shareImageComingSoon": "Image share is coming soon.",
 		"shareNone": "None",
-		"shareFooter": "{url}"
+		"shareFooter": "{url}",
+		"squadLoading": "Loading your squad…",
+		"squadNoScriptHint": "Interactive squad fixture details require JavaScript. The public fixture matrix above remains available.",
+		"squadExpand": "View squad",
+		"squadCollapse": "Collapse",
+		"squadRetry": "Refresh and retry"
 	},
 	"Selections": {
 		"title": "Trends",

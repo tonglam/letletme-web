@@ -1,3 +1,4 @@
+import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -15,34 +16,18 @@ const profiles = [
 	{ name: 'mobile', viewport: { width: 390, height: 844 } }
 ]
 
-function percentile(values, percentileValue) {
-	const ordered = [...values].sort((left, right) => left - right)
-	const index = Math.min(
-		ordered.length - 1,
-		Math.ceil((percentileValue / 100) * ordered.length) - 1
-	)
-	return Number(ordered[Math.max(0, index)].toFixed(2))
-}
 
-function distribution(runs, field) {
-	const values = runs.map(run => run[field])
-	return {
-		p50: percentile(values, 50),
-		p95: percentile(values, 95),
-		max: Number(Math.max(...values).toFixed(2))
-	}
-}
 
 function summarize(runs) {
 	return {
 		runs: runs.length,
 		status200: runs.every(run => run.status === 200),
-		lcpMs: distribution(runs, 'lcpMs'),
-		tbtMs: distribution(runs, 'tbtMs'),
-		cls: distribution(runs, 'cls'),
-		ttfbMs: distribution(runs, 'ttfbMs'),
+		lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
+		observedLongTaskBlockingMs: distribution(runs, 'observedLongTaskBlockingMs'),
+		cls: distribution(runs.map(run => run.navigation), 'cls'),
+		ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
 		loadMs: distribution(runs, 'loadMs'),
-		htmlResponseMs: distribution(runs, 'htmlResponseMs'),
+		htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
 		documentBytes: distribution(runs, 'documentBytes'),
 		firstWindowMs: distribution(runs, 'firstWindowMs'),
 		firstWindowRequestCounts: runs.map(run => run.firstWindowRequestCount),
@@ -76,26 +61,7 @@ try {
 		for (let index = 0; index < runCount; index += 1) {
 			const context = await browser.newContext({ viewport: profile.viewport })
 			const page = await context.newPage()
-			await page.addInitScript(() => {
-				window.__fixturesPerformance = { cls: 0, lcp: 0, tbt: 0 }
-				new PerformanceObserver(list => {
-					for (const entry of list.getEntries()) {
-						window.__fixturesPerformance.lcp = entry.startTime
-					}
-				}).observe({ type: 'largest-contentful-paint', buffered: true })
-				new PerformanceObserver(list => {
-					for (const entry of list.getEntries()) {
-						if (!entry.hadRecentInput) {
-							window.__fixturesPerformance.cls += entry.value
-						}
-					}
-				}).observe({ type: 'layout-shift', buffered: true })
-				new PerformanceObserver(list => {
-					for (const entry of list.getEntries()) {
-						window.__fixturesPerformance.tbt += Math.max(0, entry.duration - 50)
-					}
-				}).observe({ type: 'longtask', buffered: true })
-			})
+			await installVitals(page, '__fixturesPerformance')
 
 			const cdp = await context.newCDPSession(page)
 			await cdp.send('Network.enable')
@@ -127,7 +93,11 @@ try {
 				`${profile.name}-${index}-${Date.now()}`
 			)
 			runUrl.searchParams.set('_perfSource', 'synthetic')
-			const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+			let response
+			const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+				page,
+				onResponse: value => { response = value }
+			})
 			await page.waitForTimeout(500)
 			const responseBody = response ? await response.body() : Buffer.alloc(0)
 			const documentBytes =
@@ -137,12 +107,16 @@ try {
 			const cold = await page.evaluate(() => {
 				const navigation = performance.getEntriesByType('navigation')[0]
 				return {
-					lcpMs: window.__fixturesPerformance?.lcp ?? 0,
-					cls: window.__fixturesPerformance?.cls ?? 0,
-					tbtMs: window.__fixturesPerformance?.tbt ?? 0,
-					loadMs: navigation?.loadEventEnd ?? 0,
-					htmlResponseMs: navigation?.responseEnd ?? 0,
-					ttfbMs: navigation?.responseStart ?? 0
+					lcpMs: window.__fixturesPerformance?.lcp ?? null,
+					cls: window.__fixturesPerformance?.cls ?? null,
+					phase: 'interaction',
+					inpMs: window.__fixturesPerformance?.inp ?? null,
+					fcpMs: window.__fixturesPerformance?.fcp ?? null,
+					observationInterval: { startMs: 0, endMs: performance.now() },
+					observedLongTaskBlockingMs: window.__fixturesPerformance?.observedLongTaskBlockingMs ?? null,
+					loadMs: navigation?.loadEventEnd ?? null,
+					htmlResponseMs: navigation?.responseEnd ?? null,
+					ttfbMs: navigation?.responseStart ?? null
 				}
 			})
 
@@ -170,17 +144,23 @@ try {
 			const cachedWindowRequestCount =
 				windowRequestCount - beforeCachedWindow
 
+			await finishLongTaskObservation(page)
 			const final = await page.evaluate(() => ({
-				cls: window.__fixturesPerformance?.cls ?? 0,
-				tbtMs: window.__fixturesPerformance?.tbt ?? 0,
+				cls: window.__fixturesPerformance?.cls ?? null,
+				phase: 'interaction',
+				inpMs: window.__fixturesPerformance?.inp ?? null,
+				fcpMs: window.__fixturesPerformance?.fcp ?? null,
+				observationInterval: { startMs: 0, endMs: performance.now() },
+				observedLongTaskBlockingMs: window.__fixturesPerformance?.observedLongTaskBlockingMs ?? null,
 				horizontalOverflow:
 					document.documentElement.scrollWidth > window.innerWidth
 			}))
 			runs.push({
+				navigation,
 				status: response?.status() ?? 0,
 				...cold,
 				cls: final.cls,
-				tbtMs: final.tbtMs,
+				observedLongTaskBlockingMs: final.observedLongTaskBlockingMs,
 				documentBytes,
 				firstWindowMs,
 				firstWindowRequestCount,
@@ -209,22 +189,24 @@ console.log(
 	JSON.stringify(
 		{
 			url: new URL(targetUrl).origin + new URL(targetUrl).pathname,
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			measurements,
+			raw: rawMeasurements,
 			acceptance: {
+				navigationComplete: allRuns.every(run => navigationComplete(run.navigation)),
 				mobileLcp:
-					mobile.lcpMs.p50 <= 2_500 && mobile.lcpMs.p95 <= 3_000,
-				mobileTbt: mobile.tbtMs.max <= 100,
-				mobileCls: mobile.cls.max <= 0.02,
+					atMost(mobile.lcpMs.p50, 2_500) && atMost(mobile.lcpMs.max, 3_000),
+				mobileObservedBlocking: atMost(mobile.observedLongTaskBlockingMs.max, 100),
+				mobileCls: atMost(mobile.cls.max, 0.02),
 				documentTransferBytes: allRuns.every(
-					run => run.documentBytes <= 51 * 1024
+					run => atMost(run.documentBytes, 51 * 1024)
 				),
 				htmlResponse:
-					percentile(allRuns.map(run => run.htmlResponseMs), 95) <= 2_000,
+					atMost(percentile(allRuns.map(run => run.htmlResponseMs), 95), 2_000),
 				firstWindow:
 					allRuns.every(run => run.firstWindowRequestCount === 1) &&
-					percentile(allRuns.map(run => run.firstWindowMs), 50) <= 1_000 &&
-					percentile(allRuns.map(run => run.firstWindowMs), 95) <= 1_500,
+					atMost(percentile(allRuns.map(run => run.firstWindowMs), 50), 1_000) &&
+					atMost(percentile(allRuns.map(run => run.firstWindowMs), 95), 1_500),
 				cachedWindow: allRuns.every(
 					run => run.cachedWindowRequestCount === 0
 				),

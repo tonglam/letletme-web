@@ -1,3 +1,4 @@
+import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -14,44 +15,12 @@ const profiles = [
 	{ name: 'mobile', viewport: { width: 390, height: 844 } }
 ]
 
-function percentile(values, percentileValue) {
-	const ordered = [...values].sort((left, right) => left - right)
-	const index = Math.min(
-		ordered.length - 1,
-		Math.ceil((percentileValue / 100) * ordered.length) - 1
-	)
-	return Number(ordered[Math.max(0, index)].toFixed(2))
-}
 
-function distribution(runs, field) {
-	const values = runs.map(run => run[field])
-	return {
-		p50: percentile(values, 50),
-		p95: percentile(values, 95),
-		max: Number(Math.max(...values).toFixed(2))
-	}
-}
 
 async function measureRun(browser, profile, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	const page = await context.newPage()
-	await page.addInitScript(() => {
-		window.__marketPerformance = { cls: 0, lcp: 0, tbt: 0 }
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries())
-				window.__marketPerformance.lcp = entry.startTime
-		}).observe({ type: 'largest-contentful-paint', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				if (!entry.hadRecentInput) window.__marketPerformance.cls += entry.value
-			}
-		}).observe({ type: 'layout-shift', buffered: true })
-		new PerformanceObserver(list => {
-			for (const entry of list.getEntries()) {
-				window.__marketPerformance.tbt += Math.max(0, entry.duration - 50)
-			}
-		}).observe({ type: 'longtask', buffered: true })
-	})
+	await installVitals(page, '__marketPerformance')
 
 	const cdp = await context.newCDPSession(page)
 	await cdp.send('Network.enable')
@@ -84,7 +53,11 @@ async function measureRun(browser, profile, index) {
 		`${profile.name}-${index}-${Date.now()}`
 	)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
-	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+	let response
+	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
+		page,
+		onResponse: value => { response = value }
+	})
 	await page.waitForTimeout(500)
 	const responseBody = response ? await response.body() : Buffer.alloc(0)
 	const rawDocumentBytes = responseBody.byteLength
@@ -95,15 +68,16 @@ async function measureRun(browser, profile, index) {
 	const cold = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {
-			lcpMs: window.__marketPerformance?.lcp ?? 0,
-			cls: window.__marketPerformance?.cls ?? 0,
-			tbtMs: window.__marketPerformance?.tbt ?? 0,
-			ttfbMs: navigation?.responseStart ?? 0,
-			htmlResponseMs: navigation?.responseEnd ?? 0
+			lcpMs: window.__marketPerformance?.lcp ?? null,
+			cls: window.__marketPerformance?.cls ?? null,
+			phase: 'interaction',
+			inpMs: window.__marketPerformance?.inp ?? null,
+			fcpMs: window.__marketPerformance?.fcp ?? null,
+			observationInterval: { startMs: 0, endMs: performance.now() },
+			observedLongTaskBlockingMs: window.__marketPerformance?.observedLongTaskBlockingMs ?? null,
+			ttfbMs: navigation?.responseStart ?? null,
+			htmlResponseMs: navigation?.responseEnd ?? null
 		}
-	})
-	await page.evaluate(() => {
-		if (window.__marketPerformance) window.__marketPerformance.cls = 0
 	})
 
 	const searchInput = page.locator('#market-player-search')
@@ -157,13 +131,19 @@ async function measureRun(browser, profile, index) {
 		availabilityRequestCount = marketRequestCount - beforeAvailability
 	}
 
+	await finishLongTaskObservation(page)
 	const final = await page.evaluate(() => ({
-		interactionCls: window.__marketPerformance?.cls ?? 0,
-		tbtMs: window.__marketPerformance?.tbt ?? 0,
+		observedSessionCls: window.__marketPerformance?.cls ?? null,
+		phase: 'interaction',
+		inpMs: window.__marketPerformance?.inp ?? null,
+		fcpMs: window.__marketPerformance?.fcp ?? null,
+		observationInterval: { startMs: 0, endMs: performance.now() },
+		observedLongTaskBlockingMs: window.__marketPerformance?.observedLongTaskBlockingMs ?? null,
 		horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth
 	}))
 	await context.close()
 	return {
+		navigation,
 		status: response?.status() ?? 0,
 		...cold,
 		...final,
@@ -199,12 +179,12 @@ const measurements = Object.fromEntries(
 		{
 			runs: runs.length,
 			status200: runs.every(run => run.status === 200),
-			lcpMs: distribution(runs, 'lcpMs'),
-			tbtMs: distribution(runs, 'tbtMs'),
-			cls: distribution(runs, 'cls'),
-			interactionCls: distribution(runs, 'interactionCls'),
-			ttfbMs: distribution(runs, 'ttfbMs'),
-			htmlResponseMs: distribution(runs, 'htmlResponseMs'),
+			lcpMs: distribution(runs.map(run => run.navigation), 'lcpMs'),
+			observedLongTaskBlockingMs: distribution(runs, 'observedLongTaskBlockingMs'),
+			cls: distribution(runs.map(run => run.navigation), 'cls'),
+			observedSessionCls: distribution(runs, 'observedSessionCls'),
+			ttfbMs: distribution(runs.map(run => run.navigation), 'ttfbMs'),
+			htmlResponseMs: distribution(runs.map(run => run.navigation), 'htmlResponseMs'),
 			rawDocumentBytes: distribution(runs, 'rawDocumentBytes'),
 			documentBytes: distribution(runs, 'documentBytes'),
 			marketRequestCounts: runs.map(run => run.marketRequestCount),
@@ -222,24 +202,26 @@ console.log(
 	JSON.stringify(
 		{
 			url: new URL(targetUrl).origin + new URL(targetUrl).pathname,
-			measuredAt: new Date().toISOString(),
+			...performanceMetadata(),
 			measurements,
+			raw,
 			acceptance: {
+				navigationComplete: allRuns.every(run => navigationComplete(run.navigation)),
 				mobileLcp:
-					measurements.mobile.lcpMs.p50 <= 2500 &&
-					measurements.mobile.lcpMs.p95 <= 3000,
-				mobileTbt: measurements.mobile.tbtMs.max <= 100,
-				cls: allRuns.every(run => run.cls <= 0.02),
+					atMost(measurements.mobile.lcpMs.p50, 2500) &&
+					atMost(measurements.mobile.lcpMs.max, 3000),
+				mobileObservedBlocking: atMost(measurements.mobile.observedLongTaskBlockingMs.max, 100),
+				cls: allRuns.every(run => atMost(run.navigation.cls, 0.02)),
 				htmlResponse:
-					percentile(
+					atMost(percentile(
 						allRuns.map(run => run.htmlResponseMs),
 						95
-					) <= 2000,
-				documentBytes: allRuns.every(run => run.documentBytes <= 135 * 1024),
+					), 2000),
+				documentBytes: allRuns.every(run => atMost(run.documentBytes, 135 * 1024)),
 				rawDocumentBytes: allRuns.every(
-					run => run.rawDocumentBytes <= 135 * 1024
+					run => atMost(run.rawDocumentBytes, 135 * 1024)
 				),
-				initialRequests: allRuns.every(run => run.marketRequestCount <= 30),
+				initialRequests: allRuns.every(run => atMost(run.marketRequestCount, 30)),
 				noPlayerStatsPrefetch: allRuns.every(
 					run => run.playerStatsPrefetchCount === 0
 				),

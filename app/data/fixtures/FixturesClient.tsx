@@ -9,9 +9,11 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
-import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
-import { buildSquadTeamExposure } from '@/lib/squad-picks'
+import {
+	buildSquadTeamExposure,
+	squadPickKeys,
+	type PersonalSquadSeed
+} from '@/lib/squad-picks'
 import {
 	buildFixtureWindowRanges,
 	isFixtureWindowResponse,
@@ -30,19 +32,24 @@ import {
 	type FdrTeamIdentity,
 	type TeamFdrRow
 } from '@/lib/fixtures-fdr'
+import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { resolveFixturePlanningHorizon } from '@/lib/review-gameweek'
 import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
 import { TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import { useRouter } from 'next/navigation'
+import { useFixturesSeed } from './FixturesSeedContext'
 import {
 	useCallback,
 	useEffect,
 	useMemo,
 	useRef,
 	useState,
+	Suspense,
 	startTransition,
+	use,
 	type ReactNode
 } from 'react'
 
@@ -366,37 +373,333 @@ function ActionColumn({
 	)
 }
 
+function FixturesNoScriptResult({
+	marker,
+	title,
+	message
+}: {
+	marker: string
+	title: string
+	message: string
+}) {
+	return (
+		<noscript>
+			<style>{`[data-ssr-stream-fallback="${marker}"] { display: none !important; }`}</style>
+			<div
+				data-ssr-noscript-result={marker}
+				className="rounded-lg border border-border/70 bg-card px-4 py-5 text-sm"
+				role="status"
+			>
+				<p className="font-medium">{title}</p>
+				<p className="mt-1 text-muted-foreground">{message}</p>
+			</div>
+		</noscript>
+	)
+}
+
+function FixturesSquadStream({
+	promise,
+	teams,
+	fromGw,
+	horizon
+}: {
+	promise: Promise<PersonalSquadSeed>
+	teams: TeamFdrRow[]
+	fromGw: number
+	horizon: FdrHorizon
+}) {
+	const squad = use(promise)
+	const t = useTranslations('Fixtures')
+	const router = useRouter()
+	const shareRef = useRef<HTMLElement | null>(null)
+	const hasLinkedEntry = squad.state !== 'unbound'
+
+	return (
+		<div data-ssr-stream-content="fixtures-squad">
+			{squad.picks.length > 0 ? (
+				<div className="mb-3 flex justify-end">
+					<ShareActions
+						text={t('mySquadTitle')}
+						imageRef={shareRef}
+						title={t('mySquadTitle')}
+						actions={['image']}
+					/>
+				</div>
+			) : null}
+			<MySquadFdrDesk
+				picks={squad.picks}
+				teams={teams}
+				fromGw={fromGw}
+				horizon={horizon}
+				hasLinkedEntry={hasLinkedEntry}
+				squadState={squad.state}
+				shareRef={shareRef}
+			/>
+			{squad.state === 'unavailable' ? (
+				<button
+					type="button"
+					className="mt-3 text-sm underline"
+					onClick={() => router.refresh()}
+				>
+					{t('squadRetry')}
+				</button>
+			) : null}
+		</div>
+	)
+}
+
+function FixturesActionsStream({
+	marketSignalsPromise,
+	fixturesByEvent,
+	fromGw,
+	horizon,
+	knownTeams,
+	unknownEvents
+}: {
+	marketSignalsPromise: Promise<FixturePlanningMarketSignals>
+	fixturesByEvent: Map<number, FixturePlanningFixture[]>
+	fromGw: number
+	horizon: FdrHorizon
+	knownTeams: FdrTeamIdentity[]
+	unknownEvents: ReadonlySet<number>
+}) {
+	const marketSignals = use(marketSignalsPromise)
+	const { squad } = useFixturesSeed()
+	const t = useTranslations('Fixtures')
+	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
+	const model = useMemo(
+		() =>
+			buildFdrDeskModel(fixturesByEvent, {
+				fromGw,
+				horizon,
+				marketSignals,
+				knownTeams,
+				unknownEvents
+			}),
+		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
+	)
+	const filterByPos = useCallback(
+		(list: FdrReviewCandidate[]) => {
+			if (posFilter === 'ALL') return list
+			return list.filter(player => normalizePosition(player.position) === posFilter)
+		},
+		[posFilter]
+	)
+	const filteredCandidates = useMemo(
+		() => ({
+			differentialFavourable: filterByPos(
+				model.candidates.differentialFavourable
+			),
+			popularFavourable: filterByPos(model.candidates.popularFavourable),
+			popularDifficult: filterByPos(model.candidates.popularDifficult)
+		}),
+		[filterByPos, model.candidates]
+	)
+	const squadKeySet = useMemo(
+		() => new Set(squadPickKeys(squad?.picks ?? [])),
+		[squad]
+	)
+	const squadState = squad?.state
+	const bucketEmpty = (rawLen: number, filteredLen: number) =>
+		rawLen > 0 && filteredLen === 0
+			? t('bucketEmptyFiltered')
+			: t('bucketEmpty')
+
+	return (
+		<div data-ssr-stream-content="fixtures-actions">
+			<Card
+				role="region"
+				aria-labelledby="fdr-actions"
+				className="mb-8 p-4 sm:p-5"
+			>
+			<SectionHead
+				id="fdr-actions"
+				title={t('actionsTitle')}
+				hint={t('actionsHint')}
+			/>
+
+			<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<p className="mb-1.5 text-caption font-medium text-muted-foreground">
+						{t('actionsPosLabel')}
+					</p>
+					<div className="flex flex-wrap gap-1.5">
+						{(
+							[
+								['ALL', t('actionsPosAll')],
+								['GKP', 'GKP'],
+								['DEF', 'DEF'],
+								['MID', 'MID'],
+								['FWD', 'FWD']
+							] as const
+						).map(([id, label]) => (
+							<button
+								key={id}
+								type="button"
+								onClick={() => setPosFilter(id)}
+								className={cn(
+									'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+									posFilter === id
+										? 'border-success bg-success text-success-foreground'
+										: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
+								)}
+								aria-pressed={posFilter === id}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+				{squadKeySet.size === 0 && squad != null ? (
+					<p className="max-w-sm text-caption leading-4 text-muted-foreground">
+						{squadState === 'unavailable' ? (
+							t('actionsMySquadLoadFailed')
+						) : squadState === 'not-published' ? (
+							t('mySquadNotPublished')
+						) : (
+							<>
+								{t('actionsMySquadEmpty')}{' '}
+								<Link
+									href="/onboarding/bind-entry"
+									className="font-medium text-primary-ink underline-offset-2 hover:underline"
+								>
+									{t('actionsBindCta')}
+								</Link>
+							</>
+						)}
+					</p>
+				) : null}
+			</div>
+
+			<div className="grid gap-3 lg:grid-cols-3">
+				<ActionColumn
+					title={t('bucketDifferentialFavourable')}
+					hint={t('bucketDifferentialFavourableHint')}
+					icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
+					players={filteredCandidates.differentialFavourable}
+					empty={bucketEmpty(
+						model.candidates.differentialFavourable.length,
+						filteredCandidates.differentialFavourable.length
+					)}
+					tone="success"
+					squadKeys={squadKeySet}
+				/>
+				<ActionColumn
+					title={t('bucketPopularFavourable')}
+					hint={t('bucketPopularFavourableHint')}
+					icon={<Users className="size-3.5" aria-hidden="true" />}
+					players={filteredCandidates.popularFavourable}
+					empty={bucketEmpty(
+						model.candidates.popularFavourable.length,
+						filteredCandidates.popularFavourable.length
+					)}
+					tone="default"
+					squadKeys={squadKeySet}
+				/>
+				<ActionColumn
+					title={t('bucketPopularDifficult')}
+					hint={t('bucketPopularDifficultHint')}
+					icon={<TrendingDown className="size-3.5" aria-hidden="true" />}
+					players={filteredCandidates.popularDifficult}
+					empty={bucketEmpty(
+						model.candidates.popularDifficult.length,
+						filteredCandidates.popularDifficult.length
+					)}
+					tone="destructive"
+					squadKeys={squadKeySet}
+				/>
+			</div>
+			</Card>
+		</div>
+	)
+}
+
+function FixturesActionsFallback() {
+	const t = useTranslations('Fixtures')
+	return (
+		<>
+			<Card
+				role="region"
+				aria-labelledby="fdr-actions"
+				className="mb-8 p-4 sm:p-5"
+				data-ssr-stream-fallback="fixtures-actions"
+			>
+				<SectionHead
+					id="fdr-actions"
+					title={t('actionsTitle')}
+					hint={t('actionsHint')}
+				/>
+				<div
+					className="min-h-24 rounded-lg border border-border/60 bg-muted/10 px-3 py-5 text-center text-sm text-muted-foreground"
+					aria-busy="true"
+					role="status"
+				>
+					{t('actionsLoading')}
+				</div>
+			</Card>
+			<FixturesNoScriptResult
+				marker="fixtures-actions"
+				title={t('actionsTitle')}
+				message={t('actionsNoScriptHint')}
+			/>
+		</>
+	)
+}
+
+function FixturesSquadFallback() {
+	const t = useTranslations('Fixtures')
+	return (
+		<>
+			<div
+				data-ssr-stream-fallback="fixtures-squad"
+				className="min-h-48 animate-pulse rounded-lg bg-muted/40"
+				role="status"
+			>
+				{t('squadLoading')}
+			</div>
+			<FixturesNoScriptResult
+				marker="fixtures-squad"
+				title={t('mySquadTitle')}
+				message={t('squadNoScriptHint')}
+			/>
+		</>
+	)
+}
+
 export default function FixturesClient({
 	fromGw,
 	initialHorizon = DEFAULT_FDR_HORIZON,
 	initialFixturesByEvent,
 	initialUnknownEventIds = [],
-	marketSignals,
 	knownTeams,
-	mySquadKeys = [],
-	mySquadPicks = [],
-	hasLinkedEntry = false,
-	squadState = hasLinkedEntry ? 'not-published' : 'unbound'
+	squadPromise,
+	marketSignalsPromise
 }: {
 	fromGw: number
 	initialHorizon?: FdrHorizon
 	initialFixturesByEvent: Record<number, FixturePlanningFixture[]>
 	initialUnknownEventIds?: number[]
-	marketSignals: FixturePlanningMarketSignals | null
 	knownTeams: FdrTeamIdentity[]
-	mySquadKeys?: string[]
-	mySquadPicks?: SquadPickSeed[]
-	hasLinkedEntry?: boolean
-	squadState?: SquadLoadState
+	squadPromise: Promise<PersonalSquadSeed>
+	marketSignalsPromise: Promise<FixturePlanningMarketSignals>
 }) {
 	const t = useTranslations('Fixtures')
+	const { squad } = useFixturesSeed()
+	const mySquadPicks = useMemo(() => squad?.picks ?? [], [squad])
+	const mySquadKeys = useMemo(() => squadPickKeys(mySquadPicks), [mySquadPicks])
+	// Keep the unresolved seed distinct from a completed, unavailable read. The
+	const [squadOpen, setSquadOpen] = useState(false)
+	useEffect(() => {
+		const reveal = () => { if (window.location.hash === '#my-squad') setSquadOpen(true) }
+		reveal()
+		window.addEventListener('hashchange', reveal)
+		return () => window.removeEventListener('hashchange', reveal)
+	}, [])
 	const teamFdrShareRef = useRef<HTMLDivElement | null>(null)
-	const mySquadShareRef = useRef<HTMLElement | null>(null)
 
 	const [horizon, setHorizon] = useState<FdrHorizon>(initialHorizon)
 	const [pendingHorizon, setPendingHorizon] = useState<FdrHorizon | null>(null)
 	const [sort, setSort] = useState<'easiest' | 'hardest'>('easiest')
-	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState(false)
 	const [focusedTeamId, setFocusedTeamId] = useState<number | null>(null)
@@ -543,35 +846,11 @@ export default function FixturesClient({
 			buildFdrDeskModel(fixturesByEvent, {
 				fromGw,
 				horizon,
-				marketSignals,
 				knownTeams,
 				unknownEvents
 			}),
-		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
+		[fixturesByEvent, fromGw, horizon, knownTeams, unknownEvents]
 	)
-	const filterByPos = useCallback(
-		(list: FdrReviewCandidate[]) => {
-			if (posFilter === 'ALL') return list
-			return list.filter(p => normalizePosition(p.position) === posFilter)
-		},
-		[posFilter]
-	)
-
-	const filteredCandidates = useMemo(
-		() => ({
-			differentialFavourable: filterByPos(
-				model.candidates.differentialFavourable
-			),
-			popularFavourable: filterByPos(model.candidates.popularFavourable),
-			popularDifficult: filterByPos(model.candidates.popularDifficult)
-		}),
-		[filterByPos, model.candidates]
-	)
-
-	const bucketEmpty = (rawLen: number, filteredLen: number) =>
-		rawLen > 0 && filteredLen === 0
-			? t('bucketEmptyFiltered')
-			: t('bucketEmpty')
 
 	const best = model.easiest[0]
 	const worst = model.hardest[0]
@@ -775,37 +1054,27 @@ export default function FixturesClient({
 						)}
 					</section>
 
-					{/* My squad FDR */}
-					<Card
-						id="my-squad"
-						role="region"
-						aria-labelledby="my-squad-heading"
-						className="mb-8 scroll-mt-36 p-4 sm:p-5"
-					>
-						<SectionHead
-							id="my-squad-heading"
-							title={t('mySquadTitle')}
-							action={
-								mySquadPicks.length > 0 ? (
-									<ShareActions
-										text={t('mySquadTitle')}
-										imageRef={mySquadShareRef}
-										title={t('mySquadTitle')}
-										actions={['image']}
-									/>
-								) : null
-							}
-						/>
-						<MySquadFdrDesk
-							picks={mySquadPicks}
-							teams={model.teams}
-							fromGw={fromGw}
-							horizon={horizon}
-							hasLinkedEntry={hasLinkedEntry}
-							squadState={squadState}
-							shareRef={mySquadShareRef}
-						/>
-					</Card>
+					{/* Optional squad data never displaces the public matrix on arrival. */}
+					<details id="my-squad" open={squadOpen}
+						onToggle={event => setSquadOpen(event.currentTarget.open)}
+						className="mb-4 scroll-mt-36 rounded-lg border bg-card">
+						<summary className="flex h-12 cursor-pointer items-center justify-between gap-3 px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+							<span>{t('mySquadTitle')}</span>
+							<span className="truncate text-xs font-normal text-muted-foreground" aria-live="polite">
+								{t(squadOpen ? 'squadCollapse' : 'squadExpand')}
+							</span>
+						</summary>
+						<div className="border-t p-4 sm:p-5">
+							<Suspense fallback={<FixturesSquadFallback />}>
+								<FixturesSquadStream
+									promise={squadPromise}
+									teams={model.teams}
+									fromGw={fromGw}
+									horizon={horizon}
+								/>
+							</Suspense>
+						</div>
+					</details>
 
 					{/* Team FDR matrix */}
 					<Card
@@ -866,124 +1135,16 @@ export default function FixturesClient({
 					</Card>
 
 					{/* Neutral fixture review candidates */}
-					<Card
-						role="region"
-						aria-labelledby="fdr-actions"
-						className="mb-8 p-4 sm:p-5"
-					>
-						<SectionHead
-							id="fdr-actions"
-							title={t('actionsTitle')}
-							hint={t('actionsHint')}
+					<Suspense fallback={<FixturesActionsFallback />}>
+						<FixturesActionsStream
+							marketSignalsPromise={marketSignalsPromise}
+							fixturesByEvent={fixturesByEvent}
+							fromGw={fromGw}
+							horizon={horizon}
+							knownTeams={knownTeams}
+							unknownEvents={unknownEvents}
 						/>
-
-						<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<p className="mb-1.5 text-caption font-medium text-muted-foreground">
-									{t('actionsPosLabel')}
-								</p>
-								<div className="flex flex-wrap gap-1.5">
-									{(
-										[
-											['ALL', t('actionsPosAll')],
-											['GKP', 'GKP'],
-											['DEF', 'DEF'],
-											['MID', 'MID'],
-											['FWD', 'FWD']
-										] as const
-									).map(([id, label]) => (
-										<button
-											key={id}
-											type="button"
-											onClick={() => setPosFilter(id)}
-											className={cn(
-												'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-												posFilter === id
-													? 'border-success bg-success text-success-foreground'
-													: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
-											)}
-											aria-pressed={posFilter === id}
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							</div>
-							{squadKeySet.size === 0 ? (
-								<p className="max-w-sm text-caption leading-4 text-muted-foreground">
-									{squadState === 'unavailable' ? (
-										t('actionsMySquadLoadFailed')
-									) : squadState === 'not-published' ? (
-										t('mySquadNotPublished')
-									) : (
-										<>
-											{t('actionsMySquadEmpty')}{' '}
-											<Link
-												href="/onboarding/bind-entry"
-												className="font-medium text-primary-ink underline-offset-2 hover:underline"
-											>
-												{t('actionsBindCta')}
-											</Link>
-										</>
-									)}
-								</p>
-							) : null}
-						</div>
-
-						<div className="grid gap-3 lg:grid-cols-3">
-							<ActionColumn
-								title={t('bucketDifferentialFavourable')}
-								hint={t('bucketDifferentialFavourableHint')}
-								icon={
-									<TrendingUp
-										className="size-3.5"
-										aria-hidden="true"
-									/>
-								}
-								players={filteredCandidates.differentialFavourable}
-								empty={bucketEmpty(
-									model.candidates.differentialFavourable.length,
-									filteredCandidates.differentialFavourable.length
-								)}
-								tone="success"
-								squadKeys={squadKeySet}
-							/>
-							<ActionColumn
-								title={t('bucketPopularFavourable')}
-								hint={t('bucketPopularFavourableHint')}
-								icon={
-									<Users
-										className="size-3.5"
-										aria-hidden="true"
-									/>
-								}
-								players={filteredCandidates.popularFavourable}
-								empty={bucketEmpty(
-									model.candidates.popularFavourable.length,
-									filteredCandidates.popularFavourable.length
-								)}
-								tone="default"
-								squadKeys={squadKeySet}
-							/>
-							<ActionColumn
-								title={t('bucketPopularDifficult')}
-								hint={t('bucketPopularDifficultHint')}
-								icon={
-									<TrendingDown
-										className="size-3.5"
-										aria-hidden="true"
-									/>
-								}
-								players={filteredCandidates.popularDifficult}
-								empty={bucketEmpty(
-									model.candidates.popularDifficult.length,
-									filteredCandidates.popularDifficult.length
-								)}
-								tone="destructive"
-								squadKeys={squadKeySet}
-							/>
-						</div>
-					</Card>
+					</Suspense>
 				</div>
 			</PageShell>
 		</>
