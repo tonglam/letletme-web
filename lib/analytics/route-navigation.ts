@@ -235,22 +235,21 @@ export function measureRouteReadyDuration(
 	now = performance.now(),
 	documentStart = documentNavigationStart(),
 	readyKey?: string,
-	readyKeyKind: RouteReadyKeyKind = 'identity'
+	readyKeyKind: RouteReadyKeyKind = 'identity',
+	claimedBackgroundResumeStart?: number
 ): number | null {
 	// Keep keyed starts available while sibling readiness markers consume the
-	// same interaction. The owning marker cleanup releases the clock.
+	// same interaction. A marker that captured a background-resume clock keeps
+	// using that start even if a sibling consumes the pending global clock first.
 	const normalizedPathname = normalizePathname(pathname)
 	const pendingResumeStart =
 		!currentRouteNavigation &&
 		pendingBackgroundResume?.pathname === normalizedPathname
 			? pendingBackgroundResume.startedAt
 			: undefined
-	const start = routeReadyStartTime(
-		pathname,
-		documentStart,
-		readyKey,
-		readyKeyKind
-	)
+	const start =
+		claimedBackgroundResumeStart ??
+		routeReadyStartTime(pathname, documentStart, readyKey, readyKeyKind)
 	const measured = start === null ? null : Math.max(0, now - start)
 	if (pendingResumeStart !== undefined && start === pendingResumeStart) {
 		// Identity-keyed readiness markers may use the resume clock as their
@@ -258,10 +257,7 @@ export function measureRouteReadyDuration(
 		// only keyed interaction clocks remain available to sibling markers.
 		pendingBackgroundResume = null
 	}
-	if (
-		!readyKey &&
-		pendingBackgroundResume?.pathname === normalizedPathname
-	) {
+	if (!readyKey && pendingBackgroundResume?.pathname === normalizedPathname) {
 		pendingBackgroundResume = null
 	}
 	return measured

@@ -2,6 +2,7 @@ import {
 	normalizeMetricPage,
 	resolveWebVitalSource,
 	ROUTE_READY_METRIC_NAMES,
+	defaultMeasurementKind,
 	type PlayerStatsCacheStatus,
 	type AudienceHint
 } from '@/lib/analytics/web-vitals'
@@ -144,23 +145,6 @@ type RuntimeErrorAggregate = {
 const seenRuntimeErrorObjects = new WeakSet<object>()
 const runtimeErrorAggregates = new Map<string, RuntimeErrorAggregate>()
 const MAX_RUNTIME_ERROR_FINGERPRINT_LENGTH = 128
-const LEGACY_INTERACTION_METRIC_NAMES = new Set([
-	'MARKET_SEARCH_READY',
-	'MARKET_HISTORY_READY',
-	'MARKET_AVAILABILITY_READY',
-	'TRENDS_SWITCH_READY'
-])
-
-export function defaultMeasurementKind(
-	metricName: string,
-	interactionId?: string
-): ClientSignalMeasurementKind {
-	return interactionId ||
-		metricName === 'INP' ||
-		LEGACY_INTERACTION_METRIC_NAMES.has(metricName)
-		? 'interaction'
-		: 'initial_navigation'
-}
 
 type RuntimeErrorDimensions = Pick<
 	RuntimeErrorAggregate,
@@ -210,7 +194,7 @@ function surfaceForPage(page: string): ClientSignalSurface {
 	if (page.includes('/live/points') || page.includes('/live/competitions'))
 		return 'live_entry'
 	if (page.includes('/live/')) return 'live_match'
-	if (page.includes('price')) return 'price_changes'
+	if (page.includes('price') || page.includes('market')) return 'price_changes'
 	if (page.includes('player')) return 'player_stats'
 	if (page.includes('fixture')) return 'fixtures'
 	if (page.includes('my-fpl') || page.includes('my_fpl')) return 'my_fpl'
@@ -343,9 +327,9 @@ export function reportBrowserPerformanceMetric(
 				reasonCode:
 					metric.reasonCode ??
 					(metric.result ? reasonCodeForResult(metric.result) : 'none'),
-					measurementKind:
-						metric.measurementKind ??
-						defaultMeasurementKind(metric.name, metric.interactionId),
+				measurementKind:
+					metric.measurementKind ??
+					defaultMeasurementKind(metric.name, metric.interactionId),
 				samplingProbability: options.always ? 1 : getSampleRate(),
 				...(metric.navigationId === undefined
 					? {}

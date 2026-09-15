@@ -97,6 +97,8 @@ export function RouteReadyMarker({
 			readyKey,
 			readyKeyKind
 		)
+		const claimedBackgroundResumeStart =
+			measurementKind === 'background_resume' ? routeStartedAt : undefined
 		void (async () => {
 			const paintedAt = elementTiming
 				? await observeElementPaintTime(elementTiming, routeStartedAt)
@@ -111,7 +113,8 @@ export function RouteReadyMarker({
 				readyAt,
 				undefined,
 				readyKey,
-				readyKeyKind
+				readyKeyKind,
+				claimedBackgroundResumeStart
 			)
 			const value = measuredValue ?? 0
 			const missingStart = measuredValue === null

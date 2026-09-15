@@ -8,6 +8,7 @@ import {
 	markRouteReadyStart,
 	measureRouteReadyDuration,
 	routeReadyMeasurementKind,
+	routeReadyStartTime,
 	resetRouteNavigationStartForTests
 } from '@/lib/analytics/route-navigation'
 
@@ -188,17 +189,54 @@ describe('route ready navigation clock', () => {
 		const startedAt = performance.now()
 		markBackgroundResumeStart('/explore/fixtures', startedAt)
 		assert.equal(
-			measureRouteReadyDuration(
-				'/explore/fixtures',
-				startedAt + 450,
-				0,
-				'revision-1'
+			Math.round(
+				measureRouteReadyDuration(
+					'/explore/fixtures',
+					startedAt + 450,
+					0,
+					'revision-1'
+				) ?? Number.NaN
 			),
 			450
 		)
 		assert.equal(
 			routeReadyMeasurementKind('/explore/fixtures', 0, 'revision-2'),
 			'initial_navigation'
+		)
+	})
+
+	it('preserves a claimed resume clock for an overlapping marker', () => {
+		const startedAt = performance.now()
+		markBackgroundResumeStart('/explore/fixtures', startedAt)
+		const claimedStart = routeReadyStartTime(
+			'/explore/fixtures',
+			0,
+			'revision-1'
+		)
+		assert.equal(claimedStart, startedAt)
+		assert.equal(
+			routeReadyMeasurementKind('/explore/fixtures', 0, 'revision-1'),
+			'background_resume'
+		)
+		assert.equal(
+			Math.round(
+				measureRouteReadyDuration('/explore/fixtures', startedAt + 100, 0) ??
+					Number.NaN
+			),
+			100
+		)
+		assert.equal(
+			Math.round(
+				measureRouteReadyDuration(
+					'/explore/fixtures',
+					startedAt + 450,
+					0,
+					'revision-1',
+					'identity',
+					claimedStart ?? undefined
+				) ?? Number.NaN
+			),
+			450
 		)
 	})
 })

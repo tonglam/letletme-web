@@ -4,6 +4,7 @@ import {
 	PLAYER_STATS_CACHE_STATUSES,
 	type PlayerStatsCacheStatus
 } from '@/lib/analytics/performance-correlation'
+import type { ClientSignalMeasurementKind } from '@/lib/client-signal-contract'
 
 export const ROUTE_READY_METRIC_NAMES = new Set([
 	'FIXTURES_WINDOW_READY',
@@ -38,6 +39,12 @@ export const ROUTE_READY_METRIC_NAMES = new Set([
 	'TRENDS_DESK_READY',
 	'TRENDS_SWITCH_READY',
 	'SESSION_STATE_READY'
+])
+const LEGACY_INTERACTION_METRIC_NAMES = new Set([
+	'MARKET_SEARCH_READY',
+	'MARKET_HISTORY_READY',
+	'MARKET_AVAILABILITY_READY',
+	'TRENDS_SWITCH_READY'
 ])
 const WEB_VITAL_NAMES = new Set([
 	'CLS',
@@ -100,6 +107,17 @@ export type ClientRuntimePayload = {
 	page: string
 	device: 'mobile' | 'tablet' | 'desktop'
 	source: WebVitalSource
+}
+
+export function defaultMeasurementKind(
+	metricName: string,
+	interactionId?: string
+): ClientSignalMeasurementKind {
+	return interactionId ||
+		metricName === 'INP' ||
+		LEGACY_INTERACTION_METRIC_NAMES.has(metricName)
+		? 'interaction'
+		: 'initial_navigation'
 }
 
 const routePatterns: Array<[RegExp, string]> = [

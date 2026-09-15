@@ -2,6 +2,7 @@ import {
 	parseClientRuntimePayload,
 	parseWebVitalPayload,
 	ROUTE_READY_METRIC_NAMES,
+	defaultMeasurementKind,
 	type ClientRuntimePayload,
 	type WebVitalPayload
 } from '@/lib/analytics/web-vitals'
@@ -171,7 +172,7 @@ function surfaceForPage(page: string): ClientSignalSurface {
 	if (page.includes('/live/points')) return 'live_entry'
 	if (page.includes('/live/competitions')) return 'live_entry'
 	if (page.includes('/live/')) return 'live_match'
-	if (page.includes('price')) return 'price_changes'
+	if (page.includes('price') || page.includes('market')) return 'price_changes'
 	if (page.includes('player')) return 'player_stats'
 	if (page.includes('fixture')) return 'fixtures'
 	if (page.includes('my-fpl') || page.includes('my_fpl')) return 'my_fpl'
@@ -232,10 +233,10 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV2 | null {
 				sampleSource,
 				result: 'ok',
 				reasonCode: 'none',
-				measurementKind:
-					metric.interactionId || metric.name === 'INP'
-						? 'interaction'
-						: 'initial_navigation',
+				measurementKind: defaultMeasurementKind(
+					metric.name,
+					metric.interactionId
+				),
 				samplingProbability,
 				metricName: metric.name,
 				...(metric.navigationId === undefined
