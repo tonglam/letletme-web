@@ -44,10 +44,12 @@ type NoScriptPlayer = PlayerDirectorySeed['players'][number]
 
 function PlayerStatsNoScriptResult({
 	player,
-	playerId
+	playerId,
+	noScriptHint
 }: {
 	player: NoScriptPlayer | null
 	playerId: number
+	noScriptHint: string
 }) {
 	const t = useTranslations('PlayerStats')
 	const retryQuery = buildPlayerStatsQueryString({ p1: String(playerId) })
@@ -76,7 +78,7 @@ function PlayerStatsNoScriptResult({
 						{playerLabel}
 					</h2>
 					<p className="mt-2 text-sm text-muted-foreground">
-						{t('evidenceLoadFailed')}
+						{noScriptHint}
 					</p>
 					<a
 						href={retryHref}
@@ -105,12 +107,14 @@ export default function PlayerStatsClient({
 	initialPlayerIds,
 	directorySeed,
 	initialDeskSeedPromise,
-	navigationId
+	navigationId,
+	noScriptHint
 }: {
 	initialPlayerIds: { p1: number | null; p2: number | null }
 	directorySeed: PlayerDirectorySeed
 	initialDeskSeedPromise: Promise<PlayerStatsDeskResponse | null>
 	navigationId: string
+	noScriptHint: string
 }) {
 	const t = useTranslations('PlayerStats')
 	const [initialDeskSettled, setInitialDeskSettled] = useState(false)
@@ -634,6 +638,7 @@ export default function PlayerStatsClient({
 				<PlayerStatsNoScriptResult
 					player={initialDirectoryPlayer}
 					playerId={initialPlayerId}
+					noScriptHint={noScriptHint}
 				/>
 			) : null}
 			<div

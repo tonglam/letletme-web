@@ -3,6 +3,9 @@
 		"title": "LetLetMe — Fantasy Premier League 数据分析",
 		"description": "一站式查看 Fantasy Premier League 实时积分、球员分析和赛事工具。"
 	},
+	"NoScript": {
+		"playerStatsHint": "互动式球员详情需要启用 JavaScript；所选球员和区块摘要仍可查看。"
+	},
 	"PageMetadata": {
 		"forgotPasswordTitle": "重置密码",
 		"forgotPasswordDescription": "申请重置你的 LetLetMe 账户密码。",

@@ -3,6 +3,9 @@
 		"title": "LetLetMe — Fantasy Premier League analytics",
 		"description": "Fantasy Premier League live points, player analytics, and competition tools in one focused workspace."
 	},
+	"NoScript": {
+		"playerStatsHint": "Interactive player details require JavaScript. The selected player and section summaries remain available."
+	},
 	"PageMetadata": {
 		"forgotPasswordTitle": "Reset password",
 		"forgotPasswordDescription": "Request a password reset for your LetLetMe account.",

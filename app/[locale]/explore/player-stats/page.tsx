@@ -57,14 +57,16 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 	const translationPromise = timing.measure('translation', () =>
 		getTranslations('PlayerStats')
 	)
+	const noScriptTranslationPromise = getTranslations('NoScript')
 	const bootstrapResultPromise = bootstrapPromise.then(
 		value => ({ ok: true as const, value }),
 		error => ({ ok: false as const, error })
 	)
-	const [sp, bootstrapResult, t] = await Promise.all([
+	const [sp, bootstrapResult, t, noScript] = await Promise.all([
 		searchParams,
 		bootstrapResultPromise,
-		translationPromise
+		translationPromise,
+		noScriptTranslationPromise
 	])
 	if (!bootstrapResult.ok) {
 		if (!(bootstrapResult.error instanceof GraphQLRequestError)) {
@@ -172,6 +174,7 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 						initialPlayerIds={initialPlayerIds}
 						initialDeskSeedPromise={initialDeskSeedPromise}
 						navigationId={navigationId}
+						noScriptHint={noScript('playerStatsHint')}
 					/>
 					<Suspense fallback={null}>
 						<PersonalSeedStream seedPromise={personalSeedPromise} />
