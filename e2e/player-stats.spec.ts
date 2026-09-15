@@ -1,6 +1,18 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+function routeReadySamples(payloads: Array<Record<string, unknown>>) {
+	return payloads.flatMap(payload => {
+		const samples = payload.samples
+		return Array.isArray(samples)
+			? samples.filter(
+					(sample): sample is Record<string, unknown> =>
+						Boolean(sample) && typeof sample === 'object'
+				)
+			: []
+	})
+}
+
 test('player desk endpoint returns one cacheable batch and rejects invalid input', async ({
 	request
 }) => {
@@ -69,13 +81,13 @@ test('two-player deep link is server-seeded with zero browser desk requests', as
 	await expect(overall).toContainText('Palmer')
 	expect(deskRequests).toBe(0)
 	await expect
-		.poll(() =>
-			reportedVitals.some(metric => metric.name === 'PLAYER_DETAIL_READY')
-		)
-		.toBe(true)
-	await expect
-		.poll(() =>
-			reportedVitals.some(metric => metric.name === 'PLAYER_COMPARE_READY')
+		.poll(
+			() =>
+				routeReadySamples(reportedVitals).filter(
+					sample =>
+						sample.metric === 'route_ready_ms' &&
+						sample.surface === 'player_stats'
+				).length >= 2
 		)
 		.toBe(true)
 	expect(
