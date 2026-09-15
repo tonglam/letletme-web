@@ -952,7 +952,6 @@
 		"shareNone": "无",
 		"shareFooter": "{url}",
 		"loadingStats": "正在加载球员数据",
-		"noScriptHint": "互动式球员详情需要启用 JavaScript；上方仍保留所选球员和区块链接。",
 		"currentGameweekUnavailable": "暂时无法确认当前轮次。",
 		"loadFailed": "球员数据加载失败。",
 		"playerNotFound": "该球员不可用或链接已失效。",

@@ -76,7 +76,7 @@ function PlayerStatsNoScriptResult({
 						{playerLabel}
 					</h2>
 					<p className="mt-2 text-sm text-muted-foreground">
-						{t('noScriptHint')}
+						{t('evidenceLoadFailed')}
 					</p>
 					<a
 						href={retryHref}

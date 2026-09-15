@@ -952,7 +952,6 @@
 		"shareNone": "None",
 		"shareFooter": "{url}",
 		"loadingStats": "Loading player statistics",
-		"noScriptHint": "Interactive player details require JavaScript. The selected player and section links remain available above.",
 		"currentGameweekUnavailable": "The current gameweek is unavailable.",
 		"loadFailed": "Failed to load player data.",
 		"playerNotFound": "That player is unavailable or no longer valid.",

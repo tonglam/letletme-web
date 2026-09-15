@@ -216,10 +216,8 @@ describe('Home first-screen performance boundary', () => {
 
 	it('keeps the optional squad seed pending until its read resolves', () => {
 		assert.doesNotMatch(fixturesClient, /squad\?\.state \?\? 'unavailable'/)
-		assert.match(
-			fixturesClient,
-			/squad == null \? \(\s*t\('squadLoading'\)\s*\) : squadState === 'unavailable'/
-		)
+		assert.match(fixturesClient, /squadKeySet\.size === 0 && squad != null/)
+		assert.match(fixturesClient, /squadState === 'unavailable'/)
 	})
 
 	it('does not publish a canonical competition ready marker for a last-good board', () => {
