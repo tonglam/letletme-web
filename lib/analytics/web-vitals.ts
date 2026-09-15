@@ -5,10 +5,7 @@ import {
 	type PlayerStatsCacheStatus
 } from '@/lib/analytics/performance-correlation'
 
-const WEB_VITAL_NAMES = new Set([
-	'CLS',
-	'FCP',
-	'FID',
+export const ROUTE_READY_METRIC_NAMES = new Set([
 	'FIXTURES_WINDOW_READY',
 	'LIVE_MATCHDAY_READY',
 	'LIVE_MATCH_PLAYERS_READY',
@@ -19,9 +16,6 @@ const WEB_VITAL_NAMES = new Set([
 	'COMPETITIONS_CREATE_READY',
 	'COMPETITIONS_MANAGE_READY',
 	'GAMEWEEK_CONTENT_READY',
-	'INP',
-	'LCP',
-	'TTFB',
 	'HOME_PERSONAL_HYDRATED',
 	'HOME_TEAM_DESK_READY',
 	'HOME_LEAGUE_RANKS_READY',
@@ -44,6 +38,15 @@ const WEB_VITAL_NAMES = new Set([
 	'TRENDS_DESK_READY',
 	'TRENDS_SWITCH_READY',
 	'SESSION_STATE_READY'
+])
+const WEB_VITAL_NAMES = new Set([
+	'CLS',
+	'FCP',
+	'FID',
+	'INP',
+	'LCP',
+	'TTFB',
+	...Array.from(ROUTE_READY_METRIC_NAMES)
 ])
 const WEB_VITAL_RATINGS = new Set(['good', 'needs-improvement', 'poor'])
 const DEVICE_GROUPS = new Set(['mobile', 'tablet', 'desktop'])

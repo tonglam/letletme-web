@@ -1,6 +1,7 @@
 import {
 	normalizeMetricPage,
 	resolveWebVitalSource,
+	ROUTE_READY_METRIC_NAMES,
 	type PlayerStatsCacheStatus,
 	type AudienceHint
 } from '@/lib/analytics/web-vitals'
@@ -81,6 +82,16 @@ export function resolveNavigationId(
 
 export type BrowserPerformanceContext = PerformanceCorrelation
 
+function clientMetricForBrowserPerformance(
+	name: string
+): ClientSignalMetric | null {
+	if (name === 'CLS') return 'cls'
+	if (name === 'LCP') return 'lcp_ms'
+	if (name === 'INP') return 'inp_ms'
+	if (ROUTE_READY_METRIC_NAMES.has(name)) return 'route_ready_ms'
+	return null
+}
+
 function sendBrowserPayload(payload: string): void {
 	if (navigator.sendBeacon) {
 		const accepted = navigator.sendBeacon(
@@ -111,6 +122,7 @@ let liveMatchSignalFlushTimer: ReturnType<typeof globalThis.setTimeout> | null =
 	null
 const MAX_RUNTIME_ERROR_FINGERPRINTS = 32
 const RUNTIME_ERROR_DEDUPE_WINDOW_MS = 60_000
+const MAX_RUNTIME_ERROR_OCCURRENCES_PER_SAMPLE = 1_000
 const FIRST_PARTY_BUILD_HOSTS = new Set([
 	'letletme.top',
 	'www.letletme.top',
@@ -123,7 +135,7 @@ type RuntimeErrorAggregate = {
 	surface: ClientSignalSurface
 	deviceGroup: ClientSignalDeviceGroup
 	sampleSource: ClientSignalSampleSource
-	firstObservedAt: string
+	firstObservedAt: string | null
 	lastObservedAt: string
 	occurrenceCount: number
 	reportedCount: number
@@ -287,6 +299,8 @@ export function reportBrowserPerformanceMetric(
 	options: { always?: boolean } = {}
 ): void {
 	if (!options.always && !shouldSample(metric.metricId, metric.page)) return
+	const clientMetric = clientMetricForBrowserPerformance(metric.name)
+	if (!clientMetric) return
 
 	const payload = JSON.stringify({
 		schemaVersion: 2,
@@ -298,14 +312,8 @@ export function reportBrowserPerformanceMetric(
 			{
 				observedAt: new Date().toISOString(),
 				surface: surfaceForPage(metric.page),
-				metric:
-					metric.name === 'CLS'
-						? 'cls'
-						: metric.name === 'LCP'
-							? 'lcp_ms'
-							: metric.name === 'INP'
-								? 'inp_ms'
-								: 'route_ready_ms',
+				metric: clientMetric,
+				metricName: metric.name,
 				deviceGroup: getDeviceGroup(),
 				sampleSource:
 					resolveWebVitalSource({
@@ -324,6 +332,15 @@ export function reportBrowserPerformanceMetric(
 						? 'interaction'
 						: 'initial_navigation'),
 				samplingProbability: options.always ? 1 : getSampleRate(),
+				...(metric.navigationId === undefined
+					? {}
+					: { navigationId: metric.navigationId }),
+				...(metric.interactionId === undefined
+					? {}
+					: { interactionId: metric.interactionId }),
+				...(metric.cacheStatus === undefined
+					? {}
+					: { cacheStatus: metric.cacheStatus }),
 				value: metric.value
 			}
 		]
@@ -337,35 +354,44 @@ function flushRuntimeErrorAggregate(aggregationKey: string): void {
 	aggregate.timer = null
 	const occurrenceCount = aggregate.occurrenceCount - aggregate.reportedCount
 	if (occurrenceCount <= 0) return
-	const firstObservedAt = aggregate.firstObservedAt
+	const firstObservedAt = aggregate.firstObservedAt ?? aggregate.lastObservedAt
 	aggregate.reportedCount = aggregate.occurrenceCount
-	const payload = JSON.stringify({
-		schemaVersion: 2,
-		batchId: crypto.randomUUID(),
-		client: 'web',
-		clientRelease: clientRelease(),
-		sentAt: new Date().toISOString(),
-		samples: [
-			{
-				observedAt: aggregate.lastObservedAt,
-				surface: aggregate.surface,
-				metric: 'runtime_error',
-				deviceGroup: aggregate.deviceGroup,
-				sampleSource: aggregate.sampleSource,
-				result: 'error',
-				reasonCode: 'unknown',
-				measurementKind: 'request',
-				samplingProbability: 1,
-				errorClass: aggregate.errorClass,
-				fingerprint: aggregate.fingerprint,
-				occurrenceCount,
-				firstObservedAt,
-				lastObservedAt: aggregate.lastObservedAt
-			}
-		]
-	})
-	sendBrowserPayload(payload)
-	aggregate.firstObservedAt = aggregate.lastObservedAt
+	for (
+		let remaining = occurrenceCount;
+		remaining > 0;
+		remaining -= MAX_RUNTIME_ERROR_OCCURRENCES_PER_SAMPLE
+	) {
+		const payload = JSON.stringify({
+			schemaVersion: 2,
+			batchId: crypto.randomUUID(),
+			client: 'web',
+			clientRelease: clientRelease(),
+			sentAt: new Date().toISOString(),
+			samples: [
+				{
+					observedAt: aggregate.lastObservedAt,
+					surface: aggregate.surface,
+					metric: 'runtime_error',
+					deviceGroup: aggregate.deviceGroup,
+					sampleSource: aggregate.sampleSource,
+					result: 'error',
+					reasonCode: 'unknown',
+					measurementKind: 'request',
+					samplingProbability: 1,
+					errorClass: aggregate.errorClass,
+					fingerprint: aggregate.fingerprint,
+					occurrenceCount: Math.min(
+						remaining,
+						MAX_RUNTIME_ERROR_OCCURRENCES_PER_SAMPLE
+					),
+					firstObservedAt,
+					lastObservedAt: aggregate.lastObservedAt
+				}
+			]
+		})
+		sendBrowserPayload(payload)
+	}
+	aggregate.firstObservedAt = null
 }
 
 function runtimeErrorBuildLocation(error: unknown): string {
@@ -396,31 +422,163 @@ function runtimeErrorBuildLocation(error: unknown): string {
 	return 'unknown'
 }
 
+function scheduleRuntimeErrorFlush(aggregationKey: string): void {
+	const aggregate = runtimeErrorAggregates.get(aggregationKey)
+	if (!aggregate || aggregate.timer) return
+	aggregate.timer = globalThis.setTimeout(
+		() => flushRuntimeErrorAggregate(aggregationKey),
+		1_000
+	)
+}
+
+function mergeRuntimeErrorCounts(
+	aggregate: RuntimeErrorAggregate,
+	occurrenceCount: number,
+	firstObservedAt: string,
+	lastObservedAt: string
+): void {
+	const hadPendingOccurrences =
+		aggregate.occurrenceCount > aggregate.reportedCount
+	const incomingFirst = Date.parse(firstObservedAt)
+	const existingFirst = aggregate.firstObservedAt
+	if (!hadPendingOccurrences || existingFirst === null) {
+		aggregate.firstObservedAt = firstObservedAt
+	} else if (Number.isFinite(incomingFirst)) {
+		const currentFirst = Date.parse(existingFirst)
+		if (!Number.isFinite(currentFirst) || incomingFirst < currentFirst) {
+			aggregate.firstObservedAt = firstObservedAt
+		}
+	}
+
+	const incomingLast = Date.parse(lastObservedAt)
+	const currentLast = Date.parse(aggregate.lastObservedAt)
+	if (Number.isFinite(incomingLast) && Number.isFinite(currentLast)) {
+		aggregate.lastObservedAt = new Date(
+			Math.max(incomingLast, currentLast)
+		).toISOString()
+	} else {
+		aggregate.lastObservedAt = lastObservedAt
+	}
+	aggregate.occurrenceCount += occurrenceCount
+}
+
+function runtimeErrorHasPendingOccurrences(
+	aggregate: RuntimeErrorAggregate
+): boolean {
+	return aggregate.occurrenceCount > aggregate.reportedCount
+}
+
+function runtimeErrorIsFlushed(aggregate: RuntimeErrorAggregate): boolean {
+	return (
+		aggregate.reportedCount > 0 && !runtimeErrorHasPendingOccurrences(aggregate)
+	)
+}
+
+function mergePendingRuntimeErrorIntoIncoming(
+	aggregate: RuntimeErrorAggregate,
+	occurrenceCount: number,
+	firstObservedAt: string,
+	lastObservedAt: string
+): {
+	occurrenceCount: number
+	firstObservedAt: string
+	lastObservedAt: string
+} {
+	if (!runtimeErrorHasPendingOccurrences(aggregate)) {
+		return { occurrenceCount, firstObservedAt, lastObservedAt }
+	}
+	const pendingCount = aggregate.occurrenceCount - aggregate.reportedCount
+	const aggregateFirst = aggregate.firstObservedAt
+	const incomingFirst = Date.parse(firstObservedAt)
+	const pendingFirst =
+		aggregateFirst === null ? Number.NaN : Date.parse(aggregateFirst)
+	const aggregateLast = Date.parse(aggregate.lastObservedAt)
+	const incomingLast = Date.parse(lastObservedAt)
+	return {
+		occurrenceCount: occurrenceCount + pendingCount,
+		firstObservedAt:
+			Number.isFinite(pendingFirst) &&
+			(!Number.isFinite(incomingFirst) || pendingFirst < incomingFirst)
+				? (aggregateFirst ?? firstObservedAt)
+				: firstObservedAt,
+		lastObservedAt:
+			Number.isFinite(aggregateLast) &&
+			(!Number.isFinite(incomingLast) || aggregateLast > incomingLast)
+				? aggregate.lastObservedAt
+				: lastObservedAt
+	}
+}
+
 function mergeRuntimeErrorIntoOther(
 	dimensions: RuntimeErrorDimensions,
 	occurrenceCount: number,
 	firstObservedAt: string,
 	lastObservedAt: string
-): void {
-	const now = Date.parse(lastObservedAt)
+): string {
 	const aggregationKey = runtimeErrorAggregationKey('runtime.other', dimensions)
 	const existing = runtimeErrorAggregates.get(aggregationKey)
-	if (
-		existing &&
-		Number.isFinite(now) &&
-		now - Date.parse(existing.lastObservedAt) < RUNTIME_ERROR_DEDUPE_WINDOW_MS
-	) {
-		existing.occurrenceCount += occurrenceCount
-		existing.firstObservedAt = new Date(
-			Math.min(
-				Date.parse(existing.firstObservedAt),
-				Date.parse(firstObservedAt)
-			)
-		).toISOString()
-		existing.lastObservedAt = new Date(
-			Math.max(Date.parse(existing.lastObservedAt), Date.parse(lastObservedAt))
-		).toISOString()
-		return
+	if (existing && !runtimeErrorIsFlushed(existing)) {
+		mergeRuntimeErrorCounts(
+			existing,
+			occurrenceCount,
+			firstObservedAt,
+			lastObservedAt
+		)
+		scheduleRuntimeErrorFlush(aggregationKey)
+		return aggregationKey
+	}
+	if (existing && runtimeErrorIsFlushed(existing)) {
+		if (existing.timer) globalThis.clearTimeout(existing.timer)
+		runtimeErrorAggregates.delete(aggregationKey)
+	}
+	if (runtimeErrorAggregates.size < MAX_RUNTIME_ERROR_FINGERPRINTS) {
+		runtimeErrorAggregates.set(aggregationKey, {
+			errorClass: 'other',
+			fingerprint: 'runtime.other',
+			...dimensions,
+			firstObservedAt,
+			lastObservedAt,
+			occurrenceCount,
+			reportedCount: 0,
+			timer: null
+		})
+		scheduleRuntimeErrorFlush(aggregationKey)
+		return aggregationKey
+	}
+
+	const existingOverflow = Array.from(runtimeErrorAggregates.entries()).find(
+		([, candidate]) =>
+			candidate.fingerprint === 'runtime.other' &&
+			!runtimeErrorIsFlushed(candidate)
+	)
+	if (existingOverflow) {
+		mergeRuntimeErrorCounts(
+			existingOverflow[1],
+			occurrenceCount,
+			firstObservedAt,
+			lastObservedAt
+		)
+		scheduleRuntimeErrorFlush(existingOverflow[0])
+		return existingOverflow[0]
+	}
+
+	const oldest =
+		Array.from(runtimeErrorAggregates.entries()).find(
+			([, candidate]) => candidate.fingerprint !== 'runtime.other'
+		) ?? runtimeErrorAggregates.entries().next().value
+	if (oldest) {
+		const [oldestKey, evicted] = oldest
+		const merged = mergePendingRuntimeErrorIntoIncoming(
+			evicted,
+			occurrenceCount,
+			firstObservedAt,
+			lastObservedAt
+		)
+		if (evicted.timer) globalThis.clearTimeout(evicted.timer)
+		runtimeErrorAggregates.delete(oldestKey)
+		occurrenceCount = merged.occurrenceCount
+		firstObservedAt = merged.firstObservedAt
+		lastObservedAt = merged.lastObservedAt
 	}
 	runtimeErrorAggregates.set(aggregationKey, {
 		errorClass: 'other',
@@ -432,6 +590,8 @@ function mergeRuntimeErrorIntoOther(
 		reportedCount: 0,
 		timer: null
 	})
+	scheduleRuntimeErrorFlush(aggregationKey)
+	return aggregationKey
 }
 
 /** Report controlled runtime-error dimensions; never serialize the thrown value. */
@@ -441,12 +601,17 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 		if (seenRuntimeErrorObjects.has(error)) return
 		seenRuntimeErrorObjects.add(error)
 	}
+	let errorName: unknown
+	if (error && typeof error === 'object') {
+		try {
+			errorName = 'name' in error ? error.name : undefined
+		} catch {
+			errorName = undefined
+		}
+	}
 	const errorClass =
-		error &&
-		typeof error === 'object' &&
-		'name' in error &&
-		typeof error.name === 'string'
-			? error.name.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || 'unknown'
+		typeof errorName === 'string'
+			? errorName.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || 'unknown'
 			: 'unknown'
 	const now = new Date().toISOString()
 	const page = normalizeMetricPage(window.location.pathname)
@@ -472,28 +637,8 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 		!runtimeErrorAggregates.has(aggregationKey) &&
 		runtimeErrorAggregates.size >= MAX_RUNTIME_ERROR_FINGERPRINTS
 	) {
-		const oldest = Array.from(runtimeErrorAggregates.entries()).find(
-			([, candidate]) => candidate.fingerprint !== 'runtime.other'
-		)
-		if (oldest) {
-			const [oldestKey, evicted] = oldest
-			const pendingCount = Math.max(
-				0,
-				evicted.occurrenceCount - evicted.reportedCount
-			)
-			if (pendingCount > 0) {
-				mergeRuntimeErrorIntoOther(
-					evicted,
-					pendingCount,
-					evicted.firstObservedAt,
-					evicted.lastObservedAt
-				)
-			}
-			if (evicted.timer) globalThis.clearTimeout(evicted.timer)
-			runtimeErrorAggregates.delete(oldestKey)
-		}
-		fingerprint = 'runtime.other'
-		aggregationKey = runtimeErrorAggregationKey(fingerprint, dimensions)
+		mergeRuntimeErrorIntoOther(dimensions, 1, now, now)
+		return
 	}
 	const aggregate = runtimeErrorAggregates.get(aggregationKey)
 	if (
@@ -501,11 +646,15 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 		Date.parse(now) - Date.parse(aggregate.lastObservedAt) <
 			RUNTIME_ERROR_DEDUPE_WINDOW_MS
 	) {
+		if (aggregate.occurrenceCount === aggregate.reportedCount) {
+			aggregate.firstObservedAt = now
+		}
 		aggregate.occurrenceCount += 1
 		aggregate.lastObservedAt = now
 	} else {
+		if (aggregate?.timer) globalThis.clearTimeout(aggregate.timer)
 		runtimeErrorAggregates.set(aggregationKey, {
-			errorClass: fingerprint === 'runtime.other' ? 'other' : errorClass,
+			errorClass: errorClass,
 			fingerprint,
 			...dimensions,
 			firstObservedAt: now,
@@ -515,11 +664,5 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 			timer: null
 		})
 	}
-	const current = runtimeErrorAggregates.get(aggregationKey)
-	if (!current?.timer) {
-		current!.timer = globalThis.setTimeout(
-			() => flushRuntimeErrorAggregate(aggregationKey),
-			1_000
-		)
-	}
+	scheduleRuntimeErrorFlush(aggregationKey)
 }

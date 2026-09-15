@@ -74,6 +74,8 @@ export type ClientSignalMeasurementKind =
 	| 'background_resume'
 	| 'missing_start'
 	| 'request'
+export type ClientSignalCacheStatus =
+	'hit' | 'miss' | 'stale' | 'bypass' | 'unknown'
 
 export const MIN_CLIENT_SIGNAL_SAMPLING_PROBABILITY = 0.0001
 
@@ -107,6 +109,10 @@ export type ClientSignalBatchV2 = {
 		reasonCode: ClientSignalReasonCode
 		measurementKind: ClientSignalMeasurementKind
 		samplingProbability: number
+		metricName?: string
+		navigationId?: string
+		interactionId?: string
+		cacheStatus?: ClientSignalCacheStatus
 		errorClass?: string
 		fingerprint?: string
 		occurrenceCount?: number
@@ -360,6 +366,15 @@ const V2_MEASUREMENT_KINDS = new Set<ClientSignalMeasurementKind>([
 	'missing_start',
 	'request'
 ])
+const V2_CACHE_STATUSES = new Set<ClientSignalCacheStatus>([
+	'hit',
+	'miss',
+	'stale',
+	'bypass',
+	'unknown'
+])
+const PERFORMANCE_CORRELATION_ID_PATTERN =
+	/^(?:nav|interaction|desk|metric)-[A-Za-z0-9_-]{8,52}$/
 
 /** Parse the additive v2 wire format. The client cannot provide ingestRelease. */
 export function parseClientSignalBatchV2(
@@ -400,6 +415,10 @@ export function parseClientSignalBatchV2(
 				'reasonCode',
 				'measurementKind',
 				'samplingProbability',
+				'metricName',
+				'navigationId',
+				'interactionId',
+				'cacheStatus',
 				'errorClass',
 				'fingerprint',
 				'occurrenceCount',
@@ -415,6 +434,16 @@ export function parseClientSignalBatchV2(
 			!isFixedValue(sample.result, RESULTS) ||
 			!isFixedValue(sample.reasonCode, V2_REASON_CODES) ||
 			!isFixedValue(sample.measurementKind, V2_MEASUREMENT_KINDS) ||
+			(sample.metricName !== undefined &&
+				!isSafeDiagnosticDimension(sample.metricName, 64)) ||
+			(sample.navigationId !== undefined &&
+				(typeof sample.navigationId !== 'string' ||
+					!PERFORMANCE_CORRELATION_ID_PATTERN.test(sample.navigationId))) ||
+			(sample.interactionId !== undefined &&
+				(typeof sample.interactionId !== 'string' ||
+					!PERFORMANCE_CORRELATION_ID_PATTERN.test(sample.interactionId))) ||
+			(sample.cacheStatus !== undefined &&
+				!isFixedValue(sample.cacheStatus, V2_CACHE_STATUSES)) ||
 			typeof sample.samplingProbability !== 'number' ||
 			!Number.isFinite(sample.samplingProbability) ||
 			sample.samplingProbability < MIN_CLIENT_SIGNAL_SAMPLING_PROBABILITY ||
@@ -482,6 +511,18 @@ export function parseClientSignalBatchV2(
 			reasonCode: sample.reasonCode,
 			measurementKind: sample.measurementKind,
 			samplingProbability: sample.samplingProbability,
+			...(sample.metricName === undefined
+				? {}
+				: { metricName: sample.metricName }),
+			...(sample.navigationId === undefined
+				? {}
+				: { navigationId: sample.navigationId }),
+			...(sample.interactionId === undefined
+				? {}
+				: { interactionId: sample.interactionId }),
+			...(sample.cacheStatus === undefined
+				? {}
+				: { cacheStatus: sample.cacheStatus }),
 			...(sample.errorClass === undefined
 				? {}
 				: { errorClass: sample.errorClass }),

@@ -1,6 +1,7 @@
 import {
 	parseClientRuntimePayload,
 	parseWebVitalPayload,
+	ROUTE_READY_METRIC_NAMES,
 	type ClientRuntimePayload,
 	type WebVitalPayload
 } from '@/lib/analytics/web-vitals'
@@ -182,7 +183,7 @@ function metricForWebVital(name: string): ClientSignalMetric | null {
 	if (name === 'LCP') return 'lcp_ms'
 	if (name === 'INP') return 'inp_ms'
 	if (name === 'CLS') return 'cls'
-	if (!['FCP', 'FID', 'TTFB'].includes(name)) return 'route_ready_ms'
+	if (ROUTE_READY_METRIC_NAMES.has(name)) return 'route_ready_ms'
 	return null
 }
 
@@ -236,6 +237,16 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV2 | null {
 						? 'interaction'
 						: 'initial_navigation',
 				samplingProbability,
+				metricName: metric.name,
+				...(metric.navigationId === undefined
+					? {}
+					: { navigationId: metric.navigationId }),
+				...(metric.interactionId === undefined
+					? {}
+					: { interactionId: metric.interactionId }),
+				...(metric.cacheStatus === undefined
+					? {}
+					: { cacheStatus: metric.cacheStatus }),
 				value: metric.value
 			}
 		]
