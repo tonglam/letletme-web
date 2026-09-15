@@ -90,9 +90,10 @@ export function loadPersonalSquadSeed(eventsPromise?: Promise<EventsResponse | n
 	return runSquadReadWithinBudget(async budget => {
 		if (!(await hasSessionCookieHint())) return { picks: [], state: 'unbound' }
 		squadReadOptions(budget)
-		const [identity, events] = await Promise.all([getVerifiedEntryContext(), eventsPromise ?? getCurrentAndNextEvents()])
-		squadReadOptions(budget)
+		const identity = await getVerifiedEntryContext()
 		if (!identity.session || identity.entryId == null) return { picks: [], state: 'unbound' }
+		squadReadOptions(budget)
+		const events = await (eventsPromise ?? getCurrentAndNextEvents())
 		squadReadOptions(budget)
 		return loadEntrySquadPicks(identity.session, identity.entryId, events, budget)
 	})

@@ -142,7 +142,7 @@ const summary = Object.fromEntries(
 			lcpMs: distribution(values.map(value => value.navigation), 'lcpMs'),
 			ttfbMs: distribution(values.map(value => value.navigation), 'ttfbMs'),
 			htmlResponseMs: distribution(values.map(value => value.navigation), 'htmlResponseMs'),
-			observedLongTaskBlockingMs: distribution(values.map(value => value.navigation), 'observedLongTaskBlockingMs'),
+			observedLongTaskBlockingMs: distribution(values, 'observedLongTaskBlockingMs'),
 			cls: distribution(values.map(value => value.navigation), 'cls'),
 			initialRequests: values.map(value => value.initialRequests),
 			rscPrefetches: values.map(value => value.rscPrefetches),
