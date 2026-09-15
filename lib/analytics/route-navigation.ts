@@ -12,6 +12,8 @@ export type RouteReadyMeasurementKind =
 	| 'background_resume'
 	| 'missing_start'
 
+export type RouteReadyKeyKind = 'identity' | 'interaction'
+
 let currentRouteNavigation: RouteNavigationStart | null = null
 let pendingBackgroundResume: BackgroundResumeStart | null = null
 const readyInteractionStarts = new Map<string, number>()
@@ -171,15 +173,17 @@ export function nextPaintOpportunityTime(timeoutMs = 250): Promise<number> {
 export function routeReadyStartTime(
 	pathname: string,
 	documentStart = documentNavigationStart(),
-	readyKey?: string
+	readyKey?: string,
+	readyKeyKind: RouteReadyKeyKind = 'identity'
 ): number | null {
 	if (readyKey) {
 		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
 		const interactionStart = readyInteractionStarts.get(interactionKey)
 		if (interactionStart !== undefined) return interactionStart
-		// An explicitly keyed marker belongs to its interaction. Never reuse a
-		// navigation or document clock when that interaction start is absent.
-		return null
+		// A report identity is not itself an interaction clock. Only an explicitly
+		// declared interaction key treats a missing start as unavailable; identity
+		// keys continue to use the applicable navigation/document context.
+		if (readyKeyKind === 'interaction') return null
 	}
 	if (currentRouteNavigation) {
 		return currentRouteNavigation.pathname === normalizePathname(pathname)
@@ -201,12 +205,13 @@ export function routeReadyStartTime(
 export function routeReadyMeasurementKind(
 	pathname: string,
 	documentStart = documentNavigationStart(),
-	readyKey?: string
+	readyKey?: string,
+	readyKeyKind: RouteReadyKeyKind = 'identity'
 ): RouteReadyMeasurementKind {
 	if (readyKey) {
 		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
 		if (readyInteractionStarts.has(interactionKey)) return 'interaction'
-		return 'missing_start'
+		if (readyKeyKind === 'interaction') return 'missing_start'
 	}
 	if (currentRouteNavigation?.pathname === normalizePathname(pathname)) {
 		return 'in_page_navigation'
@@ -229,14 +234,17 @@ export function measureRouteReadyDuration(
 	pathname: string,
 	now = performance.now(),
 	documentStart = documentNavigationStart(),
-	readyKey?: string
+	readyKey?: string,
+	readyKeyKind: RouteReadyKeyKind = 'identity'
 ): number | null {
-	const start = routeReadyStartTime(pathname, documentStart, readyKey)
-	if (readyKey) {
-		readyInteractionStarts.delete(
-			`${normalizePathname(pathname)}\u0000${readyKey}`
-		)
-	}
+	// Keep keyed starts available while sibling readiness markers consume the
+	// same interaction. The owning marker cleanup releases the clock.
+	const start = routeReadyStartTime(
+		pathname,
+		documentStart,
+		readyKey,
+		readyKeyKind
+	)
 	const measured = start === null ? null : Math.max(0, now - start)
 	if (
 		!readyKey &&

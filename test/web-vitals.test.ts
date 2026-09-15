@@ -10,6 +10,7 @@ import {
 import {
 	parseClientSignalBatch,
 	parseClientSignalBatchV2,
+	normalizeClientSignalSamplingProbability,
 	withServerRelease,
 	withServerReleaseV2
 } from '../lib/client-signal-contract'
@@ -357,6 +358,8 @@ describe('privacy-safe web vitals', () => {
 			),
 			null
 		)
+		assert.equal(normalizeClientSignalSamplingProbability(0.00001, 1), 0.0001)
+		assert.equal(normalizeClientSignalSamplingProbability(0, 1), 0)
 	})
 
 	it('accepts the bounded Live Matches V3 client telemetry dimensions', () => {

@@ -115,12 +115,59 @@ describe('route ready navigation clock', () => {
 	it('does not fall back to a navigation clock for a missing interaction start', () => {
 		markRouteNavigationStart('/explore/market', 5_000, 'https://letletme.top/')
 		assert.equal(
-			measureRouteReadyDuration('/explore/market', 5_500, 0, 'search:missing'),
+			measureRouteReadyDuration(
+				'/explore/market',
+				5_500,
+				0,
+				'search:missing',
+				'interaction'
+			),
 			null
 		)
 		assert.equal(
-			routeReadyMeasurementKind('/explore/market', 0, 'search:missing'),
+			routeReadyMeasurementKind(
+				'/explore/market',
+				0,
+				'search:missing',
+				'interaction'
+			),
 			'missing_start'
+		)
+	})
+
+	it('uses navigation timing for an identity-only ready key', () => {
+		markRouteNavigationStart('/explore/market', 5_000, 'https://letletme.top/')
+		assert.equal(
+			measureRouteReadyDuration('/explore/market', 5_640, 0, 'revision-1'),
+			640
+		)
+		assert.equal(
+			routeReadyMeasurementKind('/explore/market', 0, 'revision-1'),
+			'in_page_navigation'
+		)
+	})
+
+	it('retains a keyed interaction clock for sibling readiness markers', () => {
+		markRouteReadyStart('/explore/player-stats', 900, 'detail:42')
+		assert.equal(
+			measureRouteReadyDuration(
+				'/explore/player-stats',
+				1_140,
+				0,
+				'detail:42',
+				'interaction'
+			),
+			240
+		)
+		assert.equal(
+			measureRouteReadyDuration(
+				'/explore/player-stats',
+				1_200,
+				0,
+				'detail:42',
+				'interaction'
+			),
+			300
 		)
 	})
 
@@ -131,6 +178,9 @@ describe('route ready navigation clock', () => {
 			'background_resume'
 		)
 		assert.equal(measureRouteReadyDuration('/explore/market', 3_450, 0), 450)
-		assert.equal(routeReadyMeasurementKind('/explore/market', 0), 'initial_navigation')
+		assert.equal(
+			routeReadyMeasurementKind('/explore/market', 0),
+			'initial_navigation'
+		)
 	})
 })

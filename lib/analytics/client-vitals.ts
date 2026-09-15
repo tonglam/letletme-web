@@ -9,17 +9,20 @@ import type {
 	ClientSignalBatchV2,
 	ClientSignalDeviceGroup,
 	ClientSignalMetric,
+	ClientSignalSampleSource,
 	ClientSignalResult,
 	ClientSignalReasonCode,
 	ClientSignalMeasurementKind,
 	ClientSignalSurface
 } from '@/lib/client-signal-contract'
+import { normalizeClientSignalSamplingProbability } from '@/lib/client-signal-contract'
 
 const getSampleRate = () => {
 	const configured = Number(process.env.NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE)
-	if (!Number.isFinite(configured))
-		return process.env.NODE_ENV === 'production' ? 0.25 : 1
-	return Math.min(1, Math.max(0, configured))
+	return normalizeClientSignalSamplingProbability(
+		configured,
+		process.env.NODE_ENV === 'production' ? 0.25 : 1
+	)
 }
 
 const getDeviceGroup = (): ClientSignalDeviceGroup => {
@@ -116,6 +119,10 @@ const FIRST_PARTY_BUILD_HOSTS = new Set([
 type RuntimeErrorAggregate = {
 	errorClass: string
 	fingerprint: string
+	page: string
+	surface: ClientSignalSurface
+	deviceGroup: ClientSignalDeviceGroup
+	sampleSource: ClientSignalSampleSource
 	firstObservedAt: string
 	lastObservedAt: string
 	occurrenceCount: number
@@ -124,6 +131,23 @@ type RuntimeErrorAggregate = {
 }
 const seenRuntimeErrorObjects = new WeakSet<object>()
 const runtimeErrorAggregates = new Map<string, RuntimeErrorAggregate>()
+const MAX_RUNTIME_ERROR_FINGERPRINT_LENGTH = 128
+
+type RuntimeErrorDimensions = Pick<
+	RuntimeErrorAggregate,
+	'page' | 'surface' | 'deviceGroup' | 'sampleSource'
+>
+
+const runtimeErrorAggregationKey = (
+	fingerprint: string,
+	dimensions: RuntimeErrorDimensions
+): string =>
+	[
+		fingerprint,
+		dimensions.page,
+		dimensions.deviceGroup,
+		dimensions.sampleSource
+	].join('\u0000')
 
 const liveMatchSignalMetric = (
 	view: 'HEAD' | 'FULL',
@@ -296,7 +320,9 @@ export function reportBrowserPerformanceMetric(
 					(metric.result ? reasonCodeForResult(metric.result) : 'none'),
 				measurementKind:
 					metric.measurementKind ??
-					(metric.interactionId ? 'interaction' : 'initial_navigation'),
+					(metric.interactionId || metric.name === 'INP'
+						? 'interaction'
+						: 'initial_navigation'),
 				samplingProbability: options.always ? 1 : getSampleRate(),
 				value: metric.value
 			}
@@ -305,12 +331,13 @@ export function reportBrowserPerformanceMetric(
 	sendBrowserPayload(payload)
 }
 
-function flushRuntimeErrorAggregate(fingerprint: string): void {
-	const aggregate = runtimeErrorAggregates.get(fingerprint)
+function flushRuntimeErrorAggregate(aggregationKey: string): void {
+	const aggregate = runtimeErrorAggregates.get(aggregationKey)
 	if (!aggregate) return
 	aggregate.timer = null
 	const occurrenceCount = aggregate.occurrenceCount - aggregate.reportedCount
 	if (occurrenceCount <= 0) return
+	const firstObservedAt = aggregate.firstObservedAt
 	aggregate.reportedCount = aggregate.occurrenceCount
 	const payload = JSON.stringify({
 		schemaVersion: 2,
@@ -321,16 +348,10 @@ function flushRuntimeErrorAggregate(fingerprint: string): void {
 		samples: [
 			{
 				observedAt: aggregate.lastObservedAt,
-				surface: surfaceForPage(normalizeMetricPage(window.location.pathname)),
+				surface: aggregate.surface,
 				metric: 'runtime_error',
-				deviceGroup: getDeviceGroup(),
-				sampleSource:
-					resolveWebVitalSource({
-						search: window.location.search,
-						webdriver: navigator.webdriver === true
-					}) === 'synthetic'
-						? 'synthetic'
-						: 'real',
+				deviceGroup: aggregate.deviceGroup,
+				sampleSource: aggregate.sampleSource,
 				result: 'error',
 				reasonCode: 'unknown',
 				measurementKind: 'request',
@@ -338,12 +359,13 @@ function flushRuntimeErrorAggregate(fingerprint: string): void {
 				errorClass: aggregate.errorClass,
 				fingerprint: aggregate.fingerprint,
 				occurrenceCount,
-				firstObservedAt: aggregate.firstObservedAt,
+				firstObservedAt,
 				lastObservedAt: aggregate.lastObservedAt
 			}
 		]
 	})
 	sendBrowserPayload(payload)
+	aggregate.firstObservedAt = aggregate.lastObservedAt
 }
 
 function runtimeErrorBuildLocation(error: unknown): string {
@@ -375,12 +397,14 @@ function runtimeErrorBuildLocation(error: unknown): string {
 }
 
 function mergeRuntimeErrorIntoOther(
+	dimensions: RuntimeErrorDimensions,
 	occurrenceCount: number,
 	firstObservedAt: string,
 	lastObservedAt: string
 ): void {
 	const now = Date.parse(lastObservedAt)
-	const existing = runtimeErrorAggregates.get('runtime.other')
+	const aggregationKey = runtimeErrorAggregationKey('runtime.other', dimensions)
+	const existing = runtimeErrorAggregates.get(aggregationKey)
 	if (
 		existing &&
 		Number.isFinite(now) &&
@@ -398,9 +422,10 @@ function mergeRuntimeErrorIntoOther(
 		).toISOString()
 		return
 	}
-	runtimeErrorAggregates.set('runtime.other', {
+	runtimeErrorAggregates.set(aggregationKey, {
 		errorClass: 'other',
 		fingerprint: 'runtime.other',
+		...dimensions,
 		firstObservedAt,
 		lastObservedAt,
 		occurrenceCount,
@@ -424,33 +449,53 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 			? error.name.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || 'unknown'
 			: 'unknown'
 	const now = new Date().toISOString()
-	let fingerprint = `runtime.${errorClass}.${runtimeErrorBuildLocation(error)}`
+	const page = normalizeMetricPage(window.location.pathname)
+	const dimensions: RuntimeErrorDimensions = {
+		page,
+		surface: surfaceForPage(page),
+		deviceGroup: getDeviceGroup(),
+		sampleSource:
+			resolveWebVitalSource({
+				search: window.location.search,
+				webdriver: navigator.webdriver === true
+			}) === 'synthetic'
+				? 'synthetic'
+				: 'real'
+	}
+	let fingerprint =
+		`runtime.${errorClass}.${runtimeErrorBuildLocation(error)}`.slice(
+			0,
+			MAX_RUNTIME_ERROR_FINGERPRINT_LENGTH
+		)
+	let aggregationKey = runtimeErrorAggregationKey(fingerprint, dimensions)
 	if (
-		!runtimeErrorAggregates.has(fingerprint) &&
+		!runtimeErrorAggregates.has(aggregationKey) &&
 		runtimeErrorAggregates.size >= MAX_RUNTIME_ERROR_FINGERPRINTS
 	) {
 		const oldest = Array.from(runtimeErrorAggregates.entries()).find(
-			([key]) => key !== 'runtime.other'
+			([, candidate]) => candidate.fingerprint !== 'runtime.other'
 		)
 		if (oldest) {
-			const [oldestFingerprint, evicted] = oldest
+			const [oldestKey, evicted] = oldest
 			const pendingCount = Math.max(
 				0,
 				evicted.occurrenceCount - evicted.reportedCount
 			)
 			if (pendingCount > 0) {
 				mergeRuntimeErrorIntoOther(
+					evicted,
 					pendingCount,
 					evicted.firstObservedAt,
 					evicted.lastObservedAt
 				)
 			}
 			if (evicted.timer) globalThis.clearTimeout(evicted.timer)
-			runtimeErrorAggregates.delete(oldestFingerprint)
+			runtimeErrorAggregates.delete(oldestKey)
 		}
 		fingerprint = 'runtime.other'
+		aggregationKey = runtimeErrorAggregationKey(fingerprint, dimensions)
 	}
-	const aggregate = runtimeErrorAggregates.get(fingerprint)
+	const aggregate = runtimeErrorAggregates.get(aggregationKey)
 	if (
 		aggregate &&
 		Date.parse(now) - Date.parse(aggregate.lastObservedAt) <
@@ -459,9 +504,10 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 		aggregate.occurrenceCount += 1
 		aggregate.lastObservedAt = now
 	} else {
-		runtimeErrorAggregates.set(fingerprint, {
+		runtimeErrorAggregates.set(aggregationKey, {
 			errorClass: fingerprint === 'runtime.other' ? 'other' : errorClass,
 			fingerprint,
+			...dimensions,
 			firstObservedAt: now,
 			lastObservedAt: now,
 			occurrenceCount: 1,
@@ -469,10 +515,10 @@ export function reportBrowserRuntimeError(error?: unknown): void {
 			timer: null
 		})
 	}
-	const current = runtimeErrorAggregates.get(fingerprint)
+	const current = runtimeErrorAggregates.get(aggregationKey)
 	if (!current?.timer) {
 		current!.timer = globalThis.setTimeout(
-			() => flushRuntimeErrorAggregate(fingerprint),
+			() => flushRuntimeErrorAggregate(aggregationKey),
 			1_000
 		)
 	}

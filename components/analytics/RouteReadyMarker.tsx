@@ -8,7 +8,8 @@ import {
 	observeElementPaintTime,
 	clearRouteReadyStart,
 	routeReadyMeasurementKind,
-	routeReadyStartTime
+	routeReadyStartTime,
+	type RouteReadyKeyKind
 } from '@/lib/analytics/route-navigation'
 import {
 	normalizeMetricPage,
@@ -54,6 +55,7 @@ export function RouteReadyMarker({
 	name,
 	ready = true,
 	readyKey,
+	readyKeyKind = 'identity',
 	elementTiming,
 	navigationId,
 	interactionId,
@@ -65,6 +67,7 @@ export function RouteReadyMarker({
 	name: ReadyMetricName
 	ready?: boolean
 	readyKey?: string
+	readyKeyKind?: RouteReadyKeyKind
 	elementTiming?: string
 	navigationId?: string
 	interactionId?: string
@@ -86,11 +89,13 @@ export function RouteReadyMarker({
 		// only as the observer's lower bound; it must never become a route-ready
 		// latency or be written into the normal distribution.
 		const routeStartedAt =
-			routeReadyStartTime(pathname, undefined, readyKey) ?? effectAt
+			routeReadyStartTime(pathname, undefined, readyKey, readyKeyKind) ??
+			effectAt
 		const measurementKind = routeReadyMeasurementKind(
 			pathname,
 			undefined,
-			readyKey
+			readyKey,
+			readyKeyKind
 		)
 		void (async () => {
 			const paintedAt = elementTiming
@@ -105,7 +110,8 @@ export function RouteReadyMarker({
 				pathname,
 				readyAt,
 				undefined,
-				readyKey
+				readyKey,
+				readyKeyKind
 			)
 			const value = measuredValue ?? 0
 			const missingStart = measuredValue === null
@@ -151,7 +157,8 @@ export function RouteReadyMarker({
 		poorMs,
 		ready,
 		readyIdentity,
-		readyKey
+		readyKey,
+		readyKeyKind
 	])
 
 	return null

@@ -18,6 +18,7 @@ import type {
 	ClientSignalMetric
 } from '@/lib/client-signal-contract'
 import {
+	normalizeClientSignalSamplingProbability,
 	parseClientSignalBatch,
 	parseClientSignalBatchV2,
 	withServerRelease,
@@ -185,6 +186,15 @@ function metricForWebVital(name: string): ClientSignalMetric | null {
 	return null
 }
 
+function legacyWebVitalSamplingProbability(name: string): number {
+	if (!['LCP', 'INP', 'CLS'].includes(name)) return 1
+	const configured = Number(process.env.NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE)
+	return normalizeClientSignalSamplingProbability(
+		configured,
+		process.env.NODE_ENV === 'production' ? 0.25 : 1
+	)
+}
+
 function signalSource(
 	source: WebVitalPayload['source'] | ClientRuntimePayload['source']
 ): 'real' | 'synthetic' | null {
@@ -197,6 +207,8 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV2 | null {
 	const metricName = metricForWebVital(metric.name)
 	const sampleSource = signalSource(metric.source)
 	if (!metricName || !sampleSource) return null
+	const samplingProbability = legacyWebVitalSamplingProbability(metric.name)
+	if (samplingProbability <= 0) return null
 	const deviceGroup: ClientSignalDeviceGroup =
 		metric.device === 'mobile' ||
 		metric.device === 'tablet' ||
@@ -219,10 +231,11 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV2 | null {
 				sampleSource,
 				result: 'ok',
 				reasonCode: 'none',
-				measurementKind: metric.interactionId
-					? 'interaction'
-					: 'initial_navigation',
-				samplingProbability: 1,
+				measurementKind:
+					metric.interactionId || metric.name === 'INP'
+						? 'interaction'
+						: 'initial_navigation',
+				samplingProbability,
 				value: metric.value
 			}
 		]

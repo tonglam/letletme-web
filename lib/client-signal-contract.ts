@@ -75,6 +75,20 @@ export type ClientSignalMeasurementKind =
 	| 'missing_start'
 	| 'request'
 
+export const MIN_CLIENT_SIGNAL_SAMPLING_PROBABILITY = 0.0001
+
+export function normalizeClientSignalSamplingProbability(
+	value: number,
+	fallback: number
+): number {
+	const candidate = Number.isFinite(value) ? value : fallback
+	if (candidate <= 0) return 0
+	return Math.min(
+		1,
+		Math.max(MIN_CLIENT_SIGNAL_SAMPLING_PROBABILITY, candidate)
+	)
+}
+
 export type ClientSignalBatchV2 = {
 	schemaVersion: 2
 	batchId: string
@@ -403,7 +417,7 @@ export function parseClientSignalBatchV2(
 			!isFixedValue(sample.measurementKind, V2_MEASUREMENT_KINDS) ||
 			typeof sample.samplingProbability !== 'number' ||
 			!Number.isFinite(sample.samplingProbability) ||
-			sample.samplingProbability < 0.0001 ||
+			sample.samplingProbability < MIN_CLIENT_SIGNAL_SAMPLING_PROBABILITY ||
 			sample.samplingProbability > 1 ||
 			(sample.value !== undefined && !NUMERIC_METRICS.has(sample.metric)) ||
 			(sample.value !== undefined &&
