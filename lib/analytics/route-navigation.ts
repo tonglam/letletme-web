@@ -3,7 +3,17 @@ type RouteNavigationStart = {
 	startedAt: number
 }
 
+type BackgroundResumeStart = RouteNavigationStart
+
+export type RouteReadyMeasurementKind =
+	| 'initial_navigation'
+	| 'in_page_navigation'
+	| 'interaction'
+	| 'background_resume'
+	| 'missing_start'
+
 let currentRouteNavigation: RouteNavigationStart | null = null
+let pendingBackgroundResume: BackgroundResumeStart | null = null
 const readyInteractionStarts = new Map<string, number>()
 
 type ElementPaintEntry = {
@@ -41,6 +51,7 @@ export function markRouteNavigationStart(
 	baseHref = window.location.href
 ): void {
 	try {
+		pendingBackgroundResume = null
 		markRouteReadyStart(new URL(url, baseHref).pathname, startedAt)
 	} catch {
 		// Instrumentation must never interfere with navigation.
@@ -48,10 +59,24 @@ export function markRouteNavigationStart(
 	}
 }
 
-function documentNavigationStart(): number {
+/** Starts a clock for content that becomes ready after a background resume. */
+export function markBackgroundResumeStart(
+	pathname: string,
+	startedAt = performance.now()
+): void {
+	// A visibility resume starts a fresh measurement context. A stale route
+	// navigation clock must not win classification for the resumed page.
+	currentRouteNavigation = null
+	pendingBackgroundResume = {
+		pathname: normalizePathname(pathname),
+		startedAt
+	}
+}
+
+function documentNavigationStart(): number | null {
 	const entry = performance.getEntriesByType('navigation')[0] as
 		PerformanceNavigationTiming | undefined
-	return entry?.startTime ?? 0
+	return entry?.startTime ?? null
 }
 
 /** Returns the latest browser-recorded paint time for one annotated RSC element. */
@@ -147,15 +172,57 @@ export function routeReadyStartTime(
 	pathname: string,
 	documentStart = documentNavigationStart(),
 	readyKey?: string
-): number {
+): number | null {
 	if (readyKey) {
 		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
 		const interactionStart = readyInteractionStarts.get(interactionKey)
 		if (interactionStart !== undefined) return interactionStart
+		// An explicitly keyed marker belongs to its interaction. Never reuse a
+		// navigation or document clock when that interaction start is absent.
+		return null
 	}
-	return currentRouteNavigation?.pathname === normalizePathname(pathname)
-		? currentRouteNavigation.startedAt
-		: documentStart
+	if (currentRouteNavigation) {
+		return currentRouteNavigation.pathname === normalizePathname(pathname)
+			? currentRouteNavigation.startedAt
+			: null
+	}
+	if (pendingBackgroundResume) {
+		if (
+			pendingBackgroundResume.pathname === normalizePathname(pathname) &&
+			performance.now() - pendingBackgroundResume.startedAt <= 60_000
+		)
+			return pendingBackgroundResume.startedAt
+		pendingBackgroundResume = null
+	}
+	return documentStart
+}
+
+/** Classify the clock without putting missing starts into the latency distribution. */
+export function routeReadyMeasurementKind(
+	pathname: string,
+	documentStart = documentNavigationStart(),
+	readyKey?: string
+): RouteReadyMeasurementKind {
+	if (readyKey) {
+		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
+		if (readyInteractionStarts.has(interactionKey)) return 'interaction'
+		return 'missing_start'
+	}
+	if (currentRouteNavigation?.pathname === normalizePathname(pathname)) {
+		return 'in_page_navigation'
+	}
+	if (pendingBackgroundResume) {
+		if (
+			pendingBackgroundResume.pathname === normalizePathname(pathname) &&
+			performance.now() - pendingBackgroundResume.startedAt <= 60_000
+		)
+			return 'background_resume'
+		pendingBackgroundResume = null
+	}
+	if (!currentRouteNavigation && documentStart !== null) {
+		return 'initial_navigation'
+	}
+	return 'missing_start'
 }
 
 export function measureRouteReadyDuration(
@@ -163,14 +230,35 @@ export function measureRouteReadyDuration(
 	now = performance.now(),
 	documentStart = documentNavigationStart(),
 	readyKey?: string
-): number {
-	return Math.max(
-		0,
-		now - routeReadyStartTime(pathname, documentStart, readyKey)
+): number | null {
+	const start = routeReadyStartTime(pathname, documentStart, readyKey)
+	if (readyKey) {
+		readyInteractionStarts.delete(
+			`${normalizePathname(pathname)}\u0000${readyKey}`
+		)
+	}
+	const measured = start === null ? null : Math.max(0, now - start)
+	if (
+		!readyKey &&
+		pendingBackgroundResume?.pathname === normalizePathname(pathname)
+	) {
+		pendingBackgroundResume = null
+	}
+	return measured
+}
+
+export function clearRouteReadyStart(
+	pathname: string,
+	readyKey?: string
+): void {
+	if (!readyKey) return
+	readyInteractionStarts.delete(
+		`${normalizePathname(pathname)}\u0000${readyKey}`
 	)
 }
 
 export function resetRouteNavigationStartForTests(): void {
 	currentRouteNavigation = null
+	pendingBackgroundResume = null
 	readyInteractionStarts.clear()
 }

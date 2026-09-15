@@ -9,7 +9,9 @@ import {
 } from '../lib/analytics/web-vitals'
 import {
 	parseClientSignalBatch,
-	withServerRelease
+	parseClientSignalBatchV2,
+	withServerRelease,
+	withServerReleaseV2
 } from '../lib/client-signal-contract'
 import { isTrustedSameSiteRequest } from '../lib/request-origin'
 
@@ -294,6 +296,65 @@ describe('privacy-safe web vitals', () => {
 		)
 		assert.equal(
 			parseClientSignalBatch({ ...batch, batchId: 'not-a-uuid' }, now),
+			null
+		)
+	})
+
+	it('accepts v2 diagnostics and fills ingest release only at the server boundary', () => {
+		const now = Date.parse('2026-08-27T00:00:00.000Z')
+		const batch = {
+			schemaVersion: 2,
+			batchId: '2b37a101-8f28-47ce-8c83-d5749a2f3ce7',
+			client: 'web',
+			clientRelease: 'web-build-abc123',
+			sentAt: '2026-08-27T00:00:00.000Z',
+			samples: [
+				{
+					observedAt: '2026-08-26T23:59:00.000Z',
+					surface: 'home',
+					metric: 'runtime_error',
+					deviceGroup: 'desktop',
+					sampleSource: 'real',
+					result: 'error',
+					reasonCode: 'unknown',
+					measurementKind: 'request',
+					samplingProbability: 1,
+					errorClass: 'TypeError',
+					fingerprint: 'runtime.TypeError.unknown',
+					occurrenceCount: 3,
+					firstObservedAt: '2026-08-26T23:58:00.000Z',
+					lastObservedAt: '2026-08-26T23:59:00.000Z'
+				}
+			]
+		} as const
+		const parsed = parseClientSignalBatchV2(batch, now)
+		assert.equal(parsed?.ingestRelease, 'unknown')
+		assert.equal(parsed?.samples[0]?.occurrenceCount, 3)
+		assert.deepEqual(withServerReleaseV2(parsed!, 'web-server-sha'), {
+			...parsed,
+			ingestRelease: 'web-server-sha'
+		})
+		assert.equal(
+			parseClientSignalBatchV2(
+				{ ...batch, ingestRelease: 'forged-client-value' },
+				now
+			),
+			null
+		)
+		assert.equal(
+			parseClientSignalBatchV2(
+				{
+					...batch,
+					samples: [
+						{
+							...batch.samples[0],
+							occurrenceCount: 0,
+							message: 'secret'
+						}
+					]
+				},
+				now
+			),
 			null
 		)
 	})

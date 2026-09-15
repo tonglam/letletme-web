@@ -6,10 +6,13 @@ import {
 } from '@/lib/analytics/web-vitals'
 import type { PerformanceCorrelation } from '@/lib/analytics/performance-correlation'
 import type {
-	ClientSignalBatchV1,
+	ClientSignalBatchV2,
 	ClientSignalDeviceGroup,
 	ClientSignalMetric,
-	ClientSignalResult
+	ClientSignalResult,
+	ClientSignalReasonCode,
+	ClientSignalMeasurementKind,
+	ClientSignalSurface
 } from '@/lib/client-signal-contract'
 
 const getSampleRate = () => {
@@ -58,6 +61,9 @@ export type BrowserPerformanceMetric = {
 	navigationId?: string
 	interactionId?: string
 	cacheStatus?: PlayerStatsCacheStatus
+	measurementKind?: ClientSignalMeasurementKind
+	result?: ClientSignalResult
+	reasonCode?: ClientSignalReasonCode
 }
 
 export function resolveNavigationId(
@@ -97,9 +103,27 @@ type LiveMatchClientSignalInput = {
 	revisionChanged?: boolean
 }
 
-const liveMatchSignalQueue: ClientSignalBatchV1['samples'] = []
+const liveMatchSignalQueue: ClientSignalBatchV2['samples'] = []
 let liveMatchSignalFlushTimer: ReturnType<typeof globalThis.setTimeout> | null =
 	null
+const MAX_RUNTIME_ERROR_FINGERPRINTS = 32
+const RUNTIME_ERROR_DEDUPE_WINDOW_MS = 60_000
+const FIRST_PARTY_BUILD_HOSTS = new Set([
+	'letletme.top',
+	'www.letletme.top',
+	'letletme-web.vercel.app'
+])
+type RuntimeErrorAggregate = {
+	errorClass: string
+	fingerprint: string
+	firstObservedAt: string
+	lastObservedAt: string
+	occurrenceCount: number
+	reportedCount: number
+	timer: ReturnType<typeof globalThis.setTimeout> | null
+}
+const seenRuntimeErrorObjects = new WeakSet<object>()
+const runtimeErrorAggregates = new Map<string, RuntimeErrorAggregate>()
 
 const liveMatchSignalMetric = (
 	view: 'HEAD' | 'FULL',
@@ -111,23 +135,48 @@ const liveMatchSignalMetric = (
 	return `${prefix}_result` as ClientSignalMetric
 }
 
+function clientRelease(): string {
+	const release =
+		document.documentElement.dataset.release ??
+		process.env.LETLETME_RELEASE_SHA ??
+		'unknown'
+	return release.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 128) || 'unknown'
+}
+
+function reasonCodeForResult(
+	result: ClientSignalResult
+): ClientSignalReasonCode {
+	if (result === 'auth_error') return 'auth'
+	if (result === 'timeout') return 'upstream_timeout'
+	if (result === 'unavailable') return 'unavailable'
+	return result === 'error' ? 'unknown' : 'none'
+}
+
+function surfaceForPage(page: string): ClientSignalSurface {
+	if (page.includes('/live/matches')) return 'live_matches'
+	if (page.includes('/live/points') || page.includes('/live/competitions'))
+		return 'live_entry'
+	if (page.includes('/live/')) return 'live_match'
+	if (page.includes('price')) return 'price_changes'
+	if (page.includes('player')) return 'player_stats'
+	if (page.includes('fixture')) return 'fixtures'
+	if (page.includes('my-fpl') || page.includes('my_fpl')) return 'my_fpl'
+	if (page === '/' || page.endsWith('/home')) return 'home'
+	return 'other'
+}
+
 function flushLiveMatchSignalQueue(): void {
 	liveMatchSignalFlushTimer = null
 	if (liveMatchSignalQueue.length === 0) return
 	const samples = liveMatchSignalQueue.splice(0, 50)
-	const release =
-		(document.documentElement.dataset.release ?? 'browser')
-			.replace(/[^A-Za-z0-9._-]/g, '-')
-			.slice(0, 64) || 'browser'
-	const batch: ClientSignalBatchV1 = {
-		schemaVersion: 1,
+	const batch: Omit<ClientSignalBatchV2, 'ingestRelease'> = {
+		schemaVersion: 2,
 		batchId: crypto.randomUUID(),
 		client: 'web',
-		release,
+		clientRelease: clientRelease(),
 		sentAt: new Date().toISOString(),
 		samples: samples.map(sample => ({
-			...sample,
-			observedAt: sample.observedAt
+			...sample
 		}))
 	}
 	sendBrowserPayload(JSON.stringify(batch))
@@ -170,6 +219,9 @@ export function reportLiveMatchClientSignal(
 			deviceGroup,
 			sampleSource,
 			result,
+			reasonCode: reasonCodeForResult(result),
+			measurementKind: 'request',
+			samplingProbability: 1,
 			...(value === undefined ? {} : { value })
 		})
 	}
@@ -213,26 +265,215 @@ export function reportBrowserPerformanceMetric(
 	if (!options.always && !shouldSample(metric.metricId, metric.page)) return
 
 	const payload = JSON.stringify({
-		...metric,
-		device: getDeviceGroup(),
-		source: resolveWebVitalSource({
-			search: window.location.search,
-			webdriver: navigator.webdriver === true
-		})
+		schemaVersion: 2,
+		batchId: crypto.randomUUID(),
+		client: 'web',
+		clientRelease: clientRelease(),
+		sentAt: new Date().toISOString(),
+		samples: [
+			{
+				observedAt: new Date().toISOString(),
+				surface: surfaceForPage(metric.page),
+				metric:
+					metric.name === 'CLS'
+						? 'cls'
+						: metric.name === 'LCP'
+							? 'lcp_ms'
+							: metric.name === 'INP'
+								? 'inp_ms'
+								: 'route_ready_ms',
+				deviceGroup: getDeviceGroup(),
+				sampleSource:
+					resolveWebVitalSource({
+						search: window.location.search,
+						webdriver: navigator.webdriver === true
+					}) === 'synthetic'
+						? 'synthetic'
+						: 'real',
+				result: metric.result ?? 'ok',
+				reasonCode:
+					metric.reasonCode ??
+					(metric.result ? reasonCodeForResult(metric.result) : 'none'),
+				measurementKind:
+					metric.measurementKind ??
+					(metric.interactionId ? 'interaction' : 'initial_navigation'),
+				samplingProbability: options.always ? 1 : getSampleRate(),
+				value: metric.value
+			}
+		]
 	})
 	sendBrowserPayload(payload)
 }
 
-/** Report only a fixed runtime-error code; never serialize the thrown value. */
-export function reportBrowserRuntimeError(): void {
+function flushRuntimeErrorAggregate(fingerprint: string): void {
+	const aggregate = runtimeErrorAggregates.get(fingerprint)
+	if (!aggregate) return
+	aggregate.timer = null
+	const occurrenceCount = aggregate.occurrenceCount - aggregate.reportedCount
+	if (occurrenceCount <= 0) return
+	aggregate.reportedCount = aggregate.occurrenceCount
 	const payload = JSON.stringify({
-		kind: 'runtime_error',
-		page: normalizeMetricPage(window.location.pathname),
-		device: getDeviceGroup(),
-		source: resolveWebVitalSource({
-			search: window.location.search,
-			webdriver: navigator.webdriver === true
-		})
+		schemaVersion: 2,
+		batchId: crypto.randomUUID(),
+		client: 'web',
+		clientRelease: clientRelease(),
+		sentAt: new Date().toISOString(),
+		samples: [
+			{
+				observedAt: aggregate.lastObservedAt,
+				surface: surfaceForPage(normalizeMetricPage(window.location.pathname)),
+				metric: 'runtime_error',
+				deviceGroup: getDeviceGroup(),
+				sampleSource:
+					resolveWebVitalSource({
+						search: window.location.search,
+						webdriver: navigator.webdriver === true
+					}) === 'synthetic'
+						? 'synthetic'
+						: 'real',
+				result: 'error',
+				reasonCode: 'unknown',
+				measurementKind: 'request',
+				samplingProbability: 1,
+				errorClass: aggregate.errorClass,
+				fingerprint: aggregate.fingerprint,
+				occurrenceCount,
+				firstObservedAt: aggregate.firstObservedAt,
+				lastObservedAt: aggregate.lastObservedAt
+			}
+		]
 	})
 	sendBrowserPayload(payload)
+}
+
+function runtimeErrorBuildLocation(error: unknown): string {
+	if (!error || typeof error !== 'object' || !('stack' in error))
+		return 'unknown'
+	let stack: unknown
+	try {
+		stack = error.stack
+	} catch {
+		return 'unknown'
+	}
+	if (typeof stack !== 'string') return 'unknown'
+	// Read only a bounded prefix and accept known first-party URL/source roots.
+	// The raw stack, message, host, query and user paths never leave the page.
+	for (const line of stack.slice(0, 8_192).split(/\r?\n/)) {
+		const match = line.match(
+			/(?:^|[\s([{\"'])(?:https?:\/\/([^/\s]+))?\/((?:_next\/static|app|components|lib|src)\/[A-Za-z0-9._/\[\]-]+)/
+		)
+		if (!match) continue
+		const host = match[1]?.toLowerCase().replace(/:\d+$/, '')
+		if (host && !FIRST_PARTY_BUILD_HOSTS.has(host)) continue
+		const location = match[2]
+			.replace(/[^A-Za-z0-9._-]+/g, '.')
+			.replace(/^\.+|\.+$/g, '')
+			.slice(0, 80)
+		return location || 'unknown'
+	}
+	return 'unknown'
+}
+
+function mergeRuntimeErrorIntoOther(
+	occurrenceCount: number,
+	firstObservedAt: string,
+	lastObservedAt: string
+): void {
+	const now = Date.parse(lastObservedAt)
+	const existing = runtimeErrorAggregates.get('runtime.other')
+	if (
+		existing &&
+		Number.isFinite(now) &&
+		now - Date.parse(existing.lastObservedAt) < RUNTIME_ERROR_DEDUPE_WINDOW_MS
+	) {
+		existing.occurrenceCount += occurrenceCount
+		existing.firstObservedAt = new Date(
+			Math.min(
+				Date.parse(existing.firstObservedAt),
+				Date.parse(firstObservedAt)
+			)
+		).toISOString()
+		existing.lastObservedAt = new Date(
+			Math.max(Date.parse(existing.lastObservedAt), Date.parse(lastObservedAt))
+		).toISOString()
+		return
+	}
+	runtimeErrorAggregates.set('runtime.other', {
+		errorClass: 'other',
+		fingerprint: 'runtime.other',
+		firstObservedAt,
+		lastObservedAt,
+		occurrenceCount,
+		reportedCount: 0,
+		timer: null
+	})
+}
+
+/** Report controlled runtime-error dimensions; never serialize the thrown value. */
+export function reportBrowserRuntimeError(error?: unknown): void {
+	if (typeof window === 'undefined' || typeof navigator === 'undefined') return
+	if (error && typeof error === 'object') {
+		if (seenRuntimeErrorObjects.has(error)) return
+		seenRuntimeErrorObjects.add(error)
+	}
+	const errorClass =
+		error &&
+		typeof error === 'object' &&
+		'name' in error &&
+		typeof error.name === 'string'
+			? error.name.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || 'unknown'
+			: 'unknown'
+	const now = new Date().toISOString()
+	let fingerprint = `runtime.${errorClass}.${runtimeErrorBuildLocation(error)}`
+	if (
+		!runtimeErrorAggregates.has(fingerprint) &&
+		runtimeErrorAggregates.size >= MAX_RUNTIME_ERROR_FINGERPRINTS
+	) {
+		const oldest = Array.from(runtimeErrorAggregates.entries()).find(
+			([key]) => key !== 'runtime.other'
+		)
+		if (oldest) {
+			const [oldestFingerprint, evicted] = oldest
+			const pendingCount = Math.max(
+				0,
+				evicted.occurrenceCount - evicted.reportedCount
+			)
+			if (pendingCount > 0) {
+				mergeRuntimeErrorIntoOther(
+					pendingCount,
+					evicted.firstObservedAt,
+					evicted.lastObservedAt
+				)
+			}
+			if (evicted.timer) globalThis.clearTimeout(evicted.timer)
+			runtimeErrorAggregates.delete(oldestFingerprint)
+		}
+		fingerprint = 'runtime.other'
+	}
+	const aggregate = runtimeErrorAggregates.get(fingerprint)
+	if (
+		aggregate &&
+		Date.parse(now) - Date.parse(aggregate.lastObservedAt) <
+			RUNTIME_ERROR_DEDUPE_WINDOW_MS
+	) {
+		aggregate.occurrenceCount += 1
+		aggregate.lastObservedAt = now
+	} else {
+		runtimeErrorAggregates.set(fingerprint, {
+			errorClass: fingerprint === 'runtime.other' ? 'other' : errorClass,
+			fingerprint,
+			firstObservedAt: now,
+			lastObservedAt: now,
+			occurrenceCount: 1,
+			reportedCount: 0,
+			timer: null
+		})
+	}
+	const current = runtimeErrorAggregates.get(fingerprint)
+	if (!current?.timer) {
+		current!.timer = globalThis.setTimeout(
+			() => flushRuntimeErrorAggregate(fingerprint),
+			1_000
+		)
+	}
 }

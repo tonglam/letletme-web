@@ -6,6 +6,8 @@ import {
 	measureRouteReadyDuration,
 	nextPaintOpportunityTime,
 	observeElementPaintTime,
+	clearRouteReadyStart,
+	routeReadyMeasurementKind,
 	routeReadyStartTime
 } from '@/lib/analytics/route-navigation'
 import {
@@ -80,7 +82,16 @@ export function RouteReadyMarker({
 		reportedIdentity.current = readyIdentity
 		let cancelled = false
 		const effectAt = performance.now()
-		const routeStartedAt = routeReadyStartTime(pathname, undefined, readyKey)
+		// A missing clock is reported as unavailable below. Use the effect time
+		// only as the observer's lower bound; it must never become a route-ready
+		// latency or be written into the normal distribution.
+		const routeStartedAt =
+			routeReadyStartTime(pathname, undefined, readyKey) ?? effectAt
+		const measurementKind = routeReadyMeasurementKind(
+			pathname,
+			undefined,
+			readyKey
+		)
 		void (async () => {
 			const paintedAt = elementTiming
 				? await observeElementPaintTime(elementTiming, routeStartedAt)
@@ -90,21 +101,23 @@ export function RouteReadyMarker({
 				paintedAt ??
 				(elementTiming ? await nextPaintOpportunityTime() : effectAt)
 			if (cancelled) return
-			const value = measureRouteReadyDuration(
+			const measuredValue = measureRouteReadyDuration(
 				pathname,
 				readyAt,
 				undefined,
 				readyKey
 			)
+			const value = measuredValue ?? 0
+			const missingStart = measuredValue === null
 			reportBrowserPerformanceMetric(
 				{
 					name,
 					value,
 					delta: value,
 					rating:
-						value <= goodMs
+						!missingStart && value <= goodMs
 							? 'good'
-							: value <= poorMs
+							: !missingStart && value <= poorMs
 								? 'needs-improvement'
 								: 'poor',
 					metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
@@ -112,13 +125,19 @@ export function RouteReadyMarker({
 					audienceHint,
 					navigationId,
 					interactionId,
-					cacheStatus
+					cacheStatus,
+					measurementKind,
+					result: missingStart ? 'unavailable' : 'ok',
+					reasonCode: missingStart ? 'unavailable' : 'none'
 				},
 				{ always: true }
 			)
 		})()
 		return () => {
 			cancelled = true
+			// A component can unmount before the marker resolves; release the
+			// interaction clock so a later mount cannot inherit a stale start.
+			clearRouteReadyStart(pathname, readyKey)
 		}
 	}, [
 		audienceHint,

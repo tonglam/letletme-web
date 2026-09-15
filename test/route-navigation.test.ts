@@ -4,8 +4,10 @@ import { afterEach, describe, it } from 'node:test'
 import {
 	findElementPaintTime,
 	markRouteNavigationStart,
+	markBackgroundResumeStart,
 	markRouteReadyStart,
 	measureRouteReadyDuration,
+	routeReadyMeasurementKind,
 	resetRouteNavigationStartForTests
 } from '@/lib/analytics/route-navigation'
 
@@ -78,7 +80,14 @@ describe('route ready navigation clock', () => {
 		markRouteNavigationStart('/explore/market', 5_000, 'https://letletme.top/')
 		assert.equal(
 			measureRouteReadyDuration('/profile/sessions', 7_000, 100),
-			6_900
+			null
+		)
+	})
+
+	it('marks a missing browser start instead of using the document lifetime', () => {
+		assert.equal(
+			measureRouteReadyDuration('/profile/sessions', 7_000, null),
+			null
 		)
 	})
 
@@ -101,5 +110,27 @@ describe('route ready navigation clock', () => {
 			measureRouteReadyDuration('/explore/market', 1_350, 0, 'history:13'),
 			250
 		)
+	})
+
+	it('does not fall back to a navigation clock for a missing interaction start', () => {
+		markRouteNavigationStart('/explore/market', 5_000, 'https://letletme.top/')
+		assert.equal(
+			measureRouteReadyDuration('/explore/market', 5_500, 0, 'search:missing'),
+			null
+		)
+		assert.equal(
+			routeReadyMeasurementKind('/explore/market', 0, 'search:missing'),
+			'missing_start'
+		)
+	})
+
+	it('keeps a background resume separate from navigation timing', () => {
+		markBackgroundResumeStart('/explore/market', 3_000)
+		assert.equal(
+			routeReadyMeasurementKind('/explore/market', 0),
+			'background_resume'
+		)
+		assert.equal(measureRouteReadyDuration('/explore/market', 3_450, 0), 450)
+		assert.equal(routeReadyMeasurementKind('/explore/market', 0), 'initial_navigation')
 	})
 })

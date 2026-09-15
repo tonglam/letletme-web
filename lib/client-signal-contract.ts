@@ -57,12 +57,64 @@ export type ClientSignalBatchV1 = {
 	}>
 }
 
+export type ClientSignalReasonCode =
+	| 'none'
+	| 'auth'
+	| 'validation'
+	| 'rate_limit'
+	| 'client_abort'
+	| 'upstream_timeout'
+	| 'connection'
+	| 'unavailable'
+	| 'unknown'
+export type ClientSignalMeasurementKind =
+	| 'initial_navigation'
+	| 'in_page_navigation'
+	| 'interaction'
+	| 'background_resume'
+	| 'missing_start'
+	| 'request'
+
+export type ClientSignalBatchV2 = {
+	schemaVersion: 2
+	batchId: string
+	client: ClientSignalClient
+	clientRelease: string
+	/** Filled by the trusted Web boundary before forwarding to Data. */
+	ingestRelease: string
+	sentAt: string
+	samples: Array<{
+		observedAt: string
+		surface: ClientSignalSurface
+		metric: ClientSignalMetric
+		deviceGroup: ClientSignalDeviceGroup
+		sampleSource: ClientSignalSampleSource
+		result: ClientSignalResult
+		reasonCode: ClientSignalReasonCode
+		measurementKind: ClientSignalMeasurementKind
+		samplingProbability: number
+		errorClass?: string
+		fingerprint?: string
+		occurrenceCount?: number
+		firstObservedAt?: string
+		lastObservedAt?: string
+		value?: number
+	}>
+}
+
 /** Replace the client-provided rollout label at a trusted server boundary. */
 export function withServerRelease(
 	batch: ClientSignalBatchV1,
 	release: string
 ): ClientSignalBatchV1 {
 	return { ...batch, release }
+}
+
+export function withServerReleaseV2(
+	batch: ClientSignalBatchV2,
+	release: string
+): ClientSignalBatchV2 {
+	return { ...batch, ingestRelease: release }
 }
 
 const CLIENTS = new Set<ClientSignalClient>(['web', 'wechat_miniprogram'])
@@ -159,6 +211,15 @@ const isSafeDimension = (value: unknown): value is string =>
 	value.length > 0 &&
 	value.length <= 64 &&
 	/^[A-Za-z0-9._-]+$/.test(value)
+
+const isSafeDiagnosticDimension = (
+	value: unknown,
+	maxLength = 128
+): value is string =>
+	typeof value === 'string' &&
+	value.length > 0 &&
+	value.length <= maxLength &&
+	/^[A-Za-z0-9._:-]+$/.test(value)
 
 const isFixedValue = <T extends string>(
 	value: unknown,
@@ -263,5 +324,174 @@ export function parseClientSignalBatch(
 		release: input.release,
 		sentAt: input.sentAt,
 		samples: samples as ClientSignalBatchV1['samples']
+	}
+}
+
+const V2_REASON_CODES = new Set<ClientSignalReasonCode>([
+	'none',
+	'auth',
+	'validation',
+	'rate_limit',
+	'client_abort',
+	'upstream_timeout',
+	'connection',
+	'unavailable',
+	'unknown'
+])
+const V2_MEASUREMENT_KINDS = new Set<ClientSignalMeasurementKind>([
+	'initial_navigation',
+	'in_page_navigation',
+	'interaction',
+	'background_resume',
+	'missing_start',
+	'request'
+])
+
+/** Parse the additive v2 wire format. The client cannot provide ingestRelease. */
+export function parseClientSignalBatchV2(
+	input: unknown,
+	now = Date.now()
+): ClientSignalBatchV2 | null {
+	if (
+		!isRecord(input) ||
+		!hasOnlyKeys(input, [
+			'schemaVersion',
+			'batchId',
+			'client',
+			'clientRelease',
+			'sentAt',
+			'samples'
+		]) ||
+		input.schemaVersion !== 2 ||
+		!isUuid(input.batchId) ||
+		!isFixedValue(input.client, CLIENTS) ||
+		!isSafeDiagnosticDimension(input.clientRelease) ||
+		!validTimestamp(input.sentAt, now) ||
+		!Array.isArray(input.samples) ||
+		input.samples.length < 1 ||
+		input.samples.length > 50
+	)
+		return null
+
+	const samples = input.samples.map(sample => {
+		if (
+			!isRecord(sample) ||
+			!hasOnlyKeys(sample, [
+				'observedAt',
+				'surface',
+				'metric',
+				'deviceGroup',
+				'sampleSource',
+				'result',
+				'reasonCode',
+				'measurementKind',
+				'samplingProbability',
+				'errorClass',
+				'fingerprint',
+				'occurrenceCount',
+				'firstObservedAt',
+				'lastObservedAt',
+				'value'
+			]) ||
+			!validTimestamp(sample.observedAt, now) ||
+			!isFixedValue(sample.surface, SURFACES) ||
+			!isFixedValue(sample.metric, METRICS) ||
+			!isFixedValue(sample.deviceGroup, DEVICE_GROUPS) ||
+			!isFixedValue(sample.sampleSource, SAMPLE_SOURCES) ||
+			!isFixedValue(sample.result, RESULTS) ||
+			!isFixedValue(sample.reasonCode, V2_REASON_CODES) ||
+			!isFixedValue(sample.measurementKind, V2_MEASUREMENT_KINDS) ||
+			typeof sample.samplingProbability !== 'number' ||
+			!Number.isFinite(sample.samplingProbability) ||
+			sample.samplingProbability < 0.0001 ||
+			sample.samplingProbability > 1 ||
+			(sample.value !== undefined && !NUMERIC_METRICS.has(sample.metric)) ||
+			(sample.value !== undefined &&
+				!isValidNumericValue(sample.metric, sample.value)) ||
+			(NUMERIC_METRICS.has(sample.metric) &&
+				!isValidNumericValue(sample.metric, sample.value)) ||
+			(sample.metric === 'runtime_error' &&
+				sample.errorClass !== undefined &&
+				!isSafeDimension(sample.errorClass)) ||
+			(sample.metric === 'runtime_error' &&
+				sample.fingerprint !== undefined &&
+				!isSafeDiagnosticDimension(sample.fingerprint)) ||
+			(sample.metric === 'runtime_error' &&
+				sample.occurrenceCount !== undefined &&
+				(typeof sample.occurrenceCount !== 'number' ||
+					!Number.isInteger(sample.occurrenceCount) ||
+					sample.occurrenceCount < 1 ||
+					sample.occurrenceCount > 1000)) ||
+			(sample.metric === 'runtime_error' &&
+				sample.firstObservedAt !== undefined &&
+				!validTimestamp(sample.firstObservedAt, now)) ||
+			(sample.metric === 'runtime_error' &&
+				sample.lastObservedAt !== undefined &&
+				!validTimestamp(sample.lastObservedAt, now)) ||
+			(sample.metric !== 'runtime_error' &&
+				(sample.errorClass !== undefined ||
+					sample.fingerprint !== undefined ||
+					sample.occurrenceCount !== undefined ||
+					sample.firstObservedAt !== undefined ||
+					sample.lastObservedAt !== undefined))
+		)
+			return null
+		if (
+			sample.metric === 'runtime_error' &&
+			sample.firstObservedAt !== undefined &&
+			sample.lastObservedAt !== undefined &&
+			Date.parse(sample.firstObservedAt as string) >
+				Date.parse(sample.lastObservedAt as string)
+		)
+			return null
+		let occurrenceCount = 1
+		if (
+			sample.metric === 'runtime_error' &&
+			sample.occurrenceCount !== undefined
+		) {
+			if (
+				typeof sample.occurrenceCount !== 'number' ||
+				!Number.isInteger(sample.occurrenceCount) ||
+				sample.occurrenceCount < 1 ||
+				sample.occurrenceCount > 1000
+			)
+				return null
+			occurrenceCount = sample.occurrenceCount
+		}
+		return {
+			observedAt: sample.observedAt,
+			surface: sample.surface,
+			metric: sample.metric,
+			deviceGroup: sample.deviceGroup,
+			sampleSource: sample.sampleSource,
+			result: sample.result,
+			reasonCode: sample.reasonCode,
+			measurementKind: sample.measurementKind,
+			samplingProbability: sample.samplingProbability,
+			...(sample.errorClass === undefined
+				? {}
+				: { errorClass: sample.errorClass }),
+			...(sample.fingerprint === undefined
+				? {}
+				: { fingerprint: sample.fingerprint }),
+			...(sample.metric === 'runtime_error' ? { occurrenceCount } : {}),
+			...(sample.firstObservedAt === undefined
+				? {}
+				: { firstObservedAt: sample.firstObservedAt }),
+			...(sample.lastObservedAt === undefined
+				? {}
+				: { lastObservedAt: sample.lastObservedAt }),
+			...(sample.value === undefined ? {} : { value: sample.value })
+		}
+	})
+	if (samples.some(sample => sample === null)) return null
+	return {
+		schemaVersion: 2,
+		batchId: input.batchId,
+		client: input.client,
+		clientRelease: input.clientRelease,
+		ingestRelease: 'unknown',
+		sentAt: input.sentAt,
+		samples: samples as ClientSignalBatchV2['samples']
 	}
 }

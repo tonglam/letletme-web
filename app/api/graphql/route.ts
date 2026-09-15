@@ -25,10 +25,11 @@ import { resolveWebVitalSource } from '@/lib/analytics/web-vitals'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { appendServerTiming } from '@/lib/server-timing'
 import type {
-	ClientSignalBatchV1,
+	ClientSignalBatchV2,
 	ClientSignalDeviceGroup,
 	ClientSignalMetric,
 	ClientSignalResult,
+	ClientSignalReasonCode,
 	ClientSignalSurface
 } from '@/lib/client-signal-contract'
 import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
@@ -386,9 +387,25 @@ function proxyResult(
 ): ClientSignalResult {
 	if (statusCode === 401 || statusCode === 403) return 'auth_error'
 	if (statusCode === 408 || statusCode === 504) return 'timeout'
+	if (statusCode === 499) return 'unavailable'
+	if (statusCode >= 500) return 'unavailable'
 	return statusCode >= 200 && statusCode < 300 && responseBodyOk
 		? 'ok'
 		: 'error'
+}
+
+function proxyReasonCode(
+	statusCode: number,
+	result: ClientSignalResult
+): ClientSignalReasonCode {
+	if (statusCode === 401 || statusCode === 403) return 'auth'
+	if (statusCode === 408 || statusCode === 504) return 'upstream_timeout'
+	if (statusCode === 429) return 'rate_limit'
+	if (statusCode === 499) return 'client_abort'
+	if (statusCode === 400 || statusCode === 422) return 'validation'
+	if (statusCode >= 500) return 'unavailable'
+	if (result === 'unavailable') return 'unavailable'
+	return result === 'error' ? 'unknown' : 'none'
 }
 
 function observeProxyResponse(
@@ -410,11 +427,13 @@ function observeProxyResponse(
 	if (sampleSource === 'synthetic') return response
 	if (result === 'ok' && Math.random() >= SUCCESS_SIGNAL_SAMPLE_RATE)
 		return response
-	const batch: ClientSignalBatchV1 = {
-		schemaVersion: 1,
+	const samplingProbability = result === 'ok' ? SUCCESS_SIGNAL_SAMPLE_RATE : 1
+	const batch: ClientSignalBatchV2 = {
+		schemaVersion: 2,
 		batchId: randomUUID(),
 		client: input.trafficClass === 'mini' ? 'wechat_miniprogram' : 'web',
-		release: releaseName(),
+		clientRelease: 'unknown',
+		ingestRelease: releaseName(),
 		sentAt: new Date().toISOString(),
 		samples: [
 			{
@@ -424,6 +443,9 @@ function observeProxyResponse(
 				deviceGroup: deviceGroupForRequest(input.request, input.trafficClass),
 				sampleSource,
 				result,
+				reasonCode: proxyReasonCode(response.status, result),
+				measurementKind: 'request',
+				samplingProbability,
 				value: Math.max(0, Date.now() - input.startedAt)
 			}
 		]
