@@ -590,6 +590,30 @@ function FixturesActionsStream({
 	)
 }
 
+function FixturesActionsFallback() {
+	const t = useTranslations('Fixtures')
+	return (
+		<Card
+			role="region"
+			aria-labelledby="fdr-actions"
+			className="mb-8 p-4 sm:p-5"
+		>
+			<SectionHead
+				id="fdr-actions"
+				title={t('actionsTitle')}
+				hint={t('actionsHint')}
+			/>
+			<div
+				className="min-h-24 rounded-lg border border-border/60 bg-muted/10 px-3 py-5 text-center text-sm text-muted-foreground"
+				aria-busy="true"
+				role="status"
+			>
+				{t('actionsLoading')}
+			</div>
+		</Card>
+	)
+}
+
 export default function FixturesClient({
 	fromGw,
 	initialHorizon = DEFAULT_FDR_HORIZON,
@@ -1059,7 +1083,7 @@ export default function FixturesClient({
 					</Card>
 
 					{/* Neutral fixture review candidates */}
-					<Suspense fallback={null}>
+					<Suspense fallback={<FixturesActionsFallback />}>
 						<FixturesActionsStream
 							marketSignalsPromise={marketSignalsPromise}
 							fixturesByEvent={fixturesByEvent}

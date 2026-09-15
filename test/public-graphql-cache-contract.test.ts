@@ -189,12 +189,15 @@ describe('public GraphQL cache contract', () => {
 		)
 		assert.match(page, /navigationId = createPerformanceCorrelationId\('nav'\)/)
 		assert.match(page, /navigationId\}/)
+		assert.match(page, /const initialDeskSeed\s*=\s*[\s\S]*: await timing[\s\S]*loadPlayerStatsDesk/)
+		assert.match(page, /<PlayerStatsClient[\s\S]*initialDeskSeed=\{initialDeskSeed\}/)
 		assert.ok(
 			page.indexOf('const initialDeskSeed') <
 				page.indexOf('const personalSeedPromise = loadPlayerStatsPersonalSeed')
 		)
 		assert.match(client, /void loadPlayerStatsView\(\)/)
 		assert.match(client, /interactionId: interaction\.interactionId/)
+		assert.doesNotMatch(client, /initialDeskSeedPromise|PlayerStatsInitialDesk/)
 		const retryStart = client.indexOf('retryPlayerData={() =>')
 		const retryEnd = client.indexOf('loadEvidence=', retryStart)
 		const retry = client.slice(retryStart, retryEnd)
@@ -221,7 +224,8 @@ describe('public GraphQL cache contract', () => {
 		assert.match(fixturesClient, /function FixturesSquadStream[\s\S]*const squad = use\(promise\)/)
 		assert.match(fixturesClient, /<Suspense fallback=\{<div[\s\S]*<FixturesSquadStream[\s\S]*promise=\{squadPromise\}/)
 		assert.match(fixturesClient, /function FixturesActionsStream[\s\S]*const marketSignals = use\(marketSignalsPromise\)/)
-		assert.match(fixturesClient, /<Suspense fallback=\{null\}>[\s\S]*<FixturesActionsStream[\s\S]*marketSignalsPromise=\{marketSignalsPromise\}/)
+		assert.match(fixturesClient, /function FixturesActionsFallback[\s\S]*actionsLoading/)
+		assert.match(fixturesClient, /<Suspense fallback=\{<FixturesActionsFallback \/>\}>[\s\S]*<FixturesActionsStream[\s\S]*marketSignalsPromise=\{marketSignalsPromise\}/)
 		assert.doesNotMatch(fixturesClient, /\{squadOpen \? <div/)
 
 		assert.match(priceChangesPage, /<PriceChangesBoard[\s\S]*personalSeedPromise=\{personalPromise\}/)

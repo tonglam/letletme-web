@@ -1719,6 +1719,7 @@
 		"emptyTeams": "本窗口暂无球队赛程。",
 		"actionsTitle": "赛程复核候选",
 		"actionsHint": "仅按官方 FDR 与当前 Market 可见度中性分组，不构成买入或卖出建议。",
+		"actionsLoading": "正在读取当前市场信号…",
 		"actionsPosLabel": "位置",
 		"actionsPosAll": "全部",
 		"actionsMySquadEmpty": "绑定 FPL 阵容后，可在此高亮你的球员。",

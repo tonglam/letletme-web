@@ -94,7 +94,7 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(viewSource, /STALE: t\('playerState\.coverage\.stale'\)/)
 	})
 
-	it('retries a streamed deep-link hash after the detail target mounts', async () => {
+	it('retries a deep-link hash after the detail target mounts', async () => {
 		const source = await readFile(
 			new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url),
 			'utf8'
@@ -108,19 +108,19 @@ describe('PlayerDirectorySeed', () => {
 	})
 
 	it('keeps a missing deep-link comparison visible as an actionable error', async () => {
-		const [clientSource, initialDeskSource, viewSource] = await Promise.all([
+		const [clientSource, viewSource] = await Promise.all([
 			readFile(new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url), 'utf8'),
-			readFile(new URL('../app/data/player-stats/PlayerStatsInitialDesk.tsx', import.meta.url), 'utf8'),
 			readFile(new URL('../app/data/player-stats/_components/PlayerStatsView.tsx', import.meta.url), 'utf8')
 		])
 
 		assert.match(clientSource, /const comparisonRequested = Boolean\([\s\S]*initialPlayerIds\.p2 != null\)/)
 		assert.match(clientSource, /comparisonRequested=\{comparisonRequested\}/)
+		assert.match(clientSource, /initialEntry: initialSecondEntry/)
+		assert.match(clientSource, /comparisonError=\{secondPlayer.error \?\? initialComparisonError\}/)
 		const retryStart = clientSource.indexOf('retryPlayerData={() =>')
 		const retryEnd = clientSource.indexOf('loadEvidence=', retryStart)
 		const retry = clientSource.slice(retryStart, retryEnd)
 		assert.match(retry, /secondSelectPlayerById\(initialPlayerIds\.p2[\s\S]*batchPlayerIds/)
-		assert.match(initialDeskSource, /comparisonRequested: playerIds\.p2 != null/)
 		assert.match(viewSource, /const comparisonMissing = comparisonRequested && !comparison/)
 		assert.match(viewSource, /comparisonRequested && isComparisonLoading && comparisonMissing/)
 	})

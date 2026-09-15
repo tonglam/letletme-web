@@ -1719,6 +1719,7 @@
 		"emptyTeams": "No team fixtures in this window yet.",
 		"actionsTitle": "Fixture review candidates",
 		"actionsHint": "Neutral review groups based only on official FDR and current Market visibility — not buy or sell advice.",
+		"actionsLoading": "Loading current market signals…",
 		"actionsPosLabel": "Position",
 		"actionsPosAll": "All",
 		"actionsMySquadEmpty": "Link an FPL entry to highlight your squad here.",

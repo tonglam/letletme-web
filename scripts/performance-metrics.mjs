@@ -180,7 +180,12 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				sample.origin = response?.headers()['x-letletme-origin'] ?? null
 				if (/^[a-f0-9]{40}$/.test(sample.releaseSha ?? '')) sample.sourceSha = sample.releaseSha
 				const actual = new URL(page.url())
-				if (sample.status !== 200 || actual.pathname !== target.pathname || (target.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== target.searchParams.get('tournamentId'))) throw new Error('Unexpected response or redirect')
+				if (
+					sample.status !== 200 ||
+					actual.pathname !== target.pathname ||
+					(target.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== target.searchParams.get('tournamentId')) ||
+					(target.searchParams.has('gw') && actual.searchParams.get('gw') !== target.searchParams.get('gw'))
+				) throw new Error('Unexpected response or redirect')
 				const metric = options.readyMetric ?? readyMetricFor(url)
 				if (metric) {
 					await awaitObservation(
@@ -213,10 +218,12 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 					)
 				}
 				if (target.pathname.endsWith('/live/competitions') && options.requireCompetitionMarker !== false) {
+					const expectedGameweek = target.searchParams.get('gw')
+					const gameweekSelector = expectedGameweek == null ? '' : `[data-competition-gameweek="${expectedGameweek}"]`
 					await awaitObservation(
 						page
 							.locator(
-								`[data-competition-perf-ready="detail"][data-competition-tournament-id="${target.searchParams.get('tournamentId')}"]`
+								`[data-competition-perf-ready="detail"][data-competition-tournament-id="${target.searchParams.get('tournamentId')}"${gameweekSelector}]`
 							)
 							.waitFor({ state: 'visible' })
 					)

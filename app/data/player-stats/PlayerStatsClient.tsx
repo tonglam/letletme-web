@@ -10,9 +10,8 @@ import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import { useTranslations } from 'next-intl'
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toPickerPlayer } from '@/components/player/PlayerDirectoryPicker'
-import { PlayerStatsInitialDesk } from './PlayerStatsInitialDesk'
 import { MySquadRail } from './_components/MySquadRail'
 import { PlayerSelectionPanel } from './_components/PlayerSelectionPanel'
 import { usePlayerStatsPersonalSeed } from './PlayerStatsPersonalSeedContext'
@@ -41,30 +40,45 @@ const PlayerStatsView = dynamic(loadPlayerStatsView, {
 export default function PlayerStatsClient({
 	initialPlayerIds,
 	directorySeed,
-	initialDeskSeedPromise,
+	initialDeskSeed = null,
 	navigationId
 }: {
 	initialPlayerIds: { p1: number | null; p2: number | null }
 	directorySeed: PlayerDirectorySeed
-	initialDeskSeedPromise: Promise<PlayerStatsDeskResponse | null>
+	initialDeskSeed?: PlayerStatsDeskResponse | null
 	navigationId: string
 }) {
 	const t = useTranslations('PlayerStats')
-	const [initialDeskSettled, setInitialDeskSettled] = useState(false)
 	const { seed: personalSeed, resolved: personalSeedResolved } =
 		usePlayerStatsPersonalSeed()
 	const { anchorGw, seasonStatsAvailable, seasonStatsStatus } = directorySeed
 	const mySquadPicks = personalSeed?.mySquadPicks ?? []
 	const marketCompareCandidates = personalSeed?.marketCompareCandidates
+	const initialFirstEntry = initialDeskSeed?.entries.find(
+		entry => entry.playerId === initialPlayerIds.p1
+	)
+	const initialSecondEntry = initialDeskSeed?.entries.find(
+		entry => entry.playerId === initialPlayerIds.p2
+	)
+	const initialDeskError =
+		initialPlayerIds.p1 != null && initialDeskSeed == null
+			? t('loadFailed')
+			: null
+	const initialComparisonError =
+		initialPlayerIds.p2 != null && initialSecondEntry == null
+			? t('loadFailed')
+			: null
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
 		eventId: anchorGw,
+		initialEntry: initialFirstEntry,
 		initialPlayer: directorySeed.players.find(player => player.id === initialPlayerIds.p1) ? toPickerPlayer(directorySeed.players.find(player => player.id === initialPlayerIds.p1)!) : null,
 		navigationId
 	})
 	const secondPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_2,
 		eventId: anchorGw,
+		initialEntry: initialSecondEntry,
 		initialPlayer: directorySeed.players.find(player => player.id === initialPlayerIds.p2) ? toPickerPlayer(directorySeed.players.find(player => player.id === initialPlayerIds.p2)!) : null,
 		navigationId
 	})
@@ -165,7 +179,7 @@ export default function PlayerStatsClient({
 	useEffect(() => { setDeepLinkReady(true) }, [deepLinkKey])
 
 	useEffect(() => {
-		if (!deepLinkReady || (initialPlayerIds.p1 != null && !initialDeskSettled)) return
+		if (!deepLinkReady) return
 		let cancelled = false
 		let generation = 0
 		const scheduleHashScroll = () => {
@@ -198,24 +212,20 @@ export default function PlayerStatsClient({
 			window.removeEventListener('hashchange', scheduleHashScroll)
 			window.removeEventListener('popstate', scheduleHashScroll)
 		}
-	}, [deepLinkReady, initialDeskSettled, initialPlayerIds.p1, deepLinkKey])
+	}, [deepLinkReady, initialPlayerIds.p1, deepLinkKey])
 
-	const admitFirstSeed = firstPlayer.admitInitialSeed
-	const admitSecondSeed = secondPlayer.admitInitialSeed
-	const admitDeskSeed = useCallback((seed: PlayerStatsDeskResponse | null) => {
-		const matching = seed?.eventId === anchorGw ? seed : null
-		if (initialPlayerIds.p1 != null) admitFirstSeed(matching?.entries.find(entry => entry.playerId === initialPlayerIds.p1) ?? null, { navigationId, eventId: anchorGw, playerId: initialPlayerIds.p1 })
-		if (initialPlayerIds.p2 != null) admitSecondSeed(matching?.entries.find(entry => entry.playerId === initialPlayerIds.p2) ?? null, { navigationId, eventId: anchorGw, playerId: initialPlayerIds.p2 })
-		if (matching?.section === 'overview') {
-			primePlayerStatsDeskCache({
-				playerIds: matching.entries.map(entry => entry.playerId),
-				eventId: matching.eventId,
-				horizon: matching.horizon,
+	useEffect(() => {
+		if (!initialDeskSeed || initialDeskSeed.section !== 'overview') return
+		primePlayerStatsDeskCache(
+			{
+				playerIds: initialDeskSeed.entries.map(entry => entry.playerId),
+				eventId: initialDeskSeed.eventId,
+				horizon: initialDeskSeed.horizon,
 				section: 'overview'
-			}, matching)
-		}
-		setInitialDeskSettled(true)
-	}, [admitFirstSeed, admitSecondSeed, anchorGw, initialPlayerIds.p1, initialPlayerIds.p2, navigationId])
+			},
+			initialDeskSeed
+		)
+	}, [initialDeskSeed])
 
 	const playerOnePositionCode = useMemo(() => {
 		if (!firstPlayer.playerDetail) return null
@@ -384,7 +394,6 @@ export default function PlayerStatsClient({
 				? t('squadUnbound')
 				: t('personalContextUnavailable')
 
-	const showInitialDesk = initialPlayerIds.p1 != null && !initialDeskSettled && firstPlayer.selectionVersion === 0 && secondPlayer.selectionVersion === 0
 	const comparisonRequested = Boolean(
 		secondPlayer.selectedPlayer ||
 		(secondPlayer.selectionVersion === 0 && initialPlayerIds.p2 != null)
@@ -405,8 +414,8 @@ export default function PlayerStatsClient({
 					isComparisonLoading={secondPlayer.isLoading}
 					isStateLoading={firstPlayer.isStateLoading}
 					isComparisonStateLoading={secondPlayer.isStateLoading}
-					error={firstPlayer.error}
-					comparisonError={secondPlayer.error}
+					error={firstPlayer.error ?? initialDeskError}
+					comparisonError={secondPlayer.error ?? initialComparisonError}
 					stateError={firstPlayer.stateError}
 					comparisonStateError={secondPlayer.stateError}
 					retryPlayerData={() => {
@@ -615,14 +624,7 @@ export default function PlayerStatsClient({
 				}
 			/>
 
-			{initialPlayerIds.p1 != null && !initialDeskSettled ? (
-				<Suspense fallback={showInitialDesk ? <div className="min-h-72 animate-pulse rounded-xl border bg-muted/20" role="status">{t('loadingStats')}</div> : null}>
-					<PlayerStatsInitialDesk promise={initialDeskSeedPromise} playerIds={initialPlayerIds} eventId={anchorGw} onSeed={admitDeskSeed}>
-						{showInitialDesk ? detailView : null}
-					</PlayerStatsInitialDesk>
-				</Suspense>
-			) : null}
-			{showInitialDesk ? null : detailView}
+			{detailView}
 		</>
 	)
 }
