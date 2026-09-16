@@ -695,6 +695,8 @@ async function probeTournamentReview(
 		scope.tournamentId !== config.tournamentId ||
 		scope.eventId !== eventId ||
 		review.payload === null ||
+		event.format !== scope.format ||
+		review.payload.format !== scope.format ||
 		scope.revision !== statusRevision
 	) {
 		throw new DataGovernanceProbeError(

@@ -85,6 +85,8 @@ describe('data governance consumer probe contract', () => {
 		assert.match(source, /contract: 'my-tournament-review-v2\.1'/)
 		assert.match(source, /scope\.expectedSubjectCount/)
 		assert.match(source, /scope\.readySubjectCount \+ scope\.notApplicableSubjectCount/)
+		assert.match(source, /event\.format !== scope\.format/)
+		assert.match(source, /review\.payload\.format !== scope\.format/)
 		assert.match(source, /event\.state === 'READY'/)
 		assert.match(source, /event\.readyAt !== null/)
 		assert.match(source, /event\.publishedAt !== null/)
