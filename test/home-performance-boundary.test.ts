@@ -249,8 +249,10 @@ it('performance acceptance rejects missing values and preserves missing sample c
 		distribution,
 		extractReadyMetrics,
 		hasValidProductionIdentity,
+		isUsableReadyMetric,
 		isProductionMeasurementUrl,
-		navigationComplete
+		navigationComplete,
+		readyMetricFor
 	} = await import('../scripts/performance-metrics.mjs')
 	assert.equal(atMost(null, 2500), false)
 	assert.equal(atMost(undefined, 2500), false)
@@ -265,7 +267,17 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'vercel' }), true)
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'overseas' }), true)
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'untrusted-proxy' }), false)
+	assert.equal(navigationComplete({ ...productionSample, businessResult: 'unavailable', releaseSha: 'a'.repeat(40), origin: 'vercel' }), false)
+	assert.equal(navigationComplete({ ...productionSample, businessResult: 'ok', releaseSha: 'a'.repeat(40), origin: 'vercel' }), true)
 	assert.equal(isProductionMeasurementUrl('http://localhost:3200/explore/fixtures'), false)
+	assert.equal(readyMetricFor('https://letletme.top/profile'), null)
+	assert.equal(readyMetricFor('https://letletme.top/zh-CN/live/matches'), 'LIVE_MATCHDAY_READY')
+	assert.equal(readyMetricFor('https://letletme.top/zh-CN/explore/price-predictions'), 'HOME_PRICE_CHANGES_READY')
+	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'ok' }), true)
+	assert.equal(isUsableReadyMetric({ name: 'READY', value: 0, result: 'unavailable' }), false)
+	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'error' }), false)
+	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'ok', interactionId: 'old' }), false)
+	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'ok', interactionId: 'current' }, true), true)
 	assert.deepEqual(
 		extractReadyMetrics({
 			name: 'FIXTURES_WINDOW_READY',
@@ -312,6 +324,9 @@ it('ships a valid favicon for browsers that probe the conventional path', () => 
 	assert.match(metrics, /options\.page\?\.context\(\)/)
 	assert.match(metrics, /options\.onResponse\?\.\(response\)/)
 	assert.match(metrics, /readySequence/)
+	assert.match(metrics, /isUsableReadyMetric/)
+	assert.match(metrics, /allowInteractionMetrics/)
+	assert.match(metrics, /No ready metric configured/)
 	assert.match(metrics, /snapshotLongTaskObservation/)
 	assert.match(metrics, /finishLongTaskObservation\(page\)/)
 	assert.match(metrics, /requests: requests\.slice\(\)/)

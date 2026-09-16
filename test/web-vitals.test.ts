@@ -576,5 +576,8 @@ describe('privacy-safe web vitals', () => {
 		}
 		assert.match(live, /data-letletme-contract="live_matches"/)
 		assert.match(price, /data-letletme-contract="price_changes"/)
+		assert.match(price, /<RouteReadyMarker/)
+		assert.match(price, /name="HOME_PRICE_CHANGES_READY"/)
+		assert.match(price, /elementTiming="price-changes-board"/)
 	})
 })

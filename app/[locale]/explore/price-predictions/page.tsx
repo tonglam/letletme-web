@@ -1,4 +1,5 @@
 import { PriceChangesBoard } from '@/app/data/price-changes/PriceChangesBoard'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
 import { LocalSnapshotTime } from '@/components/stats/LocalSnapshotTime'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -114,6 +115,8 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 	const { response: boardResponse, error: boardError } = await boardPromise
 
 	const board = boardResponse.priceChangeBoard
+	const priceChangesReady =
+		board.status !== 'UNAVAILABLE' && board.players.length > 0
 	const optionalLivePageContext =
 		board.status === 'READY' ? null : await getOptionalLivePageContext()
 	const isOfficialUpdating =
@@ -185,6 +188,14 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 					initialMovement={initialMovement}
 					isOfficialUpdating={isOfficialUpdating}
 					personalSeedPromise={personalPromise}
+				/>
+				<RouteReadyMarker
+					name="HOME_PRICE_CHANGES_READY"
+					ready={priceChangesReady}
+					readyKey={`${board.revision || 'unavailable'}:${board.status}:${board.observedPlayerCount}`}
+					navigationId={navigationId}
+					elementTiming="price-changes-board"
+					audienceHint="public"
 				/>
 			</div>
 		</PageShell>

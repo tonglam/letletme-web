@@ -1,4 +1,4 @@
-import { atMost, extractReadyMetrics, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, extractReadyMetrics, finishLongTaskObservation, isUsableReadyMetric, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 import { brotliCompressSync } from 'node:zlib'
 
@@ -220,7 +220,9 @@ async function runSamePageInteractions(page, metrics) {
 async function measureRun(browser, profile, scenario, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	const page = await context.newPage()
-	await installVitals(page, '__playerStatsPerformance')
+	await installVitals(page, '__playerStatsPerformance', {
+		allowInteractionMetrics: true
+	})
 
 	const cdp = await context.newCDPSession(page)
 	await cdp.send('Network.enable')
@@ -292,7 +294,10 @@ async function measureRun(browser, profile, scenario, index) {
 		try {
 			for (const metric of extractReadyMetrics(route.request().postDataJSON())) {
 				telemetry.push(metric)
-				if (metric.name === scenario.readyMetric) {
+				if (
+					metric.name === scenario.readyMetric &&
+					isUsableReadyMetric(metric, true)
+				) {
 					readyMs = metric.value
 					paintMs = metric.value
 				}

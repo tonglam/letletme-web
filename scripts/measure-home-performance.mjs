@@ -1,4 +1,4 @@
-import { extractReadyMetrics, finishLongTaskObservation, installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
+import { extractReadyMetrics, finishLongTaskObservation, installVitals, isUsableReadyMetric, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
@@ -26,7 +26,7 @@ const homeReadyMetricNames = new Set([
 	'HOME_LEAGUE_RANKS_READY'
 ])
 
-const captureHomeTelemetry = extractMetrics => {
+const captureHomeTelemetry = (extractMetrics, usableMetric) => {
 	const captureMetric = async body => {
 		try {
 			const raw =
@@ -38,6 +38,7 @@ const captureHomeTelemetry = extractMetrics => {
 			const payload = JSON.parse(raw)
 			for (const metric of extractMetrics(payload)) {
 				if (
+					usableMetric(metric) &&
 					(metric.name === 'HOME_TEAM_DESK_READY' ||
 						metric.name === 'HOME_LEAGUE_RANKS_READY') &&
 					typeof metric.value === 'number'
@@ -174,7 +175,7 @@ async function measureColdLoad(browser, profile, index) {
 		try {
 			const payload = JSON.parse(request.postData() ?? '{}')
 			for (const metric of extractReadyMetrics(payload)) {
-				if (homeReadyMetricNames.has(metric.name)) {
+				if (isUsableReadyMetric(metric) && homeReadyMetricNames.has(metric.name)) {
 					routeReady.set(metric.name, metric.value)
 				}
 			}
@@ -182,7 +183,7 @@ async function measureColdLoad(browser, profile, index) {
 	})
 	await installVitals(page, '__homePerformance')
 	await page.addInitScript({
-		content: `;(${captureHomeTelemetry.toString()})(${extractReadyMetrics.toString()})`
+		content: `;(${captureHomeTelemetry.toString()})(${extractReadyMetrics.toString()}, ${isUsableReadyMetric.toString()})`
 	})
 	const navigationStartedAt = performance.now()
 	const runUrl = new URL(baseUrl)

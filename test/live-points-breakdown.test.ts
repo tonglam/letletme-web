@@ -6,6 +6,11 @@ import {
 	breakdownSum,
 	resolvePointsBreakdown
 } from '../app/live/points/_lib/live-points-breakdown'
+import { buildLivePlayerDetailWithPayload } from '../components/live/player-detail-model'
+import type {
+	EventLiveExplainItem,
+	PlayerLiveStats
+} from '../lib/graphql/operations/live'
 import type { Player } from '../types/player'
 
 function basePlayer(
@@ -152,5 +157,111 @@ describe('resolvePointsBreakdown', () => {
 		})
 		assert.equal(resolved.source, 'provisional')
 		assert.equal(breakdownSum(resolved.lines), 26)
+	})
+})
+
+describe('buildLivePlayerDetailWithPayload', () => {
+	const completeLive = (overrides: Partial<PlayerLiveStats> = {}): PlayerLiveStats => ({
+		minutes: 90,
+		goalsScored: 2,
+		assists: 0,
+		cleanSheets: 0,
+		goalsConceded: 0,
+		ownGoals: 0,
+		penaltiesSaved: 0,
+		penaltiesMissed: 0,
+		yellowCards: 0,
+		redCards: 0,
+		saves: 0,
+		defensiveContribution: 0,
+		bonus: 0,
+		bps: 42,
+		totalPoints: 12,
+		...overrides
+	})
+
+	it('uses the targeted official payload for the latest score and breakdown', () => {
+		const player = basePlayer({
+			position: 'MID',
+			stats: { minutes: 90, goals: 1, points: 7 }
+		})
+		const live = completeLive()
+		const explain: EventLiveExplainItem = {
+			elementId: 1,
+			stats: {
+				minutes: 90,
+				goalsScored: 2,
+				assists: 0,
+				cleanSheets: 0,
+				goalsConceded: 0,
+				ownGoals: 0,
+				penaltiesSaved: 0,
+				penaltiesMissed: 0,
+				yellowCards: 0,
+				redCards: 0,
+				saves: 0,
+				defensiveContribution: 0,
+				bonus: 0
+			},
+			contributions: [
+				{ identifier: 'minutes', value: 90, points: 2 },
+				{ identifier: 'goals_scored', value: 2, points: 10 }
+			]
+		}
+
+		const detail = buildLivePlayerDetailWithPayload(player, { explain, live })
+
+		assert.equal(detail.points, 12)
+		assert.equal(detail.bps, 42)
+		assert.equal(detail.stats.goals, 2)
+		assert.equal(detail.breakdownSource, 'official')
+		assert.equal(breakdownSum(detail.pointsBreakdown), 12)
+	})
+
+	it('keeps an out-of-sync explain response provisional', () => {
+		const player = basePlayer({
+			position: 'MID',
+			stats: { minutes: 90, goals: 1, points: 7 }
+		})
+		const live = completeLive({ goalsScored: 1, totalPoints: 7 })
+		const explain: EventLiveExplainItem = {
+			elementId: 1,
+			stats: { minutes: 90, goalsScored: 1 },
+			contributions: [
+				{ identifier: 'minutes', value: 90, points: 2 },
+				{ identifier: 'goals_scored', value: 1, points: 4 }
+			]
+		}
+
+		const detail = buildLivePlayerDetailWithPayload(player, { explain, live })
+
+		assert.equal(detail.points, 7)
+		assert.equal(detail.breakdownSource, 'provisional')
+		assert.equal(detail.breakdownPending, false)
+		assert.equal(breakdownSum(detail.pointsBreakdown), 7)
+	})
+
+	it('ignores an explain response for a different player', () => {
+		const player = basePlayer({
+			stats: { minutes: 90, goals: 1, points: 7 }
+		})
+		const explain: EventLiveExplainItem = {
+			elementId: 99,
+			stats: { minutes: 90, goalsScored: 99 },
+			contributions: [
+				{ identifier: 'minutes', value: 90, points: 2 },
+				{ identifier: 'goals_scored', value: 99, points: 495 }
+			]
+		}
+
+		const detail = buildLivePlayerDetailWithPayload(player, {
+			explain,
+			live: null
+		})
+
+		assert.equal(detail.points, 7)
+		assert.equal(detail.stats.goals, 1)
+		assert.equal(detail.breakdownSource, 'provisional')
+		assert.equal(breakdownSum(detail.pointsBreakdown), 7)
 	})
 })

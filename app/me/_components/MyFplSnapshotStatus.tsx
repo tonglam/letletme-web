@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Link } from '@/i18n/navigation'
 import type { MyFplSnapshotMeta } from '@/lib/graphql/operations/my-fpl'
 import { AlertCircle } from 'lucide-react'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { useFormatter, useTranslations } from 'next-intl'
 
 type MyFplSnapshotStatusProps = {
@@ -15,12 +16,20 @@ type MyFplSnapshotStatusProps = {
 const formatDate = (
 	raw: string,
 	fallback: string,
-	format: ReturnType<typeof useFormatter>
+	format: ReturnType<typeof useFormatter>,
+	hydrated: boolean
 ): string => {
 	const value = new Date(raw)
-	return Number.isFinite(value.getTime())
-		? format.dateTime(value, { dateStyle: 'medium', timeStyle: 'medium' })
-		: fallback
+	if (!Number.isFinite(value.getTime())) return fallback
+	const timeZone = hydrated
+		? Intl.DateTimeFormat().resolvedOptions().timeZone
+		: 'UTC'
+	const label = format.dateTime(value, {
+		dateStyle: 'medium',
+		timeStyle: 'medium',
+		timeZone
+	})
+	return `${label} (${timeZone})`
 }
 
 /**
@@ -35,9 +44,10 @@ export function MyFplSnapshotStatus({
 }: MyFplSnapshotStatusProps) {
 	const t = useTranslations('MyFplSnapshot')
 	const format = useFormatter()
+	const hydrated = useHydrated()
 	const isDelayed = meta.settlementState === 'DELAYED'
 	const due = meta.finalizationDueAt
-		? formatDate(meta.finalizationDueAt, meta.snapshotDate, format)
+		? formatDate(meta.finalizationDueAt, meta.snapshotDate, format, hydrated)
 		: null
 	const message =
 		meta.settlementState === 'FINAL'
@@ -45,9 +55,10 @@ export function MyFplSnapshotStatus({
 					cutoff: formatDate(
 						meta.sourceMaxCheckedAt,
 						meta.snapshotDate,
-						format
+						format,
+						hydrated
 					),
-					published: formatDate(meta.publishedAt, meta.snapshotDate, format)
+					published: formatDate(meta.publishedAt, meta.snapshotDate, format, hydrated)
 				})
 			: meta.settlementState === 'FINALIZING'
 				? due
@@ -57,13 +68,14 @@ export function MyFplSnapshotStatus({
 					? due
 						? t('delayed', { due })
 						: t('delayedNoDue')
-					: t('provisional', {
+				: t('provisional', {
 							cutoff: formatDate(
 								meta.sourceMaxCheckedAt,
 								meta.snapshotDate,
-								format
+								format,
+								hydrated
 							),
-							published: formatDate(meta.publishedAt, meta.snapshotDate, format)
+							published: formatDate(meta.publishedAt, meta.snapshotDate, format, hydrated)
 						})
 
 	return (
