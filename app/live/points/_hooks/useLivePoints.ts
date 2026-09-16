@@ -536,6 +536,14 @@ export function useLivePoints({
 			return false
 		}
 
+		if (nextEntryId === activeEntryId) {
+			if (selectedGameweek !== undefined) {
+				resetLiveDataRetry()
+				void fetchLivePointsForGameweek(selectedGameweek)
+			}
+			return true
+		}
+
 		gameweekSelectionRef.current += 1
 		requestIdRef.current += 1
 		resetLiveDataRetry()
@@ -552,7 +560,15 @@ export function useLivePoints({
 		setError(undefined)
 		setIsLoading(true)
 		return true
-	}, [acceptSnapshot, entryIdInput, resetLiveDataRetry, t])
+	}, [
+		acceptSnapshot,
+		activeEntryId,
+		entryIdInput,
+		fetchLivePointsForGameweek,
+		resetLiveDataRetry,
+		selectedGameweek,
+		t
+	])
 
 	const changeGameweek = useCallback(
 		(gameweek: number) => {
