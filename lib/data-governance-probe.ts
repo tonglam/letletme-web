@@ -279,6 +279,62 @@ function assertScopeSeason(scopeKey: string, season: string): void {
 	}
 }
 
+type TournamentReviewPayload = NonNullable<
+	MyTournamentGameweekReviewResponse['myTournamentGameweekReview']['payload']
+>
+
+function reviewCollectionLengthMatchesCount(length: number, rowCount: number): boolean {
+	if (!Number.isSafeInteger(length) || length < 0 || length > rowCount) return false
+	return rowCount === 0 ? length === 0 : length > 0
+}
+
+function reviewCollectionPageMatchesCount(
+	length: number,
+	rowCount: number,
+	hasNextPage: boolean
+): boolean {
+	return (
+		reviewCollectionLengthMatchesCount(length, rowCount) &&
+		hasNextPage === length < rowCount
+	)
+}
+
+function reviewPayloadMatchesScope(
+	payload: TournamentReviewPayload,
+	rowCount: number,
+	readySubjectCount: number
+): boolean {
+	if (payload.format === 'POINTS') {
+		return reviewCollectionPageMatchesCount(
+			payload.points.rows.length,
+			rowCount,
+			payload.points.hasNextPage
+		)
+	}
+	if (payload.format === 'KNOCKOUT') {
+		return reviewCollectionPageMatchesCount(
+			payload.knockout.matches.length,
+			rowCount,
+			payload.knockout.hasNextPage
+		)
+	}
+	const matchesValid = reviewCollectionLengthMatchesCount(
+		payload.h2h.matches.length,
+		rowCount
+	)
+	const standingsValid = reviewCollectionLengthMatchesCount(
+		payload.h2h.standings.length,
+		readySubjectCount
+	)
+	return (
+		matchesValid &&
+		standingsValid &&
+		payload.h2h.hasNextPage ===
+			(payload.h2h.matches.length < rowCount ||
+				payload.h2h.standings.length < readySubjectCount)
+	)
+}
+
 async function resolveProbeEvent(
 	input: DataGovernanceProbeRequest
 ): Promise<ProbeEventContext> {
@@ -656,10 +712,15 @@ async function probeTournamentReview(
 		)
 	}
 	const eventId = input.eventId ?? status.latestFinalizedEventId
-	if (!positiveInteger(eventId)) {
+	const latestFinalizedEventId = status.latestFinalizedEventId
+	if (
+		!positiveInteger(eventId) ||
+		!positiveInteger(latestFinalizedEventId) ||
+		eventId > latestFinalizedEventId
+	) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
-			'my tournament review status has no eligible event'
+			'my tournament review event is not discoverable from the latest finalized pointer'
 		)
 	}
 	const event = status.events.find(candidate => candidate.eventId === eventId)
@@ -678,8 +739,7 @@ async function probeTournamentReview(
 				tournamentId: config.tournamentId,
 				eventId,
 				first: 1,
-				after: null,
-				revision: statusRevision
+				after: null
 			},
 			{
 				cache: 'no-store',
@@ -707,9 +767,12 @@ async function probeTournamentReview(
 	const expectedCount = scope.expectedSubjectCount
 	const observedCount = scope.readySubjectCount + scope.notApplicableSubjectCount
 	if (
-		![expectedCount, scope.readySubjectCount, scope.notApplicableSubjectCount].every(
-			value => Number.isSafeInteger(value) && value >= 0
-		) ||
+		![
+			scope.rowCount,
+			expectedCount,
+			scope.readySubjectCount,
+			scope.notApplicableSubjectCount
+		].every(value => Number.isSafeInteger(value) && value >= 0) ||
 		observedCount > expectedCount
 	) {
 		throw new DataGovernanceProbeError(
@@ -725,6 +788,11 @@ async function probeTournamentReview(
 			review.state === 'READY' &&
 			scope.state === 'READY' &&
 			event.state === 'READY' &&
+			reviewPayloadMatchesScope(
+				review.payload,
+				scope.rowCount,
+				scope.readySubjectCount
+			) &&
 			event.readyAt !== null &&
 			event.publishedAt !== null &&
 			event.repairState === 'NONE' &&
