@@ -1,7 +1,12 @@
-import { extractReadyMetrics, finishLongTaskObservation, installVitals, isUsableReadyMetric, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
+import { extractReadyMetrics, finishLongTaskObservation, installVitals, isProductionMeasurementUrl, isUsableReadyMetric, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
+if (isProductionMeasurementUrl(baseUrl)) {
+	throw new Error(
+		'Production measurements must use the existing logged-in Chrome tab; the home collector accepts non-production origins only'
+	)
+}
 const runCount = Number.parseInt(process.env.HOME_PERF_RUNS ?? '5', 10)
 const concurrency = Number.parseInt(
 	process.env.HOME_PERF_CONCURRENCY ?? '1',
@@ -187,7 +192,6 @@ async function measureColdLoad(browser, profile, index) {
 	})
 	const navigationStartedAt = performance.now()
 	const runUrl = new URL(baseUrl)
-	runUrl.searchParams.set('cold', `${profile.name}-${index}`)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
 	let response
 	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {

@@ -34,7 +34,6 @@ async function measure(browser, profile, index) {
 			deskRequests += 1
 	})
 	const url = new URL(targetUrl)
-	url.searchParams.set('_trendsPerf', `${profile.name}-${index}-${Date.now()}`)
 	url.searchParams.set('_perfSource', 'synthetic')
 	let response
 	const navigation = await measureNavigation(browser, profile, url.toString(), {

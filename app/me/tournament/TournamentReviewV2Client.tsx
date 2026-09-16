@@ -298,6 +298,14 @@ function mergeGameweekPage(
 type SeasonSectionKey = SeasonSectionData['section']
 type SeasonSectionPages = Partial<Record<SeasonSectionKey, SeasonSectionData>>
 
+type SeasonSectionLoad = {
+	key: string
+	promise: Promise<{
+		pages: SeasonSectionPages
+		sections: Array<SeasonSectionData | null>
+	}>
+}
+
 function mergeSeasonSectionPage(
 	previous: SeasonSectionData | undefined,
 	next: SeasonSectionData
@@ -916,6 +924,84 @@ export default function TournamentReviewV2Client({
 			initialSeasonSections.map(section => [section.section, section])
 		) as SeasonSectionPages
 	)
+	const seasonSectionLoad = useRef<SeasonSectionLoad | null>(null)
+	const seasonSectionLoadKey = (
+		tournamentId: number,
+		throughEventId: number,
+		phase: MyTournamentSeasonReview['phases'][number]
+	) =>
+		[
+			tournamentId,
+			throughEventId,
+			phase.phaseId,
+			phase.revision ?? '',
+			phase.semanticSha256 ?? ''
+		].join(':')
+	const loadSeasonSections = (
+		tournamentId: number,
+		throughEventId: number,
+		phase: MyTournamentSeasonReview['phases'][number]
+	): Promise<{
+		pages: SeasonSectionPages
+		sections: Array<SeasonSectionData | null>
+	}> => {
+		const key = seasonSectionLoadKey(tournamentId, throughEventId, phase)
+		if (seasonSectionLoad.current?.key === key)
+			return seasonSectionLoad.current.promise
+		const sectionRequests: Promise<SeasonSectionData | null>[] = [
+			fetchSeasonSection(tournamentId, throughEventId, phase)
+		]
+		if (phase.format === 'POINTS')
+			sectionRequests.push(
+				fetchSeasonSection(
+					tournamentId,
+					throughEventId,
+					phase,
+					100,
+					null,
+					'POINTS_TRAJECTORIES'
+				)
+			)
+		if (phase.format === 'H2H')
+			sectionRequests.push(
+				fetchSeasonSection(
+					tournamentId,
+					throughEventId,
+					phase,
+					100,
+					null,
+					'H2H_FIXTURES'
+				)
+			)
+		const promise = (async () => {
+			const settledSections = await Promise.allSettled(sectionRequests)
+			const primarySection = settledSections[0]
+			if (!primarySection)
+				throw new Error('Season phase publication is not ready')
+			if (primarySection.status === 'rejected') throw primarySection.reason
+			const sections = settledSections.map(result =>
+				result.status === 'fulfilled' ? result.value : null
+			)
+		const pages = Object.fromEntries(
+			sections
+				.filter((section): section is SeasonSectionData => Boolean(section))
+				.map(section => [section.section, section])
+		) as SeasonSectionPages
+		return { pages, sections }
+		})()
+		seasonSectionLoad.current = { key, promise }
+		void promise.then(
+			() => {
+				if (seasonSectionLoad.current?.promise === promise)
+					seasonSectionLoad.current = null
+			},
+			() => {
+				if (seasonSectionLoad.current?.promise === promise)
+					seasonSectionLoad.current = null
+			}
+		)
+		return promise
+	}
 
 	const selectedTournament = useMemo(
 		() =>
@@ -1209,47 +1295,15 @@ export default function TournamentReviewV2Client({
 			)
 			overviewPublished = true
 			let seasonWithSection = normalizedSeason
-			if (nextPhase) {
-				const sectionRequests: Promise<SeasonSectionData | null>[] = [
-					fetchSeasonSection(tournamentId, nextEventId, nextPhase)
-				]
-				if (nextPhase.format === 'POINTS') {
-					sectionRequests.push(
-						fetchSeasonSection(
-							tournamentId,
-							nextEventId,
-							nextPhase,
-							100,
-							null,
-							'POINTS_TRAJECTORIES'
-						)
-					)
-				}
-				if (nextPhase.format === 'H2H') {
-					sectionRequests.push(
-						fetchSeasonSection(
-							tournamentId,
-							nextEventId,
-							nextPhase,
-							100,
-							null,
-							'H2H_FIXTURES'
-						)
-					)
-				}
-				const settledSections = await Promise.allSettled(sectionRequests)
-				const primarySection = settledSections[0]
-				if (!primarySection)
-					throw new Error('Season phase publication is not ready')
-				if (primarySection.status === 'rejected') throw primarySection.reason
-				const sections = settledSections.map(result =>
-					result.status === 'fulfilled' ? result.value : null
+			// Season section pages are not part of the Gameweek first screen. Keep
+			// the authorized overview available for the tab switch and defer the
+			// immutable section reads until Season is visible.
+			if (nextPhase && viewRef.current === 'season') {
+				const { pages, sections } = await loadSeasonSections(
+					tournamentId,
+					nextEventId,
+					nextPhase
 				)
-				const pages = Object.fromEntries(
-					sections
-						.filter((section): section is SeasonSectionData => Boolean(section))
-						.map(section => [section.section, section])
-				) as SeasonSectionPages
 				if (requestId !== requestSequence.current) return
 				seasonSectionPages.current = pages
 				if (sections.some(Boolean))
@@ -1264,6 +1318,8 @@ export default function TournamentReviewV2Client({
 						? null
 						: nextPhase.phaseId
 				)
+			} else if (nextPhase) {
+				setRetryPhaseId(null)
 			}
 			if (requestId !== requestSequence.current) return
 			setSeasonReview(seasonWithSection)
@@ -1586,11 +1642,20 @@ export default function TournamentReviewV2Client({
 		viewRef.current = nextView
 		setView(nextView)
 		replaceRoute({ view: nextView })
+		if (nextView !== 'season' || !selectedTournamentId || !eventId) return
+		const phase = phaseAtEvent(seasonReview?.phases ?? [], eventId)
+		if (!phase) return
+		// A Gameweek-first server render keeps only the Season overview. Load
+		// immutable section pages at the moment Season becomes visible, while
+		// reusing any complete pages already seeded by a Season deep link.
+		if (!phaseSectionsReady(phase.format, seasonSectionPages.current)) {
+			void choosePhase(phase.phaseId, true)
+		}
 	}
 
 	const choosePhase = (phaseId: string, force = false) => {
 		if (
-			view !== 'season' ||
+			viewRef.current !== 'season' ||
 			!seasonReview ||
 			(!force && phaseId === selectedPhaseId)
 		)
@@ -1599,6 +1664,15 @@ export default function TournamentReviewV2Client({
 			candidate => candidate.phaseId === phaseId
 		)
 		if (!phase || !selectedTournamentId || !eventId) return
+		const sectionRequestKey = seasonSectionLoadKey(
+			selectedTournamentId,
+			eventId,
+			phase
+		)
+		// Repeated tab/phase clicks reuse the one request that can populate this
+		// identity. A later click must not advance requestSequence and fence the
+		// only in-flight response before it is applied.
+		if (seasonSectionLoad.current?.key === sectionRequestKey) return
 		const requestId = ++requestSequence.current
 		setSelectedPhaseId(phaseId)
 		setLoading(true)
@@ -1629,45 +1703,12 @@ export default function TournamentReviewV2Client({
 		)
 		void (async () => {
 			try {
-				const sectionRequests: Promise<SeasonSectionData | null>[] = [
-					fetchSeasonSection(selectedTournamentId, eventId, phase)
-				]
-				if (phase.format === 'POINTS')
-					sectionRequests.push(
-						fetchSeasonSection(
-							selectedTournamentId,
-							eventId,
-							phase,
-							100,
-							null,
-							'POINTS_TRAJECTORIES'
-						)
-					)
-				if (phase.format === 'H2H')
-					sectionRequests.push(
-						fetchSeasonSection(
-							selectedTournamentId,
-							eventId,
-							phase,
-							100,
-							null,
-							'H2H_FIXTURES'
-						)
-					)
-				const settledSections = await Promise.allSettled(sectionRequests)
-				const primarySection = settledSections[0]
-				if (!primarySection)
-					throw new Error('Season phase publication is not ready')
-				if (primarySection.status === 'rejected') throw primarySection.reason
-				const sections = settledSections.map(result =>
-					result.status === 'fulfilled' ? result.value : null
+				const { pages, sections } = await loadSeasonSections(
+					selectedTournamentId,
+					eventId,
+					phase
 				)
 				if (requestId !== requestSequence.current) return
-				const pages = Object.fromEntries(
-					sections
-						.filter((section): section is SeasonSectionData => Boolean(section))
-						.map(section => [section.section, section])
-				) as SeasonSectionPages
 				seasonSectionPages.current = pages
 				setRetryPhaseId(
 					phaseSectionsReady(phase.format, pages) || !phaseCanRetry(phase)

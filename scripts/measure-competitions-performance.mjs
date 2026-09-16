@@ -13,6 +13,14 @@ if (
 	throw new Error('COMPETITIONS_PERF_RUNS must be a positive integer')
 }
 const runs = Math.min(20, parsedRuns)
+const originHost = new URL(origin).hostname.toLowerCase()
+const isProductionOrigin =
+	originHost === 'letletme.top' || originHost.endsWith('.letletme.top')
+if (isProductionOrigin) {
+	throw new Error(
+		'Production measurements must use the existing logged-in Chrome tab; this isolated Playwright runner accepts non-production origins only'
+	)
+}
 const tournamentId = process.env.COMPETITIONS_PERF_TOURNAMENT_ID
 if (!/^[1-9]\d*$/.test(tournamentId ?? '')) {
 	throw new Error(
@@ -32,6 +40,11 @@ const paths = [
 	`/competitions/${tournamentId}/manage`,
 	`/live/competitions?tournamentId=${tournamentId}`
 ]
+const gameweek = process.env.COMPETITIONS_PERF_GAMEWEEK
+if (gameweek !== undefined && !/^[1-9]\d*$/.test(gameweek)) {
+	throw new Error('COMPETITIONS_PERF_GAMEWEEK must be a positive integer when provided')
+}
+if (gameweek) paths[3] += `&gw=${gameweek}`
 
 function readySelector(path) {
 	if (path === '/competitions/browse')
@@ -60,7 +73,6 @@ async function measure(browser, path, index) {
 		})
 	)
 	const url = new URL(`${origin}/${locale}${path}`)
-	url.searchParams.set('_competitionsPerf', `${path}-${index}-${Date.now()}`)
 	url.searchParams.set('_perfSource', 'synthetic')
 	let response
 	const navigation = await measureNavigation(browser, { name: 'mobile', viewport: { width: 390, height: 844 } }, url.toString(), {
@@ -108,7 +120,7 @@ async function measure(browser, path, index) {
 		).length,
 		rscPrefetches: requests.filter(
 			request =>
-				request.url.includes('/_rsc') || request.url.includes('__next_rsc__')
+			request.url.includes('/_rsc') || request.url.includes('__next_rsc__') || request.url.includes('_rsc=')
 		).length,
 		playerStatsPrefetches: requests.filter(request =>
 			request.url.includes('/explore/player-stats')
@@ -161,7 +173,9 @@ console.log(
 			summary,
 			raw: measurements,
 			acceptance: {
-				navigationComplete: Object.values(measurements).flat().every(value => navigationComplete(value.navigation))
+				navigationComplete: Object.values(measurements).flat().every(value => navigationComplete(value.navigation)),
+				functionalPass: Object.values(measurements).flat().every(value => value.navigation.functionalStatus === 'PASS'),
+				performancePass: Object.values(measurements).flat().every(value => value.navigation.performanceStatus === 'PASS')
 			}
 		},
 		null,

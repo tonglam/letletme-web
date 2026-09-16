@@ -216,6 +216,153 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	expect(explainBatchRequests).toBe(1)
 })
 
+test('live player detail ignores a late player response and retries after both reads fail', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+
+	let playerOneRequestCount = 0
+	let playerTwoRequestCount = 0
+	let releasePlayerOne!: () => void
+	const playerOneGate = new Promise<void>(resolve => {
+		releasePlayerOne = resolve
+	})
+
+	const livePayload = (playerId: number) => ({
+		minutes: 45,
+		goalsScored: playerId === 1 ? 1 : 0,
+		assists: 0,
+		cleanSheets: 0,
+		goalsConceded: playerId === 1 ? 2 : 0,
+		ownGoals: 0,
+		penaltiesSaved: 0,
+		penaltiesMissed: 0,
+		yellowCards: 0,
+		redCards: 0,
+		saves: 0,
+		defensiveContribution: 0,
+		bonus: 0,
+		bps: 10,
+		totalPoints: playerId === 1 ? 6 : 1
+	})
+	const explainPayload = (playerId: number) => ({
+		elementId: playerId,
+		stats: {
+			minutes: 45,
+			goalsScored: playerId === 1 ? 1 : 0,
+			assists: 0,
+			cleanSheets: 0,
+			goalsConceded: playerId === 1 ? 2 : 0,
+			ownGoals: 0,
+			penaltiesSaved: 0,
+			penaltiesMissed: 0,
+			yellowCards: 0,
+			redCards: 0,
+			saves: 0,
+			defensiveContribution: 0,
+			bonus: 0
+		},
+		contributions: [
+			{ identifier: 'minutes', value: 45, points: 1 },
+			...(playerId === 1
+				? [{ identifier: 'goals_scored', value: 1, points: 5 }]
+				: [])
+		]
+	})
+
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as {
+			query?: string
+			variables?: { eventId?: number; elementId?: number; playerId?: number }
+		}
+		const isExplain = payload.query?.includes('EventLiveExplainPlayer') ?? false
+		const isLive = payload.query?.includes('PlayerLive') ?? false
+		if (payload.query?.includes('EventLiveExplainBatch')) {
+			// Leave the modal without an official batch explanation so the
+			// targeted reads below are exercised deliberately.
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ data: { eventLiveExplains: [] } })
+			})
+			return
+		}
+		if (!isExplain && !isLive) {
+			await continueToGraphqlFixture(route)
+			return
+		}
+		const playerId = isExplain
+			? payload.variables?.elementId
+			: payload.variables?.playerId
+		if (playerId === 1) {
+			playerOneRequestCount += 1
+			// The first selection has both reads fail only after the user has
+			// moved on. The second selection proves close/reopen recovery.
+			if (playerOneRequestCount <= 2) {
+				await playerOneGate
+				await route.fulfill({
+					status: 503,
+					contentType: 'application/json',
+					body: JSON.stringify({ errors: [{ message: 'Detail unavailable' }] })
+				})
+				return
+			}
+		}
+		if (playerId === 2) playerTwoRequestCount += 1
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				data: isExplain
+					? { eventLiveExplain: explainPayload(playerId ?? 2) }
+					: { playerLive: livePayload(playerId ?? 2) }
+			})
+		})
+	})
+
+	await page.goto('/live/points/123')
+	const pitch = page.getByRole('region', { name: /formation/ })
+	await expect(
+		pitch.getByRole('button', { name: 'View details for Player 1', exact: true })
+	).toBeVisible()
+
+	await pitch
+		.getByRole('button', { name: 'View details for Player 1', exact: true })
+		.click()
+	await expect.poll(() => playerOneRequestCount).toBe(2)
+	const firstDialog = page.getByRole('dialog')
+	await expect(firstDialog).toBeVisible()
+	await firstDialog.getByRole('button', { name: 'Close', exact: true }).click()
+	await expect(page.getByRole('dialog')).toHaveCount(0)
+
+	await pitch
+		.getByRole('button', { name: 'View details for Player 2', exact: true })
+		.click()
+	await expect.poll(() => playerTwoRequestCount).toBe(2)
+	const secondDialog = page.getByRole('dialog')
+	await expect(secondDialog.getByRole('heading', { name: 'Player 2', exact: true })).toBeVisible()
+	await expect(secondDialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+
+	// A's failed response arrives after B is already visible and must not
+	// replace B's heading, loading state, or points.
+	releasePlayerOne()
+	await expect(secondDialog.getByRole('heading', { name: 'Player 2', exact: true })).toBeVisible()
+	await expect(secondDialog.getByText('1', { exact: true }).first()).toBeVisible()
+
+	await secondDialog.getByRole('button', { name: 'Close', exact: true }).click()
+	await expect(page.getByRole('dialog')).toHaveCount(0)
+	await pitch
+		.getByRole('button', { name: 'View details for Player 1', exact: true })
+		.click()
+	await expect.poll(() => playerOneRequestCount).toBe(4)
+	const recoveredDialog = page.getByRole('dialog')
+	await expect(recoveredDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
+	await expect(recoveredDialog.getByText('Goals', { exact: true })).toBeVisible()
+})
+
 test('live points restores transfer details and distinguishes failure from empty records', async ({
 	page
 }) => {

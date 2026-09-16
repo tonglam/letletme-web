@@ -870,7 +870,11 @@ test('the shared collector reports session-window CLS and missing navigation int
 
 
 test('anonymous competition redirects cannot be counted as successful content measurements', async ({ browser, baseURL }) => {
-	const { measureNavigation } = await import('../scripts/performance-metrics.mjs')
+	const { isProductionMeasurementUrl, measureNavigation } = await import('../scripts/performance-metrics.mjs')
+	if (isProductionMeasurementUrl(baseURL ?? '')) {
+		test.skip(true, 'Production measurements use the existing logged-in Chrome tab')
+		return
+	}
 	const sample = await measureNavigation(browser, { name: 'desktop', viewport: { width: 1440, height: 900 } }, `${baseURL}/live/competitions?tournamentId=6`)
 	expect(sample.error).toContain('Unexpected response or redirect')
 	expect(sample.readyMs).toBeNull()

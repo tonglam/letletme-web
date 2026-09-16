@@ -1423,6 +1423,47 @@ describe('asynchronous selection safety', () => {
 		assert.match(client, /const \[gameweekError, setGameweekError\]/)
 	})
 
+	it('defers Season section pages from Gameweek-first renders until Season is opened', async () => {
+		const [page, client] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/[locale]/my-fpl/competitions/page.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			page,
+			/if \(initialView !== 'season'\) \{[\s\S]*initialSeasonSections = \[\]/
+		)
+		assert.match(
+			page,
+			/if \(initialView !== 'season'\)[\s\S]*else \{[\s\S]*hydrateSeasonSeed\(/
+		)
+		assert.match(client, /viewRef\.current = nextView[\s\S]*phaseAtEvent\(/)
+		assert.match(
+			client,
+			/if \(!phaseSectionsReady\(phase\.format, seasonSectionPages\.current\)\)\s*\{[\s\S]*void choosePhase\(phase\.phaseId, true\)/
+		)
+		assert.match(
+			client,
+			/let seasonWithSection = normalizedSeason[\s\S]*if \(nextPhase && viewRef\.current === 'season'\)/
+		)
+		assert.match(client, /viewRef\.current !== 'season'/)
+		assert.match(client, /const seasonSectionLoad = useRef<SeasonSectionLoad \| null>/)
+		assert.match(client, /seasonSectionLoad\.current\?\.key === sectionRequestKey/)
+		assert.match(client, /Repeated tab\/phase clicks reuse the one request/)
+	})
+
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {
 		const [pickerSource, selectionsSource, teamSource] = await Promise.all([
 			readFile(

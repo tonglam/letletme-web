@@ -164,16 +164,15 @@ export function LivePointsDashboard({
 			return
 		}
 		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-		setLastUpdatedLabel(
-			format.dateTime(parsed, {
-				day: 'numeric',
-				month: 'short',
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				timeZone: browserTimeZone
-			})
-		)
+		const formatted = format.dateTime(parsed, {
+			day: 'numeric',
+			month: 'short',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			timeZone: browserTimeZone
+		})
+		setLastUpdatedLabel(`${formatted} (${browserTimeZone})`)
 	}, [format, lastUpdatedAt])
 	const squadTitle = liveData?.entryName ?? `Entry ${liveData?.entry ?? ''}`
 	const squadPitchLabels = {
