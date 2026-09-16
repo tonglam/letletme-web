@@ -23,7 +23,17 @@ type LivePlayerSelection = {
 
 type CachedPayload = {
 	key: string
+	sourceKey: string
 	payload: LivePlayerDetailPayload
+}
+
+/**
+ * The live snapshot has no separate revision field on the UI model. Keep the
+ * targeted response tied to the exact source snapshot used to request it so a
+ * refresh cannot let an older payload overwrite newer points and stats.
+ */
+function livePlayerSourceKey(player: Player): string {
+	return JSON.stringify(player)
 }
 
 /**
@@ -59,17 +69,23 @@ export function useLivePlayerDetail({
 			players.find(player => String(player.id) === selection.playerId) ?? null
 		)
 	}, [eventId, players, selection])
+	const selectedSourceKey = selectedSourcePlayer
+		? livePlayerSourceKey(selectedSourcePlayer)
+		: null
 
 	const selectedPlayer = useMemo(() => {
 		if (!selectedSourcePlayer) return null
 		const base = buildLivePlayerDetail(selectedSourcePlayer)
 		const payload =
-			cachedPayload?.key === selectionKey ? cachedPayload.payload : null
+			cachedPayload?.key === selectionKey &&
+			cachedPayload.sourceKey === selectedSourceKey
+				? cachedPayload.payload
+				: null
 		// A batch explanation can land while the targeted request is in flight.
 		// Prefer that newer official result over an older targeted payload.
 		if (!payload || base.breakdownSource === 'official') return base
 		return buildLivePlayerDetailWithPayload(selectedSourcePlayer, payload)
-	}, [cachedPayload, selectedSourcePlayer, selectionKey])
+	}, [cachedPayload, selectedSourceKey, selectedSourcePlayer, selectionKey])
 
 	const openPlayerDetail = useCallback(
 		(playerId: string) => {
@@ -119,7 +135,8 @@ export function useLivePlayerDetail({
 			!Number.isSafeInteger(elementId) ||
 			elementId <= 0 ||
 			base.breakdownSource === 'official' ||
-			cachedPayload?.key === selectionKey
+			(cachedPayload?.key === selectionKey &&
+				cachedPayload.sourceKey === selectedSourceKey)
 		) {
 			setIsLoading(false)
 			return
@@ -160,7 +177,11 @@ export function useLivePlayerDetail({
 						? liveResult.value.playerLive
 						: null
 			}
-			setCachedPayload({ key: selectionKey!, payload })
+			setCachedPayload({
+				key: selectionKey!,
+				sourceKey: selectedSourceKey!,
+				payload
+			})
 		}).finally(() => {
 			if (!cancelled && requestId === requestIdRef.current) {
 				setIsLoading(false)
@@ -171,7 +192,14 @@ export function useLivePlayerDetail({
 			cancelled = true
 			requestIdRef.current += 1
 		}
-	}, [cachedPayload, eventId, selectedSourcePlayer, selection, selectionKey])
+	}, [
+		cachedPayload,
+		eventId,
+		selectedSourceKey,
+		selectedSourcePlayer,
+		selection,
+		selectionKey
+	])
 
 	return {
 		closePlayerDetail,

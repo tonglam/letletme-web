@@ -127,9 +127,10 @@ export async function installVitals(
 	) => {
 		const existing = window.__performanceMetrics
 		const clsSupported = typeof PerformanceObserver !== 'undefined' && Array.isArray(PerformanceObserver.supportedEntryTypes) && PerformanceObserver.supportedEntryTypes.includes('layout-shift')
-		const state = existing ?? { lcp: null, cls: clsSupported ? 0 : null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {}, readySequence: {}, readyDetails: {} }
+		const state = existing ?? { lcp: null, cls: clsSupported ? 0 : null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {}, readySequence: {}, readyDetails: {}, allowInteractionMetrics: false }
 		state.readyDetails ??= {}
 		state.readySequence ??= {}
+		state.allowInteractionMetrics = state.allowInteractionMetrics === true || allowInteractions
 		window[aliasName] = state
 		window.__performanceMetrics = state
 		if (existing) return
@@ -152,7 +153,7 @@ export async function installVitals(
 				const payload = JSON.parse(raw)
 				for (const metric of extractMetrics(payload)) {
 					state.readyDetails[metric.name] = metric
-					if (!usableMetric(metric, allowInteractions)) continue
+					if (!usableMetric(metric, state.allowInteractionMetrics === true)) continue
 					state.ready[metric.name] = metric.value
 					state.readySequence[metric.name] = (state.readySequence[metric.name] ?? 0) + 1
 					notify()

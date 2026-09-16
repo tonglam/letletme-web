@@ -232,6 +232,21 @@ describe('privacy-safe web vitals', () => {
 		assert.match(playerStatsSource, /PLAYER_COMPARE_PAINT/)
 	})
 
+	it('merges interaction opt-in when two navigation helpers share one collector', async () => {
+		const performanceMetricsSource = await readFile(
+			new URL('../scripts/performance-metrics.mjs', import.meta.url),
+			'utf8'
+		)
+		assert.match(
+			performanceMetricsSource,
+			/state\.allowInteractionMetrics = state\.allowInteractionMetrics === true \|\| allowInteractions/
+		)
+		assert.match(
+			performanceMetricsSource,
+			/usableMetric\(metric, state\.allowInteractionMetrics === true\)/
+		)
+	})
+
 	it('maps older clients without the hint to unknown during rollout', () => {
 		const { audienceHint: _audienceHint, ...legacyMetric } = validMetric
 		assert.equal(parseWebVitalPayload(legacyMetric)?.audienceHint, 'unknown')
