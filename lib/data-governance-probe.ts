@@ -9,8 +9,12 @@ import {
 	type LiveCalcDataResponse
 } from '@/lib/graphql/operations/live'
 import {
+	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_FPL_MANAGER_GAMEWEEK,
-	type MyFplManagerGameweekResponse
+	GET_MY_TOURNAMENT_REVIEW_STATUS,
+	type MyFplManagerGameweekResponse,
+	type MyTournamentGameweekReviewResponse,
+	type MyTournamentReviewStatusResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	GET_ENTRY_LIVE_COMPETITION_BOARD,
@@ -179,9 +183,14 @@ function canaryForContract(contractKey: string): DataGovernanceCanary {
 		'live-picks',
 		'league-tournament',
 		'my-fpl',
-		'official-h2h'
+		'official-h2h',
+		'my-tournament-review-v2.1'
 	])
-	const requiresTournament = new Set(['league-tournament', 'official-h2h'])
+	const requiresTournament = new Set([
+		'league-tournament',
+		'official-h2h',
+		'my-tournament-review-v2.1'
+	])
 	const requiresPlayers = contractKey === 'player-stats'
 	const entryId = requiresEntry.has(contractKey)
 		? parseCanaryInteger('DATA_GOVERNANCE_CANARY_ENTRY_ID')
@@ -268,6 +277,77 @@ function assertScopeSeason(scopeKey: string, season: string): void {
 			'consumer response season does not match the requested scope'
 		)
 	}
+}
+
+type TournamentReviewPayload = NonNullable<
+	MyTournamentGameweekReviewResponse['myTournamentGameweekReview']['payload']
+>
+
+function reviewCollectionLengthMatchesCount(length: number, rowCount: number): boolean {
+	if (!Number.isSafeInteger(length) || length < 0 || length > rowCount) return false
+	return rowCount === 0 ? length === 0 : length > 0
+}
+
+function reviewCollectionPageMatchesCount(
+	length: number,
+	rowCount: number,
+	hasNextPage: boolean,
+	nextCursor: string | null
+): boolean {
+	return (
+		reviewCollectionLengthMatchesCount(length, rowCount) &&
+		hasNextPage === length < rowCount &&
+		reviewPageCursorMatches(nextCursor, hasNextPage)
+	)
+}
+
+function reviewPageCursorMatches(
+	nextCursor: string | null,
+	hasNextPage: boolean
+): boolean {
+	return hasNextPage
+		? typeof nextCursor === 'string' && nextCursor.trim().length > 0
+		: nextCursor === null
+}
+
+function reviewPayloadMatchesScope(
+	payload: TournamentReviewPayload,
+	rowCount: number,
+	readySubjectCount: number
+): boolean {
+	if (payload.format === 'POINTS') {
+		return reviewCollectionPageMatchesCount(
+			payload.points.rows.length,
+			rowCount,
+			payload.points.hasNextPage,
+			payload.points.nextCursor
+		)
+	}
+	if (payload.format === 'KNOCKOUT') {
+		return reviewCollectionPageMatchesCount(
+			payload.knockout.matches.length,
+			rowCount,
+			payload.knockout.hasNextPage,
+			payload.knockout.nextCursor
+		)
+	}
+	const matchesValid = reviewCollectionLengthMatchesCount(
+		payload.h2h.matches.length,
+		rowCount
+	)
+	const standingsValid = reviewCollectionLengthMatchesCount(
+		payload.h2h.standings.length,
+		readySubjectCount
+	)
+	const hasNextPage =
+		payload.h2h.matches.length < rowCount ||
+		payload.h2h.standings.length < readySubjectCount
+	return (
+		matchesValid &&
+		standingsValid &&
+		payload.h2h.hasNextPage === hasNextPage &&
+		reviewPageCursorMatches(payload.h2h.nextCursor, hasNextPage)
+	)
 }
 
 async function resolveProbeEvent(
@@ -611,6 +691,140 @@ async function probePlayerStats(
 	}
 }
 
+async function probeTournamentReview(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary
+): Promise<{
+	revision: string
+	complete: boolean
+	expectedCount: number
+	observedCount: number
+}> {
+	if (config.entryId === null || config.tournamentId === null) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review canary is not configured'
+		)
+	}
+	const context = await getCoreEventContext()
+	assertScopeSeason(input.scopeKey, context.season)
+	const response =
+		await executeServerQueryWithSession<MyTournamentReviewStatusResponse>(
+			canarySession(config),
+			GET_MY_TOURNAMENT_REVIEW_STATUS,
+			{ tournamentId: config.tournamentId },
+			{
+				cache: 'no-store',
+				timeoutMs: 5_000,
+				contract: 'my-tournament-review-v2.1'
+			}
+		)
+	const status = response.myTournamentReviewStatus
+	if (!status || status.tournamentId !== config.tournamentId) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review status returned the wrong tournament'
+		)
+	}
+	const eventId = input.eventId ?? status.latestFinalizedEventId
+	const latestFinalizedEventId = status.latestFinalizedEventId
+	if (
+		!positiveInteger(eventId) ||
+		!positiveInteger(latestFinalizedEventId) ||
+		eventId > latestFinalizedEventId
+	) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review event is not discoverable from the latest finalized pointer'
+		)
+	}
+	const event = status.events.find(candidate => candidate.eventId === eventId)
+	if (!event) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review status has no matching event'
+		)
+	}
+	const statusRevision = revision(event.revision)
+	const reviewResponse =
+		await executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
+			canarySession(config),
+			GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+			{
+				tournamentId: config.tournamentId,
+				eventId,
+				first: 1,
+				after: null
+			},
+			{
+				cache: 'no-store',
+				timeoutMs: 5_000,
+				contract: 'my-tournament-review-v2.1'
+			}
+		)
+	const review = reviewResponse.myTournamentGameweekReview
+	const scope = review?.scope
+	if (
+		!review ||
+		!scope ||
+		scope.tournamentId !== config.tournamentId ||
+		scope.eventId !== eventId ||
+		review.payload === null ||
+		event.format !== scope.format ||
+		review.payload.format !== scope.format ||
+		scope.revision !== statusRevision
+	) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review read returned an incoherent scope'
+		)
+	}
+	const expectedCount = scope.expectedSubjectCount
+	const observedCount = scope.readySubjectCount + scope.notApplicableSubjectCount
+	if (
+		![
+			scope.rowCount,
+			expectedCount,
+			scope.readySubjectCount,
+			scope.notApplicableSubjectCount
+		].every(value => Number.isSafeInteger(value) && value >= 0) ||
+		observedCount > expectedCount
+	) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review scope has invalid readiness counts'
+		)
+	}
+	return {
+		revision: statusRevision,
+		expectedCount,
+		observedCount,
+		complete:
+			review.state === 'READY' &&
+			scope.state === 'READY' &&
+			event.state === 'READY' &&
+			reviewPayloadMatchesScope(
+				review.payload,
+				scope.rowCount,
+				scope.readySubjectCount
+			) &&
+			event.readyAt !== null &&
+			event.publishedAt !== null &&
+			event.repairState === 'NONE' &&
+			event.errorCode === null &&
+			expectedCount === observedCount &&
+			(input.producerRevision === null ||
+				input.producerRevision === undefined ||
+				input.producerRevision === statusRevision) &&
+			(input.expectedCount === null ||
+				input.expectedCount === undefined ||
+				input.expectedCount === expectedCount) &&
+			(input.observedCount === null ||
+				input.observedCount === undefined ||
+				input.observedCount === observedCount)
+	}
+}
+
 /** Execute the same server loaders and GraphQL operations used by public pages. */
 export async function probeDataContract(
 	input: DataGovernanceProbeRequest
@@ -681,6 +895,14 @@ export async function probeDataContract(
 			case 'official-h2h': {
 				const result = await probeTournament(input, config, input.contractKey)
 				graphqlRevision = result.revision
+				complete = result.complete
+				break
+			}
+			case 'my-tournament-review-v2.1': {
+				const result = await probeTournamentReview(input, config)
+				graphqlRevision = result.revision
+				expectedCount = result.expectedCount
+				observedCount = result.observedCount
 				complete = result.complete
 				break
 			}

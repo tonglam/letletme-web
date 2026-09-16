@@ -6,6 +6,13 @@ const read = (path: string) =>
 	readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
 describe('data governance consumer probe contract', () => {
+	it('accepts versioned registry keys used by the Data probe', async () => {
+		const source = await read(
+			'app/api/ops/data-contracts/[contractKey]/route.ts'
+		)
+		assert.match(source, /CONTRACT_KEY = \/\^\[a-z0-9\]\[a-z0-9.-\]\{0,63\}\$\//)
+	})
+
 	it('requires ready market evidence and a canonical, matching live revision', async () => {
 		const source = await read('lib/data-governance-probe.ts')
 		assert.match(source, /market\.status === 'READY'/)
@@ -40,6 +47,7 @@ describe('data governance consumer probe contract', () => {
 			'league-tournament',
 			'official-h2h',
 			'my-fpl',
+			'my-tournament-review-v2.1',
 			'player-stats'
 		]) {
 			assert.match(source, new RegExp(`case '${contractKey}'`))
@@ -68,5 +76,40 @@ describe('data governance consumer probe contract', () => {
 			/gameweek\.state === 'READY'[\s\S]*meta\.coverageState === 'COMPLETE'/
 		)
 		assert.doesNotMatch(source, /finalRanksPresent/)
+	})
+
+	it('probes the versioned tournament review through its status consumer', async () => {
+		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /GET_MY_TOURNAMENT_REVIEW_STATUS/)
+		assert.match(source, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
+		assert.match(source, /contract: 'my-tournament-review-v2\.1'/)
+		assert.match(source, /scope\.expectedSubjectCount/)
+		assert.match(source, /scope\.readySubjectCount \+ scope\.notApplicableSubjectCount/)
+		assert.match(source, /scope\.rowCount/)
+		assert.match(source, /reviewPayloadMatchesScope\(/)
+		assert.match(source, /payload\.points\.rows\.length/)
+		assert.match(source, /payload\.points\.nextCursor/)
+		assert.match(source, /payload\.h2h\.matches\.length/)
+		assert.match(source, /payload\.h2h\.standings\.length/)
+		assert.match(source, /payload\.h2h\.nextCursor/)
+		assert.match(source, /payload\.knockout\.matches\.length/)
+		assert.match(source, /payload\.knockout\.nextCursor/)
+		assert.match(source, /reviewPageCursorMatches\(/)
+		assert.match(source, /event\.format !== scope\.format/)
+		assert.match(source, /review\.payload\.format !== scope\.format/)
+		assert.match(source, /eventId > latestFinalizedEventId/)
+		assert.match(source, /first: 1,[\s\S]*after: null\n\s*\}/)
+		const reviewRead = source.slice(
+			source.indexOf('GET_MY_TOURNAMENT_GAMEWEEK_REVIEW'),
+			source.indexOf('const review =')
+		)
+		assert.doesNotMatch(reviewRead, /revision: statusRevision/)
+		assert.match(source, /event\.state === 'READY'/)
+		assert.match(source, /event\.readyAt !== null/)
+		assert.match(source, /event\.publishedAt !== null/)
+		assert.match(source, /event\.repairState === 'NONE'/)
+		assert.match(source, /input\.producerRevision === statusRevision/)
+		assert.match(source, /input\.expectedCount === expectedCount/)
+		assert.match(source, /input\.observedCount === observedCount/)
 	})
 })
