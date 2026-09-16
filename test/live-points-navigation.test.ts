@@ -91,4 +91,29 @@ describe('live points navigation context', () => {
 		assert.match(pitchDetailHook, /function livePlayerSourceKey\(player: Player\)/)
 		assert.match(dashboard, /isLoading=\{pitchPlayerDetail\.isLoading\}/)
 	})
+
+	it('labels the live score update time with the browser timezone', () => {
+		assert.match(
+			dashboard,
+			/Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/
+		)
+		assert.match(dashboard, /setLastUpdatedLabel\(`\$\{formatted\} \(\$\{browserTimeZone\}\)`\)/)
+	})
+
+	it('does not invalidate a repeated in-flight player detail request', () => {
+		assert.match(pitchDetailHook, /const inFlightRef = useRef/)
+		assert.match(pitchDetailHook, /inFlightRef\.current\?\.key === nextKey/)
+		assert.match(pitchDetailHook, /inFlightRef\.current\.sourceKey === nextSourceKey/)
+		assert.match(
+			pitchDetailHook,
+			/A repeated click on the same player must not invalidate the request/
+		)
+	})
+
+	it('does not cache an entirely failed detail response', () => {
+		assert.match(pitchDetailHook, /const hasPayload = Boolean\(payload\.explain \|\| payload\.live\)/)
+		assert.match(pitchDetailHook, /hasPayload[\s\S]*setCachedPayload\(/)
+		assert.match(pitchDetailHook, /: null\n\t\t\t\)/)
+		assert.match(pitchDetailHook, /inFlightRef\.current\?\.requestId === requestId/)
+	})
 })

@@ -59,6 +59,11 @@ export function useLivePlayerDetail({
 	const [cachedPayload, setCachedPayload] = useState<CachedPayload | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const requestIdRef = useRef(0)
+	const inFlightRef = useRef<{
+		key: string
+		sourceKey: string
+		requestId: number
+	} | null>(null)
 
 	const selectionKey = selection
 		? `${selection.eventId}:${selection.playerId}`
@@ -93,6 +98,17 @@ export function useLivePlayerDetail({
 			const player = players.find(candidate => String(candidate.id) === playerId)
 			if (!player) return
 			const nextKey = `${eventId}:${playerId}`
+			const nextSourceKey = livePlayerSourceKey(player)
+			// A repeated click on the same player must not invalidate the request
+			// that is already filling the open modal. Invalidating it here leaves
+			// the UI loading forever because the old response is correctly ignored.
+			if (
+				selectionKey === nextKey &&
+				inFlightRef.current?.key === nextKey &&
+				inFlightRef.current.sourceKey === nextSourceKey
+			) {
+				return
+			}
 			requestIdRef.current += 1
 			setSelection({ playerId, eventId })
 			setCachedPayload(current =>
@@ -100,11 +116,12 @@ export function useLivePlayerDetail({
 			)
 			setIsLoading(true)
 		},
-		[eventId, players]
+		[eventId, players, selectionKey]
 	)
 
 	const closePlayerDetail = useCallback(() => {
 		requestIdRef.current += 1
+		inFlightRef.current = null
 		setSelection(null)
 		setCachedPayload(null)
 		setIsLoading(false)
@@ -141,9 +158,21 @@ export function useLivePlayerDetail({
 			setIsLoading(false)
 			return
 		}
+		if (
+			inFlightRef.current?.key === selectionKey &&
+			inFlightRef.current.sourceKey === selectedSourceKey
+		) {
+			setIsLoading(true)
+			return
+		}
 
 		const requestId = ++requestIdRef.current
 		let cancelled = false
+		inFlightRef.current = {
+			key: selectionKey!,
+			sourceKey: selectedSourceKey!,
+			requestId
+		}
 		setIsLoading(true)
 		void Promise.allSettled([
 			executeQuery<EventLiveExplainResponse>(
@@ -177,12 +206,20 @@ export function useLivePlayerDetail({
 						? liveResult.value.playerLive
 						: null
 			}
-			setCachedPayload({
-				key: selectionKey!,
-				sourceKey: selectedSourceKey!,
-				payload
-			})
+			const hasPayload = Boolean(payload.explain || payload.live)
+			setCachedPayload(
+				hasPayload
+					? {
+							key: selectionKey!,
+							sourceKey: selectedSourceKey!,
+							payload
+						}
+					: null
+			)
 		}).finally(() => {
+			if (inFlightRef.current?.requestId === requestId) {
+				inFlightRef.current = null
+			}
 			if (!cancelled && requestId === requestIdRef.current) {
 				setIsLoading(false)
 			}
@@ -190,6 +227,9 @@ export function useLivePlayerDetail({
 
 		return () => {
 			cancelled = true
+			if (inFlightRef.current?.requestId === requestId) {
+				inFlightRef.current = null
+			}
 			requestIdRef.current += 1
 		}
 	}, [
