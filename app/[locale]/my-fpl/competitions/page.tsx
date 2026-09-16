@@ -495,24 +495,32 @@ export default async function TournamentStatsPage({
 						initialGameweekError = t('tournamentStatsFailed')
 					}
 					if (seasonResult.status === 'fulfilled') {
-						try {
-							const seasonSeed = await hydrateSeasonSeed(
-								session,
-								initialSelectedTournamentId,
-								initialEventId,
-								seasonResult.value.myTournamentSeasonReview
-							)
-							initialSeasonReview = seasonSeed.review
-							initialSeasonSections = seasonSeed.sections
-							if (seasonSeed.error)
-								initialSeasonError = t('tournamentStatsFailed')
-						} catch {
-							// The Season overview and Gameweek snapshot are independent
-							// publications. Keep both summaries usable when a Season section
-							// page is unavailable; the client will retry only the Season view.
+						// Gameweek is the default view and does not render Season
+						// sections. Keep its server response as an overview seed and
+						// defer immutable section pages until the user opens Season.
+						if (initialView !== 'season') {
 							initialSeasonReview = seasonResult.value.myTournamentSeasonReview
 							initialSeasonSections = []
-							initialSeasonError = t('tournamentStatsFailed')
+						} else {
+							try {
+								const seasonSeed = await hydrateSeasonSeed(
+									session,
+									initialSelectedTournamentId,
+									initialEventId,
+									seasonResult.value.myTournamentSeasonReview
+								)
+								initialSeasonReview = seasonSeed.review
+								initialSeasonSections = seasonSeed.sections
+								if (seasonSeed.error)
+									initialSeasonError = t('tournamentStatsFailed')
+							} catch {
+								// The Season overview and Gameweek snapshot are independent
+								// publications. Keep both summaries usable when a Season section
+								// page is unavailable; the client will retry only the Season view.
+								initialSeasonReview = seasonResult.value.myTournamentSeasonReview
+								initialSeasonSections = []
+								initialSeasonError = t('tournamentStatsFailed')
+							}
 						}
 					} else {
 						initialSeasonError = t('tournamentStatsFailed')
