@@ -291,12 +291,23 @@ function reviewCollectionLengthMatchesCount(length: number, rowCount: number): b
 function reviewCollectionPageMatchesCount(
 	length: number,
 	rowCount: number,
-	hasNextPage: boolean
+	hasNextPage: boolean,
+	nextCursor: string | null
 ): boolean {
 	return (
 		reviewCollectionLengthMatchesCount(length, rowCount) &&
-		hasNextPage === length < rowCount
+		hasNextPage === length < rowCount &&
+		reviewPageCursorMatches(nextCursor, hasNextPage)
 	)
+}
+
+function reviewPageCursorMatches(
+	nextCursor: string | null,
+	hasNextPage: boolean
+): boolean {
+	return hasNextPage
+		? typeof nextCursor === 'string' && nextCursor.trim().length > 0
+		: nextCursor === null
 }
 
 function reviewPayloadMatchesScope(
@@ -308,14 +319,16 @@ function reviewPayloadMatchesScope(
 		return reviewCollectionPageMatchesCount(
 			payload.points.rows.length,
 			rowCount,
-			payload.points.hasNextPage
+			payload.points.hasNextPage,
+			payload.points.nextCursor
 		)
 	}
 	if (payload.format === 'KNOCKOUT') {
 		return reviewCollectionPageMatchesCount(
 			payload.knockout.matches.length,
 			rowCount,
-			payload.knockout.hasNextPage
+			payload.knockout.hasNextPage,
+			payload.knockout.nextCursor
 		)
 	}
 	const matchesValid = reviewCollectionLengthMatchesCount(
@@ -326,12 +339,14 @@ function reviewPayloadMatchesScope(
 		payload.h2h.standings.length,
 		readySubjectCount
 	)
+	const hasNextPage =
+		payload.h2h.matches.length < rowCount ||
+		payload.h2h.standings.length < readySubjectCount
 	return (
 		matchesValid &&
 		standingsValid &&
-		payload.h2h.hasNextPage ===
-			(payload.h2h.matches.length < rowCount ||
-				payload.h2h.standings.length < readySubjectCount)
+		payload.h2h.hasNextPage === hasNextPage &&
+		reviewPageCursorMatches(payload.h2h.nextCursor, hasNextPage)
 	)
 }
 
