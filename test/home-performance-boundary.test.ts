@@ -321,6 +321,30 @@ it('performance acceptance rejects missing values and preserves missing sample c
 		),
 		'BLOCKED'
 	)
+	assert.equal(
+		classifyPerformanceStatus(
+			{
+				readyMs: 100,
+				browserCache: 'warm',
+				browserCacheApplied: true,
+				browserCachePrimed: false
+			},
+			{ budgetMs: 2_500 }
+		),
+		'BLOCKED'
+	)
+	assert.equal(
+		classifyPerformanceStatus(
+			{
+				readyMs: 100,
+				browserCache: 'warm',
+				browserCacheApplied: true,
+				browserCachePrimed: true
+			},
+			{ budgetMs: 2_500 }
+		),
+		'PASS'
+	)
 	assert.deepEqual(
 		missingMetricReasons({
 			readyMs: 100,
@@ -445,6 +469,9 @@ it('keeps synthetic performance URLs deterministic and cache control explicit', 
 	assert.match(metrics, /missingMetricReasons/)
 	assert.match(metrics, /setBrowserCacheMode/)
 	assert.match(metrics, /browserCacheApplied/)
+	assert.match(metrics, /browserCachePrimed/)
+	assert.match(metrics, /warm-cache-prime-failed/)
+	assert.match(metrics, /readyDetails\?\.\[name\]/)
 	assert.match(
 		metrics,
 		/Production measurements must use the existing logged-in Chrome tab/
@@ -488,6 +515,10 @@ it('keeps synthetic performance URLs deterministic and cache control explicit', 
 	assert.match(
 		competitionsMeasurement,
 		/Production measurements must use the existing logged-in Chrome tab/
+	)
+	assert.match(
+		readFileSync('e2e/public-experience.spec.ts', 'utf8'),
+		/isProductionMeasurementUrl\(baseURL/
 	)
 	assert.doesNotMatch(competitionsMeasurement, /_competitionsPerf/)
 	assert.match(competitionsMeasurement, /COMPETITIONS_PERF_GAMEWEEK/)

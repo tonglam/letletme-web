@@ -41,6 +41,9 @@ export function missingMetricReasons(sample) {
 	if (sample?.browserCache === 'cold' && sample?.browserCacheApplied !== true)
 		reasons.browserCache =
 			sample?.browserCacheReason ?? 'cold browser-cache control was unavailable'
+	if (sample?.browserCache === 'warm' && sample?.browserCachePrimed !== true)
+		reasons.browserCache =
+			sample?.browserCacheReason ?? 'warm browser-cache prime was unavailable'
 	return reasons
 }
 
@@ -58,6 +61,11 @@ export function classifyPerformanceStatus(sample, options = {}) {
 	const budgetMs = options.budgetMs ?? 2_500
 	const metric = options.metric ?? 'readyMs'
 	if (sample?.browserCache === 'cold' && sample?.browserCacheApplied !== true)
+		return 'BLOCKED'
+	if (
+		sample?.browserCache === 'warm' &&
+		(sample?.browserCacheApplied !== true || sample?.browserCachePrimed !== true)
+	)
 		return 'BLOCKED'
 	const value = sample?.[metric]
 	if (typeof value !== 'number' || !Number.isFinite(value)) return 'NOT_OBSERVED'
@@ -306,7 +314,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 	}
 	page.on('requestfinished', onRequestFinished)
 	const browserCache = options.browserCache ?? 'uncontrolled'
-	const sample = { ...performanceMetadata(), browserVersion: browser.version(), profile: profile.name, viewport: profile.viewport, cpuRate: profile.name === 'mobile' ? 4 : 1, network: profile.name === 'mobile' ? '150ms RTT / 1.6Mbps down / 750Kbps up' : 'unthrottled', browserCache, browserCacheApplied: browserCache === 'uncontrolled' ? null : false, serverCache: options.serverCache ?? 'uncontrolled', url: String(url), phase: 'navigation', budgetMs: options.budgetMs ?? 2_500, performanceMetric: options.performanceMetric ?? 'readyMs', status: null, readyMs: null, lcpMs: null, cls: null, inpMs: null, fcpMs: null, ttfbMs: null, htmlResponseMs: null, observedLongTaskBlockingMs: null, error: null }
+	const sample = { ...performanceMetadata(), browserVersion: browser.version(), profile: profile.name, viewport: profile.viewport, cpuRate: profile.name === 'mobile' ? 4 : 1, network: profile.name === 'mobile' ? '150ms RTT / 1.6Mbps down / 750Kbps up' : 'unthrottled', browserCache, browserCacheApplied: browserCache === 'uncontrolled' ? null : false, browserCachePrimed: browserCache === 'warm' ? false : null, serverCache: options.serverCache ?? 'uncontrolled', url: String(url), phase: 'navigation', budgetMs: options.budgetMs ?? 2_500, performanceMetric: options.performanceMetric ?? 'readyMs', status: null, readyMs: null, lcpMs: null, cls: null, inpMs: null, fcpMs: null, ttfbMs: null, htmlResponseMs: null, observedLongTaskBlockingMs: null, error: null }
 	let timer
 	let releaseThrottle
 	let releaseBrowserCache
@@ -339,6 +347,22 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				}
 				const target = new URL(url)
 				target.searchParams.set('_perfSource', 'synthetic')
+				if (browserCache === 'warm') {
+					const primingPage = await awaitObservation(context.newPage())
+					try {
+						const primeResponse = await awaitObservation(
+							primingPage.goto(target.href, { waitUntil: 'load' })
+						)
+						if (!primeResponse || primeResponse.status() >= 400)
+							throw new Error('Warm browser-cache prime returned an error response')
+						sample.browserCachePrimed = true
+					} catch (error) {
+						sample.browserCacheReason = `warm-cache-prime-failed: ${error.message}`
+						throw error
+					} finally {
+						await primingPage.close().catch(() => {})
+					}
+				}
 				const response = await awaitObservation(
 					page.goto(target.href, { waitUntil: 'commit' })
 				)
@@ -361,10 +385,15 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				if (readyMetricName) {
 					await awaitObservation(
 						page.waitForFunction(
-							name =>
-								typeof window.__performanceMetrics?.ready?.[name] ===
-								'number',
-								readyMetricName
+							name => {
+								const metrics = window.__performanceMetrics
+								const readyDetail = metrics?.readyDetails?.[name]
+								return (
+									typeof metrics?.ready?.[name] === 'number' ||
+									(readyDetail != null && readyDetail.result !== undefined && readyDetail.result !== 'ok')
+								)
+							},
+							readyMetricName
 						)
 					)
 					sample.readyMs = await awaitObservation(
@@ -372,7 +401,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 							name => window.__performanceMetrics.ready[name],
 							readyMetricName
 						)
-					)
+					) ?? null
 				}
 				if (target.pathname.endsWith('/live/competitions') && options.requireCompetitionMarker !== false) {
 					const expectedGameweek = target.searchParams.get('gw')
