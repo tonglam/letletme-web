@@ -6,6 +6,13 @@ const read = (path: string) =>
 	readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
 describe('data governance consumer probe contract', () => {
+	it('accepts versioned registry keys used by the Data probe', async () => {
+		const source = await read(
+			'app/api/ops/data-contracts/[contractKey]/route.ts'
+		)
+		assert.match(source, /CONTRACT_KEY = \/\^\[a-z0-9\]\[a-z0-9.-\]\{0,63\}\$\//)
+	})
+
 	it('requires ready market evidence and a canonical, matching live revision', async () => {
 		const source = await read('lib/data-governance-probe.ts')
 		assert.match(source, /market\.status === 'READY'/)
