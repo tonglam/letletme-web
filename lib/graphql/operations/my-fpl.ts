@@ -809,6 +809,33 @@ export interface MyTournamentGameweekReviewResponse {
 	myTournamentGameweekReview: MyTournamentGameweekReview
 }
 
+export interface MyTournamentReviewStatusEvent {
+	eventId: number
+	format: MyTournamentReviewFormat
+	state: MyTournamentReviewState
+	eligibleAt: string | null
+	readyAt: string | null
+	observedAt: string | null
+	nextAttemptAt: string | null
+	executionAttempts: number
+	sourceRechecks: number
+	degradedAt: string | null
+	revision: string | null
+	publishedAt: string | null
+	repairState: 'NONE' | 'OPEN'
+	errorCode: string | null
+}
+
+export interface MyTournamentReviewStatus {
+	tournamentId: number
+	latestFinalizedEventId: number | null
+	events: MyTournamentReviewStatusEvent[]
+}
+
+export interface MyTournamentReviewStatusResponse {
+	myTournamentReviewStatus: MyTournamentReviewStatus
+}
+
 export interface MyTournamentSeasonReview {
 	state: MyTournamentReviewState
 	tournamentId: number

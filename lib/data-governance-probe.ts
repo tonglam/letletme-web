@@ -10,7 +10,9 @@ import {
 } from '@/lib/graphql/operations/live'
 import {
 	GET_MY_FPL_MANAGER_GAMEWEEK,
-	type MyFplManagerGameweekResponse
+	GET_MY_TOURNAMENT_REVIEW_STATUS,
+	type MyFplManagerGameweekResponse,
+	type MyTournamentReviewStatusResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	GET_ENTRY_LIVE_COMPETITION_BOARD,
@@ -179,9 +181,14 @@ function canaryForContract(contractKey: string): DataGovernanceCanary {
 		'live-picks',
 		'league-tournament',
 		'my-fpl',
-		'official-h2h'
+		'official-h2h',
+		'my-tournament-review-v2.1'
 	])
-	const requiresTournament = new Set(['league-tournament', 'official-h2h'])
+	const requiresTournament = new Set([
+		'league-tournament',
+		'official-h2h',
+		'my-tournament-review-v2.1'
+	])
 	const requiresPlayers = contractKey === 'player-stats'
 	const entryId = requiresEntry.has(contractKey)
 		? parseCanaryInteger('DATA_GOVERNANCE_CANARY_ENTRY_ID')
@@ -611,6 +618,65 @@ async function probePlayerStats(
 	}
 }
 
+async function probeTournamentReview(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary
+): Promise<{ revision: string; complete: boolean }> {
+	if (config.entryId === null || config.tournamentId === null) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review canary is not configured'
+		)
+	}
+	const context = await getCoreEventContext()
+	assertScopeSeason(input.scopeKey, context.season)
+	const response =
+		await executeServerQueryWithSession<MyTournamentReviewStatusResponse>(
+			canarySession(config),
+			GET_MY_TOURNAMENT_REVIEW_STATUS,
+			{ tournamentId: config.tournamentId },
+			{
+				cache: 'no-store',
+				timeoutMs: 5_000,
+				contract: 'my-tournament-review-v2.1'
+			}
+		)
+	const status = response.myTournamentReviewStatus
+	if (!status || status.tournamentId !== config.tournamentId) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review status returned the wrong tournament'
+		)
+	}
+	const eventId = input.eventId ?? status.latestFinalizedEventId
+	if (!positiveInteger(eventId)) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review status has no eligible event'
+		)
+	}
+	const event = status.events.find(candidate => candidate.eventId === eventId)
+	if (!event) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review status has no matching event'
+		)
+	}
+	const observedRevision = revision(event.revision)
+	return {
+		revision: observedRevision,
+		complete:
+			event.state === 'READY' &&
+			event.readyAt !== null &&
+			event.publishedAt !== null &&
+			event.repairState === 'NONE' &&
+			event.errorCode === null &&
+			(input.producerRevision === null ||
+				input.producerRevision === undefined ||
+				input.producerRevision === observedRevision)
+	}
+}
+
 /** Execute the same server loaders and GraphQL operations used by public pages. */
 export async function probeDataContract(
 	input: DataGovernanceProbeRequest
@@ -680,6 +746,12 @@ export async function probeDataContract(
 			case 'league-tournament':
 			case 'official-h2h': {
 				const result = await probeTournament(input, config, input.contractKey)
+				graphqlRevision = result.revision
+				complete = result.complete
+				break
+			}
+			case 'my-tournament-review-v2.1': {
+				const result = await probeTournamentReview(input, config)
 				graphqlRevision = result.revision
 				complete = result.complete
 				break

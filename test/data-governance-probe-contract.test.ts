@@ -47,6 +47,7 @@ describe('data governance consumer probe contract', () => {
 			'league-tournament',
 			'official-h2h',
 			'my-fpl',
+			'my-tournament-review-v2.1',
 			'player-stats'
 		]) {
 			assert.match(source, new RegExp(`case '${contractKey}'`))
@@ -75,5 +76,16 @@ describe('data governance consumer probe contract', () => {
 			/gameweek\.state === 'READY'[\s\S]*meta\.coverageState === 'COMPLETE'/
 		)
 		assert.doesNotMatch(source, /finalRanksPresent/)
+	})
+
+	it('probes the versioned tournament review through its status consumer', async () => {
+		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /GET_MY_TOURNAMENT_REVIEW_STATUS/)
+		assert.match(source, /contract: 'my-tournament-review-v2\.1'/)
+		assert.match(source, /event\.state === 'READY'/)
+		assert.match(source, /event\.readyAt !== null/)
+		assert.match(source, /event\.publishedAt !== null/)
+		assert.match(source, /event\.repairState === 'NONE'/)
+		assert.match(source, /input\.producerRevision === observedRevision/)
 	})
 })
