@@ -226,7 +226,7 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 
 		await expect(page.locator('[data-page-fdr-legend="true"]')).toHaveCount(1)
 		await page.locator('#my-squad summary').click()
-		const pitch = page.locator('[data-schedule-pitch="true"]')
+		const pitch = page.locator('[data-schedule-pitch="true"]:visible')
 		await expect(pitch).toBeVisible()
 		const initialRequestCount = fixtureWindowRequests.length
 		await pitch.getByRole('button').first().click()
