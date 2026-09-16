@@ -312,10 +312,6 @@ async function measureRun(browser, profile, scenario, index) {
 	for (const [key, value] of Object.entries(scenario.query)) {
 		runUrl.searchParams.set(key, value)
 	}
-	runUrl.searchParams.set(
-		'_playerStatsPerf',
-		`${profile.name}-${scenario.name}-${index}-${Date.now()}`
-	)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
 	let response
 	const navigation = await measureNavigation(browser, profile, runUrl.toString(), {

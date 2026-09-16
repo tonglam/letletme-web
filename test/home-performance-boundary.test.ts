@@ -246,11 +246,15 @@ describe('Home first-screen performance boundary', () => {
 it('performance acceptance rejects missing values and preserves missing sample counts', async () => {
 	const {
 		atMost,
+		classifyFunctionalStatus,
+		classifyNavigationSample,
+		classifyPerformanceStatus,
 		distribution,
 		extractReadyMetrics,
 		hasValidProductionIdentity,
 		isUsableReadyMetric,
 		isProductionMeasurementUrl,
+		missingMetricReasons,
 		navigationComplete,
 		readyMetricFor
 	} = await import('../scripts/performance-metrics.mjs')
@@ -278,6 +282,95 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'error' }), false)
 	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'ok', interactionId: 'old' }), false)
 	assert.equal(isUsableReadyMetric({ name: 'READY', value: 1, result: 'ok', interactionId: 'current' }, true), true)
+	assert.equal(
+		classifyFunctionalStatus({
+			status: 200,
+			businessResult: 'ok',
+			readyMs: null
+		}),
+		'PASS'
+	)
+	assert.equal(
+		classifyFunctionalStatus({
+			status: 200,
+			businessResult: 'unavailable',
+			readyMs: 100
+		}),
+		'FAIL'
+	)
+	assert.equal(
+		classifyFunctionalStatus({ status: 200, readyMs: null }),
+		'NOT_OBSERVED'
+	)
+	assert.equal(
+		classifyPerformanceStatus({ readyMs: 2_500 }, { budgetMs: 2_500 }),
+		'PASS'
+	)
+	assert.equal(
+		classifyPerformanceStatus({ readyMs: 2_501 }, { budgetMs: 2_500 }),
+		'FAIL'
+	)
+	assert.equal(
+		classifyPerformanceStatus({ readyMs: null }, { budgetMs: 2_500 }),
+		'NOT_OBSERVED'
+	)
+	assert.equal(
+		classifyPerformanceStatus(
+			{ readyMs: 100, browserCache: 'cold', browserCacheApplied: false },
+			{ budgetMs: 2_500 }
+		),
+		'BLOCKED'
+	)
+	assert.deepEqual(
+		missingMetricReasons({
+			readyMs: 100,
+			lcpMs: 10,
+			cls: 0,
+			inpMs: 20,
+			fcpMs: 5,
+			ttfbMs: 3,
+			browserCache: 'cold',
+			browserCacheApplied: false,
+			browserCacheReason: 'CDP unavailable'
+		}),
+		{ browserCache: 'CDP unavailable' }
+	)
+	assert.deepEqual(
+		missingMetricReasons({
+			phase: 'navigation',
+			lcpMs: 100,
+			cls: null,
+			inpMs: null,
+			fcpMs: 80,
+			ttfbMs: 20,
+			readyMs: 500
+		}),
+		{
+			cls: 'metric was not observed before the observation ended',
+			inpMs: 'no interaction occurred during navigation measurement'
+		}
+	)
+	assert.deepEqual(
+		classifyNavigationSample({
+			status: 200,
+			phase: 'navigation',
+			businessResult: 'ok',
+			readyMs: 1_000,
+			lcpMs: null,
+			cls: 0,
+			inpMs: null,
+			fcpMs: 1,
+			ttfbMs: 1
+		}),
+		{
+			functionalStatus: 'PASS',
+			performanceStatus: 'PASS',
+			missingReason: {
+				lcpMs: 'metric was not observed before the observation ended',
+				inpMs: 'no interaction occurred during navigation measurement'
+			}
+		}
+	)
 	assert.deepEqual(
 		extractReadyMetrics({
 			name: 'FIXTURES_WINDOW_READY',
@@ -317,6 +410,28 @@ it('ships a valid favicon for browsers that probe the conventional path', () => 
 	assert.equal(favicon.readUInt16LE(2), 1)
 })
 
+it('keeps synthetic performance URLs deterministic and cache control explicit', () => {
+	for (const name of [
+		'home',
+		'fixtures',
+		'gameweek',
+		'market',
+		'player-stats',
+		'trends',
+		'competitions'
+	]) {
+		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
+		assert.doesNotMatch(
+			source,
+			/searchParams\.set\([\s\S]*?['"](?:cold|_[A-Za-z]+Perf)['"]/
+		)
+	}
+	assert.match(
+		readFileSync('scripts/performance-metrics.mjs', 'utf8'),
+		/Network\.setCacheDisabled/
+	)
+})
+
 	it('uses the browser vitals build and the same page for navigation plus follow-up probes', () => {
 		const metrics = readFileSync('scripts/performance-metrics.mjs', 'utf8')
 	assert.match(metrics, /web-vitals\.iife\.js/)
@@ -325,20 +440,30 @@ it('ships a valid favicon for browsers that probe the conventional path', () => 
 	assert.match(metrics, /options\.onResponse\?\.\(response\)/)
 	assert.match(metrics, /readySequence/)
 	assert.match(metrics, /isUsableReadyMetric/)
+	assert.match(metrics, /classifyFunctionalStatus/)
+	assert.match(metrics, /classifyPerformanceStatus/)
+	assert.match(metrics, /missingMetricReasons/)
+	assert.match(metrics, /setBrowserCacheMode/)
+	assert.match(metrics, /browserCacheApplied/)
+	assert.match(
+		metrics,
+		/Production measurements must use the existing logged-in Chrome tab/
+	)
+	assert.match(metrics, /toolElapsedMs/)
 	assert.match(metrics, /allowInteractionMetrics/)
 	assert.match(metrics, /No ready metric configured/)
 	assert.match(metrics, /snapshotLongTaskObservation/)
 	assert.match(metrics, /finishLongTaskObservation\(page\)/)
 	assert.match(metrics, /requests: requests\.slice\(\)/)
 	assert.match(metrics, /page\.off\('requestfinished'/)
-		assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
-		assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
-		assert.match(metrics, /observationTask = \(async \(\) =>/)
-		assert.match(metrics, /cancelObservation\?\.\(timeoutError\)/)
-		assert.match(metrics, /await observationTask\?\.catch\(\(\) => \{\}\)/)
-		assert.match(metrics, /target\.searchParams\.has\('gw'\)[\s\S]*actual\.searchParams\.get\('gw'\)/)
-		assert.match(metrics, /const expectedGameweek = target\.searchParams\.get\('gw'\)/)
-		assert.match(metrics, /data-competition-gameweek=/)
+	assert.match(metrics, /if \(ownsPage\) await releaseThrottle/)
+	assert.match(metrics, /if \(ownsPage\) void page\.close\(\)/)
+	assert.match(metrics, /observationTask = \(async \(\) =>/)
+	assert.match(metrics, /cancelObservation\?\.\(timeoutError\)/)
+	assert.match(metrics, /await observationTask\?\.catch\(\(\) => \{\}\)/)
+	assert.match(metrics, /target\.searchParams\.has\('gw'\)[\s\S]*actual\.searchParams\.get\('gw'\)/)
+	assert.match(metrics, /const expectedGameweek = target\.searchParams\.get\('gw'\)/)
+	assert.match(metrics, /data-competition-gameweek=/)
 	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
 	assert.match(readFileSync('scripts/measure-competitions-performance.mjs', 'utf8'), /navigationComplete:/)
 	const homeMeasurement = readFileSync('scripts/measure-home-performance.mjs', 'utf8')
@@ -356,6 +481,16 @@ it('ships a valid favicon for browsers that probe the conventional path', () => 
 		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
 		assert.match(source, /measureNavigation\([\s\S]*\{[\s\S]*page,[\s\S]*onResponse/)
 	}
+	const competitionsMeasurement = readFileSync(
+		'scripts/measure-competitions-performance.mjs',
+		'utf8'
+	)
+	assert.match(
+		competitionsMeasurement,
+		/Production measurements must use the existing logged-in Chrome tab/
+	)
+	assert.doesNotMatch(competitionsMeasurement, /_competitionsPerf/)
+	assert.match(competitionsMeasurement, /COMPETITIONS_PERF_GAMEWEEK/)
 	for (const name of ['home', 'gameweek', 'player-stats']) {
 		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
 		assert.match(source, /extractReadyMetrics/)

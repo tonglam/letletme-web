@@ -19,6 +19,59 @@ export function percentile(values, p) {
 export function atMost(value, limit) {
 	return typeof value === 'number' && Number.isFinite(value) && value <= limit
 }
+
+const navigationMetricKeys = ['lcpMs', 'cls', 'inpMs', 'fcpMs', 'ttfbMs', 'readyMs']
+
+/**
+ * Keep missing measurements explicit. A missing browser metric is evidence
+ * about the collector, not a zero-duration success and not a product failure.
+ */
+export function missingMetricReasons(sample) {
+	const defaultReason = sample?.error ?? 'metric was not observed before the observation ended'
+	const reasons = Object.fromEntries(
+		navigationMetricKeys
+			.filter(key => sample?.[key] == null)
+			.map(key => [
+				key,
+				key === 'inpMs' && sample?.phase === 'navigation'
+					? 'no interaction occurred during navigation measurement'
+					: defaultReason
+			])
+	)
+	if (sample?.browserCache === 'cold' && sample?.browserCacheApplied !== true)
+		reasons.browserCache =
+			sample?.browserCacheReason ?? 'cold browser-cache control was unavailable'
+	return reasons
+}
+
+/** Classify the business terminal independently from Web Vitals completeness. */
+export function classifyFunctionalStatus(sample) {
+	if (sample?.status !== 200) return 'FAIL'
+	const businessResult = sample?.businessResult ?? sample?.readyResult
+	if (businessResult === 'ok') return 'PASS'
+	if (businessResult !== undefined && businessResult !== null) return 'FAIL'
+	return 'NOT_OBSERVED'
+}
+
+/** Classify the requested user-facing budget without treating missing values as pass. */
+export function classifyPerformanceStatus(sample, options = {}) {
+	const budgetMs = options.budgetMs ?? 2_500
+	const metric = options.metric ?? 'readyMs'
+	if (sample?.browserCache === 'cold' && sample?.browserCacheApplied !== true)
+		return 'BLOCKED'
+	const value = sample?.[metric]
+	if (typeof value !== 'number' || !Number.isFinite(value)) return 'NOT_OBSERVED'
+	return atMost(value, budgetMs) ? 'PASS' : 'FAIL'
+}
+
+/** Add the independent result fields consumed by production acceptance reports. */
+export function classifyNavigationSample(sample, options = {}) {
+	return {
+		functionalStatus: classifyFunctionalStatus(sample),
+		performanceStatus: classifyPerformanceStatus(sample, options),
+		missingReason: missingMetricReasons(sample)
+	}
+}
 export function isProductionMeasurementUrl(url) {
 	try {
 		const hostname = new URL(String(url)).hostname.toLowerCase()
@@ -190,6 +243,24 @@ export async function throttleProfile(page, profile) {
 	}
 }
 
+/** Apply a temporary browser-cache mode for isolated Chromium measurements. */
+export async function setBrowserCacheMode(page, mode = 'uncontrolled') {
+	if (mode !== 'cold' && mode !== 'warm') return null
+	try {
+		const cdp = await page.context().newCDPSession(page)
+		await cdp.send('Network.enable')
+		await cdp.send('Network.setCacheDisabled', {
+			cacheDisabled: mode === 'cold'
+		})
+		return async () => {
+			await cdp.send('Network.setCacheDisabled', { cacheDisabled: false }).catch(() => {})
+			await cdp.detach().catch(() => {})
+		}
+	} catch {
+		return null
+	}
+}
+
 export async function finishLongTaskObservation(page) {
 	await page.evaluate(() => window.__finishLongTaskObservation?.())
 }
@@ -214,6 +285,11 @@ export function readyMetricFor(url) {
 
 /** A dedicated navigation, without clicks. Page hide finalizes web-vitals. Pass page to keep follow-up probes on this navigation. */
 export async function measureNavigation(browser, profile, url, options = {}) {
+	if (isProductionMeasurementUrl(url))
+		throw new Error(
+			'Production measurements must use the existing logged-in Chrome tab; Playwright navigation collectors accept non-production origins only'
+		)
+	const toolStartedAt = performance.now()
 	const ownContext = !options.context && !options.page
 	const ownsPage = !options.page
 	const context = options.context ?? options.page?.context() ?? await browser.newContext({ viewport: profile.viewport, storageState: options.storageState })
@@ -229,9 +305,11 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 		requests.push({ path: new URL(request.url()).pathname, type: request.resourceType(), method: request.method(), timing: request.timing() })
 	}
 	page.on('requestfinished', onRequestFinished)
-	const sample = { ...performanceMetadata(), browserVersion: browser.version(), profile: profile.name, viewport: profile.viewport, cpuRate: profile.name === 'mobile' ? 4 : 1, network: profile.name === 'mobile' ? '150ms RTT / 1.6Mbps down / 750Kbps up' : 'unthrottled', browserCache: options.browserCache ?? 'cold', serverCache: options.serverCache ?? 'uncontrolled', url: String(url), phase: 'navigation', status: null, readyMs: null, lcpMs: null, cls: null, inpMs: null, fcpMs: null, ttfbMs: null, htmlResponseMs: null, observedLongTaskBlockingMs: null, error: null }
+	const browserCache = options.browserCache ?? 'uncontrolled'
+	const sample = { ...performanceMetadata(), browserVersion: browser.version(), profile: profile.name, viewport: profile.viewport, cpuRate: profile.name === 'mobile' ? 4 : 1, network: profile.name === 'mobile' ? '150ms RTT / 1.6Mbps down / 750Kbps up' : 'unthrottled', browserCache, browserCacheApplied: browserCache === 'uncontrolled' ? null : false, serverCache: options.serverCache ?? 'uncontrolled', url: String(url), phase: 'navigation', budgetMs: options.budgetMs ?? 2_500, performanceMetric: options.performanceMetric ?? 'readyMs', status: null, readyMs: null, lcpMs: null, cls: null, inpMs: null, fcpMs: null, ttfbMs: null, htmlResponseMs: null, observedLongTaskBlockingMs: null, error: null }
 	let timer
 	let releaseThrottle
+	let releaseBrowserCache
 	let observationTask
 	let observationFinished = false
 	let cancelObservation
@@ -252,6 +330,13 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				releaseThrottle = await awaitObservation(
 					throttleProfile(page, profile)
 				)
+				releaseBrowserCache = await awaitObservation(
+					setBrowserCacheMode(page, browserCache)
+				)
+				sample.browserCacheApplied = browserCache === 'uncontrolled' || Boolean(releaseBrowserCache)
+				if (browserCache !== 'uncontrolled' && !releaseBrowserCache) {
+					sample.browserCacheReason = 'browser-cache-control-unavailable'
+				}
 				const target = new URL(url)
 				target.searchParams.set('_perfSource', 'synthetic')
 				const response = await awaitObservation(
@@ -342,6 +427,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 						page.screenshot({ path: options.screenshot, fullPage: true })
 					)
 				if (ownsPage) await releaseThrottle?.()
+				await releaseBrowserCache?.()
 				if (ownsPage)
 					await awaitObservation(
 						page.goto('about:blank', { waitUntil: 'commit' })
@@ -369,6 +455,7 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 	} finally {
 		clearTimeout(timer)
 		await observationTask?.catch(() => {})
+		await releaseBrowserCache?.()
 		page.off('pageerror', onPageError)
 		page.off('requestfinished', onRequestFinished)
 		if (ownsPage) await page.close().catch(() => {})
@@ -379,7 +466,12 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 	if (!complete && isProductionMeasurementUrl(sample.url) && !sample.error) sample.error = 'Production measurement missing valid release/origin identity or required navigation metric'
 	sample.navigationComplete = complete
 	sample.observationInterval = { startMs: 0, endMs: sample.endMs ?? null, endReason: sample.error ?? 'business ready plus 5000ms' }
-	sample.missing = Object.fromEntries(['lcpMs', 'cls', 'inpMs', 'fcpMs', 'ttfbMs', 'readyMs'].filter(key => sample[key] == null).map(key => [key, key === 'inpMs' ? 'no interaction in navigation phase' : sample.error ?? 'no observation']))
+	sample.toolElapsedMs = Number((performance.now() - toolStartedAt).toFixed(2))
+	Object.assign(sample, classifyNavigationSample(sample, {
+		budgetMs: sample.budgetMs,
+		metric: sample.performanceMetric
+	}))
+	sample.missing = sample.missingReason
 	if (process.env.PERF_OUTPUT_DIR) {
 		mkdirSync(process.env.PERF_OUTPUT_DIR, { recursive: true })
 		writeFileSync(path.join(process.env.PERF_OUTPUT_DIR, `${Date.now()}-${profile.name}-${Math.random().toString(16).slice(2)}.json`), JSON.stringify(sample, null, 2))

@@ -88,10 +88,6 @@ try {
 			})
 
 			const runUrl = new URL(targetUrl)
-			runUrl.searchParams.set(
-				'_fixturesPerf',
-				`${profile.name}-${index}-${Date.now()}`
-			)
 			runUrl.searchParams.set('_perfSource', 'synthetic')
 			let response
 			const navigation = await measureNavigation(browser, profile, runUrl.toString(), {
