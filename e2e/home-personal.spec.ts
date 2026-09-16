@@ -226,7 +226,7 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 
 		await expect(page.locator('[data-page-fdr-legend="true"]')).toHaveCount(1)
 		await page.locator('#my-squad summary').click()
-		const pitch = page.locator('[data-schedule-pitch="true"]')
+		const pitch = page.locator('[data-schedule-pitch="true"]:visible')
 		await expect(pitch).toBeVisible()
 		const initialRequestCount = fixtureWindowRequests.length
 		await pitch.getByRole('button').first().click()
@@ -710,4 +710,59 @@ test('canonical competition board and compatibility redirect preserve the commit
 		await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).first()).toBeVisible()
 		await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
 	} finally { await session.cleanup() }
+})
+
+test('live points reloads a repeated entry without stranding the loading state', async ({ page }) => {
+	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the deterministic local GraphQL fixture')
+	const session = await createSession({ entryId: 15702 })
+	const entryRequests: number[] = []
+	let releaseRefresh!: () => void
+	const refreshGate = new Promise<void>(resolve => {
+		releaseRefresh = resolve
+	})
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as {
+			query?: string
+			variables?: { entryId?: number }
+		}
+		if (payload.query?.includes('GetLiveCalcPoints')) {
+			entryRequests.push(payload.variables?.entryId ?? 0)
+			if (entryRequests.length === 2) await refreshGate
+		}
+		await route.continue()
+	})
+	try {
+		await addSessionCookie(page, session.cookie)
+		await page.goto('/live/points')
+		const entryInput = page.getByRole('spinbutton', { name: 'FPL entry ID', exact: true })
+		const submit = page.getByRole('button', { name: 'View Live Points', exact: true })
+		const pitch = page.getByRole('region', { name: /formation/ })
+		const players = pitch.getByRole('button', { name: /View details for Player/ })
+		await entryInput.fill('123')
+		await submit.click()
+		await expect(players).toHaveCount(15)
+		await expect.poll(() => entryRequests).toEqual([123])
+		await submit.click()
+		await expect.poll(() => entryRequests).toEqual([123, 123])
+		// Another submission must reuse the in-flight request without invalidating it.
+		await submit.click()
+		await expect(pitch).toBeVisible()
+		const refreshed = page.waitForResponse(response =>
+			response.url().endsWith('/api/graphql') &&
+			response.request().postData()?.includes('GetLiveCalcPoints') === true
+		)
+		releaseRefresh()
+		expect((await refreshed).status()).toBe(200)
+		await expect(page.getByText(/Loading live points for entry/)).toHaveCount(0)
+		await expect(players).toHaveCount(15)
+		expect(entryRequests).toEqual([123, 123])
+		await entryInput.fill('456')
+		await submit.click()
+		await expect.poll(() => entryRequests).toEqual([123, 123, 456])
+		await expect(page.getByText(/Loading live points for entry/)).toHaveCount(0)
+		await expect(players).toHaveCount(15)
+	} finally {
+		releaseRefresh()
+		await session.cleanup()
+	}
 })
