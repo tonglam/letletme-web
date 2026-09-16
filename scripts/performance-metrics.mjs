@@ -45,9 +45,47 @@ export function performanceMetadata() {
 	return { schemaVersion: 2, sourceSha, collectorSourceSha: sourceSha, collectorDigest: createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'), collector: 'web-vitals@6.2.1', measuredAt: new Date().toISOString() }
 }
 
+/**
+ * Extracts the ready markers emitted by both telemetry generations.
+ *
+ * The first generation sent one `{ name, value }` object. The current Web
+ * client sends a v2 batch whose samples carry `metricName` and `value`.
+ * Keeping this pure makes the measurement contract testable without a browser.
+ */
+export function extractReadyMetrics(payload) {
+	if (payload == null || typeof payload !== 'object') return []
+	const metrics = []
+	if (
+		typeof payload.name === 'string' &&
+		typeof payload.value === 'number' &&
+		Number.isFinite(payload.value)
+	) {
+		metrics.push({ ...payload })
+	}
+	if (!Array.isArray(payload.samples)) return metrics
+	for (const sample of payload.samples) {
+		if (sample == null || typeof sample !== 'object') continue
+		const name =
+			typeof sample.metricName === 'string'
+				? sample.metricName
+				: typeof sample.name === 'string'
+					? sample.name
+					: null
+		if (
+			!name ||
+			typeof sample.value !== 'number' ||
+			!Number.isFinite(sample.value)
+		) {
+			continue
+		}
+		metrics.push({ ...sample, name })
+	}
+	return metrics
+}
+
 /** The alias is used only by the existing interaction diagnostics. */
 export async function installVitals(page, alias = '__performanceMetrics') {
-	const initialize = ({ aliasName, captureTelemetry }) => {
+	const initialize = ({ aliasName, captureTelemetry }, extractMetrics) => {
 		const existing = window.__performanceMetrics
 		const clsSupported = typeof PerformanceObserver !== 'undefined' && Array.isArray(PerformanceObserver.supportedEntryTypes) && PerformanceObserver.supportedEntryTypes.includes('layout-shift')
 		const state = existing ?? { lcp: null, cls: clsSupported ? 0 : null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {}, readySequence: {}, readyDetails: {} }
@@ -70,8 +108,8 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 		const capture = async body => {
 			try {
 				const raw = typeof body === 'string' ? body : await body?.text?.()
-				const metric = JSON.parse(raw)
-				if (typeof metric.name === 'string' && typeof metric.value === 'number') {
+				const payload = JSON.parse(raw)
+				for (const metric of extractMetrics(payload)) {
 					state.ready[metric.name] = metric.value
 					state.readySequence[metric.name] = (state.readySequence[metric.name] ?? 0) + 1
 					state.readyDetails[metric.name] = metric
@@ -94,7 +132,7 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 			return fetch(input, init)
 		}
 	}
-	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: true })})` })
+	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: true })}, ${extractReadyMetrics.toString()})` })
 }
 
 export async function throttleProfile(page, profile) {

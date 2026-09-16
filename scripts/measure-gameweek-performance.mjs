@@ -1,4 +1,4 @@
-import { atMost, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
+import { atMost, extractReadyMetrics, finishLongTaskObservation, navigationComplete, installVitals, measureNavigation, performanceMetadata, percentile, distribution } from './performance-metrics.mjs'
 import { brotliCompressSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
@@ -96,8 +96,9 @@ async function measureRun(browser, profile, index) {
 	})
 	await page.route('**/api/vitals', async route => {
 		try {
-			const metric = route.request().postDataJSON()
-			if (metric?.name === 'GAMEWEEK_CONTENT_READY') readyMetric = metric.value
+			for (const metric of extractReadyMetrics(route.request().postDataJSON())) {
+				if (metric.name === 'GAMEWEEK_CONTENT_READY') readyMetric = metric.value
+			}
 		} catch {
 			// Keep the performance run independent from telemetry parsing.
 		}

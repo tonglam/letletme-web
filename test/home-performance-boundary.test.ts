@@ -247,6 +247,7 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	const {
 		atMost,
 		distribution,
+		extractReadyMetrics,
 		hasValidProductionIdentity,
 		isProductionMeasurementUrl,
 		navigationComplete
@@ -265,6 +266,43 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'overseas' }), true)
 	assert.equal(navigationComplete({ ...productionSample, releaseSha: 'a'.repeat(40), origin: 'untrusted-proxy' }), false)
 	assert.equal(isProductionMeasurementUrl('http://localhost:3200/explore/fixtures'), false)
+	assert.deepEqual(
+		extractReadyMetrics({
+			name: 'FIXTURES_WINDOW_READY',
+			value: 123,
+			metricId: 'legacy'
+		}),
+		[{ name: 'FIXTURES_WINDOW_READY', value: 123, metricId: 'legacy' }]
+	)
+	assert.deepEqual(
+		extractReadyMetrics({
+			schemaVersion: 2,
+			samples: [
+				{ metricName: 'FIXTURES_WINDOW_READY', value: 456, result: 'ok' },
+				{ metric: 'lcp_ms', value: 789 },
+				{ metricName: 'NON_FINITE', value: Number.NaN },
+				{ metricName: 42, value: 1 }
+			]
+		}),
+		[
+			{
+				metricName: 'FIXTURES_WINDOW_READY',
+				value: 456,
+				result: 'ok',
+				name: 'FIXTURES_WINDOW_READY'
+			}
+		]
+	)
+	assert.deepEqual(
+		extractReadyMetrics({ samples: [{ name: 'HOME_READY', value: 0 }] }),
+		[{ name: 'HOME_READY', value: 0 }]
+	)
+})
+
+it('ships a valid favicon for browsers that probe the conventional path', () => {
+	const favicon = readFileSync('public/favicon.ico')
+	assert.equal(favicon.readUInt16LE(0), 0)
+	assert.equal(favicon.readUInt16LE(2), 1)
 })
 
 	it('uses the browser vitals build and the same page for navigation plus follow-up probes', () => {
@@ -302,5 +340,9 @@ it('performance acceptance rejects missing values and preserves missing sample c
 	]) {
 		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
 		assert.match(source, /measureNavigation\([\s\S]*\{[\s\S]*page,[\s\S]*onResponse/)
+	}
+	for (const name of ['home', 'gameweek', 'player-stats']) {
+		const source = readFileSync(`scripts/measure-${name}-performance.mjs`, 'utf8')
+		assert.match(source, /extractReadyMetrics/)
 	}
 })
