@@ -3,7 +3,6 @@
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
 import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
-import { buildLivePlayerDetail } from '@/components/live/player-detail-model'
 import { TeamStats } from '@/components/live/TeamStats'
 import { ShareActions } from '@/components/share/ShareActions'
 import { SquadPitch } from '@/components/squad-pitch/SquadPitch'
@@ -23,10 +22,16 @@ import {
 } from '@/lib/live-score-v2'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
-import type { PlayerDetail } from '@/types/player-detail'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ReactNode
+} from 'react'
 import type { NumberFormatOptions } from 'use-intl'
 import {
 	entryLookupPresentation,
@@ -37,6 +42,7 @@ import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import { formatLivePointsShareText } from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
 import { LivePointsTransfers } from './LivePointsTransfers'
+import { useLivePlayerDetail } from '../_hooks/useLivePlayerDetail'
 
 export function LivePointsDashboard({
 	entrySearch,
@@ -225,19 +231,15 @@ export function LivePointsDashboard({
 				]
 			}
 		: undefined
-	const [selectedPitchPlayer, setSelectedPitchPlayer] =
-		useState<PlayerDetail | null>(null)
 	const squadPitchRef = useRef<HTMLElement | null>(null)
-
-	const handlePitchPlayerClick = useCallback(
-		(playerId: string) => {
-			const player = [...startingPlayers, ...benchPlayers].find(
-				candidate => candidate.id === playerId
-			)
-			if (player) setSelectedPitchPlayer(buildLivePlayerDetail(player))
-		},
+	const allPlayers = useMemo(
+		() => [...startingPlayers, ...benchPlayers],
 		[benchPlayers, startingPlayers]
 	)
+	const pitchPlayerDetail = useLivePlayerDetail({
+		eventId: gameweek,
+		players: allPlayers
+	})
 
 	const shareText = useCallback(() => {
 		if (!liveData) return ''
@@ -422,7 +424,7 @@ export function LivePointsDashboard({
 					<div className="mb-8">
 						<SquadPitch
 							ref={squadPitchRef}
-							onPlayerClick={handlePitchPlayerClick}
+						onPlayerClick={pitchPlayerDetail.openPlayerDetail}
 							players={squadPitchPlayers}
 							benchPlayers={squadPitchBenchPlayers}
 							benchTitle={t('substitutes')}
@@ -442,9 +444,10 @@ export function LivePointsDashboard({
 					</div>
 
 					<PlayerDetailModal
-						player={selectedPitchPlayer}
-						isOpen={selectedPitchPlayer !== null}
-						onClose={() => setSelectedPitchPlayer(null)}
+						player={pitchPlayerDetail.selectedPlayer}
+						isOpen={pitchPlayerDetail.isOpen}
+						isLoading={pitchPlayerDetail.isLoading}
+						onClose={pitchPlayerDetail.closePlayerDetail}
 					/>
 
 					<section aria-labelledby="live-squad-heading">

@@ -1,4 +1,4 @@
-import { finishLongTaskObservation, installVitals, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
+import { extractReadyMetrics, finishLongTaskObservation, installVitals, isUsableReadyMetric, measureNavigation, navigationComplete, performanceMetadata, percentile, distribution, throttleProfile } from './performance-metrics.mjs'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOME_PERF_URL ?? 'https://letletme.top/'
@@ -20,6 +20,47 @@ const profiles = [
 	{ name: 'desktop', viewport: { width: 1440, height: 900 }, slow4g: false },
 	{ name: 'mobile', viewport: { width: 390, height: 844 }, slow4g: true }
 ]
+
+const homeReadyMetricNames = new Set([
+	'HOME_TEAM_DESK_READY',
+	'HOME_LEAGUE_RANKS_READY'
+])
+
+const captureHomeTelemetry = (extractMetrics, usableMetric) => {
+	const captureMetric = async body => {
+		try {
+			const raw =
+				typeof body === 'string'
+					? body
+					: body && typeof body.text === 'function'
+						? await body.text()
+						: ''
+			const payload = JSON.parse(raw)
+			for (const metric of extractMetrics(payload)) {
+				if (
+					usableMetric(metric) &&
+					(metric.name === 'HOME_TEAM_DESK_READY' ||
+						metric.name === 'HOME_LEAGUE_RANKS_READY') &&
+					typeof metric.value === 'number'
+				) {
+					window.__homePerformance.ready[metric.name] = metric.value
+				}
+			}
+		} catch {}
+	}
+	const nativeBeacon = navigator.sendBeacon?.bind(navigator)
+	if (nativeBeacon) {
+		navigator.sendBeacon = (url, data) => {
+			if (String(url).includes('/api/vitals')) void captureMetric(data)
+			return nativeBeacon(url, data)
+		}
+	}
+	const nativeFetch = window.fetch.bind(window)
+	window.fetch = (input, init) => {
+		if (String(input).includes('/api/vitals')) void captureMetric(init?.body)
+		return nativeFetch(input, init)
+	}
+}
 
 
 
@@ -133,47 +174,16 @@ async function measureColdLoad(browser, profile, index) {
 		}
 		try {
 			const payload = JSON.parse(request.postData() ?? '{}')
-			if (
-				(payload.name === 'HOME_TEAM_DESK_READY' ||
-					payload.name === 'HOME_LEAGUE_RANKS_READY') &&
-				typeof payload.value === 'number'
-			) {
-				routeReady.set(payload.name, payload.value)
+			for (const metric of extractReadyMetrics(payload)) {
+				if (isUsableReadyMetric(metric) && homeReadyMetricNames.has(metric.name)) {
+					routeReady.set(metric.name, metric.value)
+				}
 			}
 		} catch {}
 	})
 	await installVitals(page, '__homePerformance')
-	await page.addInitScript(() => {
-		const captureMetric = async body => {
-			try {
-				const raw =
-					typeof body === 'string'
-						? body
-						: body && typeof body.text === 'function'
-							? await body.text()
-							: ''
-				const payload = JSON.parse(raw)
-				if (
-					(payload.name === 'HOME_TEAM_DESK_READY' ||
-						payload.name === 'HOME_LEAGUE_RANKS_READY') &&
-					typeof payload.value === 'number'
-				) {
-					window.__homePerformance.ready[payload.name] = payload.value
-				}
-			} catch {}
-		}
-		const nativeBeacon = navigator.sendBeacon?.bind(navigator)
-		if (nativeBeacon) {
-			navigator.sendBeacon = (url, data) => {
-				if (String(url).includes('/api/vitals')) void captureMetric(data)
-				return nativeBeacon(url, data)
-			}
-		}
-		const nativeFetch = window.fetch.bind(window)
-		window.fetch = (input, init) => {
-			if (String(input).includes('/api/vitals')) void captureMetric(init?.body)
-			return nativeFetch(input, init)
-		}
+	await page.addInitScript({
+		content: `;(${captureHomeTelemetry.toString()})(${extractReadyMetrics.toString()}, ${isUsableReadyMetric.toString()})`
 	})
 	const navigationStartedAt = performance.now()
 	const runUrl = new URL(baseUrl)

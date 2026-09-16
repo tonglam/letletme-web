@@ -666,7 +666,10 @@ export function PriceChangesBoard({
 		snapshotUpdatedAtLabel
 	])
 	return (
-		<div className="space-y-5">
+		<div
+			className="space-y-5"
+			{...{ elementtiming: 'price-changes-board' }}
+		>
 			<CountdownCard
 				eyebrow={t('countdownEyebrow')}
 				title={t('countdownTitle')}

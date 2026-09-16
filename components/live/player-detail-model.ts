@@ -1,5 +1,12 @@
 import { resolvePointsBreakdown } from '@/app/live/points/_lib/live-points-breakdown'
-import { liveExplanationMatchesCurrentStats } from '@/app/live/points/_lib/live-points-model'
+import {
+	liveExplanationMatchesCurrentStats,
+	rollupBreakdownStats
+} from '@/app/live/points/_lib/live-points-model'
+import type {
+	EventLiveExplainItem,
+	PlayerLiveStats
+} from '@/lib/graphql/operations/live'
 import type { Player } from '@/types/player'
 import type { PlayerDetail } from '@/types/player-detail'
 
@@ -112,4 +119,63 @@ export function buildLivePlayerDetail(player: Player): PlayerDetail {
 		},
 		pointsBreakdown: resolved.lines,
 	}
+}
+
+export type LivePlayerDetailPayload = {
+	explain: EventLiveExplainItem | null
+	live: PlayerLiveStats | null
+}
+
+/**
+ * Merge a targeted live-detail response into the latest pick before deriving
+ * the modal view. The pick remains the source of identity and position; the
+ * live operation only refreshes event stats and explanation rows.
+ */
+export function buildLivePlayerDetailWithPayload(
+	player: Player,
+	payload: LivePlayerDetailPayload | null
+): PlayerDetail {
+	if (!payload) return buildLivePlayerDetail(player)
+
+	const playerId = Number(player.id)
+	const explanation =
+		payload.explain && payload.explain.elementId === playerId
+			? payload.explain
+			: null
+	const explanationStats = explanation?.stats
+		? { ...player.explanationStats, ...explanation.stats }
+		: player.explanationStats
+	const explanationRows =
+		explanation?.contributions ??
+		(explanation?.breakdown ?? []).flatMap(entry => entry.stats)
+	const live = payload.live
+	const enrichedPlayer: Player = {
+		...player,
+		...(live ? { bps: live.bps } : {}),
+		...(explanationStats ? { explanationStats } : {}),
+		...(explanationRows.length > 0
+			? { breakdownStats: rollupBreakdownStats(explanationRows) }
+			: {}),
+		stats: live
+			? {
+					...player.stats,
+					minutes: live.minutes,
+					goals: live.goalsScored,
+					assists: live.assists,
+					cleanSheets: live.cleanSheets,
+					saves: live.saves,
+					savePenalty: live.penaltiesSaved,
+					goalsConceded: live.goalsConceded,
+					defensiveContribution: live.defensiveContribution,
+					ownGoals: live.ownGoals,
+					penaltiesMissed: live.penaltiesMissed,
+					yellowCards: live.yellowCards,
+					redCards: live.redCards,
+					points: live.totalPoints,
+					bonusPoints: live.bonus
+				}
+				: player.stats
+	}
+
+	return buildLivePlayerDetail(enrichedPlayer)
 }

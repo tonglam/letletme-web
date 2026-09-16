@@ -31,6 +31,13 @@ export function hasValidProductionIdentity(sample) {
 	return /^[a-f0-9]{40}$/i.test(sample?.releaseSha ?? '') && /^(?:vercel|tencent|overseas)$/i.test(sample?.origin ?? '')
 }
 export function navigationComplete(sample) {
+	const businessResult = sample?.businessResult ?? sample?.readyResult
+	if (
+		businessResult !== undefined &&
+		businessResult !== null &&
+		businessResult !== 'ok'
+	)
+		return false
 	const metricsComplete = sample?.status === 200 && !sample.error && ['lcpMs', 'cls', 'fcpMs', 'ttfbMs', 'readyMs'].every(key => typeof sample[key] === 'number' && Number.isFinite(sample[key]))
 	if (!metricsComplete) return false
 	return !isProductionMeasurementUrl(sample.url) || hasValidProductionIdentity(sample)
@@ -45,12 +52,85 @@ export function performanceMetadata() {
 	return { schemaVersion: 2, sourceSha, collectorSourceSha: sourceSha, collectorDigest: createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'), collector: 'web-vitals@6.2.1', measuredAt: new Date().toISOString() }
 }
 
+/**
+ * Extracts the ready markers emitted by both telemetry generations.
+ *
+ * The first generation sent one `{ name, value }` object. The current Web
+ * client sends a v2 batch whose samples carry `metricName` and `value`.
+ * Keeping this pure makes the measurement contract testable without a browser.
+ */
+export function extractReadyMetrics(payload) {
+	if (payload == null || typeof payload !== 'object') return []
+	const metrics = []
+	if (
+		typeof payload.name === 'string' &&
+		typeof payload.value === 'number' &&
+		Number.isFinite(payload.value)
+	) {
+		metrics.push({ ...payload })
+	}
+	if (!Array.isArray(payload.samples)) return metrics
+	for (const sample of payload.samples) {
+		if (sample == null || typeof sample !== 'object') continue
+		const name =
+			typeof sample.metricName === 'string'
+				? sample.metricName
+				: typeof sample.name === 'string'
+					? sample.name
+					: null
+		if (
+			!name ||
+			typeof sample.value !== 'number' ||
+			!Number.isFinite(sample.value)
+		) {
+			continue
+		}
+		metrics.push({ ...sample, name })
+	}
+	return metrics
+}
+
+/**
+ * A ready marker is a usable business clock only when it completed normally.
+ * Interaction markers stay out of navigation samples unless a collector opts
+ * into them, so a delayed marker from an earlier click cannot make a new
+ * navigation look ready.
+ */
+export function isUsableReadyMetric(metric, allowInteractionMetrics = false) {
+	if (metric == null || typeof metric !== 'object') return false
+	if (typeof metric.name !== 'string') return false
+	if (
+		typeof metric.value !== 'number' ||
+		!Number.isFinite(metric.value) ||
+		metric.value < 0
+	)
+		return false
+	if (metric.result !== undefined && metric.result !== 'ok') return false
+	const isInteraction =
+		metric.measurementKind === 'interaction' ||
+		typeof metric.interactionId === 'string'
+	return allowInteractionMetrics || !isInteraction
+}
+
 /** The alias is used only by the existing interaction diagnostics. */
-export async function installVitals(page, alias = '__performanceMetrics') {
-	const initialize = ({ aliasName, captureTelemetry }) => {
+export async function installVitals(
+	page,
+	alias = '__performanceMetrics',
+	options = {}
+) {
+	const allowInteractionMetrics = options.allowInteractionMetrics === true
+	const initialize = (
+		{ aliasName, captureTelemetry },
+		extractMetrics,
+		usableMetric,
+		allowInteractions
+	) => {
 		const existing = window.__performanceMetrics
 		const clsSupported = typeof PerformanceObserver !== 'undefined' && Array.isArray(PerformanceObserver.supportedEntryTypes) && PerformanceObserver.supportedEntryTypes.includes('layout-shift')
-		const state = existing ?? { lcp: null, cls: clsSupported ? 0 : null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {}, readySequence: {}, readyDetails: {} }
+		const state = existing ?? { lcp: null, cls: clsSupported ? 0 : null, inp: null, fcp: null, ttfb: null, observedLongTaskBlockingMs: null, ready: {}, readySequence: {}, readyDetails: {}, allowInteractionMetrics: false }
+		state.readyDetails ??= {}
+		state.readySequence ??= {}
+		state.allowInteractionMetrics = state.allowInteractionMetrics === true || allowInteractions
 		window[aliasName] = state
 		window.__performanceMetrics = state
 		if (existing) return
@@ -70,11 +150,12 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 		const capture = async body => {
 			try {
 				const raw = typeof body === 'string' ? body : await body?.text?.()
-				const metric = JSON.parse(raw)
-				if (typeof metric.name === 'string' && typeof metric.value === 'number') {
+				const payload = JSON.parse(raw)
+				for (const metric of extractMetrics(payload)) {
+					state.readyDetails[metric.name] = metric
+					if (!usableMetric(metric, state.allowInteractionMetrics === true)) continue
 					state.ready[metric.name] = metric.value
 					state.readySequence[metric.name] = (state.readySequence[metric.name] ?? 0) + 1
-					state.readyDetails[metric.name] = metric
 					notify()
 				}
 			} catch {}
@@ -94,7 +175,7 @@ export async function installVitals(page, alias = '__performanceMetrics') {
 			return fetch(input, init)
 		}
 	}
-	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: true })})` })
+	await page.addInitScript({ content: `${vitalsSource}\n;globalThis.webVitals = webVitals;\n;(${initialize.toString()})(${JSON.stringify({ aliasName: alias, captureTelemetry: true })}, ${extractReadyMetrics.toString()}, ${isUsableReadyMetric.toString()}, ${JSON.stringify(allowInteractionMetrics)})` })
 }
 
 export async function throttleProfile(page, profile) {
@@ -121,12 +202,14 @@ export function readyMetricFor(url) {
 	if (pathname.includes('/explore/gameweek')) return 'GAMEWEEK_CONTENT_READY'
 	if (pathname.includes('/explore/market')) return 'MARKET_CONTENT_READY'
 	if (pathname.includes('/explore/selections')) return 'TRENDS_DESK_READY'
+	if (pathname.includes('/live/matches')) return 'LIVE_MATCHDAY_READY'
 	if (pathname.includes('/live/competitions')) return 'LIVE_COMPETITION_BOARD_READY'
+	if (pathname.includes('/price-predictions')) return 'HOME_PRICE_CHANGES_READY'
 	if (pathname.endsWith('/competitions/browse')) return 'COMPETITIONS_BROWSE_READY'
 	if (pathname.endsWith('/competitions/create')) return 'COMPETITIONS_CREATE_READY'
 	if (/\/competitions\/\d+\/manage$/.test(pathname)) return 'COMPETITIONS_MANAGE_READY'
-	if (pathname.includes('/price-predictions')) return null
-	return 'HOME_MARKET_READY'
+	if (/^\/(?:[a-z]{2}(?:-[A-Z]{2})?)?\/?$/.test(pathname)) return 'HOME_MARKET_READY'
+	return null
 }
 
 /** A dedicated navigation, without clicks. Page hide finalizes web-vitals. Pass page to keep follow-up probes on this navigation. */
@@ -186,35 +269,24 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 					(target.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== target.searchParams.get('tournamentId')) ||
 					(target.searchParams.has('gw') && actual.searchParams.get('gw') !== target.searchParams.get('gw'))
 				) throw new Error('Unexpected response or redirect')
-				const metric = options.readyMetric ?? readyMetricFor(url)
-				if (metric) {
+				const readyMetricName = options.readyMetric ?? readyMetricFor(url)
+				if (!readyMetricName) {
+					throw new Error(`No ready metric configured for ${target.pathname}`)
+				}
+				if (readyMetricName) {
 					await awaitObservation(
 						page.waitForFunction(
 							name =>
 								typeof window.__performanceMetrics?.ready?.[name] ===
 								'number',
-							metric
+								readyMetricName
 						)
 					)
 					sample.readyMs = await awaitObservation(
 						page.evaluate(
 							name => window.__performanceMetrics.ready[name],
-							metric
+							readyMetricName
 						)
-					)
-				} else {
-					await awaitObservation(
-						page
-							.locator(
-								'[data-letletme-contract="price_changes"][data-status="READY"]'
-							)
-							.waitFor({ state: 'attached' })
-					)
-					await awaitObservation(
-						page.locator('#price-change-search').waitFor({ state: 'visible' })
-					)
-					sample.readyMs = await awaitObservation(
-						page.evaluate(() => performance.now())
 					)
 				}
 				if (target.pathname.endsWith('/live/competitions') && options.requireCompetitionMarker !== false) {
@@ -255,7 +327,14 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 						}
 					}, ownsPage)
 				)
-				latest = details.metrics
+				const detailsMetrics = details.metrics
+				latest = detailsMetrics
+				sample.businessResult = readyMetricName
+					? detailsMetrics?.readyDetails?.[readyMetricName]?.result ?? 'ok'
+					: 'ok'
+				sample.businessReasonCode = readyMetricName
+					? detailsMetrics?.readyDetails?.[readyMetricName]?.reasonCode ?? null
+					: null
 				delete details.metrics
 				Object.assign(sample, details)
 				if (options.screenshot)

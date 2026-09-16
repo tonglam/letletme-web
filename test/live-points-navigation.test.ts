@@ -16,6 +16,14 @@ const transfers = readFileSync(
 	'app/live/points/_components/LivePointsTransfers.tsx',
 	'utf8'
 )
+const pitchDetailHook = readFileSync(
+	'app/live/points/_hooks/useLivePlayerDetail.ts',
+	'utf8'
+)
+const tournamentReview = readFileSync(
+	'app/me/tournament/TournamentReviewV2Client.tsx',
+	'utf8'
+)
 
 describe('live points navigation context', () => {
 	it('remounts transfer details for the displayed entry and gameweek', () => {
@@ -62,5 +70,25 @@ describe('live points navigation context', () => {
 			teamPoints,
 			/hasCompetitionContext \? t\('backTournament'\) : t\('backHome'\)/
 		)
+	})
+
+	it('links tournament review directly to the formal live board query', () => {
+		assert.match(
+			tournamentReview,
+			/href=\{`\/live\/competitions\?tournamentId=\$\{selectedTournament\.tournamentId\}/
+		)
+		assert.match(tournamentReview, /eventId \? `&gw=\$\{eventId\}`/)
+	})
+
+	it('keeps player detail selection scoped to player and gameweek', () => {
+		assert.match(pitchDetailHook, /const nextKey = `\$\{eventId\}:\$\{playerId\}`/)
+		assert.match(pitchDetailHook, /selection\.eventId !== eventId/)
+		assert.match(pitchDetailHook, /Promise\.allSettled\(\[/)
+		assert.match(pitchDetailHook, /requestId !== requestIdRef\.current/)
+		assert.match(pitchDetailHook, /cancelled = true/)
+		assert.match(pitchDetailHook, /sourceKey: string/)
+		assert.match(pitchDetailHook, /cachedPayload\.sourceKey === selectedSourceKey/)
+		assert.match(pitchDetailHook, /function livePlayerSourceKey\(player: Player\)/)
+		assert.match(dashboard, /isLoading=\{pitchPlayerDetail\.isLoading\}/)
 	})
 })
