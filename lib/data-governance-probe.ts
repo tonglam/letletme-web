@@ -9,9 +9,11 @@ import {
 	type LiveCalcDataResponse
 } from '@/lib/graphql/operations/live'
 import {
+	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_FPL_MANAGER_GAMEWEEK,
 	GET_MY_TOURNAMENT_REVIEW_STATUS,
 	type MyFplManagerGameweekResponse,
+	type MyTournamentGameweekReviewResponse,
 	type MyTournamentReviewStatusResponse
 } from '@/lib/graphql/operations/my-fpl'
 import {
@@ -621,7 +623,12 @@ async function probePlayerStats(
 async function probeTournamentReview(
 	input: DataGovernanceProbeRequest,
 	config: DataGovernanceCanary
-): Promise<{ revision: string; complete: boolean }> {
+): Promise<{
+	revision: string
+	complete: boolean
+	expectedCount: number
+	observedCount: number
+}> {
 	if (config.entryId === null || config.tournamentId === null) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
@@ -662,18 +669,74 @@ async function probeTournamentReview(
 			'my tournament review status has no matching event'
 		)
 	}
-	const observedRevision = revision(event.revision)
+	const statusRevision = revision(event.revision)
+	const reviewResponse =
+		await executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
+			canarySession(config),
+			GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+			{
+				tournamentId: config.tournamentId,
+				eventId,
+				first: 1,
+				after: null,
+				revision: statusRevision
+			},
+			{
+				cache: 'no-store',
+				timeoutMs: 5_000,
+				contract: 'my-tournament-review-v2.1'
+			}
+		)
+	const review = reviewResponse.myTournamentGameweekReview
+	const scope = review?.scope
+	if (
+		!review ||
+		!scope ||
+		scope.tournamentId !== config.tournamentId ||
+		scope.eventId !== eventId ||
+		review.payload === null ||
+		scope.revision !== statusRevision
+	) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review read returned an incoherent scope'
+		)
+	}
+	const expectedCount = scope.expectedSubjectCount
+	const observedCount = scope.readySubjectCount + scope.notApplicableSubjectCount
+	if (
+		![expectedCount, scope.readySubjectCount, scope.notApplicableSubjectCount].every(
+			value => Number.isSafeInteger(value) && value >= 0
+		) ||
+		observedCount > expectedCount
+	) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'my tournament review scope has invalid readiness counts'
+		)
+	}
 	return {
-		revision: observedRevision,
+		revision: statusRevision,
+		expectedCount,
+		observedCount,
 		complete:
+			review.state === 'READY' &&
+			scope.state === 'READY' &&
 			event.state === 'READY' &&
 			event.readyAt !== null &&
 			event.publishedAt !== null &&
 			event.repairState === 'NONE' &&
 			event.errorCode === null &&
+			expectedCount === observedCount &&
 			(input.producerRevision === null ||
 				input.producerRevision === undefined ||
-				input.producerRevision === observedRevision)
+				input.producerRevision === statusRevision) &&
+			(input.expectedCount === null ||
+				input.expectedCount === undefined ||
+				input.expectedCount === expectedCount) &&
+			(input.observedCount === null ||
+				input.observedCount === undefined ||
+				input.observedCount === observedCount)
 	}
 }
 
@@ -753,6 +816,8 @@ export async function probeDataContract(
 			case 'my-tournament-review-v2.1': {
 				const result = await probeTournamentReview(input, config)
 				graphqlRevision = result.revision
+				expectedCount = result.expectedCount
+				observedCount = result.observedCount
 				complete = result.complete
 				break
 			}
