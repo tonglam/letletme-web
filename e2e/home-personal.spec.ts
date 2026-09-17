@@ -9,7 +9,7 @@ async function createSession(
 	options: {
 		entryId?: number
 	} = {}
-): Promise<{ cookie: string; cleanup: () => Promise<void> }> {
+): Promise<{ cookie: string; userId: string; cleanup: () => Promise<void> }> {
 	const directDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL
 	if (!directDatabaseUrl) throw new Error('E2E_DIRECT_DATABASE_URL is required')
 	const sql = postgres(directDatabaseUrl, { max: 1, prepare: false })
@@ -60,6 +60,7 @@ async function createSession(
 	const cookieValue = encodeURIComponent(`${token}.${signature}`)
 	return {
 		cookie: `__Secure-letletme.session_token=${cookieValue}`,
+		userId,
 		cleanup: async () => {
 			try {
 				await sql`DELETE FROM bauth.session WHERE id = ${sessionId}`
@@ -1252,4 +1253,68 @@ for (const width of [1440, 390]) {
    await session.cleanup()
   }
  })
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const width of [1440, 390]) {
+		test(`J14 isolated bound profile and session journey ${locale} ${width}px`, async ({ page }) => {
+			test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated server FPL fixture')
+			const zh = locale === 'zh-CN'
+			const prefix = zh ? '/zh-CN' : ''
+			const session = await createSession({ entryId: 15702 })
+			const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+			const otherSessionId = `j14-other-${randomUUID()}`
+			const writes: string[] = []
+			page.on('request', request => {
+				if (request.url().includes('/api/auth/') && request.method() !== 'GET') writes.push(new URL(request.url()).pathname)
+			})
+			try {
+				await sql`INSERT INTO bauth.session (id, expires_at, token, user_id, user_agent) VALUES (${otherSessionId}, ${new Date(Date.now() + 3600000)}, ${randomUUID()}, ${session.userId}, 'Mozilla/5.0 (Windows NT 10.0) Firefox/130.0')`
+				await addSessionCookie(page, session.cookie)
+				await page.setViewportSize({ width, height: 900 })
+				await page.goto(`${prefix}/explore/gameweek`)
+				const nav = page.getByRole('navigation').first()
+				const profileHref = `${prefix}/profile`
+				if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+				else await nav.locator('details').filter({ has: page.locator(`a[href="${profileHref}"]`) }).locator('summary').filter({ visible: true }).click()
+				const profileLink = nav.locator(`a[href="${profileHref}"]`).filter({ visible: true })
+				await expect(profileLink).toHaveCount(1)
+				await profileLink.click()
+				await expect(page).toHaveURL(url => url.pathname === profileHref)
+				await expect(nav.locator('details[open]')).toHaveCount(0)
+				const main = page.locator('#main-content')
+				await expect(main).toContainText('E2E Synced United')
+				await expect(main).toContainText('Fixture Manager')
+				await expect(main).toContainText('E2E United')
+				const [identity] = await sql`SELECT fpl_team_name, fpl_manager_name FROM bauth."user" WHERE id=${session.userId}`
+				expect(identity).toEqual({ fpl_team_name: 'E2E Synced United', fpl_manager_name: 'Fixture Manager' })
+				await main.locator(`a[href="${prefix}/profile/sessions"]`).click()
+				await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile/sessions`)
+				await expect(main.getByText(zh ? '当前设备' : 'This device', { exact: true })).toBeVisible()
+				await expect(main.getByText(zh ? '当前设备' : 'This device', { exact: true })).toHaveCount(1)
+				await expect(main.getByText(/Firefox.*Windows/)).toBeVisible()
+				await main.locator(`a[href="${profileHref}"]`).click()
+				await expect(main).toContainText('E2E Synced United')
+				await main.locator(`a[href="${prefix}/auth/forgot-password"]`).click()
+				await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/forgot-password`)
+				await main.getByLabel(zh ? '邮箱' : 'Email', { exact: true }).fill('j14@example.test')
+				await main.getByRole('link', { name: zh ? '返回登录' : 'Back to login', exact: true }).click()
+				await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+				expect(writes).toEqual([])
+				await sql`UPDATE bauth.session SET expires_at=${new Date(Date.now() - 60000)} WHERE user_id=${session.userId}`
+				for (const protectedPath of ['/profile', '/profile/sessions']) {
+					await page.goto(`${prefix}${protectedPath}`)
+					await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === `${prefix}${protectedPath}`)
+					await expect(main).not.toContainText('E2E Synced United')
+					await expect(main.getByLabel(zh ? '邮箱' : 'Email', { exact: true })).toBeVisible()
+				}
+				expect(writes).toEqual([])
+			} finally {
+				await sql`DELETE FROM bauth.session WHERE id=${otherSessionId}`
+				await sql`DELETE FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId}`
+				await sql.end()
+				await session.cleanup()
+			}
+		})
+	}
 }

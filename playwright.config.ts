@@ -151,7 +151,7 @@ const graphqlFixtureURL = `http://127.0.0.1:${localGraphqlPort}`
 const graphqlServiceToken =
 	'e2e-graphql-service-token-at-least-thirty-two-bytes'
 const standaloneServerCommand =
-	'mkdir -p .next/standalone/public .next/standalone/.next/static && cp -R public/. .next/standalone/public/ && cp -R .next/static/. .next/standalone/.next/static/ && node .next/standalone/server.js'
+	'mkdir -p .next/standalone/public .next/standalone/.next/static && cp -R public/. .next/standalone/public/ && cp -R .next/static/. .next/standalone/.next/static/ && node --import ./e2e/fixtures/fpl-fetch.mjs .next/standalone/server.js'
 const nextCommand =
 	process.env.PLAYWRIGHT_USE_EXISTING_BUILD === '1'
 		? standaloneServerCommand
