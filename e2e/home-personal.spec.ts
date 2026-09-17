@@ -1521,6 +1521,17 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
   await expect(homeLink).toContainText('H2H Home United')
   await page.getByRole('tab', { name: fixturesName }).click()
   await expect(page.getByRole('tabpanel', { name: fixturesName }).getByText('H2H Away United', { exact: true })).toBeVisible()
+  const matchPanel = page.getByRole('tabpanel', { name: fixturesName })
+  for (const name of ['H2H Home United', 'H2H Away United']) {
+   await expect(matchPanel.getByText(name, { exact: true })).toBeVisible()
+   await expect(matchPanel.getByRole('link', { name, exact: true })).toHaveCount(0)
+  }
+  const byeCard = matchPanel.locator('li').filter({ has: page.getByText('H2H Bye United', { exact: true }) })
+  await expect(byeCard).toHaveCount(1)
+  await expect(byeCard.getByText(zh ? '轮空' : 'Bye', { exact: true })).toBeVisible()
+  await expect(byeCard.getByText(zh ? '平均队' : 'Average Team', { exact: true })).toBeVisible()
+  await expect(byeCard.locator('a[href*="/live/points/"]')).toHaveCount(0)
+
   await expect(page.locator('a[href*="/live/points/null"], a[href*="/live/points/0?"]')).toHaveCount(0)
   await page.getByRole('link', { name: zh ? '上一轮' : 'Previous', exact: true }).click()
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
