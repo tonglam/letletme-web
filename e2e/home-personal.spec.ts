@@ -1,3 +1,4 @@
+import { managedTournament } from './fixtures/managed-tournament'
 import { officialH2HFixture } from './fixtures/official-h2h'
 import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
@@ -1568,3 +1569,48 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
 
 }
 }
+
+
+test('J12 owner cancel resets delete confirmation without mutation requests', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated single-worker owner fixture')
+ const session = await createSession({ entryId: 909090 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const mutations: string[] = []
+ await page.route('**/api/tournaments/**', async route => {
+  const method = route.request().method()
+  if (['POST', 'PATCH', 'DELETE'].includes(method)) {
+   mutations.push(method)
+   await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Unexpected mutation blocked by test' }) })
+  } else await route.continue()
+ })
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+   { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } }
+  ] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/competitions/77/manage')
+  await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+  for (const title of ['Tournament settings', 'Tournament information', 'Lifecycle controls', 'Danger zone']) await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
+  const opener = page.getByRole('button', { name: 'Delete tournament', exact: true })
+  await opener.click()
+  const dialog = page.getByRole('alertdialog')
+  const confirm = dialog.getByRole('button', { name: 'Delete permanently', exact: true })
+  await expect(confirm).toBeDisabled()
+  const input = dialog.locator('#delete-confirmation')
+  await input.fill('Wrong Cup')
+  await expect(confirm).toBeDisabled()
+  await input.fill('J12 Owned Cup')
+  await expect(confirm).toBeEnabled()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await opener.click()
+  await expect(input).toHaveValue('')
+  await expect(confirm).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(mutations).toEqual([])
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
