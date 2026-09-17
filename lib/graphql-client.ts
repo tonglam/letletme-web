@@ -62,6 +62,7 @@ export class GraphQLRequestError extends Error {
 }
 
 const TRANSIENT_DEPENDENCY_STATUSES = new Set([502, 503, 504])
+const NON_TRANSIENT_DEPENDENCY_CODES = new Set(['UPSTREAM_RESPONSE_TOO_LARGE'])
 
 const isTransientDependencyStatus = (status: number): boolean =>
 	TRANSIENT_DEPENDENCY_STATUSES.has(status)
@@ -311,12 +312,6 @@ async function doFetch<T>(
 
 		const response = await fetch(endpoint, fetchOptions)
 		requestId = response.headers.get('x-request-id') ?? undefined
-		if (isClient && isTransientDependencyStatus(response.status)) {
-			dependencyFailure = noteDependencyFailure(
-				response.headers.get('retry-after')
-			)
-			dependencyFailureRecorded = true
-		}
 		let responseBytes: Uint8Array
 		try {
 			responseBytes = await readBoundedResponseBytes(
@@ -343,6 +338,18 @@ async function doFetch<T>(
 		const firstErrorCode = graphQLErrorCode(firstError)
 		if (
 			isClient &&
+			!externalSignal?.aborted &&
+			isTransientDependencyStatus(response.status) &&
+			!NON_TRANSIENT_DEPENDENCY_CODES.has(firstErrorCode ?? '')
+		) {
+			dependencyFailure = noteDependencyFailure(
+				response.headers.get('retry-after')
+			)
+			dependencyFailureRecorded = true
+		}
+		if (
+			isClient &&
+			!externalSignal?.aborted &&
 			firstErrorCode === 'DEPENDENCY_UNAVAILABLE' &&
 			!dependencyFailureRecorded
 		) {
@@ -460,7 +467,7 @@ async function doFetch<T>(
 			)
 		}
 
-		if (isClient) clearDependencyCooldown()
+		if (isClient) clearDependencyCooldown(startedAt)
 
 		const durationMs = Math.max(0, Date.now() - startedAt)
 		if (!isClient && durationMs >= GRAPHQL_SLOW_REQUEST_THRESHOLD_MS) {
@@ -497,7 +504,7 @@ async function doFetch<T>(
 						code: 'REQUEST_CANCELLED'
 					})
 		} else if (!(error instanceof GraphQLRequestError)) {
-			if (isClient && !dependencyFailureRecorded) {
+			if (isClient && !externalSignal?.aborted && !dependencyFailureRecorded) {
 				dependencyFailure = noteDependencyFailure()
 				dependencyFailureRecorded = true
 			}
