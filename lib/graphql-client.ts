@@ -1,4 +1,9 @@
 import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
+import {
+	clearDependencyCooldown,
+	dependencyCooldownErrorDetails,
+	noteDependencyFailure
+} from '@/lib/dependency-cooldown'
 import { resolveServerGraphQLEndpoint } from '@/lib/graphql-endpoint'
 import { publicGraphQLRequestMessage } from '@/lib/safe-errors'
 import {
@@ -54,6 +59,24 @@ export class GraphQLRequestError extends Error {
 		this.rateLimitScope = options.rateLimitScope ?? null
 		this.rateLimitWorkload = options.rateLimitWorkload ?? null
 	}
+}
+
+const TRANSIENT_DEPENDENCY_STATUSES = new Set([502, 503, 504])
+
+const isTransientDependencyStatus = (status: number): boolean =>
+	TRANSIENT_DEPENDENCY_STATUSES.has(status)
+
+const dependencyCooldownRequestError = (): GraphQLRequestError | null => {
+	const details = dependencyCooldownErrorDetails()
+	if (!details) return null
+	return new GraphQLRequestError(
+		publicGraphQLRequestMessage(503, 'DEPENDENCY_UNAVAILABLE'),
+		{
+			status: 503,
+			code: 'DEPENDENCY_UNAVAILABLE',
+			retryAfterSeconds: details.retryAfterSeconds
+		}
+	)
 }
 
 export const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
@@ -258,6 +281,8 @@ async function doFetch<T>(
 		externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
 
 	let requestId: string | undefined
+	let dependencyFailureRecorded = false
+	let dependencyFailure: ReturnType<typeof noteDependencyFailure> | null = null
 	try {
 		const liveContractVersion = liveContractVersionForQuery(query)
 		const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
@@ -286,6 +311,12 @@ async function doFetch<T>(
 
 		const response = await fetch(endpoint, fetchOptions)
 		requestId = response.headers.get('x-request-id') ?? undefined
+		if (isClient && isTransientDependencyStatus(response.status)) {
+			dependencyFailure = noteDependencyFailure(
+				response.headers.get('retry-after')
+			)
+			dependencyFailureRecorded = true
+		}
 		let responseBytes: Uint8Array
 		try {
 			responseBytes = await readBoundedResponseBytes(
@@ -309,6 +340,17 @@ async function doFetch<T>(
 		const normalizedErrors = normalizeGraphQLErrors(result?.errors)
 		const meaningfulErrors = normalizedErrors.filter(isMeaningfulGraphQLError)
 		const firstError = meaningfulErrors[0]
+		const firstErrorCode = graphQLErrorCode(firstError)
+		if (
+			isClient &&
+			firstErrorCode === 'DEPENDENCY_UNAVAILABLE' &&
+			!dependencyFailureRecorded
+		) {
+			dependencyFailure = noteDependencyFailure(
+				response.headers.get('retry-after')
+			)
+			dependencyFailureRecorded = true
+		}
 
 		if (!result || typeof result !== 'object' || Array.isArray(result)) {
 			throw new GraphQLRequestError('GraphQL response was not valid JSON.', {
@@ -329,9 +371,9 @@ async function doFetch<T>(
 				{
 					status: response.status,
 					code,
-					retryAfterSeconds: parseRetryAfterSeconds(
-						response.headers.get('retry-after')
-					),
+					retryAfterSeconds: dependencyFailure?.active
+						? dependencyFailure.remainingSeconds
+						: parseRetryAfterSeconds(response.headers.get('retry-after')),
 					...rateLimitMetadata(response)
 				}
 			)
@@ -384,9 +426,9 @@ async function doFetch<T>(
 				{
 					status: response.status,
 					code,
-					retryAfterSeconds: parseRetryAfterSeconds(
-						response.headers.get('retry-after')
-					),
+					retryAfterSeconds: dependencyFailure?.active
+						? dependencyFailure.remainingSeconds
+						: parseRetryAfterSeconds(response.headers.get('retry-after')),
 					...rateLimitMetadata(response)
 				}
 			)
@@ -417,6 +459,8 @@ async function doFetch<T>(
 				{ status: response.status, code: 'MISSING_DATA' }
 			)
 		}
+
+		if (isClient) clearDependencyCooldown()
 
 		const durationMs = Math.max(0, Date.now() - startedAt)
 		if (!isClient && durationMs >= GRAPHQL_SLOW_REQUEST_THRESHOLD_MS) {
@@ -453,6 +497,10 @@ async function doFetch<T>(
 						code: 'REQUEST_CANCELLED'
 					})
 		} else if (!(error instanceof GraphQLRequestError)) {
+			if (isClient && !dependencyFailureRecorded) {
+				dependencyFailure = noteDependencyFailure()
+				dependencyFailureRecorded = true
+			}
 			const message =
 				error instanceof Error
 					? error.message
@@ -461,7 +509,12 @@ async function doFetch<T>(
 						: safeSerializeForLog(error)
 			normalizedError = new GraphQLRequestError(
 				isClient ? publicGraphQLRequestMessage(0, 'NETWORK_ERROR') : message,
-				{ code: 'NETWORK_ERROR' }
+				{
+					code: 'NETWORK_ERROR',
+					retryAfterSeconds: dependencyFailure?.active
+						? dependencyFailure.remainingSeconds
+						: null
+				}
 			)
 		}
 
@@ -591,6 +644,9 @@ export async function executeQuery<T>(
 			const pending = pendingClientRequests.get(key) as Promise<T> | undefined
 			if (pending) return pending
 		}
+
+		const dependencyError = dependencyCooldownRequestError()
+		if (dependencyError) throw dependencyError
 
 		const promise = doFetch<T>(
 			endpoint,

@@ -8,6 +8,7 @@ import {
 	GraphQLRequestError,
 	normalizeGraphQLTimeoutMs
 } from '@/lib/graphql-client'
+import { clearDependencyCooldown } from '@/lib/dependency-cooldown'
 import { GET_GAMEWEEK_DESK } from '@/lib/graphql/operations/gameweek'
 import { GET_HOME_GAMEWEEK } from '@/lib/graphql/operations/home'
 import { GET_TOURNAMENT_DETAIL_DESK } from '@/lib/graphql/operations/tournaments'
@@ -238,6 +239,76 @@ test('executeQuery preserves HTTP status, GraphQL code, and Retry-After', async 
 		)
 	} finally {
 		globalThis.fetch = originalFetch
+	}
+})
+
+test('browser dependency failures cool down later requests without another fetch', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const originalError = console.error
+	const storage = new Map<string, string>()
+	let calls = 0
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: {
+			location: { origin: 'https://letletme.test' },
+			sessionStorage: {
+				getItem: (key: string) => storage.get(key) ?? null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+				removeItem: (key: string) => storage.delete(key)
+			}
+		}
+	})
+	console.error = () => undefined
+	globalThis.fetch = (async () => {
+		calls += 1
+		return Response.json(
+			{
+				errors: [
+					{
+						message: 'Unavailable',
+						extensions: { code: 'DEPENDENCY_UNAVAILABLE' }
+					}
+				]
+			},
+			{ status: 503, headers: { 'Retry-After': '300' } }
+		)
+	}) as typeof fetch
+	clearPendingClientQueries()
+	clearDependencyCooldown()
+
+	try {
+		await assert.rejects(
+			executeQuery('query DependencyProbe { __typename }'),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.status, 503)
+				assert.equal(error.code, 'DEPENDENCY_UNAVAILABLE')
+				assert.ok((error.retryAfterSeconds ?? 0) >= 299)
+				return true
+			}
+		)
+		await assert.rejects(
+			executeQuery('query DependencyProbeRefresh { __typename }'),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.status, 503)
+				assert.equal(error.code, 'DEPENDENCY_UNAVAILABLE')
+				assert.ok((error.retryAfterSeconds ?? 0) >= 299)
+				return true
+			}
+		)
+		assert.equal(calls, 1)
+	} finally {
+		clearDependencyCooldown()
+		clearPendingClientQueries()
+		globalThis.fetch = originalFetch
+		console.error = originalError
+		if (originalWindow) {
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		} else {
+			Reflect.deleteProperty(globalThis, 'window')
+		}
 	}
 })
 

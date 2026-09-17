@@ -28,8 +28,8 @@ export async function POST(request: Request) {
 	} catch {
 		report('unavailable', 503)
 		return NextResponse.json(
-			{ error: 'Authentication unavailable' },
-			{ status: 503 }
+			{ error: 'Authentication unavailable', code: 'DEPENDENCY_UNAVAILABLE' },
+			{ status: 503, headers: { 'Retry-After': '30' } }
 		)
 	}
 

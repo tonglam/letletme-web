@@ -23,7 +23,14 @@ export async function GET(request: Request) {
 	try {
 		session = (await getVerifiedEntryContext()).session;
   } catch {
-    return NextResponse.json({ success: false, error: 'Authentication unavailable.' }, { status: 503 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Authentication unavailable.',
+        code: 'DEPENDENCY_UNAVAILABLE',
+      },
+      { status: 503, headers: { 'Retry-After': '30' } },
+    );
   }
   if (!session) {
     return NextResponse.json({ success: false, error: 'Unauthenticated.' }, { status: 401 });

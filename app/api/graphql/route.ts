@@ -174,8 +174,16 @@ export async function POST(request: NextRequest) {
 			)
 			return completeResponse(
 				noStoreJson(
-					{ errors: [{ message: 'Authentication unavailable' }] },
-					503
+					{
+						errors: [
+							{
+								message: 'Authentication unavailable',
+								extensions: { code: 'DEPENDENCY_UNAVAILABLE' }
+							}
+						]
+					},
+					503,
+					{ 'Retry-After': '30' }
 				)
 			)
 		}
@@ -245,9 +253,18 @@ export async function POST(request: NextRequest) {
 		}
 		if (error instanceof GraphQLUpstreamError && error.code === 'timeout') {
 			return completeResponse(
-				noStoreJson({ errors: [{ message: 'Upstream timed out' }] }, 504, {
-					'X-Request-Id': requestId
-				})
+				noStoreJson(
+					{
+						errors: [
+							{
+								message: 'Upstream timed out',
+								extensions: { code: 'DEPENDENCY_UNAVAILABLE' }
+							}
+						]
+					},
+					504,
+					{ 'X-Request-Id': requestId, 'Retry-After': '30' }
+				)
 			)
 		}
 		if (
@@ -265,9 +282,18 @@ export async function POST(request: NextRequest) {
 		}
 		console.error('[graphql proxy] upstream read failed:', error)
 		return completeResponse(
-			noStoreJson({ errors: [{ message: 'Upstream unavailable' }] }, 502, {
-				'X-Request-Id': requestId
-			})
+			noStoreJson(
+				{
+					errors: [
+						{
+							message: 'Upstream unavailable',
+							extensions: { code: 'DEPENDENCY_UNAVAILABLE' }
+						}
+					]
+				},
+				502,
+				{ 'X-Request-Id': requestId, 'Retry-After': '30' }
+			)
 		)
 	}
 	const { responseBodyOk, cacheControl } = requestTiming.measureSync(

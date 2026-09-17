@@ -32,7 +32,7 @@ async function handler(request: Request): Promise<Response> {
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
 			return Response.json(
 				{ error: 'PRICE_CHANGE_LIVE_TIMEOUT' },
-				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+				{ status: 504, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } }
 			)
 		}
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
@@ -42,9 +42,12 @@ async function handler(request: Request): Promise<Response> {
 			)
 		}
 		console.warn('[price-changes] live board failed:', error)
+		const headers = new Headers({ 'Cache-Control': 'no-store' })
+		if (error instanceof GraphQLRequestError)
+			headers.set('Retry-After', String(Math.max(1, error.retryAfterSeconds ?? 30)))
 		return Response.json(
-			{ error: 'PRICE_CHANGE_LIVE_UNAVAILABLE' },
-			{ status: 503, headers: { 'Cache-Control': 'no-store' } }
+			{ error: 'DEPENDENCY_UNAVAILABLE' },
+			{ status: 503, headers }
 		)
 	}
 }

@@ -11,7 +11,21 @@ export async function GET(
 	request: Request,
 	context: { params: Promise<{ id: string }> }
 ) {
-	const { entryId, session } = await getVerifiedEntryContext()
+	let entryId: number | null
+	let session: Awaited<ReturnType<typeof getVerifiedEntryContext>>['session']
+	try {
+		const context = await getVerifiedEntryContext()
+		entryId = context.entryId
+		session = context.session
+	} catch {
+		return NextResponse.json(
+			{ error: 'DEPENDENCY_UNAVAILABLE' },
+			{
+				status: 503,
+				headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '30' }
+			}
+		)
+	}
 	if (!entryId)
 		return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 	const tournamentId = Number((await context.params).id)
@@ -34,7 +48,7 @@ export async function GET(
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
 			return NextResponse.json(
 				{ error: 'Participants request timed out' },
-				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+				{ status: 504, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } }
 			)
 		}
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
@@ -43,9 +57,15 @@ export async function GET(
 				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
 			)
 		}
+		const dependency =
+			error instanceof GraphQLRequestError &&
+			(error.code === 'DEPENDENCY_UNAVAILABLE' || error.status === 503)
+		const headers: Record<string, string> = { 'Cache-Control': 'no-store' }
+		if (dependency && error instanceof GraphQLRequestError)
+			headers['Retry-After'] = String(Math.max(1, error.retryAfterSeconds ?? 30))
 		return NextResponse.json(
-			{ error: 'Participants unavailable' },
-			{ status: 502 }
+			{ error: dependency ? 'DEPENDENCY_UNAVAILABLE' : 'Participants unavailable' },
+			{ status: dependency ? 503 : 502, headers }
 		)
 	}
 }

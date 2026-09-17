@@ -151,7 +151,20 @@ export async function POST(
 	context: { params: Promise<{ id: string }> }
 ) {
 	const requestId = randomUUID()
-	const { entryId, session } = await getVerifiedEntryContext()
+	let entryId: number | null
+	let session: Awaited<ReturnType<typeof getVerifiedEntryContext>>['session']
+	try {
+		const context = await getVerifiedEntryContext()
+		entryId = context.entryId
+		session = context.session
+	} catch {
+		const headers = noStoreHeaders(requestId)
+		headers['Retry-After'] = '30'
+		return NextResponse.json(
+			{ error: 'DEPENDENCY_UNAVAILABLE' },
+			{ status: 503, headers }
+		)
+	}
 	if (!entryId)
 		return NextResponse.json(
 			{ error: 'UNAUTHENTICATED' },
@@ -184,9 +197,11 @@ export async function POST(
 		return NextResponse.json(data, { headers: noStoreHeaders(requestId) })
 	} catch (error) {
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
+			const headers = noStoreHeaders(requestId)
+			headers['Retry-After'] = '30'
 			return NextResponse.json(
 				{ error: 'Competition request timed out' },
-				{ status: 504, headers: noStoreHeaders(requestId) }
+				{ status: 504, headers }
 			)
 		}
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
@@ -201,6 +216,9 @@ export async function POST(
 				? 426
 				: code === 'LIVE_BOARD_REVISION_GONE'
 				? 409
+				: code === 'DEPENDENCY_UNAVAILABLE' ||
+				  (error instanceof GraphQLRequestError && error.status === 503)
+					? 503
 				: code === 'RATE_LIMITED' ||
 					  code === 'UPSTREAM_RATE_LIMITED' ||
 					  (error instanceof GraphQLRequestError && error.status === 429)
@@ -213,12 +231,14 @@ export async function POST(
 								? 403
 								: 502
 		const headers = noStoreHeaders(requestId)
-		if (status === 429 && error instanceof GraphQLRequestError)
+		if ((status === 429 || status === 503) && error instanceof GraphQLRequestError)
 			headers['Retry-After'] = String(Math.max(1, error.retryAfterSeconds ?? 30))
 		return NextResponse.json(
 			{
 				error:
-					status === 426
+					status === 503
+						? 'DEPENDENCY_UNAVAILABLE'
+						: status === 426
 						? 'CLIENT_UPGRADE_REQUIRED'
 						: status === 409
 						? code

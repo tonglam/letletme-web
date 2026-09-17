@@ -55,7 +55,7 @@ async function handleGet(request: Request) {
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
 			return NextResponse.json(
 				{ error: 'Live context request timed out' },
-				{ status: 504, headers: { 'Cache-Control': 'no-store' } }
+				{ status: 504, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } }
 			)
 		}
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
@@ -64,9 +64,12 @@ async function handleGet(request: Request) {
 				{ status: 499, headers: { 'Cache-Control': 'no-store' } }
 			)
 		}
+		const headers: Record<string, string> = { 'Cache-Control': 'no-store' }
+		if (error instanceof GraphQLRequestError)
+			headers['Retry-After'] = String(Math.max(1, error.retryAfterSeconds ?? 30))
 		return NextResponse.json(
-			{ error: 'Live context unavailable' },
-			{ status: 503, headers: { 'Cache-Control': 'no-store' } }
+			{ error: 'DEPENDENCY_UNAVAILABLE' },
+			{ status: 503, headers }
 		)
 	}
 }
