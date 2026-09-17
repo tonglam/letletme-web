@@ -1755,7 +1755,7 @@ export default function TournamentReviewV2Client({
 	}
 
 	const restoreSeasonView = useEffectEvent(() => {
-		if (seasonError || !selectedTournamentId || !eventId) return
+		if (seasonError || retryPhaseId || !selectedTournamentId || !eventId) return
 		const phase = seasonReview?.phases.find(candidate => candidate.phaseId === selectedPhaseId)
 			?? phaseAtEvent(seasonReview?.phases ?? [], eventId)
 		if (phase && !phaseSectionsReady(phase.format, seasonSectionPages.current)) {

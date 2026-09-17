@@ -767,12 +767,13 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry'] as const) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed'] as const) {
 for (const locale of recoveryMode === 'none' ? ['en', 'zh-CN'] : ['en']) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
-const failFirstSections = recoveryMode !== 'none'
-test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${failFirstSections ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
+const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
+const failFirstSections = recoveryMode !== 'none' && !partialSsrSeed
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
@@ -810,6 +811,29 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
+		if (partialSsrSeed) {
+			const partialRules = rules.map(rule => 'variables' in rule && rule.variables?.section === 'POINTS_TRAJECTORIES'
+				? recoveryMode === 'failed-ssr-seed'
+					? { operation: rule.operation, variables: rule.variables, error: true }
+					: { ...rule, data: { myTournamentSeasonReviewSection: { ...phase, state: 'DEGRADED', tournamentId: 77, throughEventId: 4, section: 'POINTS_TRAJECTORIES', points: null, h2h: null, knockout: null, pageInfo } } }
+				: rule)
+			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: partialRules }) })).ok).toBe(true)
+			await page.goto(`${routePath}?tournamentId=77&gw=4`)
+			const retry = page.getByRole('button', { name: 'Retry this phase', exact: true })
+			await expect(retry).toBeVisible()
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			expect(sectionRequests).toBe(0)
+			const seeded = await (await fetch(fixture)).json()
+			expect(seeded.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(2)
+			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+			releaseSections()
+			await retry.click()
+			await expect.poll(() => sectionRequests).toBe(2)
+			await expect(retry).toHaveCount(0)
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			return
+		}
 		await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		const observations = await (await fetch(fixture)).json()
