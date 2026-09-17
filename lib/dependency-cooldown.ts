@@ -65,12 +65,12 @@ export function parseDependencyRetryAfter(
 	const normalized = value?.trim() ?? ''
 	if (/^\d+$/.test(normalized)) {
 		const seconds = Number(normalized)
-		return Number.isFinite(seconds) ? Math.max(1, Math.ceil(seconds)) : null
+		return Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : null
 	}
 	if (!normalized) return null
 	const retryAt = Date.parse(normalized)
 	return Number.isFinite(retryAt)
-		? Math.max(1, Math.ceil((retryAt - now) / 1_000))
+		? Math.max(0, Math.ceil((retryAt - now) / 1_000))
 		: null
 }
 
