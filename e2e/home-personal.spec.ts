@@ -1,3 +1,4 @@
+import { officialH2HFixture } from './fixtures/official-h2h'
 import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
@@ -1484,3 +1485,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+
+test('J08 official H2H standings and fixtures preserve round identity', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker fixture suite')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const tournament = { id: 6, name: 'J08 Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
+ const rules = [
+  { operation: 'GetEntryTournaments', data: { entryTournaments: [tournament] } },
+  ...([3, 4] as const).flatMap(eventId => {
+   const value = officialH2HFixture(eventId)
+   return [
+    { operation: 'GetTournamentOfficialH2H', variables: { eventId }, data: { tournamentOfficialH2H: value.snapshot } },
+    { operation: 'GetLeagueLiveHead', variables: { eventId }, data: { leagueLiveHead: value.head } },
+    { operation: 'GetTournamentOfficialH2HHistory', variables: { eventId }, data: { tournamentOfficialH2HHistory: { tournamentId: 6, eventId, matches: [] } } },
+   ]
+  }),
+ ]
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/live/competitions?tournamentId=6&gw=4')
+  const standings = page.getByRole('tab', { name: /Head-to-Head table/ })
+  await standings.click()
+  const homeLink = page.locator('a[href="/live/points/123?tournamentId=6&gw=4"]').filter({ visible: true })
+  await expect(homeLink).toHaveCount(1)
+  await expect(homeLink).toContainText('H2H Home United')
+  await page.getByRole('tab', { name: /Round fixtures/ }).click()
+  await expect(page.getByRole('tabpanel', { name: /Round fixtures/ }).getByText('H2H Away United', { exact: true })).toBeVisible()
+  await expect(page.locator('a[href*="/live/points/null"], a[href*="/live/points/0?"]')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Previous', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
+  await page.getByRole('tab', { name: /Head-to-Head table/ }).click()
+  await expect(page.locator('a[href="/live/points/123?tournamentId=6&gw=3"]').filter({ visible: true })).toHaveCount(1)
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
