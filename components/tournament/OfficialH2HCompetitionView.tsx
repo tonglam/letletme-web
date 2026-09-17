@@ -242,9 +242,11 @@ function StandingBoard({
 
 function MatchCard({
 	match,
+	tournamentId,
 	viewerEntryId
 }: {
 	match: TournamentOfficialH2HLiveMatch
+	tournamentId: number
 	viewerEntryId?: number
 }) {
 	const t = useTranslations('LiveTournament')
@@ -299,7 +301,15 @@ function MatchCard({
 							)}
 							title={sideLabel(match.home, t('officialH2HAverageTeam'))}
 						>
-							{sideLabel(match.home, t('officialH2HAverageTeam'))}
+                            {!match.home.isAverage && match.home.entryId != null && Number.isSafeInteger(match.home.entryId) && match.home.entryId > 0 ? (
+                                <Link
+                                    href={`/live/points/${match.home.entryId}?tournamentId=${tournamentId}&gw=${match.eventId}`}
+                                    prefetch={false}
+                                    className="hover:text-primary-ink hover:underline underline-offset-2"
+                                >
+                                    {sideLabel(match.home, t('officialH2HAverageTeam'))}
+                                </Link>
+                            ) : sideLabel(match.home, t('officialH2HAverageTeam'))}
 						</p>
 						{match.home.playerName ? (
 							<p className="break-words text-[10px] leading-tight text-muted-foreground">
@@ -334,7 +344,15 @@ function MatchCard({
 							)}
 							title={sideLabel(match.away, t('officialH2HAverageTeam'))}
 						>
-							{sideLabel(match.away, t('officialH2HAverageTeam'))}
+                            {!match.away.isAverage && match.away.entryId != null && Number.isSafeInteger(match.away.entryId) && match.away.entryId > 0 ? (
+                                <Link
+                                    href={`/live/points/${match.away.entryId}?tournamentId=${tournamentId}&gw=${match.eventId}`}
+                                    prefetch={false}
+                                    className="hover:text-primary-ink hover:underline underline-offset-2"
+                                >
+                                    {sideLabel(match.away, t('officialH2HAverageTeam'))}
+                                </Link>
+                            ) : sideLabel(match.away, t('officialH2HAverageTeam'))}
 						</p>
 						{match.away.playerName ? (
 							<p className="break-words text-[10px] leading-tight text-muted-foreground">
@@ -938,6 +956,7 @@ export function OfficialH2HCompetitionView({
 							<MatchCard
 								key={match.officialMatchId}
 								match={match}
+								tournamentId={tournamentId}
 								viewerEntryId={viewerEntryId}
 							/>
 						))}
