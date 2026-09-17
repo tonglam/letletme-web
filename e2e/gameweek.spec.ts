@@ -2,6 +2,40 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
 for (const locale of ['en', 'zh-CN'] as const) {
+	test(`gameweek selector enumerates its range and commits first-week stepping in ${locale}`, async ({ page }) => {
+		await page.setViewportSize({ width: locale === 'en' ? 1440 : 390, height: 900 })
+		const requestedEvents: string[] = []
+		page.on('request', request => {
+			const url = new URL(request.url())
+			if (url.pathname === '/api/gameweek/desk') requestedEvents.push(url.searchParams.get('eventId') ?? '')
+		})
+		await page.goto(locale === 'en' ? '/explore/gameweek' : '/zh-CN/explore/gameweek')
+		const input = page.locator('#gameweek-jump-input')
+		await expect(input).toHaveValue('33')
+		await expect(input).toHaveAttribute('min', '1')
+		await expect(input).toHaveAttribute('max', '33')
+		const selector = page.getByRole('combobox', { name: locale === 'en' ? 'Select gameweek' : '选择轮次', exact: true })
+		await selector.click()
+		const expectedOptions = Array.from({ length: 33 }, (_, index) => {
+			const gw = 33 - index
+			return locale === 'en'
+				? `Gameweek ${gw}${gw === 33 ? ' (Current)' : ''}`
+				: `第 ${gw} 轮${gw === 33 ? '（当前）' : ''}`
+		})
+		await expect(page.getByRole('option')).toHaveText(expectedOptions)
+		await page.getByRole('option', { name: expectedOptions[32], exact: true }).click()
+		await expect(page.getByRole('heading', { name: locale === 'en' ? 'GW1 Overview' : 'GW1 概览', exact: true })).toBeVisible()
+		await expect(input).toHaveValue('1')
+		await expect(page.getByRole('button', { name: locale === 'en' ? 'Previous gameweek' : '上一轮', exact: true })).toBeDisabled()
+		await page.getByRole('button', { name: locale === 'en' ? 'Next gameweek' : '下一轮', exact: true }).click()
+		await expect(page.getByRole('heading', { name: locale === 'en' ? 'GW2 Overview' : 'GW2 概览', exact: true })).toBeVisible()
+		await expect(input).toHaveValue('2')
+		await expect(input).toHaveAttribute('aria-busy', 'false')
+		expect(requestedEvents).toEqual(['1', '2'])
+	})
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
 	for (const width of [1440, 390]) {
 		test.describe(`gameweek board rows ${locale} ${width}`, () => {
 			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
