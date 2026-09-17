@@ -19,6 +19,13 @@ import {
 	AUTH_TRUSTED_PROVIDERS
 } from '@/lib/auth-policy'
 import { trustedAuthOrigins } from '@/lib/auth-origin'
+import { withAuthorizationSessionDeadline } from '@/lib/auth-session-deadline'
+
+export {
+	AUTHORIZATION_SESSION_TIMEOUT_MS,
+	AuthorizationSessionTimeoutError,
+	withAuthorizationSessionDeadline
+} from '@/lib/auth-session-deadline'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
 
@@ -208,10 +215,14 @@ export type Session = AuthInstance['$Infer']['Session']
 
 /** Authorization checks must bypass Better Auth's five-minute cookie cache. */
 export async function getAuthorizationSession(
-	headers: Headers
+	headers: Headers,
+	options: { signal?: AbortSignal; timeoutMs?: number } = {}
 ): Promise<Session | null> {
-	return getAuth().api.getSession({
-		headers,
-		query: { disableCookieCache: true }
-	})
+	return withAuthorizationSessionDeadline(
+		getAuth().api.getSession({
+			headers,
+			query: { disableCookieCache: true }
+		}),
+		options
+	)
 }
