@@ -8,6 +8,11 @@ import {
 	GraphQLRequestError,
 	normalizeGraphQLTimeoutMs
 } from '@/lib/graphql-client'
+import {
+	clearDependencyCooldown,
+	noteDependencyFailure,
+	readDependencyCooldown
+} from '@/lib/dependency-cooldown'
 import { GET_GAMEWEEK_DESK } from '@/lib/graphql/operations/gameweek'
 import { GET_HOME_GAMEWEEK } from '@/lib/graphql/operations/home'
 import { GET_TOURNAMENT_DETAIL_DESK } from '@/lib/graphql/operations/tournaments'
@@ -77,8 +82,7 @@ test('executeQuery classifies a response body timeout as REQUEST_TIMEOUT', async
 				timeoutMs: 5
 			}),
 			(error: unknown) =>
-				error instanceof GraphQLRequestError &&
-				error.code === 'REQUEST_TIMEOUT'
+				error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT'
 		)
 		assert.equal(cancelled, true)
 	} finally {
@@ -88,7 +92,8 @@ test('executeQuery classifies a response body timeout as REQUEST_TIMEOUT', async
 
 test('executeQuery classifies malformed JSON as INVALID_RESPONSE', async () => {
 	const originalFetch = globalThis.fetch
-	globalThis.fetch = (async () => new Response('not-json', { status: 200 })) as typeof fetch
+	globalThis.fetch = (async () =>
+		new Response('not-json', { status: 200 })) as typeof fetch
 	try {
 		await assert.rejects(
 			executeQuery('query InvalidResponseProbe { __typename }'),
@@ -103,7 +108,8 @@ test('executeQuery classifies malformed JSON as INVALID_RESPONSE', async () => {
 
 test('executeQuery classifies malformed JSON on an error status as INVALID_RESPONSE', async () => {
 	const originalFetch = globalThis.fetch
-	globalThis.fetch = (async () => new Response('upstream-html', { status: 502 })) as typeof fetch
+	globalThis.fetch = (async () =>
+		new Response('upstream-html', { status: 502 })) as typeof fetch
 	try {
 		await assert.rejects(
 			executeQuery('query InvalidErrorResponseProbe { __typename }'),
@@ -175,9 +181,7 @@ test('executeQuery sends the Live Points V2 header for every affected desk reque
 		_input: string | URL | Request,
 		init?: RequestInit
 	) => {
-		contractHeaders.push(
-			new Headers(init?.headers).get('X-LetLetMe-Contract')
-		)
+		contractHeaders.push(new Headers(init?.headers).get('X-LetLetMe-Contract'))
 		return Response.json({ data: {} })
 	}) as typeof fetch
 
@@ -238,6 +242,154 @@ test('executeQuery preserves HTTP status, GraphQL code, and Retry-After', async 
 		)
 	} finally {
 		globalThis.fetch = originalFetch
+	}
+})
+
+test('browser dependency failures cool down later requests without another fetch', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const originalError = console.error
+	const storage = new Map<string, string>()
+	let calls = 0
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: {
+			location: { origin: 'https://letletme.test' },
+			sessionStorage: {
+				getItem: (key: string) => storage.get(key) ?? null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+				removeItem: (key: string) => storage.delete(key)
+			}
+		}
+	})
+	console.error = () => undefined
+	globalThis.fetch = (async () => {
+		calls += 1
+		return Response.json(
+			{
+				errors: [
+					{
+						message: 'Unavailable',
+						extensions: { code: 'DEPENDENCY_UNAVAILABLE' }
+					}
+				]
+			},
+			{ status: 503, headers: { 'Retry-After': '300' } }
+		)
+	}) as typeof fetch
+	clearPendingClientQueries()
+	clearDependencyCooldown()
+
+	try {
+		await assert.rejects(
+			executeQuery('query DependencyProbe { __typename }'),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.status, 503)
+				assert.equal(error.code, 'DEPENDENCY_UNAVAILABLE')
+				assert.ok((error.retryAfterSeconds ?? 0) >= 299)
+				return true
+			}
+		)
+		await assert.rejects(
+			executeQuery('query DependencyProbeRefresh { __typename }'),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.status, 503)
+				assert.equal(error.code, 'DEPENDENCY_UNAVAILABLE')
+				assert.ok((error.retryAfterSeconds ?? 0) >= 299)
+				return true
+			}
+		)
+		assert.equal(calls, 1)
+	} finally {
+		clearDependencyCooldown()
+		clearPendingClientQueries()
+		globalThis.fetch = originalFetch
+		console.error = originalError
+		if (originalWindow) {
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		} else {
+			Reflect.deleteProperty(globalThis, 'window')
+		}
+	}
+})
+
+test('a success that started before a newer failure cannot clear its cooldown', () => {
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const storage = new Map<string, string>()
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: {
+			sessionStorage: {
+				getItem: (key: string) => storage.get(key) ?? null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+				removeItem: (key: string) => storage.delete(key)
+			}
+		}
+	})
+	try {
+		clearDependencyCooldown()
+		noteDependencyFailure('300', 2_000)
+		clearDependencyCooldown(1_000)
+		assert.equal(readDependencyCooldown(2_001).active, true)
+		clearDependencyCooldown(3_000)
+		assert.equal(readDependencyCooldown(3_001).active, false)
+	} finally {
+		clearDependencyCooldown()
+		if (originalWindow)
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		else Reflect.deleteProperty(globalThis, 'window')
+	}
+})
+
+test('deterministic oversized responses do not cool down unrelated browser queries', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const originalError = console.error
+	const storage = new Map<string, string>()
+	let calls = 0
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: {
+			location: { origin: 'https://letletme.test' },
+			sessionStorage: {
+				getItem: (key: string) => storage.get(key) ?? null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+				removeItem: (key: string) => storage.delete(key)
+			}
+		}
+	})
+	console.error = () => undefined
+	globalThis.fetch = (async () => {
+		calls += 1
+		return Response.json(
+			{
+				errors: [
+					{
+						message: 'Upstream response too large',
+						extensions: { code: 'UPSTREAM_RESPONSE_TOO_LARGE' }
+					}
+				]
+			},
+			{ status: 502, headers: { 'Retry-After': '300' } }
+		)
+	}) as typeof fetch
+	clearPendingClientQueries()
+	clearDependencyCooldown()
+	try {
+		await assert.rejects(executeQuery('query OversizedProbeA { __typename }'))
+		await assert.rejects(executeQuery('query OversizedProbeB { __typename }'))
+		assert.equal(calls, 2)
+		assert.equal(readDependencyCooldown().active, false)
+	} finally {
+		clearDependencyCooldown()
+		clearPendingClientQueries()
+		globalThis.fetch = originalFetch
+		console.error = originalError
+		if (originalWindow)
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		else Reflect.deleteProperty(globalThis, 'window')
 	}
 })
 
@@ -303,11 +455,9 @@ test('executeQuery leaves deliberately handled GraphQL errors to the caller with
 
 	try {
 		await assert.rejects(
-			executeQuery(
-				'query RevisionProbe { __typename }',
-				undefined,
-				{ handledErrorCodes: ['LIVE_REVISION_GONE'] }
-			),
+			executeQuery('query RevisionProbe { __typename }', undefined, {
+				handledErrorCodes: ['LIVE_REVISION_GONE']
+			}),
 			(error: unknown) => {
 				assert.ok(error instanceof GraphQLRequestError)
 				assert.equal(error.code, 'LIVE_REVISION_GONE')

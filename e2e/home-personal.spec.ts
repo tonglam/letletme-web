@@ -808,7 +808,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
 			await gate
 			if (failFirstSections && sectionRequests <= 2) {
-				await route.fulfill({ status: 503, json: { errors: [{ message: 'Section temporarily unavailable' }] } })
+				await route.fulfill({ status: 503, headers: { 'retry-after': '0' }, json: { errors: [{ message: 'Section temporarily unavailable' }] } })
 				return
 			}
 			await route.continue()
