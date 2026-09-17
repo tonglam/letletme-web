@@ -17,7 +17,12 @@ import {
 } from '@/lib/data-governance-probe'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30
+// The route is only for explicitly authorized, one-shot governance evidence.
+// Keep its platform ceiling above the internal deadline so cancellation can
+// settle cleanly without allowing a slow nested query to occupy the request.
+export const maxDuration = 10
+
+const INTERNAL_DEADLINE_MS = 8_000
 
 const WINDOW_VALUES = new Set<GovernanceWindow>(['1h', '6h', '3d', '28d'])
 const CONTRACT_KEY = /^[a-z0-9][a-z0-9.-]{0,63}$/
@@ -132,6 +137,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 			{ status: 413 }
 		)
 	}
+	const timeoutController = new AbortController()
+	const deadlineAt = Date.now() + INTERNAL_DEADLINE_MS
+	const timeoutId = setTimeout(() => timeoutController.abort(), INTERNAL_DEADLINE_MS)
+	const signal = AbortSignal.any([request.signal, timeoutController.signal])
 	try {
 		const body = parseDataGovernanceProbeRequest(await request.json())
 		if (body.contractKey !== contractKey) {
@@ -140,7 +149,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 				{ status: 400 }
 			)
 		}
-		const result = await probeDataContract(body)
+		const result = await probeDataContract(body, {
+			signal,
+			timeoutMs: Math.max(1, deadlineAt - Date.now())
+		})
 		return NextResponse.json(result, {
 			status: 200,
 			headers: { 'cache-control': 'no-store' }
@@ -157,5 +169,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 			{ success: false, error: 'BUSINESS_DATA_UNAVAILABLE' },
 			{ status: 503, headers: { 'cache-control': 'no-store' } }
 		)
+	} finally {
+		clearTimeout(timeoutId)
 	}
 }

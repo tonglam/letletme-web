@@ -80,6 +80,13 @@ export type EntrySyncOutboxHealth = {
 	generatedAt: string
 }
 
+export type EntrySyncOutboxMonitorHealth = Omit<
+	EntrySyncOutboxHealth,
+	'deliveredCount'
+> & {
+	view: 'monitor'
+}
+
 export type EntrySyncOutboxCleanupResult = {
 	deleted: number
 	batches: number
@@ -517,6 +524,68 @@ export async function getEntrySyncOutboxHealth(
 		pendingCount: Number(row?.pending_count ?? 0),
 		leasedCount: Number(row?.leased_count ?? 0),
 		deliveredCount: Number(row?.delivered_count ?? 0),
+		oldestPendingAt,
+		oldestPendingAgeSeconds: Number.isFinite(oldestTimestamp)
+			? Math.max(0, Math.floor((now.getTime() - oldestTimestamp) / 1_000))
+			: null,
+		contractFailureCount: Number(row?.contract_failure_count ?? 0),
+		oldestContractFailureAt: row?.oldest_contract_failure_at ?? null,
+		generatedAt: now.toISOString()
+	}
+}
+
+/**
+ * Bounded monitoring projection. Delivered rows are retained for seven days
+ * for the cleanup contract, but they are not part of the frequent health
+ * decision and must not be counted by every monitoring request.
+ */
+export async function getEntrySyncOutboxMonitorHealth(
+	now = new Date()
+): Promise<EntrySyncOutboxMonitorHealth> {
+	const [row] = await db.transaction(async tx => {
+		await tx.execute(sql`SELECT set_config('statement_timeout', '2s', true)`)
+		await tx.execute(sql`SELECT set_config('lock_timeout', '1s', true)`)
+		return tx.execute<{
+			pending_count: number
+			leased_count: number
+			oldest_pending_at: string | null
+			contract_failure_count: number
+			oldest_contract_failure_at: string | null
+		}>(sql`
+			SELECT
+				count(*) FILTER (WHERE status = 'pending')::integer AS pending_count,
+				count(*) FILTER (WHERE status = 'leased')::integer AS leased_count,
+				(min(created_at) FILTER (WHERE status = 'pending'))::text AS oldest_pending_at,
+				count(*) FILTER (
+					WHERE status = 'pending'
+						AND (
+							last_error_code = 'INVALID_RESPONSE'
+							OR (
+								last_error_code LIKE 'HTTP_4%'
+								AND last_error_code NOT IN ('HTTP_408', 'HTTP_429')
+							)
+						)
+				)::integer AS contract_failure_count,
+				(min(updated_at) FILTER (
+					WHERE status = 'pending'
+						AND (
+							last_error_code = 'INVALID_RESPONSE'
+							OR (
+								last_error_code LIKE 'HTTP_4%'
+								AND last_error_code NOT IN ('HTTP_408', 'HTTP_429')
+							)
+						)
+				))::text AS oldest_contract_failure_at
+			FROM bauth.entry_sync_outbox
+			WHERE status IN ('pending', 'leased')
+		`)
+	})
+	const oldestPendingAt = row?.oldest_pending_at ?? null
+	const oldestTimestamp = oldestPendingAt ? Date.parse(oldestPendingAt) : NaN
+	return {
+		view: 'monitor',
+		pendingCount: Number(row?.pending_count ?? 0),
+		leasedCount: Number(row?.leased_count ?? 0),
 		oldestPendingAt,
 		oldestPendingAgeSeconds: Number.isFinite(oldestTimestamp)
 			? Math.max(0, Math.floor((now.getTime() - oldestTimestamp) / 1_000))

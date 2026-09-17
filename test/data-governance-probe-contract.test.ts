@@ -29,6 +29,19 @@ describe('data governance consumer probe contract', () => {
 		assert.match(source, /redirect: 'error'/)
 	})
 
+	it('bounds the directed MyFPL request and propagates cancellation', async () => {
+		const route = await read(
+			'app/api/ops/data-contracts/[contractKey]/route.ts'
+		)
+		const probe = await read('lib/data-governance-probe.ts')
+		assert.match(route, /AbortSignal\.any\(\[request\.signal, timeoutController\.signal\]\)/)
+		assert.match(route, /setTimeout\(\(\) => timeoutController\.abort\(\), 8_000\)/)
+		assert.match(route, /timeoutMs: 7_500/)
+		assert.match(probe, /signal: options\.signal/)
+		assert.match(probe, /Math\.min\(options\.timeoutMs \?\? 8_000, 8_000\)/)
+		assert.match(probe, /canarySession\(config, entryId\)/)
+	})
+
 	it('uses server-only canaries for every authenticated business contract', async () => {
 		const source = await read('lib/data-governance-probe.ts')
 		assert.match(source, /GET_ENTRY_LIVE_COMPETITION_BOARD/)
@@ -58,6 +71,9 @@ describe('data governance consumer probe contract', () => {
 
 	it('keeps MyFPL consumer counts and revision sourced from GraphQL', async () => {
 		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /entryId\?: number \| null/)
+		assert.match(source, /gameweek\.entry\?\.id !== entryId/)
+		assert.match(source, /\{ eventId, snapshotRevision: null \}/)
 		assert.match(source, /expectedCount = result\.expectedCount/)
 		assert.match(source, /observedCount = result\.observedCount/)
 		assert.match(source, /input\.producerRevision === result\.revision/)
