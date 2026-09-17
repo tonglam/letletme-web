@@ -93,7 +93,7 @@ function invalidRouteResponse(
 		i18nResponse,
 		withDocumentCacheHeaders(
 			req,
-			NextResponse.rewrite(url, { status: 404 }),
+			NextResponse.rewrite(url),
 			hasSessionCookieHintInHeaders(req.headers)
 		)
 	)
