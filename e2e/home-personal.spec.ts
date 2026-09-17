@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
+import { managerReview, managerGameweek } from './fixtures/manager-review'
 
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
 
@@ -1482,5 +1483,56 @@ for (const locale of ['en', 'zh-CN'] as const) {
     expect(mutations).toEqual([])
    } finally { await sql.end(); await session.cleanup() }
   })
+ }
+}
+
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+ test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated manager fixture only')
+ const zh = locale === 'zh-CN'
+ const labels = zh ? ['赛季复盘', '队长历史', '板凳得分', '转会历史', '道具卡使用', '轮次历史'] : ['Season Review', 'Captain History', 'Bench Points', 'Transfer History', 'Chip Usage', 'Gameweek History']
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const rules = [
+  { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: managerReview } },
+  ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: managerGameweek(eventId) } }))
+ ]
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto(`${zh ? '/zh-CN' : ''}/my-fpl/team`)
+  const season = page.getByRole('tab', { name: labels[0], exact: true })
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
+  for (const name of labels.slice(1)) {
+   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+  }
+  const transfers = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[3], exact: true }) })
+  await expect(transfers).toHaveCount(1)
+  await transfers.locator('button[aria-expanded]').click()
+  await expect(transfers.getByText('Incoming 1-1', { exact: true })).toBeVisible()
+  for (const chip of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit'])) {
+   await transfers.getByRole('button').filter({ hasText: chip }).click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog).toBeVisible()
+   await expect(dialog.getByRole('heading')).toContainText(chip)
+   await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+   await expect(dialog).toHaveCount(0)
+  }
+  const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
+  await history.getByRole('button', { name: zh ? '打开第 1 轮' : 'Open gameweek 1', exact: true }).click()
+  await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page).toHaveURL(url => url.searchParams.get('gw') === '1')
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+
  }
 }
