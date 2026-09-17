@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync, lstatSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, lstatSync, readdirSync } from 'node:fs'
+import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { readBuildConfig } from './build-config.mjs'
 
@@ -28,6 +28,20 @@ export function verifyPrebuiltRelease(root, sha, hostConfig, platform = process)
 	assert.equal(readFileSync(join(root, '.next/BUILD_ID'), 'utf8'), readFileSync(join(root, '.next/standalone/.next/BUILD_ID'), 'utf8'))
 	assert.ok(readFileSync(join(root, '.next/BUILD_ID'), 'utf8').trim(), 'empty build ID')
 	assert.ok(lstatSync(join(root, '.next/static')).isDirectory(), 'missing static assets')
+	const hasFile = (directory) => readdirSync(directory, { withFileTypes: true }).some(
+		(entry) => entry.isFile() || (entry.isDirectory() && hasFile(join(directory, entry.name)))
+	)
+	assert.ok(hasFile(join(root, '.next/static')), 'empty static assets')
+	const standalone = resolve(root, '.next/standalone')
+	const requiredFiles = json('.next/standalone/.next/required-server-files.json').files
+	assert.ok(Array.isArray(requiredFiles) && requiredFiles.length > 0, 'missing required file manifest')
+	for (const name of requiredFiles) {
+		assert.equal(typeof name, 'string')
+		assert.match(name, /^\.next\//)
+		const file = resolve(standalone, name)
+		assert.ok(file.startsWith(standalone + sep), 'required file escapes standalone output')
+		assert.ok(lstatSync(file).isFile(), 'required runtime file is absent or not a regular file')
+	}
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

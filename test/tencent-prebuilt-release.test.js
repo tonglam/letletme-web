@@ -19,9 +19,10 @@ async function fixture(run) {
 		mkdirSync(join(root, '.next/static'))
 		write('.letletme-build.json', manifest)
 		for (const base of ['.next', '.next/standalone/.next']) {
-			write(`${base}/required-server-files.json`, { config })
+			write(`${base}/required-server-files.json`, { config, files: ['.next/required-server-files.json'] })
 			write(`${base}/BUILD_ID`, 'build-id')
 		}
+		write('.next/static/runtime.js', '/* fixture asset */')
 		write('.next/standalone/server.js', 'throw new Error("must not execute")')
 		await run({ root, write, manifest, config, verify: () => verifyPrebuiltRelease(root, sha, hostConfig, platform) })
 	} finally { rmSync(root, { recursive: true, force: true }) }
@@ -51,3 +52,15 @@ test('rejects incomplete output', () => fixture(({ root, verify }) => {
 	rmSync(join(root, '.next/standalone/server.js'))
 	assert.throws(verify)
 }))
+
+
+test('rejects empty static assets and absent declared runtime files', async () => {
+	await fixture(({ root, verify }) => {
+		rmSync(join(root, '.next/static/runtime.js'))
+		assert.throws(verify)
+	})
+	await fixture(({ write, config, verify }) => {
+		write('.next/standalone/.next/required-server-files.json', { config, files: ['.next/server/missing.js'] })
+		assert.throws(verify)
+	})
+})
