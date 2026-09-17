@@ -1077,3 +1077,27 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+test('repeated shell bootstrap executes theme actions only once', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Injects duplicate scripts only into an isolated fixture')
+ await page.goto('/')
+ await expect(page.locator('html')).toHaveAttribute('data-shell-hydrated', '')
+ await page.addScriptTag({ url: '/theme-bootstrap.js' })
+ await page.addScriptTag({ url: '/theme-bootstrap.js' })
+ await page.evaluate(() => {
+  document.documentElement.dataset.themeGuardCount = '0'
+  new MutationObserver(records => {
+   const count = records.flatMap(record => Array.from(record.addedNodes)).filter(node => node instanceof Element && node.hasAttribute('data-theme-transition-guard')).length
+   document.documentElement.dataset.themeGuardCount = String(Number(document.documentElement.dataset.themeGuardCount) + count)
+  }).observe(document.head, { childList: true })
+ })
+ const summary = page.locator('summary[aria-label="Change color theme"]')
+ await summary.click()
+ await page.getByRole('radio', { name: 'System', exact: true }).focus()
+ await page.keyboard.press('ArrowLeft')
+ await expect(page.locator('html')).toHaveClass(/dark/)
+ await expect(page.locator('[data-theme-choice="dark"]')).toHaveAttribute('aria-checked', 'true')
+ await expect(page.locator('html')).toHaveAttribute('data-theme-guard-count', '1')
+ await expect(summary).toBeFocused()
+ await expect(summary.locator('..')).not.toHaveAttribute('open', '')
+})

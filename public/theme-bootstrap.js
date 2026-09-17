@@ -1,4 +1,6 @@
 (() => {
+	if (window.__letletmeShellBootstrapped) return
+	window.__letletmeShellBootstrapped = true
 	// This external beforeInteractive script owns the tiny shell interaction
 	// layer without adding a React-rendered inline <script> to the layout.
 	const disclosureSelector = 'details[data-navigation-disclosure]'
