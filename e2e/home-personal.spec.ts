@@ -768,8 +768,8 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' ? ['en', 'zh-CN'] : ['en']) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -812,6 +812,78 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
+		if (recoveryMode === 'gw-route') {
+			const historicalPoints = { ...points, grossPointsTotal: 33, netPointsTotal: 29,
+				rows: points.rows.map(row => ({ ...row, entryName: 'GW3 Fixture United', grossPoints: 33, netPoints: 29 })) }
+			const historicalPhase = { ...phase, endEventId: 3, revision: '3', semanticSha256: 'b'.repeat(64) }
+			const historicalRules = [
+				{ operation: 'GetMyTournamentGameweekReview', variables: { eventId: 3 }, data: { myTournamentGameweekReview: { state: 'READY', scope: { ...scope, eventId: 3, revision: '3', semanticSha256: historicalPhase.semanticSha256 }, payload: { format: 'POINTS', points: historicalPoints } } } },
+				{ operation: 'GetMyTournamentSeasonReview', variables: { throughEventId: 3 }, data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 77, throughEventId: 3, latestFinalizedEventId: 3, phases: [historicalPhase] } } },
+				...rules
+			]
+			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: historicalRules }) })).ok).toBe(true)
+			await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			let releaseNavigation!: () => void
+			const navigationGate = new Promise<void>(resolve => { releaseNavigation = resolve })
+			let gwRscRequests = 0
+			await page.route(url => url.pathname === routePath && url.searchParams.has('_rsc') && url.searchParams.get('gw') === '3', async route => {
+				gwRscRequests += 1
+				await navigationGate
+				await route.continue()
+			})
+			try {
+				await page.getByRole('combobox').nth(1).selectOption('3')
+				await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toBeVisible()
+				await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3', { timeout: 1500 })
+				expect(gwRscRequests).toBe(0)
+			} finally {
+				releaseNavigation()
+				await page.unrouteAll({ behavior: 'wait' })
+			}
+			await page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '赛程' : 'Fixtures', exact: true }).click()
+			await expect(page).toHaveURL(url => url.pathname === fixturesPath)
+			await page.goBack()
+			await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
+			await expect(page.getByRole('combobox').nth(1)).toHaveValue('3')
+			await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toBeVisible()
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toHaveCount(0)
+			await page.goForward()
+			await expect(page).toHaveURL(url => url.pathname === fixturesPath)
+			await page.goBack()
+			await expect(page.getByRole('combobox').nth(1)).toHaveValue('3')
+			await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toBeVisible()
+			await page.reload()
+			await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toBeVisible()
+			await page.getByRole('combobox').nth(1).selectOption('4')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			let releaseSlowGw!: () => void
+			const slowGw = new Promise<void>(resolve => { releaseSlowGw = resolve })
+			await page.route('**/api/graphql', async route => {
+				const payload = route.request().postDataJSON()
+				if (payload.query?.includes('GetMyTournamentGameweekReview') && payload.variables.eventId === 3) await slowGw
+				await route.continue()
+			})
+			const isSlowGw = (request: import('@playwright/test').Request) => request.url().endsWith('/api/graphql') && request.postDataJSON()?.query?.includes('GetMyTournamentGameweekReview') && request.postDataJSON()?.variables.eventId === 3
+			const slowStarted = page.waitForRequest(isSlowGw)
+			const slowFinished = page.waitForEvent('requestfinished', { predicate: isSlowGw })
+			try {
+				await page.getByRole('combobox').nth(1).selectOption('3')
+				await slowStarted
+				await page.getByRole('combobox').nth(1).selectOption('4')
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+				releaseSlowGw()
+				await slowFinished
+				await expect(page).toHaveURL(url => url.searchParams.get('gw') === '4')
+				await expect(page.getByRole('combobox').nth(1)).toHaveValue('4')
+				await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toHaveCount(0)
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			} finally {
+				releaseSlowGw()
+				await page.unrouteAll({ behavior: 'wait' })
+			}
+			return
+		}
 		if (recoveryMode === 'search-empty') {
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
 			await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)

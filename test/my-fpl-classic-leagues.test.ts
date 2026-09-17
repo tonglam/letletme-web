@@ -102,6 +102,5 @@ describe('My FPL Classic league visibility', () => {
 			/setGameweekReview\(null\)[\s\S]*setSeasonReview\(null\)/
 		)
 		assert.match(client, /\+\+requestSequence\.current/)
-		assert.match(client, /replaceRoute\(\{ eventId: nextEventId \}\)/)
 	})
 })
