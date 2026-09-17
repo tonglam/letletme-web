@@ -2422,6 +2422,7 @@
 		"reviewAdminAccessibleScope": "管理员：只看我的赛事",
 		"reviewSearchPlaceholder": "搜索赛事",
 		"reviewSearch": "搜索",
+		"reviewSearchEmpty": "没有赛事符合搜索条件。请修改或清除搜索。",
 		"reviewClearSearch": "清除搜索",
 		"reviewLoadMoreTournaments": "加载更多赛事",
 		"reviewLoadingTournaments": "正在加载赛事…"
