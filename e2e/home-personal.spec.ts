@@ -1499,21 +1499,27 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
  const tournament = { id: 6, name: 'J08 Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
  const rules = [
-  { operation: 'GetEntryTournaments', data: { entryTournaments: [tournament] } },
-  ...([3, 4] as const).flatMap(eventId => {
-   const value = officialH2HFixture(eventId)
+  { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...tournament, id: 7, name: 'J08 Other H2H' }, tournament] } },
+  ...[6, 7].flatMap(tournamentId => ([3, 4] as const).flatMap(eventId => {
+   const value = officialH2HFixture(eventId, tournamentId)
    return [
-    { operation: 'GetTournamentOfficialH2H', variables: { eventId }, data: { tournamentOfficialH2H: value.snapshot } },
-    { operation: 'GetLeagueLiveHead', variables: { eventId }, data: { leagueLiveHead: value.head } },
-    { operation: 'GetTournamentOfficialH2HHistory', variables: { eventId }, data: { tournamentOfficialH2HHistory: { tournamentId: 6, eventId, matches: [] } } },
+    { operation: 'GetTournamentOfficialH2H', variables: { tournamentId, eventId }, data: { tournamentOfficialH2H: value.snapshot } },
+    { operation: 'GetLeagueLiveHead', variables: { tournamentId, eventId }, data: { leagueLiveHead: value.head } },
+    { operation: 'GetTournamentOfficialH2HHistory', variables: { tournamentId, eventId }, data: { tournamentOfficialH2HHistory: { tournamentId, eventId, matches: [] } } },
    ]
-  }),
+  })),
  ]
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
   await page.setViewportSize({ width, height: 900 })
-  await page.goto(`${prefix}/live/competitions?tournamentId=6&gw=4`)
+  await page.goto(`${prefix}/live/competitions?tournamentId=7&gw=4`)
+  const selector = page.getByRole('button', { name: zh ? '对战联赛' : 'Head-to-head', exact: true })
+  await expect(selector).toContainText('J08 Other H2H')
+  await selector.click()
+  await page.getByRole('menuitem', { name: 'J08 Official H2H', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+  await expect(selector).toContainText('J08 Official H2H')
   const standings = page.getByRole('tab', { name: tableName })
   await standings.click()
   const homeLink = page.getByRole('tabpanel', { name: tableName }).locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=4"]`).filter({ visible: true })
