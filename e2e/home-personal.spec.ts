@@ -1519,6 +1519,22 @@ test('J08 official H2H standings and fixtures preserve round identity', async ({
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
   await page.getByRole('tab', { name: /Head-to-Head table/ }).click()
   await expect(page.locator('a[href="/live/points/123?tournamentId=6&gw=3"]').filter({ visible: true })).toHaveCount(1)
+  await page.getByRole('link', { name: 'Next', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('gw') === '4')
+  for (const entryId of [123, 456]) {
+   await page.getByRole('tab', { name: /Head-to-Head table/ }).click()
+   const link = page.locator(`a[href="/live/points/${entryId}?tournamentId=6&gw=4"]`).filter({ visible: true })
+   await expect(link).toHaveCount(1)
+   const returnUrl = page.url()
+   await link.click()
+   await expect(page).toHaveURL(url => url.pathname === `/live/points/${entryId}` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+   const pitch = page.getByRole('region', { name: /formation/ })
+   await expect(pitch.getByRole('button', { name: /View details for Player/ })).toHaveCount(15)
+   await expect(page.getByRole('region', { name: /GW4/ })).toBeVisible()
+   await page.goBack()
+   await expect(page).toHaveURL(returnUrl)
+   await expect(page.getByRole('tab', { name: /Head-to-Head table/ })).toBeVisible()
+  }
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
