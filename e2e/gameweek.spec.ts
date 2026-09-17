@@ -313,3 +313,62 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		})
 	})
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test(`J04 home to gameweek detail and history ${locale} ${width}px`, async ({ page }, testInfo) => {
+			const zh = locale === 'zh-CN'
+			const prefix = zh ? '/zh-CN' : ''
+			const detailRequests: string[] = []
+			await page.route('**/api/graphql', async route => {
+				const body = route.request().postDataJSON()
+				const explain = /query EventLiveExplainPlayer\b/.test(body.query ?? '')
+				const live = /query PlayerLive\b/.test(body.query ?? '')
+				if (!explain && !live) return route.continue()
+				expect(body.variables).toEqual(explain ? { eventId: 33, elementId: 2 } : { eventId: 33, playerId: 2 })
+				detailRequests.push(explain ? 'explain' : 'live')
+				const stats = { minutes: 90, goalsScored: 1, assists: 0, cleanSheets: 1, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 3, bps: 38, totalPoints: 11 }
+				await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: explain ? { eventLiveExplain: { elementId: 2, selectedBy: 10, stats, contributions: [{ identifier: 'minutes', value: 90, points: 2 }, { identifier: 'goals_scored', value: 1, points: 5 }, { identifier: 'clean_sheets', value: 1, points: 1 }, { identifier: 'bonus', value: 3, points: 3 }], player: { id: 2, webName: 'Palmer', team: { id: 1, shortName: 'ARS' } } } } : { playerLive: stats } }) })
+			})
+			await page.setViewportSize({ width, height: 900 })
+			testInfo.annotations.push({ type: 'coverage-case', description: 'J04 actual gameweek journey; comparison steps .07-.09 are inapplicable to match-detail modal; performance unmeasured' })
+			await page.goto(prefix || '/')
+			await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
+			const nav = page.getByRole('navigation').first()
+			const href = `${prefix}/explore/gameweek`
+			if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+			else await nav.locator('details').filter({ has: page.locator(`a[href="${href}"]`) }).locator('summary').filter({ visible: true }).click()
+			const link = nav.locator(`a[href="${href}"]`).filter({ visible: true })
+			await expect(link).toHaveCount(1)
+			await link.click()
+			await expect(page).toHaveURL(url => url.pathname === href)
+			await page.getByRole('combobox', { name: zh ? '选择轮次' : 'Select gameweek', exact: true }).click()
+			await page.getByRole('option', { name: zh ? '第 33 轮（当前）' : 'Gameweek 33 (Current)', exact: true }).click()
+			await expect(page.getByRole('heading', { name: zh ? 'GW33 概览' : 'GW33 Overview', exact: true })).toBeVisible()
+			const dream = page.locator('[aria-labelledby="home-team-of-week-title"]')
+			await expect(dream.locator('li button')).toHaveCount(1)
+			await expect(dream).toContainText('Saka')
+			const rows = page.locator('tbody tr')
+			await expect(rows.getByRole('button')).toHaveText(['Saka', 'Palmer'])
+			await expect(rows.nth(0).getByRole('cell').last()).toHaveText('12')
+			await expect(rows.nth(1).getByRole('cell').last()).toHaveText('11')
+			const opener = rows.getByRole('button', { name: 'Palmer', exact: true })
+			await opener.click()
+			const dialog = page.getByRole('dialog')
+			await expect(dialog).toContainText('Palmer')
+			await expect(dialog.getByText(zh ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+			await expect(dialog.getByRole('list')).toBeVisible()
+			await expect(dialog.getByRole('list').getByRole('listitem').last()).toContainText('+11')
+			expect(detailRequests.sort()).toEqual(['explain', 'live'])
+			await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+			await expect(dialog).toHaveCount(0)
+			await expect(opener).toBeFocused()
+			await page.goBack()
+			await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+			await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
+			await page.goForward()
+			await expect(page).toHaveURL(url => url.pathname === href)
+			await expect(page.getByRole('heading', { name: zh ? 'GW33 概览' : 'GW33 Overview', exact: true })).toBeVisible()
+		})
+	}
+}
