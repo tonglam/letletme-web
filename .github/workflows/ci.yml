@@ -97,6 +97,8 @@ jobs:
       - run: npm test
         env:
           RUN_DB_INTEGRATION: 'true'
+          E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
       - run: npm run test:edge
       - run: npm run worker:dry-run
       - run: npm run watchdog:dry-run

@@ -11,7 +11,7 @@ import {
 	check,
 	jsonb
 } from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 
 const authSchema = pgSchema('bauth')
 
@@ -461,3 +461,17 @@ export const entrySyncOutbox = authSchema.table(
 		)
 	})
 )
+
+// Better Auth's native joins use these ORM relations; the existing foreign keys
+// remain authoritative and no database migration is required.
+export const sessionRelations = relations(session, ({ one }) => ({
+	user: one(user, { fields: [session.userId], references: [user.id] })
+}))
+
+export const accountRelations = relations(account, ({ one }) => ({
+	user: one(user, { fields: [account.userId], references: [user.id] })
+}))
+
+export const userRelations = relations(user, ({ many }) => ({
+	accounts: many(account)
+}))
