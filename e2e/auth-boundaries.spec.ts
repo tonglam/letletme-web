@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import postgres from 'postgres'
 import en from '../messages/en.json'
 import zh from '../messages/zh-CN.json'
 
@@ -62,4 +64,36 @@ test.describe('AUTH03.state.01 invalid-next planned context', () => {
 			expect(externalRequests).toBe(0)
 		})
 	}
+})
+
+
+test.describe('AUTH03.state.02 expired token', () => {
+ test.use({ viewport: { width: 390, height: 900 }, colorScheme: 'dark', timezoneId: 'UTC' })
+ test('real auth endpoint rejects expired fixture token without success navigation', async ({ page }) => {
+  const direct = process.env.E2E_DIRECT_DATABASE_URL
+  if (!direct) throw new Error('E2E_DIRECT_DATABASE_URL is required')
+  const sql = postgres(direct, { max: 1, prepare: false })
+  const token = `auth-expired-${randomUUID()}`
+  const identifier = `reset-password:${token}`
+  try {
+   await sql`INSERT INTO bauth.verification (id, identifier, value, expires_at)
+    VALUES (${token}, ${identifier}, ${`absent-${token}`}, ${new Date(Date.now() - 60000)})`
+   await page.goto(`/zh-CN/auth/reset-password?token=${token}`)
+   await page.getByLabel(zh.Auth.password, { exact: true }).fill('IsolatedFixturePassword-42')
+   await page.getByLabel(zh.Auth.confirmPassword, { exact: true }).fill('IsolatedFixturePassword-42')
+   const responsePromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/auth/reset-password' && response.request().method() === 'POST')
+   await page.getByRole('button', { name: zh.Auth.setNewPassword, exact: true }).click()
+   const response = await responsePromise
+   expect(response.status()).toBe(400)
+   expect((await response.json()).code).toBe('INVALID_TOKEN')
+   await expect(page.getByRole('alert').filter({ hasText: zh.Auth.errors.invalidResetLink })).toHaveText(zh.Auth.errors.invalidResetLink)
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/auth/reset-password' && url.searchParams.get('token') === token)
+   await expect(page.getByRole('button', { name: zh.Auth.setNewPassword, exact: true })).toBeEnabled()
+   await expect(page.locator('form')).toHaveAttribute('aria-busy', 'false')
+  } finally {
+   await sql`DELETE FROM bauth.verification WHERE id = ${token}`
+   await sql.end()
+  }
+ })
 })
