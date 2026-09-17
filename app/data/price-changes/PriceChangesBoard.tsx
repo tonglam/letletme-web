@@ -63,7 +63,7 @@ import { buildPriceChangeFilterUrl } from '@/lib/price-change-filter-url'
 import { cn } from '@/lib/utils'
 import { useHydrated } from '@/hooks/use-hydrated'
 import type { PersonalSquadSeed } from '@/lib/squad-picks'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
 	ArrowDown,
 	ArrowDownRight,
@@ -427,12 +427,24 @@ export function PriceChangesBoard({
 	const router = useRouter()
 	const [isRefreshing, startRefresh] = useTransition()
 	const hydrated = useHydrated()
+	const searchParams = useSearchParams()
+	const requestedMovement = searchParams?.get('movement')
+	const routeMovement: PriceChangeMovementFilter = searchParams
+		? requestedMovement === 'rise' || requestedMovement === 'fall' || requestedMovement === 'locked'
+			? requestedMovement
+			: 'all'
+		: initialMovement
+	const routeScope: PriceChangeScope = routeMovement === 'locked'
+		? 'all'
+		: searchParams
+			? searchParams.get('scope') === 'all' ? 'all' : DEFAULT_PRICE_CHANGE_SCOPE
+			: initialScope
 	const [search, setSearch] = useState('')
 	const [scope, setScope] = useState<PriceChangeScope>(
-		initialMovement === 'locked' ? 'all' : initialScope
+		routeScope
 	)
 	const [movement, setMovement] =
-		useState<PriceChangeMovementFilter>(initialMovement)
+		useState<PriceChangeMovementFilter>(routeMovement)
 	const [sort, setSort] = useState<PriceChangeSortState>(
 		DEFAULT_PRICE_CHANGE_SORT
 	)
@@ -480,10 +492,10 @@ export function PriceChangesBoard({
 	}, [router])
 
 	useEffect(() => {
-		setScope(initialMovement === 'locked' ? 'all' : initialScope)
-		setMovement(initialMovement)
+		setScope(routeScope)
+		setMovement(routeMovement)
 		setPage(1)
-	}, [initialMovement, initialScope])
+	}, [routeMovement, routeScope])
 
 	const updateFilterUrl = (
 		nextScope: PriceChangeScope,

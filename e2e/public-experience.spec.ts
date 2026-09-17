@@ -879,3 +879,35 @@ test('anonymous competition redirects cannot be counted as successful content me
 	expect(sample.error).toContain('Unexpected response or redirect')
 	expect(sample.readyMs).toBeNull()
 })
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`prediction filters follow URL after browser history restoration [${locale}]`, async ({ page }) => {
+		const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+		const path = `${prefix}/explore/price-predictions`
+		const scope = page.getByRole('combobox', { name: locale === 'zh-CN' ? '预测范围' : 'Prediction scope', exact: true })
+		const movement = page.getByRole('combobox', { name: locale === 'zh-CN' ? '走势' : 'Movement', exact: true })
+		await page.goto(path)
+		await scope.click()
+		await page.getByRole('option', { name: locale === 'zh-CN' ? '全部球员' : 'All players', exact: true }).click()
+		await movement.click()
+		await page.getByRole('option', { name: locale === 'zh-CN' ? '只看上涨' : 'Rises only', exact: true }).click()
+		await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'all' && url.searchParams.get('movement') === 'rise')
+		await expect(page.getByRole('table').getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+		await expect(page.getByRole('table').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
+		await page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '赛程' : 'Fixtures', exact: true }).click()
+		await expect(page).toHaveURL(url => url.pathname === `${prefix}/explore/fixtures`)
+		await page.goBack()
+		await expect(page).toHaveURL(url => url.pathname === path && url.searchParams.get('scope') === 'all' && url.searchParams.get('movement') === 'rise')
+		await expect(scope).toContainText(locale === 'zh-CN' ? '全部球员' : 'All players')
+		await expect(movement).toContainText(locale === 'zh-CN' ? '只看上涨' : 'Rises only')
+		await expect(page.getByRole('table').getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+		await expect(page.getByRole('table').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
+		await page.goForward()
+		await expect(page).toHaveURL(url => url.pathname === `${prefix}/explore/fixtures`)
+		await page.goBack()
+		await expect(scope).toContainText(locale === 'zh-CN' ? '全部球员' : 'All players')
+		await page.reload()
+		await expect(movement).toContainText(locale === 'zh-CN' ? '只看上涨' : 'Rises only')
+		await expect(page.getByRole('table').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
+	})
+}
