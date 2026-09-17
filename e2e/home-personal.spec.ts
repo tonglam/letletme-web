@@ -2009,3 +2009,48 @@ test('J13 prepared preview exposes every group and knockout format without creat
   expect(writes).toEqual([])
  } finally { await session.cleanup() }
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  for (const persona of ['anonymous', 'unbound', 'bound'] as const) {
+   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated identity fixtures')
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const session = persona === 'anonymous' ? null : await createSession(persona === 'bound' ? { entryId: 909090 } : {})
+    try {
+     await page.setViewportSize({ width, height: 900 })
+     if (session) await addSessionCookie(page, session.cookie)
+     await page.goto(`${prefix}/onboarding/bind-entry?next=${encodeURIComponent('/auth/forgot-password')}`)
+     if (persona === 'anonymous') {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+      await expect(page.locator('#main-content input[type="password"]')).toBeEnabled()
+     } else if (persona === 'bound') {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/forgot-password`)
+      await expect(page.locator('#main-content input[type="email"]')).toBeEnabled()
+     } else {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/onboarding/bind-entry`)
+      const input = page.locator('#main-content input[name="entryId"]')
+      await expect(input).toBeEnabled()
+      const writes: string[] = []
+      page.on('request', request => {
+       if (request.headers()['next-action']) writes.push(request.url())
+      })
+      for (const value of ['-1', '1.5', '']) {
+       await input.fill(value)
+       await expect(input).toHaveValue(value)
+      }
+      await page.locator('#main-content button[type="submit"]').click()
+      await expect(input).toBeFocused()
+      expect(await input.evaluate(element => (element as HTMLInputElement).validity.valueMissing)).toBe(true)
+      expect(writes).toEqual([])
+      const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+      try {
+       const [row] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session!.userId}`
+       expect(row).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
+      } finally { await sql.end() }
+     }
+    } finally { if (session) await session.cleanup() }
+   })
+  }
+ }
+}
