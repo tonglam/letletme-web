@@ -766,3 +766,93 @@ test('live points reloads a repeated entry without stranding the loading state',
 		await session.cleanup()
 	}
 })
+
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry'] as const) {
+const failFirstSections = recoveryMode !== 'none'
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state${failFirstSections ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
+	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
+	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+	const session = await createSession({ entryId: 123 })
+	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	const points = {
+		headlineMetric: 'GROSS_POINTS', grossPointsTotal: 75, grossPointsAverage: 75, netPointsTotal: 71,
+		seasonGrossPointsTotal: 300, seasonGrossPointsAverage: 300, seasonNetPointsTotal: 296,
+		nextCursor: null, hasNextPage: false,
+		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
+	}
+	const pageInfo = { hasNextPage: false, endCursor: null }
+	const scope = { ...phase, tournamentId: 77, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
+	const rules = [
+		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '77', node: { tournamentId: 77, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
+		{ operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 77, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
+		{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: { format: 'POINTS', points } } } },
+		...['POINTS_STANDINGS', 'POINTS_TRAJECTORIES'].map(section => ({ operation: 'GetMyTournamentSeasonReviewSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 77, throughEventId: 4, section, points, h2h: null, knockout: null, pageInfo } } }))
+	]
+	let releaseSections!: () => void
+	const gate = new Promise<void>(resolve => { releaseSections = resolve })
+	let sectionRequests = 0
+	try {
+		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+		await addSessionCookie(page, session.cookie)
+		await page.route('**/api/graphql', async route => {
+			const payload = route.request().postDataJSON()
+			if (!payload.query?.includes('GetMyTournamentSeasonReviewSection')) return route.continue()
+			sectionRequests += 1
+			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
+			await gate
+			if (failFirstSections && sectionRequests <= 2) {
+				await route.fulfill({ status: 503, json: { errors: [{ message: 'Section temporarily unavailable' }] } })
+				return
+			}
+			await route.continue()
+		})
+		await page.goto('/my-fpl/competitions?tournamentId=77&view=gameweek&gw=4')
+		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		const observations = await (await fetch(fixture)).json()
+		expect(observations.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(0)
+		const season = page.getByRole('tab', { name: 'Season', exact: true })
+		const gameweek = page.getByRole('tab', { name: 'Gameweek', exact: true })
+		await season.click()
+		await expect.poll(() => sectionRequests).toBe(2)
+		await expect(page.getByText('The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
+		await gameweek.click()
+		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		await season.click()
+		expect(sectionRequests).toBe(2)
+		releaseSections()
+		if (failFirstSections) {
+			await expect(page.getByText('Tournament review is temporarily unavailable. Please try again.', { exact: true })).toBeVisible()
+			await expect(page.getByRole('button', { name: 'Retry this phase', exact: true })).toBeVisible()
+			if (recoveryMode === 'retry-button') {
+				await page.getByRole('button', { name: 'Retry this phase', exact: true }).click()
+			} else {
+				await gameweek.click()
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+				await season.click()
+			}
+			await expect.poll(() => sectionRequests).toBe(4)
+		}
+		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		await gameweek.click()
+		await season.click()
+		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		expect(sectionRequests).toBe(failFirstSections ? 4 : 2)
+		await expect(page).toHaveURL(url =>
+			url.pathname === '/my-fpl/competitions' &&
+			url.searchParams.get('tournamentId') === '77' &&
+			url.searchParams.get('view') === null &&
+			url.searchParams.get('gw') === '4'
+		)
+		await page.reload()
+		await expect(season).toHaveAttribute('aria-selected', 'true')
+		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		expect(sectionRequests).toBe(failFirstSections ? 4 : 2)
+		await expect(page.getByText('The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
+	} finally {
+		releaseSections()
+		await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+		await session.cleanup()
+	}
+})
+
+}

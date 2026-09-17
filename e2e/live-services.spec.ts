@@ -1,5 +1,15 @@
 import { expect, test, type Route } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { resolveLiveRefreshProfile } from '../lib/live-refresh'
+
+// The standalone server is always production-shaped, even when the test
+// runner itself has no NODE_ENV. Match its profile, including the default.
+const refreshProfile = resolveLiveRefreshProfile(
+	process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE,
+	'production'
+)
+const refreshIntervalMs = refreshProfile === 'conserve' ? 120_000 : 30_000
+const firstRefreshWindowMs = Math.ceil(refreshIntervalMs * 1.1) + 1_000
 
 const graphqlFixtureUrl = 'http://127.0.0.1:4100/graphql'
 
@@ -707,7 +717,13 @@ test('official-sync live points auto-refreshes without a polling label', async (
 
 	// The official post-deadline sync is expected lifecycle work.  It should
 	// recover through the cheap refresh loop without asking the user to retry.
-	await page.clock.runFor(30_000)
+	if (refreshProfile === 'conserve') {
+		await page.clock.runFor(100_000)
+		expect(clientLivePointsRequests).toBe(1)
+	}
+	await page.clock.runFor(
+		firstRefreshWindowMs - (refreshProfile === 'conserve' ? 100_000 : 0)
+	)
 	await expect.poll(() => clientLivePointsRequests).toBeGreaterThan(1)
 	// Flush the React update queued by the second network response while the
 	// browser fake clock is installed.
@@ -936,7 +952,15 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
 	await expect(page.getByText(/Auto refresh in \d+s/)).toHaveCount(0)
 
-	await page.clock.fastForward(90_000)
+	if (refreshProfile === 'conserve') {
+		await page.clock.fastForward(100_000)
+		expect(headRequestCount).toBe(0)
+		expect(fullRequestCount).toBe(0)
+	}
+	await page.clock.fastForward(
+		Math.max(90_000, firstRefreshWindowMs) -
+			(refreshProfile === 'conserve' ? 100_000 : 0)
+	)
 	await expect.poll(() => headRequestCount).toBeGreaterThan(0)
 	await expect.poll(() => fullRequestCount).toBe(1)
 	expect(probeCount).toBe(0)
@@ -947,7 +971,8 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	)
 	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
 
-	await page.clock.fastForward(30_000)
+	// A newly accepted snapshot re-arms the countdown with fresh jitter.
+	await page.clock.fastForward(firstRefreshWindowMs)
 	await expect.poll(() => headRequestCount).toBeGreaterThan(1)
 	await expect.poll(() => fullRequestCount).toBe(2)
 	expect(probeCount).toBe(0)
