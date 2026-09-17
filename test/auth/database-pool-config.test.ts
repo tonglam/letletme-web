@@ -3,7 +3,10 @@ import { describe, it } from 'node:test'
 
 import {
 	resolveWebDatabasePoolMax,
-	WEB_DATABASE_POOL_MAX
+	WEB_DATABASE_POOL_MAX,
+	WEB_DATABASE_IDLE_TRANSACTION_TIMEOUT_MS,
+	WEB_DATABASE_LOCK_TIMEOUT_MS,
+	WEB_DATABASE_STATEMENT_TIMEOUT_MS
 } from '../../lib/db/pool-config'
 
 describe('Web database pool contract', () => {
@@ -19,5 +22,11 @@ describe('Web database pool contract', () => {
 		for (const value of ['0', '3', '1.5', 'many']) {
 			assert.throws(() => resolveWebDatabasePoolMax(value))
 		}
+	})
+
+	it('keeps database work bounded at the server connection boundary', () => {
+		assert.equal(WEB_DATABASE_STATEMENT_TIMEOUT_MS, 5_000)
+		assert.equal(WEB_DATABASE_LOCK_TIMEOUT_MS, 5_000)
+		assert.equal(WEB_DATABASE_IDLE_TRANSACTION_TIMEOUT_MS, 5_000)
 	})
 })
