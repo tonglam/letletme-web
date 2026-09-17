@@ -65,6 +65,7 @@ export function HomeAutoCarousel({
 	const [isReducedMotion, setIsReducedMotion] = useState(false)
 	const [isFullListOpen, setIsFullListOpen] = useState(false)
 	const touchStartX = useRef<number | null>(null)
+	const fullListTriggerRef = useRef<HTMLButtonElement | null>(null)
 	const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
 	const activeSlideIndex = Math.max(
@@ -332,7 +333,8 @@ export function HomeAutoCarousel({
 											variant="ghost"
 											size="sm"
 											type="button"
-											onClick={() => {
+											onClick={event => {
+												fullListTriggerRef.current = event.currentTarget
 												setActiveSlideId(slide.id)
 												setIsFullListOpen(true)
 											}}
@@ -357,7 +359,13 @@ export function HomeAutoCarousel({
 					open={isFullListOpen}
 					onOpenChange={setIsFullListOpen}
 				>
-					<DialogContent className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-xl sm:p-6">
+					<DialogContent
+						className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-xl sm:p-6"
+						onCloseAutoFocus={event => {
+							event.preventDefault()
+							fullListTriggerRef.current?.focus()
+						}}
+					>
 						<div
 							id={fullContentId}
 							data-share-preserve-width="true"

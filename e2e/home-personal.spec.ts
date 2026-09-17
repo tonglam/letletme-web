@@ -1003,6 +1003,12 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(dialog.getByRole('heading', { name: zh ? '积分联赛' : 'Classic', exact: true })).toBeVisible()
 			await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
 			await expect(dialog).toHaveCount(0)
+			await expect(carousel.getByRole('button', { name: zh ? '查看全部 12 个' : 'View all 12', exact: true })).toBeFocused()
+			await carousel.getByRole('button', { name: zh ? '查看全部 12 个' : 'View all 12', exact: true }).click()
+			await expect(dialog).toBeVisible()
+			await page.keyboard.press('Escape')
+			await expect(dialog).toHaveCount(0)
+			await expect(carousel.getByRole('button', { name: zh ? '查看全部 12 个' : 'View all 12', exact: true })).toBeFocused()
 		} finally {
 			await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
 			await session.cleanup()
