@@ -1429,6 +1429,10 @@ export default function TournamentClient({
 							followsAnchorRef.current = false
 							setFollowsGameweekAnchor(false)
 							setSelectedGameweek(gameweek)
+							const params = new URLSearchParams(searchParams.toString())
+							params.set('gw', String(gameweek))
+							if (selectedTournament) params.set('tournamentId', selectedTournament.id)
+							window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`)
 						}}
 						currentGameweek={currentGameweek}
 						maxGameweek={selectedTournamentIsOfficialH2H ? 38 : currentGameweek}
