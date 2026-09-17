@@ -97,3 +97,55 @@ test.describe('AUTH03.state.02 expired token', () => {
   }
  })
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  const prefix = locale === 'en' ? '' : '/zh-CN'
+  const t = (locale === 'en' ? en : zh).Auth
+  const forms = [
+   { path: '/auth/login', fields: [t.email, t.password] },
+   { path: '/auth/signup', fields: [t.name, t.email, t.password, t.confirmPassword] },
+   { path: '/auth/forgot-password', fields: [t.email] },
+   { path: '/auth/reset-password?token=unsubmitted-fixture-token', fields: [t.password, t.confirmPassword] }
+  ]
+  for (const form of forms) {
+   test(`AUTH01 focus input clear ${locale} ${width} ${form.path}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let authWrites = 0
+    page.on('request', request => {
+     if (new URL(request.url()).pathname.startsWith('/api/auth/') && request.method() !== 'GET') authWrites++
+    })
+    await page.goto(`${prefix}${form.path}`)
+    for (const label of form.fields) {
+     const field = page.getByLabel(label, { exact: true })
+     await expect(field).toBeEnabled()
+     await field.focus()
+     await expect(field).toBeFocused()
+     const value = label === t.email ? 'input-only@example.invalid' : 'FixtureInput-42'
+     await field.fill(value)
+     await expect(field).toHaveValue(value)
+     if (label === t.password || label === t.confirmPassword) await expect(field).toHaveAttribute('type', 'password')
+     await field.fill('')
+     await expect(field).toHaveValue('')
+    }
+    expect(authWrites).toBe(0)
+   })
+  }
+  test(`AUTH01 help links actual click journey ${locale} ${width}`, async ({ page }) => {
+   await page.setViewportSize({ width, height: 900 })
+   await page.goto(`${prefix}/auth/login`)
+   await page.getByRole('link', { name: t.forgotPassword, exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/forgot-password`)
+   await expect(page.getByLabel(t.email, { exact: true })).toBeEnabled()
+   await page.getByRole('link', { name: t.backToLogin, exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+   await expect(page.getByLabel(t.password, { exact: true })).toBeEnabled()
+   await page.getByRole('link', { name: t.signUp, exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/signup`)
+   await expect(page.getByLabel(t.confirmPassword, { exact: true })).toBeEnabled()
+   await page.locator('#main-content').getByRole('link', { name: t.signIn, exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+   await expect(page.getByLabel(t.password, { exact: true })).toBeEnabled()
+  })
+ }
+}
