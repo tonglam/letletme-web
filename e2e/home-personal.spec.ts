@@ -1572,7 +1572,7 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
 
 
 test('J12 browse filters and owner cancel preserve read-only behavior', async ({ page }) => {
- test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated single-worker owner fixture')
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker owner fixture')
  const session = await createSession({ entryId: 909090 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
  const mutations: string[] = []
@@ -1586,7 +1586,8 @@ test('J12 browse filters and owner cancel preserve read-only behavior', async ({
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } },
-   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } }
+   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
+   { operation: 'GetEntryTournaments', data: { entryTournaments: [managedTournament] } }
   ] }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
   await page.goto('/competitions/browse')
@@ -1633,6 +1634,19 @@ test('J12 browse filters and owner cancel preserve read-only behavior', async ({
   await expect(confirm).toBeDisabled()
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(dialog).toHaveCount(0)
+  const live = page.getByRole('link', { name: 'Back to tournament', exact: true })
+  await expect(live).toHaveAttribute('href', '/live/competitions/77')
+  await live.click()
+  await expect(page).toHaveURL(url => url.pathname === '/live/competitions/77')
+  const ready = page.locator('[data-competition-perf-ready="detail"]')
+  await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect(ready).toHaveAttribute('data-competition-gameweek', '33')
+  await expect(ready.getByRole('heading', { name: 'J12 Owned Cup', exact: true })).toBeVisible()
+  await expect(ready.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+  await page.goBack()
+  await expect(page).toHaveURL(url => url.pathname === '/competitions/77/manage')
+  await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
   expect(mutations).toEqual([])
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
