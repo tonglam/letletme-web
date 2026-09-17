@@ -1487,7 +1487,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
-test('J08 official H2H standings and fixtures preserve round identity', async ({ page }) => {
+for (const locale of ['en', 'zh-CN'] as const) {
+for (const width of [1440, 390]) {
+test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px`, async ({ page }) => {
+ const zh = locale === 'zh-CN'
+ const prefix = zh ? '/zh-CN' : ''
+ const tableName = zh ? /对战积分榜/ : /Head-to-Head table/
+ const fixturesName = zh ? /本轮对阵/ : /Round fixtures/
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker fixture suite')
  const session = await createSession({ entryId: 15702 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -1506,37 +1512,41 @@ test('J08 official H2H standings and fixtures preserve round identity', async ({
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
-  await page.goto('/live/competitions?tournamentId=6&gw=4')
-  const standings = page.getByRole('tab', { name: /Head-to-Head table/ })
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto(`${prefix}/live/competitions?tournamentId=6&gw=4`)
+  const standings = page.getByRole('tab', { name: tableName })
   await standings.click()
-  const homeLink = page.locator('a[href="/live/points/123?tournamentId=6&gw=4"]').filter({ visible: true })
+  const homeLink = page.locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=4"]`).filter({ visible: true })
   await expect(homeLink).toHaveCount(1)
   await expect(homeLink).toContainText('H2H Home United')
-  await page.getByRole('tab', { name: /Round fixtures/ }).click()
-  await expect(page.getByRole('tabpanel', { name: /Round fixtures/ }).getByText('H2H Away United', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: fixturesName }).click()
+  await expect(page.getByRole('tabpanel', { name: fixturesName }).getByText('H2H Away United', { exact: true })).toBeVisible()
   await expect(page.locator('a[href*="/live/points/null"], a[href*="/live/points/0?"]')).toHaveCount(0)
-  await page.getByRole('link', { name: 'Previous', exact: true }).click()
+  await page.getByRole('link', { name: zh ? '上一轮' : 'Previous', exact: true }).click()
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
-  await page.getByRole('tab', { name: /Head-to-Head table/ }).click()
-  await expect(page.locator('a[href="/live/points/123?tournamentId=6&gw=3"]').filter({ visible: true })).toHaveCount(1)
-  await page.getByRole('link', { name: 'Next', exact: true }).click()
+  await page.getByRole('tab', { name: tableName }).click()
+  await expect(page.locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=3"]`).filter({ visible: true })).toHaveCount(1)
+  await page.getByRole('link', { name: zh ? '下一轮' : 'Next', exact: true }).click()
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '4')
   for (const entryId of [123, 456]) {
-   await page.getByRole('tab', { name: /Head-to-Head table/ }).click()
-   const link = page.locator(`a[href="/live/points/${entryId}?tournamentId=6&gw=4"]`).filter({ visible: true })
+   await page.getByRole('tab', { name: tableName }).click()
+   const link = page.locator(`a[href="${prefix}/live/points/${entryId}?tournamentId=6&gw=4"]`).filter({ visible: true })
    await expect(link).toHaveCount(1)
    const returnUrl = page.url()
    await link.click()
-   await expect(page).toHaveURL(url => url.pathname === `/live/points/${entryId}` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
-   const pitch = page.getByRole('region', { name: /formation/ })
-   await expect(pitch.getByRole('button', { name: /View details for Player/ })).toHaveCount(15)
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/${entryId}` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+   const pitch = page.getByRole('region', { name: zh ? /阵型/ : /formation/ })
+   await expect(pitch.getByRole('button', { name: zh ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
    await expect(page.getByRole('region', { name: /GW4/ })).toBeVisible()
    await page.goBack()
    await expect(page).toHaveURL(returnUrl)
-   await expect(page.getByRole('tab', { name: /Head-to-Head table/ })).toBeVisible()
+   await expect(page.getByRole('tab', { name: tableName })).toBeVisible()
   }
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
  }
 })
+
+}
+}
