@@ -173,13 +173,14 @@ jobs:
           set -euo pipefail
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
             TENCENT_SSH_PRIVATE_KEY TENCENT_SSH_JUMP_PRIVATE_KEY TENCENT_SSH_KNOWN_HOSTS \
-            TENCENT_RELEASE_SIGNING_KEY \
+            TENCENT_RELEASE_SIGNING_KEY NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
             EDGEONE_TENCENTCLOUD_SECRET_ID EDGEONE_TENCENTCLOUD_SECRET_KEY EDGEONE_ZONE_ID \
             EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY \
             EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON \
             EDGEONE_TENCENT_HEALTH_URL; do
             [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
           done
+          node ops/tencent/scripts/build-config.mjs >/dev/null
           export TENCENTCLOUD_SECRET_ID="$EDGEONE_TENCENTCLOUD_SECRET_ID"
           export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
           node ops/release/edgeone-mode.mjs --mode all-vercel --dry-run >/dev/null

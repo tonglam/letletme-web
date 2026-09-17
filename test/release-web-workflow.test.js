@@ -191,3 +191,12 @@ test('EdgeOne cutover requires an explicit workflow authorization', () => {
 	const split = workflow.indexOf('node ops/release/edgeone-mode.mjs --mode split >/dev/null', guard)
 	assert.ok(guard >= 0 && guard < activate && guard < split)
 })
+
+
+test('Tencent build key is validated before route preflight and mutation', () => {
+ const start = workflow.indexOf('- name: Verify production credentials and scoped route snapshots')
+ const validation = workflow.indexOf('node ops/tencent/scripts/build-config.mjs >/dev/null', start)
+ const routeCheck = workflow.indexOf('node ops/release/edgeone-mode.mjs', start)
+ assert.ok(start >= 0 && validation > start && validation < routeCheck)
+ assert.match(workflow.slice(start, validation), /TENCENT_RELEASE_SIGNING_KEY NEXT_SERVER_ACTIONS_ENCRYPTION_KEY/)
+})
