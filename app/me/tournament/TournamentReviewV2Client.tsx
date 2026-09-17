@@ -1641,7 +1641,16 @@ export default function TournamentReviewV2Client({
 		setLoadingMore(false)
 		viewRef.current = nextView
 		setView(nextView)
-		replaceRoute({ view: nextView })
+		const query = buildTournamentStatsQueryString({
+			tournamentId: selectedTournamentId,
+			view: nextView,
+			gw: eventId,
+			scope: scope === 'MANAGED' ? 'ALL' : scope
+		})
+		// The review data is owned by the client for this presentation change.
+		// Keep the canonical deep link without re-running the server seed loader.
+		const currentPathname = window.location.pathname
+		window.history.replaceState(null, '', query ? `${currentPathname}?${query}` : currentPathname)
 		if (nextView !== 'season' || !selectedTournamentId || !eventId) return
 		const phase = phaseAtEvent(seasonReview?.phases ?? [], eventId)
 		if (!phase) return
