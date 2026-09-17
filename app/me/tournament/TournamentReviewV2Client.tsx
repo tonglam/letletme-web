@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
+import { useSearchParams } from 'next/navigation'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
 import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
@@ -23,7 +24,7 @@ import {
 	type MyTournamentSeasonReview,
 	type MyTournamentSeasonReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
-import { buildTournamentStatsQueryString } from './_lib/tournament-stats-url'
+import { buildTournamentStatsQueryString, parseTournamentStatsView } from './_lib/tournament-stats-url'
 import {
 	mergeTournamentReviewEventIds,
 	tournamentReviewPointsRow,
@@ -829,7 +830,6 @@ export default function TournamentReviewV2Client({
 	initialFplClassicRanks,
 	initialCatalog,
 	initialScope,
-	initialView,
 	initialSelectedTournamentId,
 	initialEventId,
 	initialFinalizedEventIds,
@@ -853,7 +853,10 @@ export default function TournamentReviewV2Client({
 	const [finalizedEventIds, setFinalizedEventIds] = useState(
 		initialFinalizedEventIds
 	)
-	const [view, setView] = useState<'gameweek' | 'season'>(initialView)
+	// History restoration can reuse an older server seed. The current URL
+	// owns presentation, including native replaceState and Back/Forward.
+	const searchParams = useSearchParams()
+	const view = parseTournamentStatsView(searchParams.get('view'))
 	const viewRef = useRef(view)
 	useEffect(() => {
 		viewRef.current = view
@@ -1640,7 +1643,6 @@ export default function TournamentReviewV2Client({
 		// requestSequence for stale-response fencing.
 		setLoadingMore(false)
 		viewRef.current = nextView
-		setView(nextView)
 		const query = buildTournamentStatsQueryString({
 			tournamentId: selectedTournamentId,
 			view: nextView,
@@ -1751,6 +1753,20 @@ export default function TournamentReviewV2Client({
 			}
 		})()
 	}
+
+	const restoreSeasonView = useEffectEvent(() => {
+		if (seasonError || !selectedTournamentId || !eventId) return
+		const phase = seasonReview?.phases.find(candidate => candidate.phaseId === selectedPhaseId)
+			?? phaseAtEvent(seasonReview?.phases ?? [], eventId)
+		if (phase && !phaseSectionsReady(phase.format, seasonSectionPages.current)) {
+			void choosePhase(phase.phaseId, true)
+		}
+	})
+	useEffect(() => {
+		// Back can restore a Gameweek seed at a Season URL without a tab click.
+		// Reuse the same identity-bound loader; errors still require user retry.
+		if (view === 'season') restoreSeasonView()
+	}, [view])
 
 	const selectedPhase = useMemo(
 		() =>
