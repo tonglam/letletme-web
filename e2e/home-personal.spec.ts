@@ -1377,6 +1377,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
     for (const id of ['0', '-1', 'abc', '1.5', '9007199254740992']) {
      const response = await page.goto(`${prefix}/competitions/${id}?gw=1&created=1`)
      expect(response).not.toBeNull()
+     if (!id.includes('.')) {
+      expect(response!.headers()['cache-control']).toContain('private')
+      expect(response!.headers()['cache-control']).toContain('no-store')
+     }
      // Next streamed not-found responses can retain HTTP 200; require the explicit 404 payload.
      expect([200, 404]).toContain(response!.status())
      if (response!.status() === 200) {

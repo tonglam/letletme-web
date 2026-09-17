@@ -87,11 +87,15 @@ function invalidRouteResponse(
 	i18nResponse: NextResponse
 ) {
 	const url = req.nextUrl.clone()
-	url.pathname = `/${locale}/__not-found`
+	url.pathname = `/${locale}/route-not-found`
 	url.search = ''
 	return copyCookies(
 		i18nResponse,
-		withDocumentCacheHeaders(req, NextResponse.rewrite(url, { status: 404 }))
+		withDocumentCacheHeaders(
+			req,
+			NextResponse.rewrite(url, { status: 404 }),
+			hasSessionCookieHintInHeaders(req.headers)
+		)
 	)
 }
 
