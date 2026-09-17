@@ -1245,6 +1245,11 @@ export default function TournamentClient({
 		() => (contentScopeKey === scopeKey ? entries : []),
 		[contentScopeKey, entries, scopeKey]
 	)
+	const viewerRow = boardPage?.viewerRow
+	const pinnedViewerEntry = useMemo(
+		() => viewerRow ? boardRowToTournamentEntry(viewerRow) : undefined,
+		[viewerRow]
+	)
 	const hasContent = visibleEntries.length > 0
 	const hasBoard = contentScopeKey === scopeKey && boardPage !== null
 	const activeFilterCount =
@@ -1615,11 +1620,7 @@ export default function TournamentClient({
 										tournamentId={selectedTournament.id}
 										gameweek={selectedGameweek}
 										viewerEntryId={entryId}
-										pinnedViewerEntry={
-											boardPage.viewerRow
-												? boardRowToTournamentEntry(boardPage.viewerRow)
-												: undefined
-										}
+										pinnedViewerEntry={pinnedViewerEntry}
 										onVisibleEntriesChange={setTableEntriesForShare}
 										shareText={shareText}
 										shareImageRef={shareRef}

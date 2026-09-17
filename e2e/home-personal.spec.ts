@@ -768,8 +768,8 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || recoveryMode === 'live-journey' ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned') ? ['en', 'zh-CN'] : ['en']) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -786,7 +786,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
 	}
 	const pageInfo = { hasNextPage: false, endCursor: null }
-	const reviewTournamentId = recoveryMode === 'live-journey' ? 6 : 77
+	const reviewTournamentId = (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned') ? 6 : 77
 	const scope = { ...phase, tournamentId: reviewTournamentId, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
 	const rules = [
 		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: recoveryMode === 'search-empty', pageInfo, edges: [{ cursor: '77', node: { tournamentId: reviewTournamentId, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
@@ -813,8 +813,20 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
-		if (recoveryMode === 'live-journey') {
+		if ((recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned')) {
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+			if (recoveryMode === 'live-journey-pinned') {
+				await page.route('**/api/live/competitions/6/board', async route => {
+					const response = await route.fetch()
+					const body = await response.json()
+					const board = body.entryLiveCompetitionBoard
+					board.viewerRow = { ...board.rows[0], entry: 123, entryName: 'Pinned Viewer United', liveRank: 90 }
+					board.totalEntries = 2
+					board.filteredEntries = 2
+					board.pageInfo = { hasNextPage: true, endCursor: 'pinned-fixture-page-1' }
+					await route.fulfill({ response, json: body })
+				})
+			}
 			const unavailableRules = [
 				{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } },
 				...rules
@@ -830,6 +842,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			const team = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
 			await expect(team).toHaveCount(1)
 			await expect(team).toBeVisible()
+			if (recoveryMode === 'live-journey-pinned') {
+				await expect(page.getByRole('link', { name: /Pinned Viewer United/ }).filter({ visible: true })).toHaveCount(1)
+			}
 			const gameweekNavigations: string[] = []
 			const recordGameweekNavigation = (request: import('@playwright/test').Request) => {
 				if (new URL(request.url()).pathname === `${prefix}/live/competitions` && request.headers().rsc === '1') gameweekNavigations.push(request.url())
