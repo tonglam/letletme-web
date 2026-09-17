@@ -10,7 +10,7 @@ import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import { useTranslations } from 'next-intl'
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toPickerPlayer } from '@/components/player/PlayerDirectoryPicker'
 import { PlayerStatsInitialDesk } from './PlayerStatsInitialDesk'
 import { MySquadRail } from './_components/MySquadRail'
@@ -19,6 +19,7 @@ import { usePlayerStatsPersonalSeed } from './PlayerStatsPersonalSeedContext'
 import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
 import {
 	buildPlayerStatsQueryString,
+	parsePlayerStatsPlayerId,
 	playerStatsSectionFromHash,
 } from './_lib/player-stats-url'
 
@@ -139,6 +140,7 @@ export default function PlayerStatsClient({
 	const firstSelectPlayerById = firstPlayer.selectPlayerById
 	const secondSelectPlayer = secondPlayer.selectPlayer
 	const secondSelectPlayerById = secondPlayer.selectPlayerById
+	const firstClearSelection = firstPlayer.clearSelection
 	const secondClearSelection = secondPlayer.clearSelection
 	const firstSelectedPlayerId = firstPlayer.selectedPlayer?.id
 	const secondSelectedPlayerId = secondPlayer.selectedPlayer?.id
@@ -229,7 +231,37 @@ export default function PlayerStatsClient({
 		syncUrl()
 	}, [deepLinkReady, syncUrl])
 
-	useEffect(() => { setDeepLinkReady(true) }, [deepLinkKey])
+	const restoredSelection = useRef<string | null>(null)
+	useEffect(() => {
+		if (restoredSelection.current !== deepLinkKey) {
+			// Back can restore a cached RSC seed from before local selections.
+			// Reconcile the actual history URL before letting that seed write it back.
+			const params = new URLSearchParams(window.location.search)
+			const p1 = parsePlayerStatsPlayerId(params.get('p1'))
+			const candidate = parsePlayerStatsPlayerId(params.get('p2'))
+			const p2 = p1 !== null && candidate !== p1 ? candidate : null
+			const batchPlayerIds = [p1, p2].filter((id): id is number => id !== null)
+			const pendingPlayer = (id: number) => {
+				const player = directorySeed.players.find(candidate => candidate.id === id)
+				return player ? toPickerPlayer(player) : {
+					id: String(id), name: `#${id}`, position: 'MID' as const,
+					teamShortName: '', teamName: ''
+				}
+			}
+			if (p1 !== initialPlayerIds.p1) {
+				if (p1 === null) firstClearSelection()
+				else void firstSelectPlayerById(p1, { batchPlayerIds, pendingPlayer: pendingPlayer(p1) })
+			}
+			if (p2 !== initialPlayerIds.p2) {
+				if (p2 === null) secondClearSelection()
+				else void secondSelectPlayerById(p2, { batchPlayerIds, pendingPlayer: pendingPlayer(p2) })
+				setCompareOpen(p2 !== null)
+			}
+			restoredSelection.current = deepLinkKey
+		}
+		// The selection identities are ready even while their shared data request is pending.
+		setDeepLinkReady(true)
+	}, [deepLinkKey, directorySeed.players, initialPlayerIds.p1, initialPlayerIds.p2, firstClearSelection, secondClearSelection, firstSelectPlayerById, secondSelectPlayerById])
 
 	useEffect(() => {
 		if (!deepLinkReady || (initialPlayerIds.p1 != null && !initialDeskSettled)) return
