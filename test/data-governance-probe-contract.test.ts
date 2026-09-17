@@ -85,6 +85,13 @@ describe('data governance consumer probe contract', () => {
 		assert.match(source, /input\.observedCount === result\.observedCount/)
 	})
 
+	it('does not let entry-data request fields retarget the configured canary', async () => {
+		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /const entryId = useRequestedEntryId/)
+		assert.match(source, /probeEntryData\(input, config\)/)
+		assert.match(source, /probeEntryData\(\n\s*\{ \.\.\.input, eventId \},\n\s*config,\n\s*options,\n\s*true\n\s*\)/)
+	})
+
 	it('keeps entry readiness independent from publication-wide MyFPL coverage', async () => {
 		const source = await read('lib/data-governance-probe.ts')
 		assert.match(

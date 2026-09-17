@@ -413,7 +413,8 @@ function snapshotRevision(value: unknown): string {
 async function probeEntryData(
 	input: DataGovernanceProbeRequest,
 	config: DataGovernanceCanary,
-	options: DataGovernanceProbeExecutionOptions = {}
+	options: DataGovernanceProbeExecutionOptions = {},
+	useRequestedEntryId = false
 ): Promise<{
 	entryId: number
 	revision: string
@@ -428,7 +429,13 @@ async function probeEntryData(
 	const eventId = positiveInteger(input.eventId)
 		? input.eventId
 		: (await resolveProbeEvent(input)).eventId
-	const entryId = input.entryId ?? config.entryId
+	// The existing entry-data canary remains bound to its configured entry.
+	// Only the explicitly directed MyFPL acceptance may override that identity;
+	// otherwise an optional request field must not silently retarget a periodic
+	// or shared contract.
+	const entryId = useRequestedEntryId
+		? input.entryId ?? config.entryId
+		: config.entryId
 	if (!positiveInteger(entryId)) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
@@ -695,7 +702,12 @@ async function probeMyFpl(
 	const eventId = positiveInteger(input.eventId)
 		? input.eventId
 		: (await resolveProbeEvent(input)).eventId
-	const result = await probeEntryData({ ...input, eventId }, config, options)
+	const result = await probeEntryData(
+		{ ...input, eventId },
+		config,
+		options,
+		true
+	)
 	return {
 		...result,
 		complete: result.complete && result.coverageState === 'COMPLETE'
