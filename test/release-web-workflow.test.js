@@ -116,23 +116,12 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 	)
 })
 
-test('signed Tencent release archive carries the same public live flag', () => {
-	assert.match(
-		workflow,
-		/printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\\nNEXT_PUBLIC_LIVE_REFRESH_PROFILE=%s\\n'/
-	)
-	assert.match(
-		workflow,
-		/"\$WEB_PRICE_CHANGE_LIVE_ENABLED" "\$WEB_LIVE_REFRESH_PROFILE" > "\$tmp_root\/\.env\.production"/
-	)
-	assert.match(
-		workflow,
-		/tar --append --file="\$tmp_root\/release\.tar" -C "\$tmp_root" \.env\.production/
-	)
-	assert.match(
-		workflow,
-		/identical client bundle without copying any host secrets/
-	)
+test('signed Tencent archive includes validated CI-built standalone output', () => {
+	assert.match(workflow, /node ops\/tencent\/scripts\/build-release\.mjs "\$build_source" "\$RELEASE_SHA" "\$tmp_root\/build-config\.json"/)
+	assert.match(workflow, /\.letletme-release-sha \.letletme-build\.json \.next\/BUILD_ID/)
+	assert.match(workflow, /\.next\/required-server-files\.json \.next\/standalone \.next\/static/)
+	assert.ok(workflow.indexOf('node ops/tencent/scripts/build-release.mjs') < workflow.indexOf('openssl pkeyutl -sign'))
+	assert.match(workflow, /runs-on: ubuntu-24\.04/)
 })
 
 test('Vercel candidate reaches READY and passes protected health verification before routing changes', () => {

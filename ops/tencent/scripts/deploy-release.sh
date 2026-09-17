@@ -124,14 +124,14 @@ chmod 0751 /opt/letletme
 chown root:www-data "$static_root"
 chmod 0751 "$static_root"
 
-install -d -o letletme -g letletme -m 0700 "$build_dir"
+install -d -o root -g root -m 0700 "$build_dir"
 if [[ $source_is_git == 1 ]]; then
 	git -C "$source_dir" archive --format=tar "$release_sha" | \
 		tar -xf - -C "$build_dir"
 else
 	tar -cf - -C "$source_dir" . | tar -xf - -C "$build_dir"
 fi
-chown -R letletme:letletme "$build_dir"
+chown -R root:root "$build_dir"
 
 stage_dir=''
 rollback_activation() {
@@ -194,69 +194,16 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
-(
-	# This is a root-owned, mode-0600 host configuration file.
+# Validate the signed artifact against the current host before copying output.
+# All pre-activation files stay root-owned; the running app cannot replace them.
+/usr/bin/env -i PATH=/usr/bin:/bin /bin/bash --noprofile --norc -c '
+	set -euo pipefail
+	set -a
 	# shellcheck disable=SC1091
 	source /etc/letletme/web.env
-	export NODE_ENV=production
-	export LETLETME_ORIGIN=tencent
-	export LETLETME_RELEASE_SHA=$release_sha
-	export NEXT_DEPLOYMENT_ID=${release_sha:0:32}
-	export NODE_OPTIONS=--max-old-space-size=1536
-	export LETLETME_BUILD_DIR=$build_dir
-	export HOME=$build_dir/.home
-	export npm_config_cache=$build_dir/.npm-cache
-	install -d -o letletme -g letletme -m 0700 "$HOME" "$npm_config_cache"
-	build_env_file=$(mktemp "/run/letletme-build-env-$release_sha.XXXXXX")
-	cleanup_build_env() {
-		if [[ -n ${build_env_file:-} && $build_env_file == /run/letletme-build-env-$release_sha.* ]]; then
-			rm -f -- "$build_env_file"
-		fi
-	}
-	trap cleanup_build_env EXIT
-	chmod 0600 "$build_env_file"
-	write_build_env() {
-		local build_key=$1
-		local build_value=$2
-		printf 'export %s=%q\n' "$build_key" "$build_value"
-	}
-	{
-		write_build_env PATH "${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
-		write_build_env HOME "$HOME"
-		write_build_env npm_config_cache "$npm_config_cache"
-		write_build_env NODE_ENV "$NODE_ENV"
-		write_build_env NODE_OPTIONS "$NODE_OPTIONS"
-		write_build_env LETLETME_ORIGIN "$LETLETME_ORIGIN"
-		write_build_env LETLETME_RELEASE_SHA "$LETLETME_RELEASE_SHA"
-		write_build_env NEXT_DEPLOYMENT_ID "$NEXT_DEPLOYMENT_ID"
-		write_build_env LETLETME_BUILD_DIR "$LETLETME_BUILD_DIR"
-		for build_key in \
-			NEXT_PUBLIC_APP_URL \
-			NEXT_PUBLIC_SUPABASE_URL \
-			NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
-			BETTER_AUTH_URL \
-			NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
-			LETLETME_LOCAL_PROXY_SECRET; do
-			if [[ -n ${!build_key-} ]]; then
-				write_build_env "$build_key" "${!build_key}"
-			fi
-		done
-	} > "$build_env_file"
-	chown letletme:letletme "$build_env_file"
-	cd -- "$build_dir"
-	runuser --user letletme -- /usr/bin/env -i /bin/bash --noprofile --norc -c '
-		set -euo pipefail
-		# shellcheck disable=SC1090
-		source "$1"
-		cd -- "$LETLETME_BUILD_DIR"
-		npm ci --include=dev
-		npm run build
-	' letletme-build "$build_env_file"
-	rm -f -- "$build_env_file"
-	build_env_file=''
-	trap - EXIT
-	node -e 'const f=require("./.next/required-server-files.json"); if(f.config.deploymentId !== process.env.LETLETME_RELEASE_SHA.slice(0, 32)) process.exit(1)'
-)
+	set +a
+	exec /usr/bin/node /usr/local/libexec/letletme-release-tools/prebuilt-release.mjs "$1" "$2"
+' letletme-validate-prebuilt "$build_dir" "$release_sha"
 
 stage_dir=$(mktemp -d "$release_root/.staging-$release_sha.XXXXXX")
 rsync -a "$build_dir/.next/standalone/" "$stage_dir/"
