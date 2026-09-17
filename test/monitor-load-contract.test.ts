@@ -22,7 +22,7 @@ describe('monitor load reduction contracts', () => {
 
 	it('keeps directed MyFPL acceptance bounded separately from the platform ceiling', async () => {
 		const route = await read('app/api/ops/data-contracts/[contractKey]/route.ts')
-		assert.match(route, /export const maxDuration = 10/)
+		assert.match(route, /export const maxDuration = 30/)
 		assert.match(route, /INTERNAL_DEADLINE_MS = 8_000/)
 		assert.match(route, /timeoutMs: Math\.max\(1, deadlineAt - Date\.now\(\)\)/)
 	})

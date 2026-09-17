@@ -34,6 +34,7 @@ describe('data governance consumer probe contract', () => {
 			'app/api/ops/data-contracts/[contractKey]/route.ts'
 		)
 		const probe = await read('lib/data-governance-probe.ts')
+		assert.match(route, /export const maxDuration = 30/)
 		assert.match(route, /AbortSignal\.any\(\[request\.signal, timeoutController\.signal\]\)/)
 		assert.match(route, /const INTERNAL_DEADLINE_MS = 8_000/)
 		assert.match(route, /setTimeout\(\(\) => timeoutController\.abort\(\), INTERNAL_DEADLINE_MS\)/)

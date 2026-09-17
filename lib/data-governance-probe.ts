@@ -415,6 +415,7 @@ async function probeEntryData(
 	config: DataGovernanceCanary,
 	options: DataGovernanceProbeExecutionOptions = {}
 ): Promise<{
+	entryId: number
 	revision: string
 	complete: boolean
 	settlementState: 'PROVISIONAL' | 'FINALIZING' | 'FINAL' | 'DELAYED'

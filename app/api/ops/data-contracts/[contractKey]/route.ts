@@ -18,9 +18,10 @@ import {
 
 export const dynamic = 'force-dynamic'
 // The route is only for explicitly authorized, one-shot governance evidence.
-// Keep its platform ceiling above the internal deadline so cancellation can
-// settle cleanly without allowing a slow nested query to occupy the request.
-export const maxDuration = 10
+// Keep the platform ceiling above both the bounded POST deadline and the
+// existing authenticated GET overview request. POST still aborts its directed
+// consumer work at INTERNAL_DEADLINE_MS below.
+export const maxDuration = 30
 
 const INTERNAL_DEADLINE_MS = 8_000
 
