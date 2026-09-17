@@ -990,6 +990,19 @@ for (const locale of ['en', 'zh-CN']) {
   test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }) => {
    let prefix = locale === 'en' ? '' : '/zh-CN'
    let zh = locale === 'zh-CN'
+   const expectHomeData = async () => {
+    await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
+    await expect(page.locator(`a[href="${prefix}/live/points/15702?gw=33&from=home"]`)).toContainText('101')
+    const market = page.locator('[aria-labelledby="home-market-title"]')
+    await expect(market).toContainText('Saka')
+    await expect(page.locator('#home-price-changes-today')).toContainText(zh ? '2026年8月3日' : 'Aug 3, 2026')
+    const fixtures = page.locator('[data-home-matches]')
+    await expect(fixtures).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(fixtures).toContainText(/CHE|Chelsea/)
+    await expect(fixtures).toContainText(/ARS|Arsenal/)
+    await expect(fixtures.locator('[aria-busy="true"]')).toHaveCount(0)
+    await expect(fixtures.getByRole('alert')).toHaveCount(0)
+   }
    const authWrites: string[] = []
    page.on('request', request => {
     if (new URL(request.url()).pathname.startsWith('/api/auth/') && request.method() !== 'GET') authWrites.push(request.method() + ' ' + new URL(request.url()).pathname)
@@ -1012,6 +1025,7 @@ for (const locale of ['en', 'zh-CN']) {
    await page.goto(prefix || '/')
    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   await expectHomeData()
    const nav = page.getByRole('navigation').first()
    const createHref = `${prefix}/competitions/create`
    if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
@@ -1056,6 +1070,7 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   await expectHomeData()
    expect(await page.evaluate(() => sessionStorage.getItem('j15-protected-content-observed'))).toBeNull()
    expect(authWrites).toEqual([])
   })
