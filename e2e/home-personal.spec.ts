@@ -1662,8 +1662,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
 for (const width of [1440, 390]) {
- test(`J12 non-owner cannot access management ${width}px`, async ({ page }) => {
+ test(`J12 non-owner cannot access management ${locale} ${width}px`, async ({ page }) => {
+  const zh = locale === 'zh-CN'
+  const prefix = zh ? '/zh-CN' : ''
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated non-owner fixture')
   await page.setViewportSize({ width, height: 900 })
   const session = await createSession({ entryId: 909090 })
@@ -1681,15 +1684,15 @@ for (const width of [1440, 390]) {
     { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: null } }
    ] }) })).ok).toBe(true)
    await addSessionCookie(page, session.cookie)
-   await page.goto('/competitions/browse')
-   await page.getByRole('button', { name: 'Actions for J12 Owned Cup', exact: true }).click()
-   await expect(page.getByRole('menuitem', { name: 'View live details', exact: true })).toBeVisible()
-   await expect(page.getByRole('menuitem', { name: 'Manage tournament', exact: true })).toHaveCount(0)
+   await page.goto(`${prefix}/competitions/browse`)
+   await page.getByRole('button', { name: zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup', exact: true }).click()
+   await expect(page.getByRole('menuitem', { name: zh ? '查看实时详情' : 'View live details', exact: true })).toBeVisible()
+   await expect(page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })).toHaveCount(0)
    await page.keyboard.press('Escape')
-   await page.goto('/competitions/77/manage')
-   await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toBeVisible()
+   await page.goto(`${prefix}/competitions/77/manage`)
+   await expect(page.getByRole('heading', { name: zh ? '需要管理员权限' : 'Administrator access required', exact: true })).toBeVisible()
    await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
-   await expect(page.getByRole('button', { name: 'Delete tournament', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toHaveCount(0)
    await expect(page.getByRole('heading', { name: /J12 Owned Cup/ })).toHaveCount(0)
    const observations = await (await fetch(fixture)).json()
    expect(observations.requests.some((request: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => request.operation === 'GetManagedTournament' && request.variables.tournamentId === 77 && request.variables.entryId === 909090)).toBe(true)
@@ -1699,4 +1702,6 @@ for (const width of [1440, 390]) {
    await session.cleanup()
   }
  })
+}
+
 }
