@@ -310,11 +310,13 @@ function FullSeasonSchedule({
 export function TeamFdrDetailDialog({
 	team,
 	open,
-	onOpenChange
+	onOpenChange,
+	onCloseAutoFocus
 }: {
 	team: TeamFdrRow | null
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	onCloseAutoFocus: (event: Event) => void
 }) {
 	const t = useTranslations('Fixtures')
 	const [schedule, setSchedule] = useState<FullSeasonSchedule | null>(null)
@@ -415,7 +417,7 @@ export function TeamFdrDetailDialog({
 			open={open}
 			onOpenChange={onOpenChange}
 		>
-			<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-5xl overflow-y-auto overscroll-contain p-4 sm:p-6">
+			<DialogContent onCloseAutoFocus={onCloseAutoFocus} className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-5xl overflow-y-auto overscroll-contain p-4 sm:p-6">
 				{team ? (
 					<div
 						ref={shareRef}
