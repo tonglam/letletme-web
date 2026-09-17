@@ -233,6 +233,7 @@ test('live player detail ignores a late player response and retries after both r
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
 	)
+	await page.clock.install()
 
 	let playerOneRequestCount = 0
 	let playerTwoRequestCount = 0
@@ -364,6 +365,11 @@ test('live player detail ignores a late player response and retries after both r
 
 	await secondDialog.getByRole('button', { name: 'Close', exact: true }).click()
 	await expect(page.getByRole('dialog')).toHaveCount(0)
+	// The dependency failure installs the shared 30-second cooldown. Advance
+	// the deterministic clock before exercising the explicit recovery read;
+	// a manual refresh must not bypass a live server cooldown.
+	await page.clock.runFor(1)
+	await page.clock.fastForward(30_000)
 	await pitch
 		.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()
@@ -380,6 +386,7 @@ test('live points restores transfer details and distinguishes failure from empty
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
 	)
+	await page.clock.install()
 	await page.route('**/api/auth/get-session', async route => {
 		await route.fulfill({
 			status: 200,
@@ -462,6 +469,9 @@ test('live points restores transfer details and distinguishes failure from empty
 		'Unable to load transfers'
 	)
 	await expect(section).not.toContainText('No synced transfer records')
+	// The first 503 establishes the shared dependency cooldown. A user-visible
+	// refresh waits for that server-directed window instead of bypassing it.
+	await page.clock.fastForward(30_000)
 	await section
 		.getByRole('button', { name: 'Refresh transfers', exact: true })
 		.click()
