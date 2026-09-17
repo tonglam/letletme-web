@@ -13,6 +13,7 @@ import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 
 export const dynamic = 'force-dynamic'
@@ -35,18 +36,20 @@ type PageProps = {
 export default async function Page({ params, searchParams }: PageProps) {
 	await getPageLocale(params)
 	const resolvedSearchParams = await searchParams
+	const timing = new RouteLoaderTiming('/live/competitions')
 
 	// Public lifecycle context and the fresh entry authorization hint are
 	// independent. Resolve them together; the initial render fetches only the
 	// lightweight tournament list, while the browser can paint strict last-good
 	// board data before starting the paginated board request.
 	const [{ presentation, liveContext }, verified] = await Promise.all([
-		getLivePageContext(),
-		getVerifiedEntryContext()
+		timing.measure('live-context', () => getLivePageContext()),
+		timing.measure('session', () => getVerifiedEntryContext())
 	])
 	const entryId = verified.entryId
 	const platformAdmin = isPlatformAdminIdentity(verified.session?.user ?? {})
 	if (isOfficialLiveUpdatingContext(liveContext)) {
+		timing.finish('unavailable')
 		return (
 			<SeasonPhaseState
 				feature="competition"
@@ -62,6 +65,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
+		timing.finish('unavailable')
 		return (
 			<SeasonPhaseState
 				feature="competition"
@@ -73,6 +77,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const currentEventId =
 		liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
+		timing.finish('unavailable')
 		return (
 			<SeasonPhaseState
 				feature="competition"
@@ -85,6 +90,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		typeof mapEntryTournamentToLiveTournament
 	>[] = []
 	let initialSelectedTournamentId = ''
+	let tournamentListFailed = false
 	const season = liveContext?.season || String(getCurrentSeasonKey())
 	const sessionIdentity = verified.session as unknown as {
 		user?: { id?: string }
@@ -112,12 +118,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 				requestedTournamentIdNumber > 0
 					? requestedTournamentIdNumber
 					: null
-				const tournamentData = await executeServerQuery<EntryTournamentsResponse>(
+			const tournamentData = await timing.measure('tournament-list', () =>
+				executeServerQuery<EntryTournamentsResponse>(
 					platformAdmin
 						? GET_PLATFORM_ADMIN_TOURNAMENTS
 						: GET_ENTRY_TOURNAMENTS,
 					{ entryId },
 					{ cache: 'no-store' }
+				)
 			)
 			initialTournaments = tournamentData.entryTournaments.map(
 				mapEntryTournamentToLiveTournament
@@ -130,10 +138,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 					? String(selectedTournamentIdFromUrl)
 					: initialTournaments[0]?.id) ?? ''
 		} catch (err) {
+			tournamentListFailed = true
 			console.error('Failed to seed live tournament list:', err)
 		}
 	}
 
+	timing.finish(!entryId ? 'forbidden' : tournamentListFailed ? 'partial' : 'ready')
 	return (
 		<TournamentClient
 			entryId={entryId ?? 0}
