@@ -1196,7 +1196,7 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const width of [1440, 390]) {
- test(`live board sort and pagination preserve request scope at ${width}px`, async ({ page }) => {
+ test(`canonical competition board sort and pagination preserve request scope at ${width}px`, async ({ page }) => {
   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated board fixtures')
   const session = await createSession({ entryId: 123 })
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
