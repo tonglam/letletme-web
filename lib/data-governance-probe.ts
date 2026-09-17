@@ -32,6 +32,7 @@ export type DataGovernanceProbeRequest = {
 	scopeKey: string
 	periodKey: string
 	eventId?: number | null
+	entryId?: number | null
 	sourceDay?: string | null
 	producerRevision?: string | null
 	expectedCount?: number | null
@@ -42,6 +43,7 @@ export type DataGovernanceProbeResponse = {
 	success: true
 	contractKey: string
 	scopeKey: string
+	entryId?: number
 	graphqlSeenAt: string
 	webSeenAt: string
 	graphqlRevision: string
@@ -54,6 +56,11 @@ export type DataGovernanceProbeResponse = {
 	timelinessState?: 'CURRENT' | 'STALE'
 	finalizationDueAt?: string | null
 }
+
+export type DataGovernanceProbeExecutionOptions = Readonly<{
+	signal?: AbortSignal
+	timeoutMs?: number
+}>
 
 export class DataGovernanceProbeError extends Error {
 	readonly code:
@@ -68,6 +75,9 @@ export class DataGovernanceProbeError extends Error {
 
 const positiveInteger = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+
+const ENTRY_DATA_TIMEOUT_MS = 30_000
+const DIRECTED_MY_FPL_TIMEOUT_MS = 8_000
 
 const nonNegativeIntegerOrNull = (value: unknown): number | null =>
 	value === null ||
@@ -101,6 +111,11 @@ export function parseDataGovernanceProbeRequest(
 	if (eventId !== null && !positiveInteger(eventId)) {
 		throw new DataGovernanceProbeError('INVALID_REQUEST', 'eventId is invalid')
 	}
+	const entryId =
+		body.entryId === null || body.entryId === undefined ? null : body.entryId
+	if (entryId !== null && !positiveInteger(entryId)) {
+		throw new DataGovernanceProbeError('INVALID_REQUEST', 'entryId is invalid')
+	}
 	const expectedCount = nonNegativeIntegerOrNull(body.expectedCount)
 	const observedCount = nonNegativeIntegerOrNull(body.observedCount)
 	if (Number.isNaN(expectedCount) || Number.isNaN(observedCount)) {
@@ -119,6 +134,7 @@ export function parseDataGovernanceProbeRequest(
 		scopeKey,
 		periodKey,
 		eventId,
+		entryId,
 		sourceDay,
 		producerRevision,
 		expectedCount,
@@ -249,13 +265,16 @@ function canaryForContract(contractKey: string): DataGovernanceCanary {
 	return { entryId, tournamentId, playerIds, userId }
 }
 
-function canarySession(config: DataGovernanceCanary): Session {
+function canarySession(
+	config: DataGovernanceCanary,
+	entryId: number | null = config.entryId
+): Session {
 	return {
 		session: { id: 'data-governance-probe' },
 		user: {
 			id: config.userId,
 			name: 'Data Governance Probe',
-			fplEntryId: config.entryId,
+			fplEntryId: entryId,
 			fplEntryVerifiedAt: new Date().toISOString()
 		}
 	} as unknown as Session
@@ -283,8 +302,12 @@ type TournamentReviewPayload = NonNullable<
 	MyTournamentGameweekReviewResponse['myTournamentGameweekReview']['payload']
 >
 
-function reviewCollectionLengthMatchesCount(length: number, rowCount: number): boolean {
-	if (!Number.isSafeInteger(length) || length < 0 || length > rowCount) return false
+function reviewCollectionLengthMatchesCount(
+	length: number,
+	rowCount: number
+): boolean {
+	if (!Number.isSafeInteger(length) || length < 0 || length > rowCount)
+		return false
 	return rowCount === 0 ? length === 0 : length > 0
 }
 
@@ -396,8 +419,11 @@ function snapshotRevision(value: unknown): string {
 
 async function probeEntryData(
 	input: DataGovernanceProbeRequest,
-	config: DataGovernanceCanary
+	config: DataGovernanceCanary,
+	options: DataGovernanceProbeExecutionOptions = {},
+	useRequestedEntryId = false
 ): Promise<{
+	entryId: number
 	revision: string
 	complete: boolean
 	settlementState: 'PROVISIONAL' | 'FINALIZING' | 'FINAL' | 'DELAYED'
@@ -407,21 +433,54 @@ async function probeEntryData(
 	observedCount: number
 	finalizationDueAt: string | null
 }> {
-	const { eventId } = await resolveProbeEvent(input)
+	const eventId = positiveInteger(input.eventId)
+		? input.eventId
+		: (await resolveProbeEvent(input)).eventId
+	// The existing entry-data canary remains bound to its configured entry.
+	// Only the explicitly directed MyFPL acceptance may override that identity;
+	// otherwise an optional request field must not silently retarget a periodic
+	// or shared contract.
+	const entryId = useRequestedEntryId
+		? (input.entryId ?? config.entryId)
+		: config.entryId
+	if (!positiveInteger(entryId)) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary entry is not configured'
+		)
+	}
 	const response =
 		await executeServerQueryWithSession<MyFplManagerGameweekResponse>(
-			canarySession(config),
+			canarySession(config, entryId),
 			GET_MY_FPL_MANAGER_GAMEWEEK,
 			{ eventId, snapshotRevision: null },
-			{ cache: 'no-store', timeoutMs: 30_000 }
+			{
+				cache: 'no-store',
+				timeoutMs: Math.min(
+					options.timeoutMs ??
+						(useRequestedEntryId
+							? DIRECTED_MY_FPL_TIMEOUT_MS
+							: ENTRY_DATA_TIMEOUT_MS),
+					useRequestedEntryId
+						? DIRECTED_MY_FPL_TIMEOUT_MS
+						: ENTRY_DATA_TIMEOUT_MS
+				),
+				signal: options.signal
+			}
 		)
 	const gameweek = response.myFplManagerGameweek
-	if (!gameweek || gameweek.eventId !== eventId) {
+	if (
+		!gameweek ||
+		gameweek.eventId !== eventId ||
+		gameweek.entry?.id !== entryId ||
+		typeof gameweek.context?.season !== 'string'
+	) {
 		throw new DataGovernanceProbeError(
 			'BUSINESS_DATA_UNAVAILABLE',
 			'entry business loader returned the wrong event'
 		)
 	}
+	assertScopeSeason(input.scopeKey, gameweek.context.season)
 	const picks = gameweek.result?.picks ?? []
 	const meta = gameweek.snapshotMeta
 	if (!meta) {
@@ -431,6 +490,7 @@ async function probeEntryData(
 		)
 	}
 	return {
+		entryId,
 		revision: snapshotRevision(meta),
 		settlementState: meta.settlementState,
 		coverageState: meta.coverageState,
@@ -651,10 +711,18 @@ async function probeTournament(
 
 async function probeMyFpl(
 	input: DataGovernanceProbeRequest,
-	config: DataGovernanceCanary
+	config: DataGovernanceCanary,
+	options: DataGovernanceProbeExecutionOptions = {}
 ): Promise<Awaited<ReturnType<typeof probeEntryData>>> {
-	const { eventId } = await resolveProbeEvent(input)
-	const result = await probeEntryData({ ...input, eventId }, config)
+	const eventId = positiveInteger(input.eventId)
+		? input.eventId
+		: (await resolveProbeEvent(input)).eventId
+	const result = await probeEntryData(
+		{ ...input, eventId },
+		config,
+		options,
+		true
+	)
 	return {
 		...result,
 		complete: result.complete && result.coverageState === 'COMPLETE'
@@ -780,7 +848,8 @@ async function probeTournamentReview(
 		)
 	}
 	const expectedCount = scope.expectedSubjectCount
-	const observedCount = scope.readySubjectCount + scope.notApplicableSubjectCount
+	const observedCount =
+		scope.readySubjectCount + scope.notApplicableSubjectCount
 	if (
 		![
 			scope.rowCount,
@@ -827,7 +896,8 @@ async function probeTournamentReview(
 
 /** Execute the same server loaders and GraphQL operations used by public pages. */
 export async function probeDataContract(
-	input: DataGovernanceProbeRequest
+	input: DataGovernanceProbeRequest,
+	options: DataGovernanceProbeExecutionOptions = {}
 ): Promise<DataGovernanceProbeResponse> {
 	let graphqlRevision: string
 	let expectedCount: number | null = input.expectedCount ?? null
@@ -837,6 +907,7 @@ export async function probeDataContract(
 	let coverageState: DataGovernanceProbeResponse['coverageState']
 	let timelinessState: DataGovernanceProbeResponse['timelinessState']
 	let finalizationDueAt: string | null | undefined
+	let consumerEntryId: number | undefined
 
 	try {
 		const config = canaryForContract(input.contractKey)
@@ -907,7 +978,17 @@ export async function probeDataContract(
 				break
 			}
 			case 'my-fpl': {
-				const result = await probeMyFpl(input, config)
+				if (
+					!positiveInteger(input.eventId) ||
+					!positiveInteger(input.entryId)
+				) {
+					throw new DataGovernanceProbeError(
+						'INVALID_REQUEST',
+						'my-fpl probe requires eventId and entryId'
+					)
+				}
+				const result = await probeMyFpl(input, config, options)
+				consumerEntryId = result.entryId
 				graphqlRevision = result.revision
 				settlementState = result.settlementState
 				coverageState = result.coverageState
@@ -964,6 +1045,7 @@ export async function probeDataContract(
 		success: true,
 		contractKey: input.contractKey,
 		scopeKey: input.scopeKey,
+		...(consumerEntryId !== undefined ? { entryId: consumerEntryId } : {}),
 		graphqlSeenAt,
 		webSeenAt,
 		graphqlRevision: graphqlRevision!,

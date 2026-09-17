@@ -10,7 +10,10 @@ describe('data governance consumer probe contract', () => {
 		const source = await read(
 			'app/api/ops/data-contracts/[contractKey]/route.ts'
 		)
-		assert.match(source, /CONTRACT_KEY = \/\^\[a-z0-9\]\[a-z0-9.-\]\{0,63\}\$\//)
+		assert.match(
+			source,
+			/CONTRACT_KEY = \/\^\[a-z0-9\]\[a-z0-9.-\]\{0,63\}\$\//
+		)
 	})
 
 	it('requires ready market evidence and a canonical, matching live revision', async () => {
@@ -27,6 +30,33 @@ describe('data governance consumer probe contract', () => {
 	it('does not follow redirects while sending the Data API credential', async () => {
 		const source = await read('lib/data-governance-client.ts')
 		assert.match(source, /redirect: 'error'/)
+	})
+
+	it('bounds the directed MyFPL request and propagates cancellation', async () => {
+		const route = await read(
+			'app/api/ops/data-contracts/[contractKey]/route.ts'
+		)
+		const probe = await read('lib/data-governance-probe.ts')
+		assert.match(route, /export const maxDuration = 30/)
+		assert.match(
+			route,
+			/AbortSignal\.any\(\[request\.signal, timeoutController\.signal\]\)/
+		)
+		assert.match(route, /const INTERNAL_DEADLINE_MS = 8_000/)
+		assert.match(route, /contractKey === 'my-fpl'/)
+		assert.match(route, /const EXISTING_PROBE_DEADLINE_MS = 30_000/)
+		assert.match(
+			route,
+			/setTimeout\(\(\) => timeoutController\.abort\(\), deadlineMs\)/
+		)
+		assert.match(route, /timeoutMs: Math\.max\(1, deadlineAt - Date\.now\(\)\)/)
+		assert.match(probe, /signal: options\.signal/)
+		assert.match(probe, /const ENTRY_DATA_TIMEOUT_MS = 30_000/)
+		assert.match(probe, /const DIRECTED_MY_FPL_TIMEOUT_MS = 8_000/)
+		assert.match(probe, /useRequestedEntryId/)
+		assert.match(probe, /canarySession\(config, entryId\)/)
+		assert.match(probe, /consumerEntryId = result\.entryId/)
+		assert.match(probe, /entryId: number/)
 	})
 
 	it('uses server-only canaries for every authenticated business contract', async () => {
@@ -58,11 +88,24 @@ describe('data governance consumer probe contract', () => {
 
 	it('keeps MyFPL consumer counts and revision sourced from GraphQL', async () => {
 		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /entryId\?: number \| null/)
+		assert.match(source, /gameweek\.entry\?\.id !== entryId/)
+		assert.match(source, /\{ eventId, snapshotRevision: null \}/)
 		assert.match(source, /expectedCount = result\.expectedCount/)
 		assert.match(source, /observedCount = result\.observedCount/)
 		assert.match(source, /input\.producerRevision === result\.revision/)
 		assert.match(source, /input\.expectedCount === result\.expectedCount/)
 		assert.match(source, /input\.observedCount === result\.observedCount/)
+	})
+
+	it('does not let entry-data request fields retarget the configured canary', async () => {
+		const source = await read('lib/data-governance-probe.ts')
+		assert.match(source, /const entryId = useRequestedEntryId/)
+		assert.match(source, /probeEntryData\(input, config\)/)
+		assert.match(
+			source,
+			/probeEntryData\(\n\s*\{ \.\.\.input, eventId \},\n\s*config,\n\s*options,\n\s*true\n\s*\)/
+		)
 	})
 
 	it('keeps entry readiness independent from publication-wide MyFPL coverage', async () => {
@@ -84,7 +127,10 @@ describe('data governance consumer probe contract', () => {
 		assert.match(source, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
 		assert.match(source, /contract: 'my-tournament-review-v2\.1'/)
 		assert.match(source, /scope\.expectedSubjectCount/)
-		assert.match(source, /scope\.readySubjectCount \+ scope\.notApplicableSubjectCount/)
+		assert.match(
+			source,
+			/scope\.readySubjectCount \+ scope\.notApplicableSubjectCount/
+		)
 		assert.match(source, /scope\.rowCount/)
 		assert.match(source, /reviewPayloadMatchesScope\(/)
 		assert.match(source, /payload\.points\.rows\.length/)
