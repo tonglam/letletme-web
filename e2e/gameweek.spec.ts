@@ -500,3 +500,44 @@ for (const reopen of [false, true]) {
   } finally { release() }
  })
 }
+
+
+test('match detail invalidates an old player when a pending gameweek commits', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated gameweek race injection only')
+ let releaseDesk: () => void = () => undefined
+ let releaseDetail: () => void = () => undefined
+ const deskGate = new Promise<void>(resolve => { releaseDesk = resolve })
+ const detailGate = new Promise<void>(resolve => { releaseDetail = resolve })
+ let deskRequested = false
+ let detailRequests = 0
+ await page.route('**/api/gameweek/desk?eventId=32', async route => {
+  deskRequested = true
+  await deskGate
+  await route.continue()
+ })
+ await page.route('**/api/graphql', async route => {
+  const body = route.request().postDataJSON()
+  if (/query (EventLiveExplainPlayer|PlayerLive)\b/.test(body.query ?? '')) {
+   detailRequests += 1
+   await detailGate
+  }
+  await route.continue()
+ })
+ try {
+  await page.goto('/explore/gameweek')
+  await expect(page.getByRole('heading', { name: 'GW33 Overview', exact: true })).toBeVisible()
+  const input = page.locator('#gameweek-jump-input')
+  await input.fill('32')
+  await input.press('Enter')
+  await expect.poll(() => deskRequested).toBe(true)
+  await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect.poll(() => detailRequests).toBe(2)
+  releaseDesk()
+  await expect(page.getByRole('heading', { name: 'GW32 Overview', exact: true, includeHidden: true })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+ } finally {
+  releaseDesk()
+  releaseDetail()
+ }
+})

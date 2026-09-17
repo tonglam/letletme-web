@@ -9,7 +9,7 @@ import {
 } from '@/lib/graphql/operations/live'
 import type { PlayerStat } from '@/types/match'
 import type { PlayerDetail } from '@/types/player-detail'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildBreakdownFromPlayerLive, createBasePlayerDetail } from './match-card-model'
 
 export function useMatchPlayerDetail(eventId?: number) {
@@ -17,6 +17,16 @@ export function useMatchPlayerDetail(eventId?: number) {
 	const [isOpen, setIsOpen] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
 	const requestIdRef = useRef(0)
+
+	useEffect(() => {
+		requestIdRef.current += 1
+		setSelectedPlayer(null)
+		setIsOpen(false)
+		setIsLoading(false)
+		return () => {
+			requestIdRef.current += 1
+		}
+	}, [eventId])
 
 	const openPlayerDetail = useCallback(async (player: PlayerStat, team: string, teamShort: string) => {
 		const requestId = requestIdRef.current + 1
