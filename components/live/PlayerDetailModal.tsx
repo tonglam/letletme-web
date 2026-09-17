@@ -141,6 +141,7 @@ export function PlayerDetailModal({
 }: PlayerDetailModalProps) {
 	const t = useTranslations('LivePoints')
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const openerRef = useRef<HTMLElement | null>(null)
 	if (!player) return null
 
 	const breakdownLabels: Record<string, string> = {
@@ -206,7 +207,20 @@ export function PlayerDetailModal({
 
 	return (
 		<Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-			<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto overscroll-contain p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-lg">
+			<DialogContent
+				onOpenAutoFocus={() => {
+					// This controlled dialog is opened by player buttons outside DialogTrigger.
+					openerRef.current = document.activeElement instanceof HTMLElement
+						? document.activeElement
+						: null
+				}}
+				onCloseAutoFocus={event => {
+					event.preventDefault()
+					const opener = openerRef.current
+					openerRef.current = null
+					if (opener?.isConnected) opener.focus({ preventScroll: true })
+				}}
+				className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto overscroll-contain p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-lg">
 				<DialogTitle className="sr-only">
 					{t('playerDetails', { player: player.name })}
 				</DialogTitle>
