@@ -13,7 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Search, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { TeamFdrDetailDialog } from './TeamFdrDetailDialog'
 
 const FDR_CELL: Record<number, string> = {
@@ -150,6 +150,7 @@ export function FdrMatrix({
 	const t = useTranslations('Fixtures')
 	const ordered = orderFdrTeamsForDisplay(teams, sort)
 	const [selectedTeam, setSelectedTeam] = useState<TeamFdrRow | null>(null)
+	const detailTriggerRef = useRef<HTMLButtonElement | null>(null)
 	const [searchTerm, setSearchTerm] = useState('')
 	const normalizedSearch = searchTerm.trim().toLowerCase()
 
@@ -323,7 +324,10 @@ export function FdrMatrix({
 									>
 										<button
 											type="button"
-											onClick={() => setSelectedTeam(row)}
+											onClick={event => {
+												detailTriggerRef.current = event.currentTarget
+												setSelectedTeam(row)
+											}}
 											aria-label={t('openTeamFixtureDetail', {
 												team: row.teamName
 											})}
@@ -453,6 +457,12 @@ export function FdrMatrix({
 			)}
 			<TeamFdrDetailDialog
 				team={selectedTeam}
+				onCloseAutoFocus={event => {
+					if (detailTriggerRef.current?.isConnected) {
+						event.preventDefault()
+						detailTriggerRef.current.focus()
+					}
+				}}
 				open={selectedTeam !== null}
 				onOpenChange={open => {
 					if (!open) setSelectedTeam(null)

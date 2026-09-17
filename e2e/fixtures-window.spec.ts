@@ -298,3 +298,27 @@ test('switching back during a request cancels stale horizon intent', async ({
 	)
 	expect(requestCount).toBe(2)
 })
+
+for (const width of [390, 1440]) {
+	for (const closeMethod of ['button', 'escape'] as const) {
+		test(`team fixture dialog restores its current trigger after ${closeMethod} at ${width}px`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 900 })
+			await page.goto('/explore/fixtures')
+			for (const team of ['Arsenal', 'Chelsea']) {
+				const trigger = page.getByRole('button', { name: `View ${team}'s full-season fixtures`, exact: true })
+				await trigger.click()
+				const dialog = page.getByRole('dialog')
+				await expect(dialog).toBeVisible()
+				await expect(dialog.getByRole('heading', { name: new RegExp(team) })).toBeVisible()
+				if (closeMethod === 'button') {
+					await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+				} else {
+					await page.keyboard.press('Escape')
+				}
+				await expect(dialog).not.toBeVisible()
+				await expect(trigger).toBeFocused()
+				await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden')
+			}
+		})
+	}
+}
