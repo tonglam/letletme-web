@@ -769,7 +769,7 @@ test('live points reloads a repeated entry without stranding the loading state',
 
 for (const recoveryMode of ['none', 'retry-button', 'tab-reentry'] as const) {
 const failFirstSections = recoveryMode !== 'none'
-test(`tournament season sections load on demand without a false missing-publication state${failFirstSections ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state${failFirstSections ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
