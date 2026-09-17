@@ -1,3 +1,4 @@
+import { managedTournament } from './fixtures/managed-tournament'
 import { officialH2HFixture } from './fixtures/official-h2h'
 import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
@@ -1712,3 +1713,200 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
 
 }
 }
+
+
+test.describe('J12 Perth baseline journeys', () => {
+ test.use({ timezoneId: 'Australia/Perth' })
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+ test(`J12 browse filters and owner cancel preserve read-only behavior ${locale} ${width}px`, async ({ page }, testInfo) => {
+ const zh = locale === 'zh-CN'
+ const prefix = zh ? '/zh-CN' : ''
+ await page.setViewportSize({ width, height: 900 })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker owner fixture')
+ const session = await createSession({ entryId: 909090 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const mutations: string[] = []
+ await page.route('**/api/tournaments/**', async route => {
+  const method = route.request().method()
+  if (['POST', 'PATCH', 'DELETE'].includes(method)) {
+   mutations.push(method)
+   await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Unexpected mutation blocked by test' }) })
+  } else await route.continue()
+ })
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+   { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } },
+   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
+   { operation: 'GetEntryTournaments', data: { entryTournaments: [managedTournament] } }
+  ] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto(`${prefix}/competitions/browse`)
+  await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/browse`)
+  const actions = page.getByRole('button', { name: zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup', exact: true })
+  await expect(actions).toHaveCount(1)
+  await expect(actions).toBeVisible()
+  const search = page.getByRole('textbox', { name: zh ? '搜索赛事' : 'Search tournaments', exact: true })
+  await search.fill('No matching tournament')
+  await expect(actions).toHaveCount(0)
+  await search.fill('J12 Owned')
+  await expect(actions).toBeVisible()
+  const type = page.getByRole('group', { name: zh ? '联赛类型' : 'Tournament type', exact: true })
+  await type.getByRole('button', { name: zh ? '对战联赛' : 'H2H', exact: true }).click()
+  await expect(actions).toHaveCount(0)
+  await type.getByRole('button', { name: zh ? '经典联赛' : 'Classic', exact: true }).click()
+  await expect(actions).toBeVisible()
+  const status = page.getByRole('group', { name: zh ? '状态' : 'Status', exact: true })
+  await status.getByRole('button', { name: zh ? '已结束' : 'Finished', exact: true }).click()
+  await expect(actions).toHaveCount(0)
+  await status.getByRole('button', { name: zh ? '进行中' : 'Active', exact: true }).click()
+  await expect(actions).toBeVisible()
+  await actions.click()
+  const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
+  await expect(manage).toHaveAttribute('href', `${prefix}/competitions/77/manage`)
+  await manage.click()
+  await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/77/manage`)
+  await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+  for (const title of (zh ? ['赛事设置', '赛事信息', '生命周期控制', '危险操作'] : ['Tournament settings', 'Tournament information', 'Lifecycle controls', 'Danger zone'])) await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
+  const opener = page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })
+  await opener.click()
+  const dialog = page.getByRole('alertdialog')
+  const confirm = dialog.getByRole('button', { name: zh ? '永久删除' : 'Delete permanently', exact: true })
+  await expect(confirm).toBeDisabled()
+  const input = dialog.locator('#delete-confirmation')
+  await input.fill('Wrong Cup')
+  await expect(confirm).toBeDisabled()
+  await input.fill('J12 Owned Cup')
+  await expect(confirm).toBeEnabled()
+  await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await opener.click()
+  await expect(input).toHaveValue('')
+  await expect(confirm).toBeDisabled()
+  await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  const live = page.getByRole('link', { name: zh ? '返回赛事' : 'Back to tournament', exact: true })
+  await expect(live).toHaveAttribute('href', `${prefix}/live/competitions/77`)
+  await live.click()
+  await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions/77`)
+  const ready = page.locator('[data-competition-perf-ready="detail"]')
+  await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect(ready).toHaveAttribute('data-competition-gameweek', '33')
+  await expect(ready.getByRole('heading', { name: 'J12 Owned Cup', exact: true })).toBeVisible()
+  await expect(ready.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+  await page.goBack()
+  await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/77/manage`)
+  await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
+  expect(mutations).toEqual([])
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+  await testInfo.attach('J12-baseline-scope', { body: JSON.stringify({ variantId: `J12.O.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, viewport: page.viewportSize(), timezone: 'Australia/Perth', theme: 'system', scope: 'One functional journey; cache cold/warm repetitions and performance remain unverified' }), contentType: 'application/json' })
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+
+ }
+}
+
+})
+
+for (const locale of ['en', 'zh-CN'] as const) {
+for (const width of [1440, 390]) {
+ test(`J12 non-owner cannot access management ${locale} ${width}px`, async ({ page }) => {
+  const zh = locale === 'zh-CN'
+  const prefix = zh ? '/zh-CN' : ''
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated non-owner fixture')
+  await page.setViewportSize({ width, height: 900 })
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const mutations: string[] = []
+  await page.route('**/api/tournaments/**', async route => {
+   if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+    mutations.push(route.request().method())
+    await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+   } else await route.continue()
+  })
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [{ ...managedTournament, adminEntryId: 808080 }] } },
+    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: null } }
+   ] }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.goto(`${prefix}/competitions/browse`)
+   await page.getByRole('button', { name: zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup', exact: true }).click()
+   await expect(page.getByRole('menuitem', { name: zh ? '查看实时详情' : 'View live details', exact: true })).toBeVisible()
+   await expect(page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })).toHaveCount(0)
+   await page.keyboard.press('Escape')
+   await page.goto(`${prefix}/competitions/77/manage`)
+   await expect(page.getByRole('heading', { name: zh ? '需要管理员权限' : 'Administrator access required', exact: true })).toBeVisible()
+   await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+   await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('heading', { name: /J12 Owned Cup/ })).toHaveCount(0)
+   const observations = await (await fetch(fixture)).json()
+   expect(observations.requests.some((request: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => request.operation === 'GetManagedTournament' && request.variables.tournamentId === 77 && request.variables.entryId === 909090)).toBe(true)
+   expect(mutations).toEqual([])
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
+
+}
+
+test.describe('J12 planned UTC dark mobile management states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const scenario of ['active', 'paused', 'setup-failed'] as const) {
+  test(`J12 state ${scenario} preserves state on cancellation`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated state fixture')
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const tournament = {
+    ...managedTournament,
+    state: scenario === 'paused' ? 'INACTIVE' : 'ACTIVE',
+    ...(scenario === 'setup-failed' ? {
+     setupStatus: 'FAILED', setupPhase: 'BUILDING_STRUCTURE',
+     setupCompletedUnits: 1, setupFinishedAt: null,
+     standingsReadyAt: null, profilesReadyAt: null, insightsReadyAt: null
+    } : {})
+   }
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: tournament } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto('/zh-CN/competitions/77/manage')
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+    const lifecycle = page.getByRole('button', { name: scenario === 'paused' ? '恢复并补齐数据' : '暂停', exact: true })
+    await expect(lifecycle).toBeEnabled()
+    await expect(page.getByRole('button', { name: scenario === 'paused' ? '暂停' : '恢复并补齐数据', exact: true })).toHaveCount(0)
+    const repair = page.getByRole('button', { name: '修复赛事设置', exact: true })
+    if (scenario === 'setup-failed') await expect(repair).toBeEnabled()
+    else await expect(repair).toHaveCount(0)
+    await page.getByRole('button', { name: '删除赛事', exact: true }).click()
+    const dialog = page.getByRole('alertdialog')
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(lifecycle).toBeEnabled()
+    expect(mutations).toEqual([])
+    await testInfo.attach('J12-state-scope', { body: JSON.stringify({ variantId: `J12.state.0${['active', 'paused', 'setup-failed'].indexOf(scenario) + 1}`, scenario, locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', scope: 'Management state and cancellation only; full state journey and performance remain unverified' }), contentType: 'application/json' })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
