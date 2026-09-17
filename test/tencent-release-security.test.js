@@ -15,22 +15,11 @@ const releaseWorkflow = fs.readFileSync(
 	'utf8'
 )
 
-test('Tencent builds pass secrets through a temporary env file, not process arguments', () => {
-	assert.match(
-		deployRelease,
-		/build_env_file=\$\(mktemp "\/run\/letletme-build-env-\$release_sha\.XXXXXX"\)/
-	)
-	assert.match(deployRelease, /chmod 0600 "\$build_env_file"/)
-	assert.match(deployRelease, /chown letletme:letletme "\$build_env_file"/)
-	assert.match(deployRelease, /printf 'export %s=%q\\n'/)
-	assert.match(deployRelease, /trap cleanup_build_env EXIT/)
-	assert.match(
-		deployRelease,
-		/runuser --user letletme -- \/usr\/bin\/env -i \/bin\/bash --noprofile --norc -c/
-	)
-	assert.match(deployRelease, /letletme-build "\$build_env_file"/)
-	assert.doesNotMatch(deployRelease, /\/usr\/bin\/env -i "\$\{build_env\[@\]\}"/)
-	assert.doesNotMatch(deployRelease, /build_env\+=\(/)
+test('Tencent stage validates prebuilt output without installing or compiling', () => {
+	assert.doesNotMatch(deployRelease, /npm (?:ci|run build)/)
+	assert.match(deployRelease, /letletme-release-tools\/prebuilt-release\.mjs "\$1" "\$2"/)
+	assert.match(deployRelease, /install -d -o root -g root -m 0700 "\$build_dir"/)
+	assert.ok(deployRelease.indexOf('prebuilt-release.mjs') < deployRelease.indexOf('rsync -a "$build_dir/.next/standalone/"'))
 })
 
 test('steady-state Tencent builds do not propagate the retired proxy secret', () => {

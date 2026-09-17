@@ -103,19 +103,21 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    `sudo /usr/local/libexec/letletme-release version` and refuses to promote
    Vercel when the installed tooling revision is stale.
 2. Install the host-only files above.
-3. Copy either a clean checkout with usable Git metadata, or a release archive
-   containing `.letletme-release-sha`, at the exact release SHA to the host.
-   A linked local worktree `.git` file is not portable.
-4. Run `deploy-release.sh <checkout-or-archive> <full-sha> stage` as root (or
-   call the restricted wrapper as `deploy`). It rejects a dirty or mismatched
-   source, builds the exact SHA, and leaves `/opt/letletme/current` unchanged.
+3. Build a signed prebuilt release on the existing Linux x64 CI runner, using
+   Node 22 and the production host's build configuration. Clean Git checkouts
+   and marker-only source archives are no longer deployable inputs. The origin
+   does not install dependencies or compile Next.js. The manual procedure below
+   uses the same producer and signing boundary as the workflow.
+4. Upload the signed archive and call the restricted wrapper's `stage` command
+   as `deploy`. It verifies the signature, exact SHA, platform, host configuration
+   and required standalone/static files, leaving `/opt/letletme/current` unchanged.
+   Run the wrapper's `verify <full-sha>` before activation.
 5. After Vercel has been promoted and returns the exact same release header,
    run `activate-release.sh <full-sha>`. It switches the current symlink
    atomically, restarts systemd, verifies `/healthz`, and renders Nginx.
    `rollback-release.sh` activates the safe `/opt/letletme/previous` release.
-   The dependency install and Next.js build run as the unprivileged `letletme`
-   user; root is used only for artifact installation and activation. It never
-   runs a database migration.
+   Root installs and activates the verified artifact; the application runs as
+   the unprivileged `letletme` user. This flow never runs a database migration.
    The Nginx-to-Node hop deliberately sends `X-Forwarded-Proto: http`: Nginx
    is the TLS terminator, while the loopback Node listener is cleartext. This
    avoids Next self-hosted Proxy/middleware attempting an HTTPS internal fetch
@@ -130,6 +132,61 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    Static assets are release-scoped; Nginx checks the active release first and
    then retained releases so in-flight browser requests for an older chunk do
    not 404 during a rollout or rollback.
+
+### Manual signed artifact preparation
+
+Run on a trusted Ubuntu 24.04 Linux x64 build machine with Node 22, npm, GNU
+`tar`, OpenSSL and sufficient build memory. Use the reviewed exact release SHA
+and a clean checkout. `TENCENT_HOST` must resolve through the existing approved
+SSH configuration as the restricted `deploy` account. Load
+`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` from the approved secret store into the
+process environment; it must match the installed host key. Set
+`WEB_PRICE_CHANGE_LIVE_ENABLED` and `WEB_LIVE_REFRESH_PROFILE` to the approved
+release values. `RELEASE_SIGNING_KEY_FILE` names the existing protected Ed25519
+private key file; do not copy it to the origin or print secrets. Do not run with
+shell tracing. Install reviewed host tooling before staging.
+
+The following produces and stages an artifact only. It does not authorize or
+perform a routing change or activation. Coordinate with the normal release
+operator so no other release is running; keep the known rollback version.
+
+```bash
+set -euo pipefail
+[[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+[[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]]
+[[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]]
+[[ "$(ssh "$TENCENT_HOST" 'sudo /usr/local/libexec/letletme-release version')" == 'letletme-release-tooling 20260918-1' ]]
+node ops/tencent/scripts/build-config.mjs >/dev/null
+umask 077
+artifact_work=$(mktemp -d)
+trap 'rm -rf -- "$artifact_work"' EXIT
+ssh "$TENCENT_HOST" 'sudo /usr/local/libexec/letletme-release build-config' > "$artifact_work/host.json"
+git archive --format=tar "$RELEASE_SHA" > "$artifact_work/release.tar"
+mkdir "$artifact_work/source"
+tar -xf "$artifact_work/release.tar" -C "$artifact_work/source"
+node ops/tencent/scripts/build-release.mjs "$artifact_work/source" "$RELEASE_SHA" "$artifact_work/host.json"
+tar --append --file="$artifact_work/release.tar" -C "$artifact_work/source" \
+  .letletme-release-sha .letletme-build.json .next/BUILD_ID \
+  .next/required-server-files.json .next/standalone .next/static
+gzip -c "$artifact_work/release.tar" > "$artifact_work/release.tar.gz"
+openssl pkeyutl -sign -rawin -inkey "$RELEASE_SIGNING_KEY_FILE" \
+  -in "$artifact_work/release.tar.gz" -out "$artifact_work/release.sig"
+remote_root="/tmp/letletme-release-$RELEASE_SHA"
+ssh "$TENCENT_HOST" "test ! -e '$remote_root' && test ! -e '$remote_root.tar.gz' && test ! -e '$remote_root.sig' && install -d -m 0750 '$remote_root'"
+cat "$artifact_work/release.tar.gz" | ssh "$TENCENT_HOST" "install -m 0640 /dev/stdin '$remote_root.tar.gz'"
+cat "$artifact_work/release.sig" | ssh "$TENCENT_HOST" "install -m 0640 /dev/stdin '$remote_root.sig'"
+ssh "$TENCENT_HOST" "tar -xzf '$remote_root.tar.gz' -C '$remote_root'"
+ssh "$TENCENT_HOST" "sudo /usr/local/libexec/letletme-release stage '$remote_root' '$RELEASE_SHA'"
+ssh "$TENCENT_HOST" "sudo /usr/local/libexec/letletme-release verify '$RELEASE_SHA'"
+```
+
+If temporary remote paths already exist, inspect their ownership and associated
+release before using the existing controlled cleanup procedure; do not overwrite
+another run. A build failure or key/config mismatch stops before upload. A
+signature or artifact validation failure stops before activation. Staging and
+`verify` are not public production acceptance: continue the existing Vercel
+promotion, matching-header, controlled activation, routing and browser/API
+acceptance gates. Preserve the previous release and static files for rollback.
 
 Next.js 16 intentionally uses an internal constant `.next/BUILD_ID` whenever
 `deploymentId` is enabled. The release gate therefore checks the configured
