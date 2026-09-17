@@ -152,6 +152,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const format = useFormatter()
 	const locale = useLocale() as AppLocale
 	const t = useTranslations('TeamStats')
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
 	const formatOverallRank = useCallback(
@@ -196,7 +197,8 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 			}),
 		[benchPicks]
 	)
-	const handlePitchPlayerClick = (playerId: string) => {
+	const handlePitchPlayerClick = (playerId: string, opener: HTMLElement) => {
+		playerOpenerRef.current = opener
 		const elementId = playerId.replace(/^bench-/, '')
 		const pick = stats.eventPicks.find(
 			item => pickElementId(item) === elementId
@@ -313,6 +315,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				/>
 			</div>
 			<PlayerDetailModal
+				openerRef={playerOpenerRef}
 				player={selectedPlayer}
 				isOpen={selectedPlayer !== null}
 				onClose={() => setSelectedPlayer(null)}

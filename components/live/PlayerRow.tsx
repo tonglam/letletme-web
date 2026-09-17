@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import { CheckCircle2, Clock } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { buildLivePlayerDetail } from './player-detail-model'
 
@@ -95,6 +95,7 @@ function formatStatValue(value: number | undefined | null): string {
 }
 
 export function PlayerRow({ player }: PlayerRowProps) {
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const t = useTranslations('LivePoints')
 	const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
 
@@ -181,10 +182,14 @@ export function PlayerRow({ player }: PlayerRowProps) {
 				role="button"
 				tabIndex={0}
 				aria-label={detailsLabel}
-				onClick={() => setIsDetailModalOpen(true)}
+				onClick={event => {
+					playerOpenerRef.current = event.currentTarget
+					setIsDetailModalOpen(true)
+				}}
 				onKeyDown={event => {
 					if (event.key === 'Enter' || event.key === ' ') {
 						event.preventDefault()
+						playerOpenerRef.current = event.currentTarget
 						setIsDetailModalOpen(true)
 					}
 				}}
@@ -338,6 +343,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 			</div>
 
 			<PlayerDetailModal
+				openerRef={playerOpenerRef}
 				player={playerDetail}
 				isOpen={isDetailModalOpen}
 				onClose={() => setIsDetailModalOpen(false)}

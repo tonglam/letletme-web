@@ -230,6 +230,7 @@ export function LivePointsDashboard({
 				]
 			}
 		: undefined
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const squadPitchRef = useRef<HTMLElement | null>(null)
 	const allPlayers = useMemo(
 		() => [...startingPlayers, ...benchPlayers],
@@ -423,7 +424,10 @@ export function LivePointsDashboard({
 					<div className="mb-8">
 						<SquadPitch
 							ref={squadPitchRef}
-						onPlayerClick={pitchPlayerDetail.openPlayerDetail}
+						onPlayerClick={(playerId, opener) => {
+							playerOpenerRef.current = opener
+							pitchPlayerDetail.openPlayerDetail(playerId)
+						}}
 							players={squadPitchPlayers}
 							benchPlayers={squadPitchBenchPlayers}
 							benchTitle={t('substitutes')}
@@ -443,6 +447,7 @@ export function LivePointsDashboard({
 					</div>
 
 					<PlayerDetailModal
+						openerRef={playerOpenerRef}
 						player={pitchPlayerDetail.selectedPlayer}
 						isOpen={pitchPlayerDetail.isOpen}
 						isLoading={pitchPlayerDetail.isLoading}

@@ -9,7 +9,7 @@ import type { HomeGameweek } from '@/lib/graphql/operations/home'
 import { formatCompactNumber } from '@/lib/utils'
 import { ArrowRight, ArrowRightCircle, Crown, Trophy, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 
 type HomeGameweekOverview = NonNullable<
 	HomeGameweek['gameweekDesk']['overview']
@@ -64,6 +64,7 @@ const tileIconStyles = [
 ] as const
 
 export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const t = useTranslations('Home')
 	const playerDetail = useMatchPlayerDetail(currentEventId ?? undefined)
 	const makeDetailTarget = (
@@ -235,13 +236,14 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 								type="button"
 								className={`${tileClassName} w-full text-left`}
 								aria-label={`${stat.label}: ${stat.value}`}
-								onClick={() =>
+								onClick={event => {
+									playerOpenerRef.current = event.currentTarget
 									void playerDetail.openPlayerDetail(
 										detailTarget.player,
 										detailTarget.team,
 										detailTarget.teamShort
 									)
-								}
+								}}
 							>
 								{tile}
 							</button>
@@ -257,6 +259,7 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 				</div>
 			</Card>
 			<PlayerDetailModal
+				openerRef={playerOpenerRef}
 				player={playerDetail.selectedPlayer}
 				isOpen={playerDetail.isOpen}
 				onClose={playerDetail.closePlayerDetail}

@@ -56,7 +56,7 @@ export function PlayerList({
 	emptyText?: string
 	showRank?: boolean
 	playerHref?: (player: PlayerListItem) => string | null
-	onPlayerClick?: (player: PlayerListItem) => void
+	onPlayerClick?: (player: PlayerListItem, opener: HTMLElement) => void
 }) {
 	const t = useTranslations('PlayerDirectory')
 
@@ -178,7 +178,7 @@ export function PlayerList({
 									<button
 										type="button"
 										className="block w-full truncate bg-transparent p-0 text-left text-sm font-semibold tracking-tight text-primary-ink underline decoration-primary/35 underline-offset-2 transition-colors hover:decoration-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-										onClick={() => onPlayerClick(player)}
+										onClick={event => onPlayerClick(player, event.currentTarget)}
 									>
 										{player.name}
 									</button>
