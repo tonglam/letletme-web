@@ -11,8 +11,23 @@ if [[ $# -lt 1 ]]; then
 fi
 
 script_root=/usr/local/libexec
-tooling_revision=20260826-2
+tooling_revision=20260918-1
 case $1 in
+build-config)
+	if [[ $# -ne 1 ]]; then
+		echo "usage: $0 build-config" >&2
+		exit 1
+	fi
+	# Read only the installed configuration and installed code. The caller
+	# cannot choose an env file, module, or additional Node arguments.
+	exec /usr/bin/env -i PATH=/usr/bin:/bin /bin/bash --noprofile --norc -c '
+		set -euo pipefail
+		set -a
+		source /etc/letletme/web.env
+		set +a
+		exec /usr/bin/node /usr/local/libexec/letletme-release-tools/build-config.mjs
+	'
+	;;
 version)
 	if [[ $# -ne 1 ]]; then
 		echo "usage: $0 version" >&2

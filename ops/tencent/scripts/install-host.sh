@@ -199,6 +199,11 @@ install -o root -g root -m 0750 \
 	"$script_dir/entry-sync-outbox.sh" /usr/local/libexec/letletme-entry-sync-outbox.sh
 install -o root -g root -m 0755 \
 	"$script_dir/letletme-release-wrapper.sh" /usr/local/libexec/letletme-release
+install -d -o root -g root -m 0755 /usr/local/libexec/letletme-release-tools
+install -o root -g root -m 0644 \
+	"$script_dir/build-config.mjs" /usr/local/libexec/letletme-release-tools/build-config.mjs
+install -o root -g root -m 0644 \
+	"$script_dir/prebuilt-release.mjs" /usr/local/libexec/letletme-release-tools/prebuilt-release.mjs
 install -o root -g root -m 0644 \
 	"$ops_dir/systemd/letletme-auth-event-cleanup.service" \
 	/etc/systemd/system/letletme-auth-event-cleanup.service

@@ -51,7 +51,7 @@ jobs:
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.head_branch == 'main'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     steps:
       - name: Check release automation gate
@@ -159,6 +159,7 @@ jobs:
           TENCENT_SSH_JUMP_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_JUMP_PRIVATE_KEY }}
           TENCENT_SSH_KNOWN_HOSTS: ${{ secrets.TENCENT_SSH_KNOWN_HOSTS }}
           TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
           EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
           EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
           EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID }}
@@ -172,13 +173,14 @@ jobs:
           set -euo pipefail
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
             TENCENT_SSH_PRIVATE_KEY TENCENT_SSH_JUMP_PRIVATE_KEY TENCENT_SSH_KNOWN_HOSTS \
-            TENCENT_RELEASE_SIGNING_KEY \
+            TENCENT_RELEASE_SIGNING_KEY NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
             EDGEONE_TENCENTCLOUD_SECRET_ID EDGEONE_TENCENTCLOUD_SECRET_KEY EDGEONE_ZONE_ID \
             EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY \
             EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON \
             EDGEONE_TENCENT_HEALTH_URL; do
             [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
           done
+          node ops/tencent/scripts/build-config.mjs >/dev/null
           export TENCENTCLOUD_SECRET_ID="$EDGEONE_TENCENTCLOUD_SECRET_ID"
           export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
           node ops/release/edgeone-mode.mjs --mode all-vercel --dry-run >/dev/null
@@ -292,6 +294,7 @@ jobs:
           TENCENT_SSH_JUMP_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_JUMP_PRIVATE_KEY }}
           TENCENT_SSH_KNOWN_HOSTS: ${{ secrets.TENCENT_SSH_KNOWN_HOSTS }}
           TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
           EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
           EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
           EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID }}
@@ -388,25 +391,6 @@ jobs:
             *) echo "invalid LETLETME_LIVE_REFRESH_PROFILE value: $WEB_LIVE_REFRESH_PROFILE" >&2; exit 1 ;;
           esac
           git archive --format=tar "$RELEASE_SHA" > "$tmp_root/release.tar"
-          # The Tencent release tool builds from the signed archive and uses a
-          # deliberately narrow host-env allowlist.  Carry the same public
-          # feature flag in the signed source so both origins compile the
-          # identical client bundle without copying any host secrets.
-          printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\nNEXT_PUBLIC_LIVE_REFRESH_PROFILE=%s\n' \
-            "$WEB_PRICE_CHANGE_LIVE_ENABLED" "$WEB_LIVE_REFRESH_PROFILE" > "$tmp_root/.env.production"
-          chmod 0600 "$tmp_root/.env.production"
-          tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .env.production
-          printf '%s\n' "$RELEASE_SHA" > "$tmp_root/.letletme-release-sha"
-          tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .letletme-release-sha
-          gzip -c "$tmp_root/release.tar" > "$tmp_root/release.tar.gz"
-          printf '%s\n' "$TENCENT_RELEASE_SIGNING_KEY" > "$tmp_root/release-signing-key.pem"
-          chmod 0600 "$tmp_root/release-signing-key.pem"
-          openssl pkeyutl -sign -rawin \
-            -inkey "$tmp_root/release-signing-key.pem" \
-            -in "$tmp_root/release.tar.gz" \
-            -out "$tmp_root/release.tar.gz.sig"
-          rm -f -- "$tmp_root/release-signing-key.pem"
-
           ssh_dir="$HOME/.ssh/letletme-release"
           install -d -m 0700 "$ssh_dir"
           printf '%s\n' "$TENCENT_SSH_PRIVATE_KEY" > "$ssh_dir/tencent"
@@ -440,13 +424,32 @@ jobs:
 
           installed_tooling="$(ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release version")"
-          [[ "$installed_tooling" == "letletme-release-tooling 20260826-2" ]] || {
+          [[ "$installed_tooling" == "letletme-release-tooling 20260918-1" ]] || {
             echo "Tencent release tooling is stale: $installed_tooling" >&2
             echo "Rerun ops/tencent/scripts/install-host.sh as root before enabling Web automation." >&2
             exit 1
           }
           current_release="$(ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release current")"
+
+          # Build on the existing runner, not on the memory-constrained origin.
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release build-config" > "$tmp_root/build-config.json"
+          build_source="$tmp_root/tencent-build"
+          install -d -m 0700 "$build_source"
+          tar -xf "$tmp_root/release.tar" -C "$build_source"
+          node ops/tencent/scripts/build-release.mjs "$build_source" "$RELEASE_SHA" "$tmp_root/build-config.json"
+          tar --append --file="$tmp_root/release.tar" -C "$build_source" \
+            .letletme-release-sha .letletme-build.json .next/BUILD_ID \
+            .next/required-server-files.json .next/standalone .next/static
+          gzip -c "$tmp_root/release.tar" > "$tmp_root/release.tar.gz"
+          printf '%s\n' "$TENCENT_RELEASE_SIGNING_KEY" > "$tmp_root/release-signing-key.pem"
+          chmod 0600 "$tmp_root/release-signing-key.pem"
+          openssl pkeyutl -sign -rawin \
+            -inkey "$tmp_root/release-signing-key.pem" \
+            -in "$tmp_root/release.tar.gz" \
+            -out "$tmp_root/release.tar.gz.sig"
+          rm -f -- "$tmp_root/release-signing-key.pem"
 
           remote_root="/tmp/letletme-release-$RELEASE_SHA"
           remote_archive="/tmp/letletme-release-$RELEASE_SHA.tar.gz"
