@@ -3,6 +3,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
 import { managerReview, managerGameweek } from './fixtures/manager-review'
+import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
 
@@ -1585,6 +1586,20 @@ for (const locale of ['en', 'zh-CN'] as const) {
      expect(request.variables.entryId).toBe(session.entryId)
      expect(request.variables.eventId).toBe(33)
     }
+    // Separate BFF contract probe; not a timing sample or the original SSR response.
+    const apiResponse = await page.request.post('/api/graphql', {
+     headers: { 'X-LetLetMe-Contract': 'live-points-v2' },
+     data: { query: GET_LIVE_POINTS, variables: { entryId: session.entryId, eventId: 33 } }
+    })
+    expect(apiResponse.ok()).toBe(true)
+    const api = await apiResponse.json()
+    expect(api.errors).toBeUndefined()
+    const live = api.data.calcLivePointsByEntry
+    expect(live.entry).toBe(session.entryId)
+    expect(live.event).toBe(33)
+    expect(live.snapshot.eventId).toBe(33)
+    expect(live.snapshot.revisions.scoreCore).toBe('a'.repeat(64))
+    expect(live.score.revisions).toEqual(live.snapshot.revisions)
     await page.goBack()
     await expect(page).toHaveURL(returnUrl)
     await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
