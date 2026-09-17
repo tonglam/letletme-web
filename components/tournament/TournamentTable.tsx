@@ -21,7 +21,7 @@ import type { TournamentEntry } from '@/types/tournament'
 import { ArrowDown, ArrowUp, GitCompareArrows } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useFormatter, useTranslations } from 'next-intl'
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 
 const EntryCompareSheet = dynamic(
 	() =>
@@ -129,6 +129,7 @@ export function TournamentTable({
 		[]
 	)
 	const [isCompareOpen, setIsCompareOpen] = useState(false)
+	const compareOpenerRef = useRef<HTMLButtonElement | null>(null)
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
 	const exitCompareMode = () => {
@@ -362,7 +363,10 @@ export function TournamentTable({
 										size="sm"
 										variant="secondary"
 										className="h-8 gap-1.5 text-xs"
-										onClick={() => setIsCompareOpen(true)}
+										onClick={event => {
+											compareOpenerRef.current = event.currentTarget
+											setIsCompareOpen(true)
+										}}
 									>
 										<GitCompareArrows
 											className="size-3.5"
@@ -706,6 +710,7 @@ export function TournamentTable({
 					}
 					scoreCoreRevision={serverControl?.scoreCoreRevision}
 					onRevisionGone={serverControl?.onRevisionGone}
+					openerRef={compareOpenerRef}
 					open={isCompareOpen}
 					onOpenChange={setIsCompareOpen}
 				/>

@@ -16,10 +16,11 @@ import {
 } from '@/lib/graphql/operations/live'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
+	openerRef: RefObject<HTMLElement | null>
 	entries: [TournamentEntry, TournamentEntry]
 	gameweek: number
 	/** Optional live-board context supplied by the paginated standings table. */
@@ -464,6 +465,7 @@ function PlayerCompareRow({
 }
 
 export function EntryCompareSheet({
+	openerRef,
 	entries,
 	gameweek,
 	open,
@@ -545,6 +547,11 @@ export function EntryCompareSheet({
 			onOpenChange={onOpenChange}
 		>
 			<SheetContent
+				onCloseAutoFocus={event => {
+					event.preventDefault()
+					const opener = openerRef.current
+					if (opener?.isConnected) opener.focus({ preventScroll: true })
+				}}
 				side="right"
 				className="w-full gap-0 overflow-y-auto p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-[680px]"
 			>
