@@ -75,6 +75,9 @@ for (const locale of ['en', 'zh-CN']) {
 				let requests = 0
 				await page.route('**/api/trends/public-desk?**', async route => {
 					requests++
+					const requestUrl = new URL(route.request().url())
+					expect(requestUrl.searchParams.get('cohortId')).toBe('competition:779')
+					expect(requestUrl.searchParams.get('eventId')).toBe(state === 'empty' && !inject ? '32' : '33')
 					if (!inject) return route.continue()
 					if (state === 'failure') return route.fulfill({ status: 503, json: { error: 'isolated read failure' } })
 					const response = await route.fetch()
@@ -93,6 +96,7 @@ for (const locale of ['en', 'zh-CN']) {
 				if (state === 'failure') {
 					await expect(page.getByText(zh ? '联赛趋势加载失败。本次失败不会被伪装成空数据。' : 'League trends could not be loaded. Your request was not treated as an empty result.', { exact: true })).toBeVisible()
 					await expect(cohort).toHaveValue('competition:777')
+					await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:777' && url.searchParams.get('gw') === '33' && url.searchParams.get('scope') === 'public')
 					await expect(gw).toHaveValue('33')
 					await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
 					inject = false
@@ -115,6 +119,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
 				await expect(cohort).toHaveAttribute('aria-busy', 'false')
 				await expect(cohort).toHaveValue('competition:779')
+				await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:779' && url.searchParams.get('gw') === (state === 'empty' ? '32' : '33'))
 				expect(requests).toBe(2)
 			})
 		}
@@ -159,7 +164,17 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(cohort).toHaveValue('competition:777')
 			await expect(gw).toHaveValue('32')
 			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
-			await expect(page.getByRole('tabpanel').getByRole('listitem').first()).toContainText('64')
+			await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:777' && url.searchParams.get('gw') === '32')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			for (const name of zh ? ['持有率', '队长选择', '转会'] : ['Ownership', 'Captaincy', 'Transfers']) {
+				await page.getByRole('tab', { name, exact: true }).click()
+				const rows = page.getByRole('tabpanel').getByRole('listitem')
+				await expect(rows).toHaveCount(name === 'Transfers' || name === '转会' ? 1 : 2)
+				for (const row of await rows.all()) {
+					await expect(row.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+					await expect(row).toContainText('64')
+				}
+			}
 		})
 	}
 }
