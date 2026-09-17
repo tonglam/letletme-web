@@ -1910,3 +1910,102 @@ test.describe('J12 planned UTC dark mobile management states', () => {
   })
  }
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+ test.describe(`J13 ${locale} ${width}`, () => {
+ test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+ test(`J13 ${locale} creation modes keep unprepared fields hidden and leave without writes`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session and intercepted API only')
+  const session = await createSession({ entryId: 15702 })
+  const prefix = locale === 'en' ? '' : '/zh-CN'
+  const forbidden: string[] = []
+  await page.route('**/api/tournaments{,/**}', async route => {
+   const path = new URL(route.request().url()).pathname
+   if (path === '/api/tournaments/check-name') {
+    await route.fulfill({ json: { available: true } })
+   } else {
+    forbidden.push(`${route.request().method()} ${path}`)
+    await route.abort()
+   }
+  })
+  try {
+   await addSessionCookie(page, session.cookie)
+   await page.goto(`${prefix}/competitions/browse`)
+   const create = page.locator(`a[href="${prefix}/competitions/create"]`).filter({ visible: true }).first()
+   await create.click()
+   await expect(page).toHaveURL(new RegExp(`${prefix}/competitions/create$`))
+   await expect(page.locator('#tournament-create-form')).toHaveAttribute('aria-busy', 'false')
+   await page.locator('label[for="creation-mode-classic"]').click()
+   await expect(page.locator('#creation-mode-classic')).toHaveAttribute('aria-checked', 'true')
+   await expect(page.locator('#tournament-name')).toHaveCount(0)
+   await page.locator('label[for="creation-mode-h2h"]').click()
+   await expect(page.locator('#creation-mode-h2h')).toHaveAttribute('aria-checked', 'true')
+   const importHelp = page.getByRole('region', { name: locale === 'en' ? 'How to get the link' : '如何获取链接', exact: true })
+   await expect(importHelp).toBeVisible()
+   await expect(importHelp.getByRole('listitem')).toHaveCount(3)
+   await expect(importHelp).toContainText(locale === 'en' ? 'Select the Head-to-Head league you want to mirror.' : '选择你要镜像的对战联赛。')
+   await expect(importHelp).toContainText(locale === 'en' ? 'Open Standings or New entries and copy the browser URL.' : '打开“Standings”或“New entries”，复制浏览器地址栏中的链接。')
+   await expect(page.locator('#tournament-name')).toHaveCount(0)
+   await page.locator('label[for="creation-mode-custom"]').click()
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   const help = page.getByRole('button', { name: locale === 'en' ? 'Show help' : '显示帮助', exact: true })
+   await help.click()
+   const helpDialog = page.getByRole('dialog')
+   await expect(helpDialog.getByRole('heading', { name: locale === 'en' ? 'Choose participants' : '选择参赛球队', exact: true })).toBeVisible()
+   await helpDialog.getByRole('tab', { name: locale === 'en' ? 'FAQ' : '常见问题', exact: true }).click()
+   await expect(helpDialog.getByRole('heading', { name: locale === 'en' ? 'Why must I fetch a league first?' : '为什么必须先加载联赛？', exact: true })).toBeVisible()
+   await page.keyboard.press('Escape')
+   await expect(helpDialog).toHaveCount(0)
+   await expect(help).toBeFocused()
+   await page.locator('#tournament-name').fill('J13 local draft')
+   await expect(page.locator('#tournament-name')).toHaveValue('J13 local draft')
+   await expect(page.locator('#tournament-create-form button[type="submit"]')).toBeDisabled()
+   await page.locator('label[for="creation-mode-h2h"]').click()
+   await expect(page.locator('#tournament-name')).toHaveCount(0)
+   await page.getByRole('contentinfo').locator(`a[href="${prefix}/competitions/browse"]`).click()
+   await expect(page).toHaveURL(new RegExp(`${prefix}/competitions/browse$`))
+   expect(forbidden).toEqual([])
+  } finally { await session.cleanup() }
+ })
+ })
+ }
+}
+
+test('J13 prepared preview exposes every group and knockout format without creation', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated preview substitute only')
+ const session = await createSession({ entryId: 15702 })
+ const writes: string[] = []
+ let previews = 0
+ await page.route('**/api/tournaments{,/**}', async route => {
+  const path = new URL(route.request().url()).pathname
+  if (path === '/api/tournaments/preview') {
+   previews += 1
+   expect(route.request().method()).toBe('POST')
+   expect(route.request().postDataJSON()).toEqual({ leagueUrl: 'https://fantasy.premierleague.com/leagues/123/standings/c' })
+   await route.fulfill({ json: { previewToken: 'isolated-j13-preview', expiresAt: new Date(Date.now() + 600000).toISOString(), leagueId: 123, leagueType: 'classic', leagueName: 'J13 fixture league', startEvent: 1, participants: Array.from({ length: 8 }, (_, i) => ({ id: String(i + 1), team: `J13 Team ${i + 1}`, manager: `Fixture ${i + 1}`, overallRank: i + 1, totalPoints: 100 })) } })
+  } else if (path === '/api/tournaments/check-name') await route.fulfill({ json: { available: true } })
+  else { writes.push(path); await route.abort() }
+ })
+ try {
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/competitions/create')
+  await expect(page.locator('#tournament-create-form')).toHaveAttribute('aria-busy', 'false')
+  await page.locator('label[for="creation-mode-custom"]').click()
+  await page.locator('#league-url').fill('https://fantasy.premierleague.com/leagues/123/standings/c')
+  await page.getByRole('button', { name: 'Fetch league', exact: true }).click()
+  await expect(page.locator('#group-format')).toBeVisible()
+  for (const format of ['No Group', 'Points Race', 'No Group']) {
+   await page.locator('#group-format').click()
+   await page.getByRole('option', { name: format, exact: true }).click()
+   await expect(page.locator('#group-format')).toHaveText(format)
+  }
+  for (const format of ['Single Elimination', 'Double Elimination', 'No Knockout']) {
+   await page.locator('#knockout-format').click()
+   await page.getByRole('option', { name: format, exact: true }).click()
+   await expect(page.locator('#knockout-format')).toHaveText(format)
+  }
+  expect(previews).toBe(1)
+  expect(writes).toEqual([])
+ } finally { await session.cleanup() }
+})
