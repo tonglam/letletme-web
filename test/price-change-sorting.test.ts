@@ -137,3 +137,19 @@ describe('sortPriceChangePlayers', () => {
 		)
 	})
 })
+
+it('explicit progress descending stays numeric when personal squad arrives', () => {
+	const players = [
+		player(1, { status: 'LIKELY_RISE', progressPercent: 20 }),
+		player(2, { status: 'UNLIKELY', progressPercent: 95 })
+	]
+	for (const squadElementIds of [new Set<number>(), new Set([1])]) {
+		assert.deepEqual(
+			sortPriceChangePlayers(players, {
+				sort: { column: 'progress', direction: 'desc' },
+				squadElementIds
+			}).map(item => item.playerId),
+			[2, 1]
+		)
+	}
+})

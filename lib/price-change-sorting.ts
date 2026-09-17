@@ -12,6 +12,8 @@ export type PriceChangeSortColumn =
 export type PriceChangeSortDirection = 'asc' | 'desc'
 
 export type PriceChangeSortState = {
+	/** Only the default recommendation prioritizes relevance before values. */
+	relevanceFirst?: boolean
 	column: PriceChangeSortColumn
 	direction: PriceChangeSortDirection
 }
@@ -23,6 +25,7 @@ export type PriceChangeScope = 'all' | 'likely'
 export const DEFAULT_PRICE_CHANGE_SCOPE: PriceChangeScope = 'likely'
 
 export const DEFAULT_PRICE_CHANGE_SORT: PriceChangeSortState = {
+	relevanceFirst: true,
 	column: 'progress',
 	direction: 'desc'
 }
@@ -150,9 +153,7 @@ export function sortPriceChangePlayers(
 		locale?: string
 	} = {}
 ): PriceChangePlayer[] {
-	const relevanceFirst =
-		sort.column === DEFAULT_PRICE_CHANGE_SORT.column &&
-		sort.direction === DEFAULT_PRICE_CHANGE_SORT.direction
+	const relevanceFirst = sort.relevanceFirst === true
 
 	return [...players].sort((left, right) => {
 		if (relevanceFirst) {

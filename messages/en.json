@@ -1531,6 +1531,7 @@
 		"filterRise": "Rises only",
 		"filterFall": "Falls only",
 		"filterLocked": "Locked / calibrating",
+		"sortRecommended": "Recommended",
 		"sortLabel": "Sort",
 		"sortMomentum": "Prediction progress",
 		"sortOwnership": "Ownership",
