@@ -59,7 +59,9 @@ export function HomeAutoCarousel({
 	const firstSlideId = visibleSlides[0]?.id ?? ''
 	const [activeSlideId, setActiveSlideId] = useState(firstSlideId)
 	const [isManuallyPaused, setIsManuallyPaused] = useState(false)
-	const [isInteractionPaused, setIsInteractionPaused] = useState(false)
+	const [isHovered, setIsHovered] = useState(false)
+	const [hasFocusWithin, setHasFocusWithin] = useState(false)
+	const [isTouchActive, setIsTouchActive] = useState(false)
 	const [isReducedMotion, setIsReducedMotion] = useState(false)
 	const [isFullListOpen, setIsFullListOpen] = useState(false)
 	const touchStartX = useRef<number | null>(null)
@@ -70,7 +72,8 @@ export function HomeAutoCarousel({
 		visibleSlides.findIndex(slide => slide.id === activeSlideId)
 	)
 	const activeSlide = visibleSlides[activeSlideIndex] ?? visibleSlides[0]
-	const isAutoPaused = isManuallyPaused || isInteractionPaused || isFullListOpen
+	const isAutoPaused =
+		isManuallyPaused || isHovered || hasFocusWithin || isTouchActive || isFullListOpen
 
 	useEffect(() => {
 		const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -158,7 +161,7 @@ export function HomeAutoCarousel({
 
 	const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
 		touchStartX.current = event.touches[0]?.clientX ?? null
-		setIsInteractionPaused(true)
+		setIsTouchActive(true)
 	}
 
 	const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
@@ -171,29 +174,29 @@ export function HomeAutoCarousel({
 				move(deltaX < 0 ? 1 : -1)
 			}
 		}
-		setIsInteractionPaused(false)
+		setIsTouchActive(false)
 	}
 
 	return (
 		<div
 			data-home-carousel={dataAttribute}
 			className={className}
-			onMouseEnter={() => setIsInteractionPaused(true)}
-			onMouseLeave={() => setIsInteractionPaused(false)}
-			onFocusCapture={() => setIsInteractionPaused(true)}
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
+			onFocusCapture={() => setHasFocusWithin(true)}
 			onBlurCapture={event => {
 				if (
 					!event.relatedTarget ||
 					!event.currentTarget.contains(event.relatedTarget as Node)
 				) {
-					setIsInteractionPaused(false)
+					setHasFocusWithin(false)
 				}
 			}}
 			onTouchStart={handleTouchStart}
 			onTouchEnd={handleTouchEnd}
 			onTouchCancel={() => {
 				touchStartX.current = null
-				setIsInteractionPaused(false)
+				setIsTouchActive(false)
 			}}
 		>
 			{renderHeader || renderAction ? (

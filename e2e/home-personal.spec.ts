@@ -186,6 +186,7 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 				document.activeElement.blur()
 			}
 		})
+		await page.mouse.move(0, 0)
 		await page.waitForTimeout(7_200)
 		await expect(h2hTab).toHaveAttribute('aria-selected', 'true')
 		await expect(main.getByText('#12')).toBeVisible()
@@ -913,4 +914,73 @@ test(`SSR remediation tournament season sections load on demand without a false 
 
 }
 
+}
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`personal league carousel covers navigation pause focus and full list [${locale}]`, async ({ page }) => {
+		test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated fixture controls')
+		const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+		const session = await createSession({ entryId: 15702 })
+		const zh = locale === 'zh-CN'
+		const leagues = Array.from({ length: 13 }, (_, i) => ({
+			key: `${i === 12 ? 'h2h' : 'classic'}:${400 + i}`, name: `Carousel League ${i + 1}`,
+			leagueType: i === 12 ? 'H2H' : 'CLASSIC', visibility: 'PUBLIC', rank: i + 1,
+			rankState: 'READY', rankCheckedAt: '2026-09-16T00:00:00Z', movement: { direction: 'FLAT', places: 0 },
+			tournamentId: null, h2hMatchup: null
+		}))
+		const desk = { state: 'READY', entryName: 'Carousel United', playerName: 'Fixture Manager', region: 'Australia', overallPoints: 1234, pointsState: 'FINAL', pointsCheckedAt: '2026-09-16T00:00:00Z', overallRank: 56789, rankState: 'READY', rankCheckedAt: '2026-09-16T00:00:00Z', teamValue: 1005, bank: 15, leagueRanks: leagues, sourceCheckedAt: '2026-09-16T00:00:00Z' }
+		try {
+			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', data: { homePersonalDesk: desk } }] }) })).ok).toBe(true)
+			await page.setViewportSize(zh ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+			await page.clock.install()
+			await addSessionCookie(page, session.cookie)
+			await page.goto(zh ? '/zh-CN' : '/')
+			const carousel = page.locator('[data-home-carousel="personal-league"]')
+			const classic = carousel.getByRole('tab', { name: zh ? /积分联赛/ : /Classic/ })
+			const h2h = carousel.getByRole('tab', { name: zh ? /对战联赛/ : /H2H/ })
+			const heading = page.getByRole('heading', { level: 1 })
+			await expect(classic).toHaveAttribute('aria-selected', 'true')
+			await carousel.getByRole('button', { name: zh ? '下一个联赛分类' : 'Next league group', exact: true }).click()
+			await expect(h2h).toHaveAttribute('aria-selected', 'true')
+			await expect(carousel.getByText('Carousel League 13', { exact: true })).toBeVisible()
+			await carousel.getByRole('button', { name: zh ? '上一个联赛分类' : 'Previous league group', exact: true }).click()
+			await expect(classic).toHaveAttribute('aria-selected', 'true')
+			await carousel.getByRole('button', { name: zh ? '暂停自动切换联赛分类' : 'Pause automatic league rotation', exact: true }).click()
+			await heading.click()
+			await page.clock.fastForward(14_100)
+			await expect(classic).toHaveAttribute('aria-selected', 'true')
+			await carousel.getByRole('button', { name: zh ? '继续自动切换联赛分类' : 'Resume automatic league rotation', exact: true }).click()
+			await heading.click()
+			await page.clock.fastForward(7_100)
+			await expect(h2h).toHaveAttribute('aria-selected', 'true')
+			await classic.click()
+			await heading.click()
+			await carousel.hover()
+			await page.clock.fastForward(7_100)
+			await expect(classic).toHaveAttribute('aria-selected', 'true')
+			await page.mouse.move(0, 0)
+			await page.clock.fastForward(7_100)
+			await expect(h2h).toHaveAttribute('aria-selected', 'true')
+			await classic.click()
+			await classic.press('ArrowRight')
+			await expect(h2h).toBeFocused()
+			await page.mouse.move(0, 0)
+			await page.clock.fastForward(7_100)
+			await expect(h2h).toHaveAttribute('aria-selected', 'true')
+			await classic.click()
+			await carousel.getByRole('button', { name: zh ? '查看全部 12 个' : 'View all 12', exact: true }).click()
+			const dialog = page.getByRole('dialog')
+			await expect(dialog).toBeVisible()
+			await expect(dialog.getByText('Carousel League 12', { exact: true })).toBeVisible()
+			await expect(dialog.getByText(/^Carousel League \d+$/)).toHaveCount(12)
+			await page.clock.fastForward(7_100)
+			await expect(dialog.getByRole('heading', { name: zh ? '积分联赛' : 'Classic', exact: true })).toBeVisible()
+			await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+			await expect(dialog).toHaveCount(0)
+		} finally {
+			await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+			await session.cleanup()
+		}
+	})
 }
