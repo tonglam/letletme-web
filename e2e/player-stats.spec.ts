@@ -119,6 +119,13 @@ test('selection keeps committed detail while pending and reuses the server seed'
 	page
 }) => {
 	let deskRequests = 0
+	let heldRequest: import('@playwright/test').Request | undefined
+	let heldRequestSettled = false
+	const observeSettlement = (request: import('@playwright/test').Request) => {
+		if (request === heldRequest) heldRequestSettled = true
+	}
+	page.on('requestfinished', observeSettlement)
+	page.on('requestfailed', observeSettlement)
 	let releaseRequest: () => void = () => undefined
 	let markRequestStarted: () => void = () => undefined
 	const requestStarted = new Promise<void>(resolve => {
@@ -130,6 +137,7 @@ test('selection keeps committed detail while pending and reuses the server seed'
 
 	await page.route('**/api/player-stats/desk?**', async route => {
 		deskRequests += 1
+		heldRequest = route.request()
 		markRequestStarted()
 		await requestGate
 		try {
@@ -164,7 +172,10 @@ test('selection keeps committed detail while pending and reuses the server seed'
 	await expect(page.getByText('Loading player statistics')).toHaveCount(0)
 	await expect(overall).toContainText('Saka')
 	releaseRequest()
-	await page.waitForTimeout(100)
+	await expect.poll(() => heldRequestSettled).toBe(true)
+	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+	await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1')
+	await expect(page.getByText('Loading player statistics')).toHaveCount(0)
 	await expect(overall).not.toContainText('Palmer')
 	expect(deskRequests).toBe(1)
 })
@@ -293,6 +304,10 @@ test.describe('SSR detail stream', () => {
 		await page.goto(`/explore/player-stats?p1=2&p2=${initialPlayerId}`, { waitUntil: 'commit' })
 		await page.getByRole('button', { name: 'Remove', exact: true }).click()
 		await expect(page).not.toHaveURL(/p2=/)
+		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Palmer')
+		await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { operation: string; variables: { playerIds?: number[] }; finishedAt?: number | null }) => row.operation === 'GetPlayerStatsDeskOverview' && row.variables.playerIds?.includes(initialPlayerId))?.finishedAt).toBeTruthy()
+		await page.waitForLoadState('load')
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
 		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Palmer')
 		await expect(page.getByRole('region', { name: 'Player overall' })).not.toContainText('Saka')
 		await expect(page).not.toHaveURL(/p2=/)
