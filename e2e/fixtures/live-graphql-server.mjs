@@ -1420,7 +1420,11 @@ const server = createServer((request, response) => {
 									{ capability: 'TRANSFERS', state: 'READY' }
 								]
 							}
-						]
+						].flatMap(cohort =>
+							variables.access === 'MINE'
+								? [cohort]
+								: [cohort, { ...cohort, id: 'competition:779', displayName: 'E2E Second Public League' }]
+						)
 					}
 				}
 			})
@@ -1428,11 +1432,12 @@ const server = createServer((request, response) => {
 		}
 		if (query.includes('TrendCohortSnapshot')) {
 			const eventId = Number(variables.eventId) || 33
+			const isSecondCohort = variables.cohortId === 'competition:779'
 			const cohort = {
 				id: String(variables.cohortId || 'competition:777'),
 				kind: 'TRACKED_OFFICIAL_COMPETITION',
 				access: variables.access === 'MINE' ? 'MINE' : 'PUBLIC',
-				displayName: 'E2E Public League',
+				displayName: isSecondCohort ? 'E2E Second Public League' : 'E2E Public League',
 				setupStatus: 'READY',
 				exact: true,
 				latestEventId: 33,
@@ -1447,12 +1452,12 @@ const server = createServer((request, response) => {
 				]
 			}
 			const row = {
-				elementId: 1,
-				playerName: 'Saka',
+				elementId: isSecondCohort ? 2 : 1,
+				playerName: isSecondCohort ? 'Palmer' : 'Saka',
 				playerPosition: 3,
 				teamShortName: 'ARS',
-				count: 720,
-				percentage: 72
+				count: isSecondCohort ? (eventId === 33 ? 610 : 530) : (eventId === 33 ? 720 : 640),
+				percentage: isSecondCohort ? (eventId === 33 ? 61 : 53) : (eventId === 33 ? 72 : 64)
 			}
 			json(response, 200, {
 				data: {
