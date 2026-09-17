@@ -1521,8 +1521,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
   for (const name of labels.slice(1)) {
    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   }
+  const section = (name: string) => page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name, exact: true }) })
+  const captains = section(labels[1])
+  await expect(captains).toHaveCount(1)
+  for (const gw of [1, 2, 3]) {
+   const row = captains.locator('li').filter({ has: page.getByRole('button', { name: zh ? `打开第 ${gw} 轮` : `Open gameweek ${gw}`, exact: true }) })
+   await expect(row).toHaveCount(1)
+   await expect(row.getByText('Saka', { exact: true })).toBeVisible()
+   await expect(row.getByText('20', { exact: true })).toBeVisible()
+  }
+  const bench = section(labels[2])
+  await expect(bench).toHaveCount(1)
+  await expect(bench.getByText(zh ? '本赛季没有轮次板凳分达到 10+。' : 'No gameweek hit 10+ on the bench this season.', { exact: true })).toBeVisible()
+  const chips = section(labels[4])
+  await expect(chips).toHaveCount(1)
+  for (const gw of [2, 3]) await expect(chips.getByRole('button', { name: zh ? `打开第 ${gw} 轮` : `Open gameweek ${gw}`, exact: true })).toBeVisible()
   const transfers = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[3], exact: true }) })
   await expect(transfers).toHaveCount(1)
+  await expect(transfers.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
   await transfers.locator('button[aria-expanded]').click()
   await expect(transfers.getByText('Incoming 1-1', { exact: true })).toBeVisible()
   for (const chip of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit'])) {
