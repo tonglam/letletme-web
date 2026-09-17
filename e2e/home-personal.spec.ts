@@ -1661,3 +1661,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
  }
 }
+
+for (const width of [1440, 390]) {
+ test(`J12 non-owner cannot access management ${width}px`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated non-owner fixture')
+  await page.setViewportSize({ width, height: 900 })
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const mutations: string[] = []
+  await page.route('**/api/tournaments/**', async route => {
+   if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+    mutations.push(route.request().method())
+    await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+   } else await route.continue()
+  })
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [{ ...managedTournament, adminEntryId: 808080 }] } },
+    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: null } }
+   ] }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.goto('/competitions/browse')
+   await page.getByRole('button', { name: 'Actions for J12 Owned Cup', exact: true }).click()
+   await expect(page.getByRole('menuitem', { name: 'View live details', exact: true })).toBeVisible()
+   await expect(page.getByRole('menuitem', { name: 'Manage tournament', exact: true })).toHaveCount(0)
+   await page.keyboard.press('Escape')
+   await page.goto('/competitions/77/manage')
+   await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toBeVisible()
+   await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+   await expect(page.getByRole('button', { name: 'Delete tournament', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('heading', { name: /J12 Owned Cup/ })).toHaveCount(0)
+   const observations = await (await fetch(fixture)).json()
+   expect(observations.requests.some((request: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => request.operation === 'GetManagedTournament' && request.variables.tournamentId === 77 && request.variables.entryId === 909090)).toBe(true)
+   expect(mutations).toEqual([])
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
