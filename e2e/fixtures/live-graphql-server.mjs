@@ -1590,6 +1590,7 @@ const server = createServer((request, response) => {
 		}
 		if (query.includes('GetLiveCalcPoints')) {
 			const requestedEntry = Number(variables.entryId) || 123
+			const requestedEvent = Number(variables.eventId) || 33
 			if (requestedEntry === 999 && recoveryEntryRequestCount < 2) {
 				recoveryEntryRequestCount += 1
 				json(response, 200, {
@@ -1599,13 +1600,13 @@ const server = createServer((request, response) => {
 			}
 			json(response, 200, {
 				data: {
-					liveSnapshot: liveSnapshot(),
+					liveSnapshot: { ...liveSnapshot(), eventId: requestedEvent },
 					calcLivePointsByEntry: {
 						availability: 'READY',
 						delivery: liveDelivery('FRESH'),
-						snapshot: liveSnapshot(),
+						snapshot: { ...liveSnapshot(), eventId: requestedEvent },
 						entry: requestedEntry,
-						event: 33,
+						event: requestedEvent,
 						entryName: 'E2E United',
 						playerName: 'Test Manager',
 						chip: null,

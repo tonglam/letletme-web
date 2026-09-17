@@ -11,7 +11,7 @@ const refreshProfile = resolveLiveRefreshProfile(
 const refreshIntervalMs = refreshProfile === 'conserve' ? 120_000 : 30_000
 const firstRefreshWindowMs = Math.ceil(refreshIntervalMs * 1.1) + 1_000
 
-const graphqlFixtureUrl = 'http://127.0.0.1:4100/graphql'
+const graphqlFixtureUrl = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`
 
 const liveRevisionVector = (revision: string) => ({
 	publicationId: `e2e-live-${revision.slice(0, 8)}`,

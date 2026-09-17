@@ -1,3 +1,4 @@
+import { officialH2HFixture } from './fixtures/official-h2h'
 import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
@@ -1483,4 +1484,87 @@ for (const locale of ['en', 'zh-CN'] as const) {
    } finally { await sql.end(); await session.cleanup() }
   })
  }
+}
+
+
+for (const locale of ['en', 'zh-CN'] as const) {
+for (const width of [1440, 390]) {
+test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px`, async ({ page }) => {
+ const zh = locale === 'zh-CN'
+ const prefix = zh ? '/zh-CN' : ''
+ const tableName = zh ? /对战积分榜/ : /Head-to-Head table/
+ const fixturesName = zh ? /本轮对阵/ : /Round fixtures/
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker fixture suite')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const tournament = { id: 6, name: 'J08 Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
+ const rules = [
+  { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...tournament, id: 7, name: 'J08 Other H2H' }, tournament] } },
+  ...[6, 7].flatMap(tournamentId => ([3, 4] as const).flatMap(eventId => {
+   const value = officialH2HFixture(eventId, tournamentId)
+   return [
+    { operation: 'GetTournamentOfficialH2H', variables: { tournamentId, eventId }, data: { tournamentOfficialH2H: value.snapshot } },
+    { operation: 'GetLeagueLiveHead', variables: { tournamentId, eventId }, data: { leagueLiveHead: value.head } },
+    { operation: 'GetTournamentOfficialH2HHistory', variables: { tournamentId, eventId }, data: { tournamentOfficialH2HHistory: { tournamentId, eventId, matches: [] } } },
+   ]
+  })),
+ ]
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto(`${prefix}/live/competitions?tournamentId=7&gw=4`)
+  const selector = page.getByRole('button', { name: zh ? '对战联赛' : 'Head-to-head', exact: true })
+  await expect(selector).toContainText('J08 Other H2H')
+  await selector.click()
+  await page.getByRole('menuitem', { name: 'J08 Official H2H', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+  await expect(selector).toContainText('J08 Official H2H')
+  const standings = page.getByRole('tab', { name: tableName })
+  await standings.click()
+  const homeLink = page.getByRole('tabpanel', { name: tableName }).locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=4"]`).filter({ visible: true })
+  await expect(homeLink).toHaveCount(1)
+  await expect(homeLink).toContainText('H2H Home United')
+  await page.getByRole('tab', { name: fixturesName }).click()
+  await expect(page.getByRole('tabpanel', { name: fixturesName }).getByText('H2H Away United', { exact: true })).toBeVisible()
+  const matchPanel = page.getByRole('tabpanel', { name: fixturesName })
+  for (const name of ['H2H Home United', 'H2H Away United']) {
+   await expect(matchPanel.getByText(name, { exact: true })).toBeVisible()
+   await expect(matchPanel.getByRole('link', { name, exact: true })).toHaveCount(1)
+  }
+  const byeCard = matchPanel.locator('li').filter({ has: page.getByText('H2H Bye United', { exact: true }) })
+  await expect(byeCard).toHaveCount(1)
+  await expect(byeCard.getByText(zh ? '轮空' : 'Bye', { exact: true })).toBeVisible()
+  await expect(byeCard.getByText(zh ? '平均队' : 'Average Team', { exact: true })).toBeVisible()
+  await expect(byeCard.getByRole('link', { name: zh ? '平均队' : 'Average Team', exact: true })).toHaveCount(0)
+  await expect(byeCard.getByRole('link', { name: 'H2H Bye United', exact: true })).toHaveCount(1)
+
+  await expect(page.locator('a[href*="/live/points/null"], a[href*="/live/points/0?"]')).toHaveCount(0)
+  await page.getByRole('link', { name: zh ? '上一轮' : 'Previous', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
+  await page.getByRole('tab', { name: tableName }).click()
+  await expect(page.getByRole('tabpanel', { name: tableName }).locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=3"]`).filter({ visible: true })).toHaveCount(1)
+  await page.getByRole('link', { name: zh ? '下一轮' : 'Next', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('gw') === '4')
+  for (const entryId of [123, 456]) {
+   await page.getByRole('tab', { name: fixturesName }).click()
+   const link = page.getByRole('tabpanel', { name: fixturesName }).locator(`a[href="${prefix}/live/points/${entryId}?tournamentId=6&gw=4"]`).filter({ visible: true })
+   await expect(link).toHaveCount(1)
+   const returnUrl = page.url()
+   await link.click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/${entryId}` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+   const pitch = page.getByRole('region', { name: zh ? /阵型/ : /formation/ })
+   await expect(pitch.getByRole('button', { name: zh ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+   await expect(page.getByRole('region', { name: /GW4/ })).toBeVisible()
+   await page.goBack()
+   await expect(page).toHaveURL(returnUrl)
+   await expect(page.getByRole('tab', { name: tableName })).toBeVisible()
+  }
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+
+}
 }
