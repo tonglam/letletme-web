@@ -58,7 +58,7 @@ test.describe('J09 match status and player navigation', () => {
 	})
 	for (const locale of ['en', 'zh-CN']) {
 		for (const width of [1440, 390]) {
-			test(`J09 status cards and team tabs ${locale} ${width}px`, async ({ page }) => {
+			test(`J09 status cards and team tabs ${locale} ${width}px`, async ({ page }, testInfo) => {
 				const zh = locale === 'zh-CN'
 				const prefix = zh ? '/zh-CN' : ''
 				const seedResponse = await fetch(`${origin}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-letletme-contract': 'live-points-v2' }, body: JSON.stringify({ query: 'query GetLiveMatchday { liveMatchday { availability } }', variables: { eventId: 33 } }) })
@@ -91,9 +91,15 @@ test.describe('J09 match status and player navigation', () => {
 				}
 				await page.locator('[role="tab"][aria-controls$="content-live"]').click()
 				const card = page.locator('[data-match-id="101"]')
+				await expect(card.getByRole('tab')).toHaveCount(0)
 				const expand = card.locator('button[aria-expanded]')
 				await expand.click()
 				await expect(expand).toHaveAttribute('aria-expanded', 'true')
+				await expect(card.getByRole('tab')).toHaveText(['Arsenal', 'Chelsea'])
+				await testInfo.attach('J09-card-control-inventory', {
+					contentType: 'application/json',
+					body: JSON.stringify({ matchId: 101, locale, width, collapsedTabs: [], expandedTabs: await card.getByRole('tab').allTextContents(), playerControl: 'button', absentPlannedControls: ['J09.07 independent match tab', 'J09.09 independent player tab'], scope: 'this MatchCard implementation and fixture state only' })
+				})
 				await card.getByRole('tab', { name: 'Arsenal', exact: true }).click()
 				await expect(card.getByRole('button', { name: /Saka/ })).toBeVisible()
 				await card.getByRole('tab', { name: 'Chelsea', exact: true }).click()
