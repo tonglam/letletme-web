@@ -1394,3 +1394,40 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+test.describe('J19 planned UTC dark mobile states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ test('valid-id, legacy-link and invalid-id keep their terminal contracts', async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Requires isolated live fixtures and database')
+  const session = await createSession({ entryId: 15702 })
+  try {
+   await addSessionCookie(page, session.cookie)
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.goto('/zh-CN/competitions/6?gw=1&created=1')
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/live/competitions' && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '1' && url.searchParams.get('created') === '1')
+   const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+   await expect(board.getByRole('link', { name: 'E2E United Test Manager', exact: true }).filter({ visible: true })).toHaveCount(1)
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   await page.goto('/zh-CN/explore/price-changes')
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/explore/price-predictions')
+   await expect(page.getByRole('combobox', { name: '预测范围', exact: true })).toBeEnabled()
+   await expect(page.getByRole('main').getByRole('link', { name: 'Saka', exact: true }).filter({ visible: true })).toHaveAttribute('href', '/zh-CN/explore/player-stats?p1=1')
+   const invalidResults: { id: string; status: number }[] = []
+   for (const id of ['0', '-1', 'abc', '1.5', '9007199254740992']) {
+    const response = await page.goto(`/zh-CN/competitions/${id}?gw=1&created=1`)
+    expect(response).not.toBeNull()
+    expect([200, 404]).toContain(response!.status())
+    if (response!.status() === 200) expect(await response!.text()).toContain('NEXT_HTTP_ERROR_FALLBACK;404')
+    await expect(page).toHaveURL(url => url.pathname === `/zh-CN/competitions/${id}`)
+    await expect(page.getByRole('heading', { name: '找不到页面', exact: true })).toBeVisible()
+    await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached()
+    await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'E2E United Test Manager', exact: true })).toHaveCount(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    invalidResults.push({ id, status: response!.status() })
+   }
+   await testInfo.attach('J19-state-variants', { body: JSON.stringify({ variantIds: ['J19.state.01', 'J19.state.02', 'J19.state.03'], locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', invalidResults }), contentType: 'application/json' })
+  } finally { await session.cleanup() }
+ })
+})
