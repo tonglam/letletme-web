@@ -1,6 +1,55 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test.describe(`gameweek board rows ${locale} ${width}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+			test('Dream Team and 10+ boards retain independent identities and exact scores', async ({
+				page, request
+			}, testInfo) => {
+				testInfo.annotations.push({
+					type: 'coverage-variant',
+					description: `GW03.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base; partial board assertions only`
+				})
+				// The fixture deliberately has one Dream Team player and two hauls.
+				// This proves independent boards, not a complete eleven-player formation.
+				const response = await request.get('/api/gameweek/desk?eventId=33')
+				expect(response.status()).toBe(200)
+				const desk = await response.json()
+				expect(desk.eventId).toBe(33)
+				expect(desk.dreamTeam.map((player: { id: number }) => player.id)).toEqual([1])
+				expect(desk.hauls.map((player: { id: number }) => player.id)).toEqual([1, 2])
+				await page.goto(locale === 'en' ? '/explore/gameweek' : '/zh-CN/explore/gameweek')
+				await expect(page.getByRole('heading', {
+					name: locale === 'en' ? 'GW33 Overview' : 'GW33 概览', exact: true
+				})).toBeVisible()
+				const dreamTeam = page.locator('[aria-labelledby="home-team-of-week-title"]')
+				await expect(dreamTeam).toHaveCount(1)
+				await expect(dreamTeam.locator('#home-team-of-week-title')).toHaveText(
+					locale === 'en' ? /^GW33\s*Dream Team$/ : /^GW33\s*梦之队$/
+				)
+				const pitchPlayers = dreamTeam.locator('li button')
+				await expect(pitchPlayers).toHaveCount(1)
+				await expect(pitchPlayers.getByText('Saka', { exact: true })).toBeVisible()
+				await expect(pitchPlayers.getByText('12', { exact: true })).toBeVisible()
+				await expect(dreamTeam.getByText('Palmer', { exact: true })).toHaveCount(0)
+				const hauls = page.locator('[data-share-fit-content="true"]').filter({
+					has: page.getByRole('heading', {
+						name: locale === 'en' ? 'Players Scoring 10+' : '得分上双球员', exact: true
+					})
+				})
+				await expect(hauls).toHaveCount(1)
+				const rows = hauls.locator('tbody tr')
+				await expect(rows).toHaveCount(2)
+				await expect(rows.getByRole('button')).toHaveText(['Saka', 'Palmer'])
+				await expect(rows.nth(0).getByRole('cell').last()).toHaveText('12')
+				await expect(rows.nth(1).getByRole('cell').last()).toHaveText('11')
+			})
+		})
+	}
+}
+
 test('gameweek desk endpoint returns compact cacheable data and rejects invalid IDs', async ({
 	request
 }) => {
