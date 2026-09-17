@@ -9,7 +9,7 @@ import {
 } from '@/lib/graphql/operations/live'
 import type { PlayerStat } from '@/types/match'
 import type { PlayerDetail } from '@/types/player-detail'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildBreakdownFromPlayerLive, createBasePlayerDetail } from './match-card-model'
 
 export function useMatchPlayerDetail(eventId?: number) {
@@ -17,6 +17,16 @@ export function useMatchPlayerDetail(eventId?: number) {
 	const [isOpen, setIsOpen] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
 	const requestIdRef = useRef(0)
+
+	useEffect(() => {
+		requestIdRef.current += 1
+		setSelectedPlayer(null)
+		setIsOpen(false)
+		setIsLoading(false)
+		return () => {
+			requestIdRef.current += 1
+		}
+	}, [eventId])
 
 	const openPlayerDetail = useCallback(async (player: PlayerStat, team: string, teamShort: string) => {
 		const requestId = requestIdRef.current + 1
@@ -27,15 +37,18 @@ export function useMatchPlayerDetail(eventId?: number) {
 		if (!player.element || !eventId) return
 
 		try {
-			const [explainData, liveData] = await Promise.all([
+			const [explainResult, liveResult] = await Promise.allSettled([
 				executeQuery<EventLiveExplainResponse>(GET_EVENT_LIVE_EXPLAIN, { eventId, elementId: player.element }),
 				executeQuery<PlayerLiveResponse>(GET_PLAYER_LIVE, { playerId: player.element, eventId }),
 			])
 			if (requestIdRef.current !== requestId) return
+			for (const result of [explainResult, liveResult]) {
+				if (result.status === 'rejected') console.warn('Live player detail unavailable:', result.reason)
+			}
 			setSelectedPlayer((current) => {
 				if (!current) return current
-				const explain = explainData.eventLiveExplain
-				const live = liveData.playerLive
+				const explain = explainResult.status === 'fulfilled' ? explainResult.value.eventLiveExplain : null
+				const live = liveResult.status === 'fulfilled' ? liveResult.value.playerLive : null
 				return {
 					...current,
 					name: explain?.player?.webName || current.name,

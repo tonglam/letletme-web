@@ -372,3 +372,172 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		})
 	}
 }
+
+test('match detail retains live statistics when explanation read fails', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated partial failure injection only')
+ await page.route('**/api/graphql', async route => {
+  const body = route.request().postDataJSON()
+  if (/query EventLiveExplainPlayer\b/.test(body.query ?? '')) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ errors: [{ message: 'Isolated explanation failure' }] }) })
+  } else if (/query PlayerLive\b/.test(body.query ?? '')) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { playerLive: { minutes: 90, goalsScored: 1, assists: 0, cleanSheets: 1, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 3, bps: 38, totalPoints: 11 } } }) })
+  } else await route.continue()
+ })
+ await page.goto('/explore/gameweek')
+ await page.getByRole('combobox', { name: 'Select gameweek', exact: true }).click()
+ await page.getByRole('option', { name: 'Gameweek 33 (Current)', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'GW33 Overview', exact: true })).toBeVisible()
+ await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+ const dialog = page.getByRole('dialog')
+ await expect(dialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+ await expect(dialog.getByText('90', { exact: true })).toBeVisible()
+ await expect(dialog.getByText('38', { exact: true })).toBeVisible()
+})
+
+test('match detail ends loading after both reads fail and retries on reopening', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated partial failure injection only')
+ let failReads = true
+ const operations: string[] = []
+ await page.route('**/api/graphql', async route => {
+  const body = route.request().postDataJSON()
+  const detail = /query (EventLiveExplainPlayer|PlayerLive)\b/.test(body.query ?? '')
+  if (detail) operations.push(body.query.match(/query (\w+)/)[1])
+  if (detail && failReads) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ errors: [{ message: 'Isolated both-read failure' }] }) })
+  } else if (/query EventLiveExplainPlayer\b/.test(body.query ?? '')) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ errors: [{ message: 'Isolated explanation failure' }] }) })
+  } else if (/query PlayerLive\b/.test(body.query ?? '')) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { playerLive: { minutes: 90, goalsScored: 1, assists: 0, cleanSheets: 1, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 3, bps: 38, totalPoints: 11 } } }) })
+  } else await route.continue()
+ })
+ await page.goto('/explore/gameweek')
+ await page.getByRole('combobox', { name: 'Select gameweek', exact: true }).click()
+ await page.getByRole('option', { name: 'Gameweek 33 (Current)', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'GW33 Overview', exact: true })).toBeVisible()
+ await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+ const dialog = page.getByRole('dialog')
+ await expect(dialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+ await expect.poll(() => operations.length).toBe(2)
+ await expect(dialog.getByText('38', { exact: true })).toHaveCount(0)
+ await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+ await expect(dialog).toHaveCount(0)
+ failReads = false
+ await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+ await expect.poll(() => operations.length).toBe(4)
+ await expect(dialog.getByText('90', { exact: true })).toBeVisible()
+ await expect(dialog.getByText('38', { exact: true })).toBeVisible()
+})
+
+test('match detail retains explanation identity without inventing missing live statistics', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated partial failure injection only')
+ await page.route('**/api/graphql', async route => {
+  const body = route.request().postDataJSON()
+  if (/query EventLiveExplainPlayer\b/.test(body.query ?? '')) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { eventLiveExplain: { elementId: 2, selectedBy: 10, contributions: [], player: { id: 2, webName: 'Palmer verified detail', team: { id: 1, shortName: 'ARS' } } } } }) })
+  } else if (/query PlayerLive\b/.test(body.query ?? '')) {
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ errors: [{ message: 'Isolated live failure' }] }) })
+  } else await route.continue()
+ })
+ await page.goto('/explore/gameweek')
+ await page.getByRole('combobox', { name: 'Select gameweek', exact: true }).click()
+ await page.getByRole('option', { name: 'Gameweek 33 (Current)', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'GW33 Overview', exact: true })).toBeVisible()
+ await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+ const dialog = page.getByRole('dialog')
+ await expect(dialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+ await expect(dialog.getByRole('heading', { name: 'Palmer verified detail', exact: true })).toBeVisible()
+ await expect(dialog.getByText('38', { exact: true })).toHaveCount(0)
+ await expect(dialog.getByRole('list')).toHaveCount(0)
+})
+
+for (const reopen of [false, true]) {
+ test(`match detail ignores closed late responses with reopen ${reopen}`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated race injection only')
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  let held = 0
+  const lateResponses: Array<Promise<unknown>> = []
+  page.on('response', response => {
+   if (!response.url().endsWith('/api/graphql')) return
+   const body = response.request().postDataJSON()
+   if ((body.variables?.elementId ?? body.variables?.playerId) === 2 && /query (EventLiveExplainPlayer|PlayerLive)\b/.test(body.query ?? '')) lateResponses.push(response.finished())
+  })
+  await page.route('**/api/graphql', async route => {
+   const body = route.request().postDataJSON()
+   const explain = /query EventLiveExplainPlayer\b/.test(body.query ?? '')
+   const live = /query PlayerLive\b/.test(body.query ?? '')
+   if (!explain && !live) return route.continue()
+   const id = body.variables.elementId ?? body.variables.playerId
+   if (id === 2) { held += 1; await gate }
+   const stats = { minutes: 90, goalsScored: 1, assists: 0, cleanSheets: 1, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 3, bps: id === 2 ? 38 : 42, totalPoints: 11 }
+   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: explain ? { eventLiveExplain: { elementId: id, selectedBy: 10, contributions: [], player: { id, webName: id === 2 ? 'Palmer late result' : 'Saka current result', team: { id: 1, shortName: 'ARS' } } } } : { playerLive: stats } }) })
+  })
+  try {
+   await page.goto('/explore/gameweek')
+   await page.getByRole('combobox', { name: 'Select gameweek', exact: true }).click()
+   await page.getByRole('option', { name: 'Gameweek 33 (Current)', exact: true }).click()
+   await expect(page.getByRole('heading', { name: 'GW33 Overview', exact: true })).toBeVisible()
+   await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+   await expect.poll(() => held).toBe(2)
+   const dialog = page.getByRole('dialog')
+   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+   await expect(dialog).toHaveCount(0)
+   if (reopen) {
+    await page.locator('tbody').getByRole('button', { name: 'Saka', exact: true }).click()
+    await expect(dialog.getByRole('heading', { name: 'Saka current result', exact: true })).toBeVisible()
+    await expect(dialog.getByText('42', { exact: true })).toBeVisible()
+   }
+   release()
+   await expect.poll(() => lateResponses.length).toBe(2)
+   await Promise.all(lateResponses)
+   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+   if (reopen) {
+    await expect(dialog.getByRole('heading', { name: 'Saka current result', exact: true })).toBeVisible()
+    await expect(dialog.getByText('42', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Palmer late result', { exact: true })).toHaveCount(0)
+    await expect(dialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+   } else await expect(dialog).toHaveCount(0)
+  } finally { release() }
+ })
+}
+
+
+test('match detail invalidates an old player when a pending gameweek commits', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated gameweek race injection only')
+ let releaseDesk: () => void = () => undefined
+ let releaseDetail: () => void = () => undefined
+ const deskGate = new Promise<void>(resolve => { releaseDesk = resolve })
+ const detailGate = new Promise<void>(resolve => { releaseDetail = resolve })
+ let deskRequested = false
+ let detailRequests = 0
+ await page.route('**/api/gameweek/desk?eventId=32', async route => {
+  deskRequested = true
+  await deskGate
+  await route.continue()
+ })
+ await page.route('**/api/graphql', async route => {
+  const body = route.request().postDataJSON()
+  if (/query (EventLiveExplainPlayer|PlayerLive)\b/.test(body.query ?? '')) {
+   detailRequests += 1
+   await detailGate
+  }
+  await route.continue()
+ })
+ try {
+  await page.goto('/explore/gameweek')
+  await expect(page.getByRole('heading', { name: 'GW33 Overview', exact: true })).toBeVisible()
+  const input = page.locator('#gameweek-jump-input')
+  await input.fill('32')
+  await input.press('Enter')
+  await expect.poll(() => deskRequested).toBe(true)
+  await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect.poll(() => detailRequests).toBe(2)
+  releaseDesk()
+  await expect(page.getByRole('heading', { name: 'GW32 Overview', exact: true, includeHidden: true })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+ } finally {
+  releaseDesk()
+  releaseDetail()
+ }
+})
