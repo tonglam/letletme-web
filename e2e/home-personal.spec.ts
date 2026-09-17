@@ -1431,3 +1431,52 @@ test.describe('J19 planned UTC dark mobile states', () => {
   } finally { await session.cleanup() }
  })
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J16 unbound navigation leaves identity unchanged ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated unbound identity')
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   const session = await createSession()
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const mutations: string[] = []
+   page.on('request', request => {
+    if (request.headers()['next-action'] || (request.method() !== 'GET' && /\/api\/(auth|fpl)/.test(new URL(request.url()).pathname))) mutations.push(new URL(request.url()).pathname)
+   })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(prefix || '/')
+    const main = page.locator('#main-content')
+    await expect(main.getByText(locale === 'zh-CN' ? '绑定你的 FPL 球队' : 'Link your FPL team', { exact: true })).toBeVisible()
+    const clickNav = async (href: string) => {
+     const nav = page.getByRole('navigation').first()
+     if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+     else await nav.locator('details').filter({ has: page.locator(`a[href="${href}"]`) }).locator('summary').filter({ visible: true }).click()
+     const link = nav.locator(`a[href="${href}"]`).filter({ visible: true })
+     await expect(link).toHaveCount(1)
+     await link.click()
+    }
+    await clickNav(`${prefix}/my-fpl/team`)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/onboarding/bind-entry`)
+    const input = main.locator('input[name="entryId"]')
+    await expect(input).toBeVisible()
+    await input.fill('-1')
+    await expect(input).toHaveValue('-1')
+    await input.clear()
+    await expect(input).toHaveValue('')
+    await expect(main.getByText(locale === 'zh-CN' ? '如何查找参赛 ID' : 'How to find your entry ID', { exact: true })).toBeVisible()
+    await expect(main.locator('a[href="https://fantasy.premierleague.com/en/my-team"]')).toHaveAttribute('target', '_blank')
+    await expect(main.getByRole('dialog')).toHaveCount(0)
+    await page.goBack()
+    await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+    await clickNav(`${prefix}/profile`)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
+    await expect(main.getByRole('heading', { name: locale === 'zh-CN' ? '我的资料' : 'My Profile', exact: true })).toBeVisible()
+    const [identity] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+    expect(identity).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
+    expect(mutations).toEqual([])
+   } finally { await sql.end(); await session.cleanup() }
+  })
+ }
+}
