@@ -1,5 +1,47 @@
 import { expect, test } from '@playwright/test'
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test.describe(`fixture row identity ${locale} ${width}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+			test('DGW and BGW belong to the correct team and gameweek cells', async ({ page }) => {
+				await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+				const matrix = page.getByRole('region', {
+					name: locale === 'en' ? 'Team FDR' : '球队 FDR', exact: true
+				})
+				await expect(matrix.locator('tbody tr')).toHaveCount(3)
+				const headers = await matrix.getByRole('columnheader').allTextContents()
+				const gw33 = headers.findIndex(text => text.trim() === 'GW33')
+				const gw34 = headers.findIndex(text => text.trim() === 'GW34')
+				expect(gw33).toBeGreaterThanOrEqual(0)
+				expect(gw34).toBeGreaterThan(gw33)
+				// Resolve columns from their actual GW headings, not a fixed offset.
+				const arsenal = matrix.locator('#fdr-team-1')
+				const arsenal33 = arsenal.locator(':scope > td, :scope > th').nth(gw33)
+				await expect(arsenal33.locator('[title]')).toHaveCount(2)
+				await expect(arsenal33.getByText(locale === 'en' ? 'DGW' : '双赛轮', { exact: true })).toBeVisible()
+				await expect(arsenal33.getByTitle('GW33 · CHE (H) · FDR 2', { exact: true })).toHaveText('CHEH · FDR 2')
+				await expect(arsenal33.getByTitle('GW33 · EVE (A) · FDR 2', { exact: true })).toHaveText('EVEA · FDR 2')
+				const arsenal34 = arsenal.locator(':scope > td, :scope > th').nth(gw34)
+				await expect(arsenal34).toHaveText(locale === 'en' ? 'BGW' : '空白轮')
+				await expect(arsenal34.locator('[title]')).toHaveCount(0)
+				for (const [teamId, expected33, expected34] of [
+					[2, 'GW33 · ARS (A) · FDR 4', 'GW34 · EVE (H) · FDR 2'],
+					[3, 'GW33 · ARS (H) · FDR 4', 'GW34 · CHE (A) · FDR 3']
+				] as const) {
+					const row = matrix.locator(`#fdr-team-${teamId}`)
+					for (const [index, title] of [[gw33, expected33], [gw34, expected34]] as const) {
+						const cell = row.locator(':scope > td, :scope > th').nth(index)
+						await expect(cell.locator('[title]')).toHaveCount(1)
+						await expect(cell.getByTitle(title, { exact: true })).toBeVisible()
+						await expect(cell.getByText(locale === 'en' ? 'DGW' : '双赛轮', { exact: true })).toHaveCount(0)
+					}
+				}
+			})
+		})
+	}
+}
+
 function routeReadySamples(payloads: Array<Record<string, unknown>>) {
 	return payloads.flatMap(payload => {
 		const samples = payload.samples
@@ -186,40 +228,48 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 	expect(requestCount).toBe(1)
 })
 
-test('partial fixture window commits unavailable cells instead of BGWs', async ({
-	page
-}) => {
-	await page.route('**/api/fixtures/window?**', route =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			headers: { 'Cache-Control': 'no-store' },
-			body: JSON.stringify({
-				fromGw: 38,
-				toGw: 38,
-				fixturesByEvent: {},
-				unknownEventIds: [38]
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test.describe(`unknown fixture cells ${locale} ${width}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+			test('partial fixture window preserves each team and marks unknown cells unavailable', async ({ page }) => {
+				let windowRequests = 0
+				await page.route('**/api/fixtures/window?**', route => {
+					windowRequests += 1
+					const url = new URL(route.request().url())
+					expect(url.searchParams.get('fromGw')).toBe('38')
+					return route.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						headers: { 'Cache-Control': 'no-store' },
+						body: JSON.stringify({ fromGw: 38, toGw: 38, fixturesByEvent: {}, unknownEventIds: [38] })
+					})
+				})
+				await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+				const matrix = page.getByRole('region', {
+					name: locale === 'en' ? 'Team FDR' : '球队 FDR', exact: true
+				})
+				const originalGw33 = await matrix.locator('#fdr-team-1 [title^="GW33 ·"]').allTextContents()
+				expect(originalGw33).toHaveLength(2)
+				const sixGws = page.getByRole('button', { name: locale === 'en' ? '6 GWs' : '6 轮', exact: true })
+				await sixGws.click()
+				await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
+				await expect(sixGws).toHaveAttribute('aria-busy', 'false')
+				const headers = await matrix.getByRole('columnheader').allTextContents()
+				const gw38 = headers.findIndex(header => header.trim() === 'GW38')
+				expect(gw38).toBeGreaterThan(-1)
+				await expect(matrix.locator('tbody tr')).toHaveCount(3)
+				for (const teamId of [1, 2, 3]) {
+					const cell = matrix.locator(`#fdr-team-${teamId}`).locator(':scope > td, :scope > th').nth(gw38)
+					await expect(cell).toHaveText(locale === 'en' ? 'Unavailable' : '暂不可用')
+					await expect(cell.locator('[title]')).toHaveCount(0)
+				}
+				await expect(matrix.locator('#fdr-team-1 [title^="GW33 ·"]')).toHaveText(originalGw33)
+				expect(windowRequests).toBe(1)
 			})
 		})
-	)
-	await page.route('**/api/vitals', route =>
-		route.fulfill({ status: 204, body: '' })
-	)
-	await page.goto('/explore/fixtures')
-	await page.getByRole('button', { name: '6 GWs' }).click()
-	await expect(page.getByRole('button', { name: '6 GWs' })).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	)
-
-	const table = page.getByRole('table')
-	const headers = await table.locator('thead th').allTextContents()
-	const gw38Column = headers.findIndex(header => header.trim() === 'GW38')
-	expect(gw38Column).toBeGreaterThan(-1)
-	const firstRowCells = table.locator('tbody tr').first().locator('th, td')
-	await expect(firstRowCells.nth(gw38Column)).toContainText('Unavailable')
-	await expect(firstRowCells.nth(gw38Column)).not.toContainText('BGW')
-})
+	}
+}
 
 test('failed terminal fixture window keeps the committed horizon and can be retried', async ({
 	page
