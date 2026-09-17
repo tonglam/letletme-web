@@ -768,8 +768,11 @@ test('live points reloads a repeated entry without stranding the loading state',
 })
 
 for (const recoveryMode of ['none', 'retry-button', 'tab-reentry'] as const) {
+for (const locale of recoveryMode === 'none' ? ['en', 'zh-CN'] : ['en']) {
+const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
+const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const failFirstSections = recoveryMode !== 'none'
-test(`SSR remediation tournament season sections load on demand without a false missing-publication state${failFirstSections ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${failFirstSections ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
@@ -791,6 +794,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	let releaseSections!: () => void
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
+	let viewNavigationRequests = 0
 	try {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
@@ -806,15 +810,20 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
-		await page.goto('/my-fpl/competitions?tournamentId=77&view=gameweek&gw=4')
+		await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		const observations = await (await fetch(fixture)).json()
 		expect(observations.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(0)
-		const season = page.getByRole('tab', { name: 'Season', exact: true })
-		const gameweek = page.getByRole('tab', { name: 'Gameweek', exact: true })
+		page.on('request', request => {
+			const url = new URL(request.url())
+			if (url.pathname === routePath && url.searchParams.has('_rsc')) viewNavigationRequests += 1
+		})
+		const season = page.getByRole('tab', { name: locale === 'zh-CN' ? '赛季' : 'Season', exact: true })
+		const gameweek = page.getByRole('tab', { name: locale === 'zh-CN' ? '轮次' : 'Gameweek', exact: true })
 		await season.click()
 		await expect.poll(() => sectionRequests).toBe(2)
-		await expect(page.getByText('The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
+		expect(viewNavigationRequests).toBe(0)
+		await expect(page.getByText(locale === 'zh-CN' ? '已结算发布缺少对应赛制数据。' : 'The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
 		await gameweek.click()
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		await season.click()
@@ -838,21 +847,32 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		expect(sectionRequests).toBe(failFirstSections ? 4 : 2)
 		await expect(page).toHaveURL(url =>
-			url.pathname === '/my-fpl/competitions' &&
+			url.pathname === routePath &&
 			url.searchParams.get('tournamentId') === '77' &&
 			url.searchParams.get('view') === null &&
 			url.searchParams.get('gw') === '4'
 		)
+		expect(viewNavigationRequests).toBe(0)
 		await page.reload()
 		await expect(season).toHaveAttribute('aria-selected', 'true')
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		expect(sectionRequests).toBe(failFirstSections ? 4 : 2)
-		await expect(page.getByText('The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
+		await expect(page.getByText(locale === 'zh-CN' ? '已结算发布缺少对应赛制数据。' : 'The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
+		await page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '赛程' : 'Fixtures', exact: true }).click()
+		await expect(page).toHaveURL(url => url.pathname === fixturesPath)
+		await page.goBack()
+		await expect(season).toHaveAttribute('aria-selected', 'true')
+		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		await expect(page).toHaveURL(url => url.pathname === routePath && url.searchParams.get('tournamentId') === '77' && url.searchParams.get('gw') === '4' && !url.searchParams.has('view'))
+		await page.goForward()
+		await expect(page).toHaveURL(url => url.pathname === fixturesPath)
 	} finally {
 		releaseSections()
 		await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
 		await session.cleanup()
 	}
 })
+
+}
 
 }

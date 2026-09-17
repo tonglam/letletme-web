@@ -1367,7 +1367,6 @@ describe('asynchronous selection safety', () => {
 		assert.match(competitionPage, /selectTournamentReviewEventId\(/)
 		assert.match(tournamentClient, /latestFinalizedScope/)
 		assert.match(tournamentClient, /GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION/)
-		assert.match(tournamentClient, /replaceRoute\(\{ view: nextView \}\)/)
 		assert.match(tournamentClient, /semanticSha256/)
 		assert.match(
 			teamPage,
