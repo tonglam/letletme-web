@@ -10,10 +10,10 @@ import { useEffect } from 'react'
 
 export default function ErrorPage({
 	error,
-	reset
+	retry
 }: {
 	error: Error & { digest?: string }
-	reset: () => void
+	retry: () => void
 }) {
 	const common = useTranslations('Common')
 
@@ -29,7 +29,7 @@ export default function ErrorPage({
 			description={common('pageLoadErrorDescription')}
 			actions={
 				<>
-					<Button onClick={reset}>
+					<Button onClick={retry}>
 						<RotateCcw data-icon="inline-start" />
 						{common('tryAgain')}
 					</Button>
