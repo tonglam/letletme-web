@@ -1571,7 +1571,7 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
 }
 
 
-test('J12 owner cancel resets delete confirmation without mutation requests', async ({ page }) => {
+test('J12 browse filters and owner cancel preserve read-only behavior', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated single-worker owner fixture')
  const session = await createSession({ entryId: 909090 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -1585,10 +1585,35 @@ test('J12 owner cancel resets delete confirmation without mutation requests', as
  })
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
-   { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } }
+   { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } },
+   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } }
   ] }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
-  await page.goto('/competitions/77/manage')
+  await page.goto('/competitions/browse')
+  await expect(page).toHaveURL(url => url.pathname === '/competitions/browse')
+  const actions = page.getByRole('button', { name: 'Actions for J12 Owned Cup', exact: true })
+  await expect(actions).toHaveCount(1)
+  await expect(actions).toBeVisible()
+  const search = page.getByRole('textbox', { name: 'Search tournaments', exact: true })
+  await search.fill('No matching tournament')
+  await expect(actions).toHaveCount(0)
+  await search.fill('J12 Owned')
+  await expect(actions).toBeVisible()
+  const type = page.getByRole('group', { name: 'Tournament type', exact: true })
+  await type.getByRole('button', { name: 'H2H', exact: true }).click()
+  await expect(actions).toHaveCount(0)
+  await type.getByRole('button', { name: 'Classic', exact: true }).click()
+  await expect(actions).toBeVisible()
+  const status = page.getByRole('group', { name: 'Status', exact: true })
+  await status.getByRole('button', { name: 'Finished', exact: true }).click()
+  await expect(actions).toHaveCount(0)
+  await status.getByRole('button', { name: 'Active', exact: true }).click()
+  await expect(actions).toBeVisible()
+  await actions.click()
+  const manage = page.getByRole('menuitem', { name: 'Manage tournament', exact: true })
+  await expect(manage).toHaveAttribute('href', '/competitions/77/manage')
+  await manage.click()
+  await expect(page).toHaveURL(url => url.pathname === '/competitions/77/manage')
   await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
   for (const title of ['Tournament settings', 'Tournament information', 'Lifecycle controls', 'Danger zone']) await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
   const opener = page.getByRole('button', { name: 'Delete tournament', exact: true })
