@@ -1194,3 +1194,62 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 	})
 }
+
+for (const width of [1440, 390]) {
+ test(`canonical competition board sort and pagination preserve request scope at ${width}px`, async ({ page }) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated board fixtures')
+  const session = await createSession({ entryId: 123 })
+  const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
+  try {
+   await page.setViewportSize({ width, height: 900 })
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/live/competitions/6/board', async route => {
+    const payload = route.request().postDataJSON()
+    expect(payload.eventId).toBe(4)
+    const input = payload.input ?? {}
+    inputs.push(input)
+    const response = await route.fetch()
+    expect(response.ok()).toBe(true)
+    const body = await response.json()
+    const board = body.entryLiveCompetitionBoard
+    const template = board.rows[0]
+    const rows = [
+     { ...template, entry: 15702, entryName: 'Alpha Coverage', score: { ...template.score, eventPoints: 30, totalPoints: 100 } },
+     { ...template, entry: 15703, entryName: 'Beta Coverage', score: { ...template.score, eventPoints: 20, totalPoints: 300 } },
+     { ...template, entry: 15704, entryName: 'Gamma Coverage', score: { ...template.score, eventPoints: 10, totalPoints: 200 } }
+    ]
+    if (input.sort === 'TOTAL_POINTS') rows.sort((a, b) => input.direction === 'ASC' ? a.score.totalPoints - b.score.totalPoints : b.score.totalPoints - a.score.totalPoints)
+    const after = input.after != null
+    if (after) expect(input.after).toBe('coverage-page-2')
+    board.rows = after ? rows.slice(2) : rows.slice(0, 2)
+    board.viewerRow = null
+    board.totalEntries = 3
+    board.filteredEntries = 3
+    board.pageInfo = { hasNextPage: !after, endCursor: after ? null : 'coverage-page-2' }
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/live/competitions?tournamentId=6&gw=4')
+   const teams = page.getByRole('link', { name: /(?:Alpha|Beta|Gamma) Coverage/ }).filter({ visible: true })
+   await expect(teams).toHaveCount(2)
+   await expect(teams.nth(0)).toContainText('Alpha Coverage')
+   await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+   await expect(teams).toHaveCount(3)
+   await expect(teams.nth(2)).toContainText('Gamma Coverage')
+   expect(inputs.at(-1)).toMatchObject({ after: 'coverage-page-2' })
+   await page.getByRole('combobox', { name: 'Sort competition standings', exact: true }).click()
+   await page.getByRole('option', { name: 'Total Pts', exact: true }).click()
+   await expect(teams).toHaveCount(2)
+   await expect(teams.nth(0)).toContainText('Beta Coverage')
+   await expect(teams.nth(1)).toContainText('Gamma Coverage')
+   expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'DESC' })
+   expect(inputs.at(-1)?.after ?? null).toBeNull()
+   await page.getByRole('button', { name: 'Desc', exact: true }).click()
+   await expect(teams.nth(0)).toContainText('Alpha Coverage')
+   await expect(teams.nth(1)).toContainText('Gamma Coverage')
+   expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'ASC' })
+   await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+  } finally {
+   await session.cleanup()
+  }
+ })
+}

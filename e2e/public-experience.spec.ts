@@ -464,13 +464,7 @@ test('rapid native menu interaction does not strand client navigation', async ({
 
 	await summary.click()
 	const navigationPromise = page.waitForURL(/\/explore\/market$/)
-	await page.evaluate(() => {
-		document
-			.querySelector<HTMLAnchorElement>(
-				'details[data-navigation-group="explore"] a[href="/explore/market"]'
-			)
-			?.click()
-	})
+	await explore.getByRole('link', { name: 'Market', exact: true }).click()
 	await expect(explore).not.toHaveAttribute('open', '')
 	await navigationPromise
 	await expect(page).toHaveURL(/\/explore\/market$/)
