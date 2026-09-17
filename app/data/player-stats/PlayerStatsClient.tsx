@@ -231,10 +231,9 @@ export default function PlayerStatsClient({
 		syncUrl()
 	}, [deepLinkReady, syncUrl])
 
-	const restoredSelection = useRef<{ key: string; pending: Promise<unknown> } | null>(null)
+	const restoredSelection = useRef<string | null>(null)
 	useEffect(() => {
-		let cancelled = false
-		if (restoredSelection.current?.key !== deepLinkKey) {
+		if (restoredSelection.current !== deepLinkKey) {
 			// Back can restore a cached RSC seed from before local selections.
 			// Reconcile the actual history URL before letting that seed write it back.
 			const params = new URLSearchParams(window.location.search)
@@ -249,22 +248,19 @@ export default function PlayerStatsClient({
 					teamShortName: '', teamName: ''
 				}
 			}
-			const pending: Promise<unknown>[] = []
 			if (p1 !== initialPlayerIds.p1) {
 				if (p1 === null) firstClearSelection()
-				else pending.push(firstSelectPlayerById(p1, { batchPlayerIds, pendingPlayer: pendingPlayer(p1) }))
+				else void firstSelectPlayerById(p1, { batchPlayerIds, pendingPlayer: pendingPlayer(p1) })
 			}
 			if (p2 !== initialPlayerIds.p2) {
 				if (p2 === null) secondClearSelection()
-				else pending.push(secondSelectPlayerById(p2, { batchPlayerIds, pendingPlayer: pendingPlayer(p2) }))
+				else void secondSelectPlayerById(p2, { batchPlayerIds, pendingPlayer: pendingPlayer(p2) })
 				setCompareOpen(p2 !== null)
 			}
-			restoredSelection.current = { key: deepLinkKey, pending: Promise.all(pending) }
+			restoredSelection.current = deepLinkKey
 		}
-		void restoredSelection.current.pending.then(() => {
-			if (!cancelled) setDeepLinkReady(true)
-		})
-		return () => { cancelled = true }
+		// The selection identities are ready even while their shared data request is pending.
+		setDeepLinkReady(true)
 	}, [deepLinkKey, directorySeed.players, initialPlayerIds.p1, initialPlayerIds.p2, firstClearSelection, secondClearSelection, firstSelectPlayerById, secondSelectPlayerById])
 
 	useEffect(() => {

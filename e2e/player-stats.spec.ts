@@ -392,3 +392,33 @@ for (const recovery of ['retry', 'remove'] as const) {
 		}
 	})
 }
+
+test('clearing a shared pending history restore updates the URL before the response', async ({ page }) => {
+ await page.goto('/explore/player-stats?p1=1')
+ const players = page.getByRole('region', { name: 'Players', exact: true })
+ const overall = page.getByRole('region', { name: 'Player overall' })
+ await expect(overall).toContainText('Saka')
+ await players.getByRole('button', { name: 'Edit', exact: true }).click()
+ await players.getByRole('button', { name: /^Palmer/ }).click()
+ await expect(overall).toContainText('Palmer')
+ await page.getByRole('button', { name: 'Add comparison', exact: true }).click()
+ await players.getByRole('button', { name: /^Saka/ }).click()
+ await expect(page).toHaveURL(/p1=2&p2=1/)
+ await page.getByRole('link', { name: 'Squad fixture plan on Fixtures', exact: true }).click()
+ await expect(page).toHaveURL(/fixtures#my-squad$/)
+ await page.clock.setFixedTime(new Date(Date.now() + 6 * 60 * 1000))
+ let release = () => {}
+ const held = new Promise<void>(resolve => { release = resolve })
+ let requests = 0
+ await page.route('**/api/player-stats/desk?**', async route => {
+  requests++
+  await held
+  try { await route.continue() } catch { /* Navigation may cancel the shared request. */ }
+ })
+ try {
+  await page.goBack()
+  await expect.poll(() => requests).toBe(1)
+  await page.getByRole('button', { name: 'Remove', exact: true }).click()
+  await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
+ } finally { release() }
+})
