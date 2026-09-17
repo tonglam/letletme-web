@@ -1492,7 +1492,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
  test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }) => {
- test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated manager fixture only')
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Shared manager fixture requires the dedicated single-worker SSR suite')
  const zh = locale === 'zh-CN'
  const labels = zh ? ['赛季复盘', '队长历史', '板凳得分', '转会历史', '道具卡使用', '轮次历史'] : ['Season Review', 'Captain History', 'Bench Points', 'Transfer History', 'Chip Usage', 'Gameweek History']
  const session = await createSession({ entryId: 15702 })
@@ -1558,7 +1558,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
   test(`J10 pending review opens live points and returns ${locale} ${width}px`, async ({ page }) => {
-   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Isolated live and manager fixtures required')
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Shared live and manager fixtures require the dedicated single-worker SSR suite')
    const session = await createSession({ entryId: 15702 })
    const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -1598,8 +1598,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
     expect(live.entry).toBe(session.entryId)
     expect(live.event).toBe(33)
     expect(live.snapshot.eventId).toBe(33)
-    expect(live.snapshot.revisions.scoreCore).toBe('a'.repeat(64))
-    expect(live.score.revisions).toEqual(live.snapshot.revisions)
+    // GET_LIVE_POINTS selects snapshot eventId/state only. This probe verifies
+    // identity, not snapshot/score revision parity; fixture-only extra fields
+    // cannot establish that contract.
     await page.goBack()
     await expect(page).toHaveURL(returnUrl)
     await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
