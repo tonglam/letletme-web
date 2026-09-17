@@ -540,6 +540,7 @@ export function usePlayerDetailSlot({
 			playerId: number,
 			opts?: {
 				silentNotFound?: boolean
+				pendingPlayer?: PlayerDirectoryOption
 				batchPlayerIds?: number[]
 				interactionId?: string
 			}
@@ -556,6 +557,11 @@ export function usePlayerDetailSlot({
 				position: 'MID',
 				teamShortName: '',
 				teamName: ''
+			}
+			if (opts?.pendingPlayer?.id === String(playerId)) {
+				setSelectedPlayer(opts.pendingPlayer)
+				setPlayerDetail(null)
+				setPlayerStateProfile(null)
 			}
 			const result = await loadPlayerDetail(placeholder, opts?.batchPlayerIds, {
 				navigationId,

@@ -313,3 +313,82 @@ test.describe('SSR detail stream', () => {
 		await expect(page).not.toHaveURL(/p2=/)
 	})
 })
+
+for (const width of [1440, 390]) {
+	test(`local comparison survives leaving and browser history at ${width}px`, async ({ page }) => {
+		await page.setViewportSize({ width, height: 900 })
+		await page.goto('/explore/player-stats?p1=1')
+		const overall = page.getByRole('region', { name: 'Player overall' })
+		await expect(overall).toContainText('Saka')
+		await page.getByRole('button', { name: 'Add comparison', exact: true }).click()
+		await page.getByRole('region', { name: 'Players', exact: true })
+			.getByRole('button', { name: /^Palmer/ }).click()
+		await expect(page).toHaveURL(/p1=1&p2=2/)
+		await expect(overall).toContainText('Palmer')
+		const comparisonUrl = page.url()
+		await page.getByRole('link', { name: 'Squad fixture plan on Fixtures', exact: true }).click()
+		await expect(page).toHaveURL(/\/explore\/fixtures#my-squad$/)
+		await expect(page.locator('#my-squad')).toBeVisible()
+		await page.goBack()
+		await expect(page).toHaveURL(comparisonUrl)
+		await expect(overall).toContainText('Saka')
+		await expect(overall).toContainText('Palmer')
+		await page.goForward()
+		await expect(page).toHaveURL(/\/explore\/fixtures#my-squad$/)
+		await expect(page.locator('#my-squad')).toBeVisible()
+	})
+}
+
+for (const recovery of ['retry', 'remove'] as const) {
+	test(`history restoration ${recovery} preserves the latest comparison intent`, async ({ page }) => {
+		await page.goto('/explore/player-stats?p1=1')
+		const overall = page.getByRole('region', { name: 'Player overall' })
+		await expect(overall).toContainText('Saka')
+		await page.getByRole('button', { name: 'Add comparison', exact: true }).click()
+		await page.getByRole('region', { name: 'Players', exact: true })
+			.getByRole('button', { name: /^Palmer/ }).click()
+		await expect(overall).toContainText('Palmer')
+		await expect(page).toHaveURL(/p1=1&p2=2/)
+		await page.getByRole('link', { name: 'Squad fixture plan on Fixtures', exact: true }).click()
+		await expect(page).toHaveURL(/\/explore\/fixtures#my-squad$/)
+		// Expire only the isolated browser's five-minute desk cache.
+		await page.clock.setFixedTime(new Date(Date.now() + 6 * 60 * 1000))
+		let requests = 0
+		let release = () => {}
+		const held = new Promise<void>(resolve => { release = resolve })
+		let settled = false
+		await page.route('**/api/player-stats/desk?**', async route => {
+			if (!new URL(route.request().url()).searchParams.get('playerIds')?.split(',').includes('2')) {
+				return route.continue()
+			}
+			requests++
+			if (requests > 1) return route.continue()
+			if (recovery === 'retry') return route.fulfill({ status: 503, body: '{}' })
+			await held
+			try { await route.continue() } catch { /* Removed selection cancels the request. */ }
+			settled = true
+		})
+		try {
+			await page.goBack()
+			await expect.poll(() => requests).toBe(1)
+			if (recovery === 'retry') {
+				await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible()
+				await expect(page).toHaveURL(/p1=1&p2=2/)
+				await page.getByRole('button', { name: 'Retry', exact: true }).click()
+				await expect(overall).toContainText('Palmer')
+				await expect(overall).toContainText('Saka')
+				expect(requests).toBe(2)
+			} else {
+				await page.getByRole('button', { name: 'Remove', exact: true }).click()
+				release()
+				await expect.poll(() => settled).toBe(true)
+				await expect(page).not.toHaveURL(/p2=/)
+				await expect(overall).toContainText('Saka')
+				await expect(overall).not.toContainText('Palmer')
+				expect(requests).toBe(1)
+			}
+		} finally {
+			release()
+		}
+	})
+}
