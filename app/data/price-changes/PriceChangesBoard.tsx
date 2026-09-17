@@ -1007,7 +1007,7 @@ export function PriceChangesBoard({
 					) : (
 						<>
 							<div
-								className="flex items-center gap-2 px-4 pt-4 md:hidden"
+								className="flex items-center gap-2 px-4 pt-4"
 								data-share-exclude="true"
 							>
 								<span className="text-xs font-medium text-muted-foreground">
