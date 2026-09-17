@@ -230,6 +230,7 @@ test('failed terminal fixture window keeps the committed horizon and can be retr
 	)
 	await page.route('**/api/fixtures/window?**', route => {
 		requestCount += 1
+		if (requestCount > 1) return route.continue()
 		return route.fulfill({
 			status: 502,
 			contentType: 'application/json',
@@ -249,8 +250,14 @@ test('failed terminal fixture window keeps the committed horizon and can be retr
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')
 	await expect(sixGws).toHaveAttribute('aria-busy', 'false')
 
+	const recoveredResponse = page.waitForResponse(response => response.url().includes('/api/fixtures/window?fromGw=38') && response.status() === 200)
 	await sixGws.click()
+	expect(await (await recoveredResponse).json()).toMatchObject({ fromGw: 38, toGw: 38, unknownEventIds: [] })
 	await expect.poll(() => requestCount).toBe(2)
+	await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
+	await expect(sixGws).toHaveAttribute('aria-busy', 'false')
+	await expect(page.getByRole('columnheader', { name: 'GW38', exact: true })).toBeVisible()
+	await expect(page.getByText('Could not load fixtures for this horizon.')).not.toBeVisible()
 })
 
 test('switching back during a request cancels stale horizon intent', async ({
