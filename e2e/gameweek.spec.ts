@@ -70,18 +70,21 @@ test('gameweek switch keeps committed content, sends one GET, and reuses cache',
 	expect(accessibility.violations).toEqual([])
 })
 
-test('failed gameweek desk keeps the previously committed gameweek', async ({
+test('failed gameweek desk keeps the previously committed gameweek and recovers on retry', async ({
 	page
 }) => {
-	await page.route('**/api/gameweek/desk?**', route =>
-		route.fulfill({
+	let requestCount = 0
+	await page.route('**/api/gameweek/desk?**', route => {
+		requestCount += 1
+		if (requestCount > 1) return route.continue()
+		return route.fulfill({
 			status: 502,
 			contentType: 'application/json',
 			body: JSON.stringify({
 				error: 'Gameweek desk is temporarily unavailable'
 			})
 		})
-	)
+	})
 	await page.route('**/api/vitals', route =>
 		route.fulfill({ status: 204, body: '' })
 	)
@@ -95,6 +98,17 @@ test('failed gameweek desk keeps the previously committed gameweek', async ({
 	await expect(
 		page.getByRole('heading', { name: 'GW33 Overview' })
 	).toBeVisible()
+	const recoveredResponse = page.waitForResponse(response => response.url().includes('/api/gameweek/desk?eventId=32') && response.status() === 200)
+	await input.fill('32')
+	await input.press('Enter')
+	expect(await (await recoveredResponse).json()).toMatchObject({ eventId: 32, overviewState: 'AVAILABLE', boardsState: 'AVAILABLE', overview: { averagePoints: 52, highestPoints: 101 } })
+	await expect.poll(() => requestCount).toBe(2)
+	await expect(page.getByRole('heading', { name: 'GW32 Overview' })).toBeVisible()
+	await expect(page.getByText('Failed to load the selected gameweek data.')).not.toBeVisible()
+	const overview = page.locator('[data-gameweek-overview="true"]')
+	await expect(overview.getByText('52', { exact: true })).toBeVisible()
+	await expect(overview.getByText('101', { exact: true })).toBeVisible()
+
 })
 
 test('a late superseded desk response cannot overwrite the current selection', async ({
