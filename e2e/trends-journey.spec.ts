@@ -28,7 +28,7 @@ for (const locale of ['en', 'zh-CN']) {
 					await expect(rows).toHaveCount(name === 'Transfers' || name === '转会' ? 1 : 2)
 					for (const row of await rows.all()) {
 						await expect(row.getByRole('link', { name: player, exact: true })).toBeVisible()
-						await expect(row).toContainText(String(percent))
+						await expect(row.getByText(`${percent}%`, { exact: true })).toBeVisible()
 					}
 				}
 			}
@@ -156,7 +156,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await cohort.selectOption('competition:777')
 			await gw.selectOption('32')
 			await expect(cohort).toHaveAttribute('aria-busy', 'false')
-			await expect(page.getByRole('tabpanel').getByRole('listitem').first()).toContainText('64')
+			await expect(page.getByRole('tabpanel').getByRole('listitem').first().getByText('64%', { exact: true })).toBeVisible()
 			const oldResponse = page.waitForResponse(response => new URL(response.url()).searchParams.get('cohortId') === 'competition:779')
 			release()
 			await (await oldResponse).finished()
@@ -172,7 +172,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(rows).toHaveCount(name === 'Transfers' || name === '转会' ? 1 : 2)
 				for (const row of await rows.all()) {
 					await expect(row.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
-					await expect(row).toContainText('64')
+					await expect(row.getByText('64%', { exact: true })).toBeVisible()
 				}
 			}
 		})
