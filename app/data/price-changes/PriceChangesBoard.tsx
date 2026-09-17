@@ -355,7 +355,7 @@ function SortableHeader({
 	onSort: (column: PriceChangeSortColumn) => void
 	align?: 'left' | 'right'
 }) {
-	const active = sort.column === column
+	const active = !sort.relevanceFirst && sort.column === column
 	const SortIcon = active
 		? sort.direction === 'asc'
 			? ArrowUp
@@ -594,10 +594,11 @@ export function PriceChangesBoard({
 		movement !== 'all' ||
 		sort.column !== DEFAULT_PRICE_CHANGE_SORT.column ||
 		sort.direction !== DEFAULT_PRICE_CHANGE_SORT.direction ||
+		!sort.relevanceFirst ||
 		teamId !== 'all'
 	const setSortColumn = (column: PriceChangeSortColumn) => {
 		setSort(current =>
-			current.column === column
+			!current.relevanceFirst && current.column === column
 				? {
 						column,
 						direction: current.direction === 'desc' ? 'asc' : 'desc'
@@ -607,6 +608,11 @@ export function PriceChangesBoard({
 		setPage(1)
 	}
 	const setSortValue = (value: string) => {
+		if (value === 'recommended') {
+			setSort(DEFAULT_PRICE_CHANGE_SORT)
+			setPage(1)
+			return
+		}
 		const [column, direction] = value.split(':') as [
 			PriceChangeSortColumn,
 			PriceChangeSortDirection
@@ -983,6 +989,7 @@ export function PriceChangesBoard({
 
 					<div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
 						<p>
+							{sort.relevanceFirst ? <span>{t('sortRecommended')} · </span> : null}
 							{t('resultCountBoard', {
 								from,
 								to,
@@ -1007,7 +1014,7 @@ export function PriceChangesBoard({
 									{t('sortLabel')}:
 								</span>
 								<Select
-									value={`${sort.column}:${sort.direction}`}
+									value={sort.relevanceFirst ? 'recommended' : `${sort.column}:${sort.direction}`}
 									onValueChange={setSortValue}
 								>
 									<SelectTrigger
@@ -1018,6 +1025,7 @@ export function PriceChangesBoard({
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
+										<SelectItem value="recommended">{t('sortRecommended')}</SelectItem>
 										<SelectItem value="progress:desc">
 											{t('progress')} ↓
 										</SelectItem>

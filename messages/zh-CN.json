@@ -1531,6 +1531,7 @@
 		"filterRise": "只看上涨",
 		"filterFall": "只看下跌",
 		"filterLocked": "锁定 / 校准中",
+		"sortRecommended": "推荐排序",
 		"sortLabel": "排序",
 		"sortMomentum": "预测进度",
 		"sortOwnership": "持有率",

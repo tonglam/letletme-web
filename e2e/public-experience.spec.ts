@@ -946,3 +946,33 @@ test('prediction route-ready telemetry passes receiver payload validation', asyn
 		expect(response.status(), await response.text()).toBe(204)
 	}
 })
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`prediction recommendation and explicit sort remain distinct [${locale}]`, async ({ page }) => {
+		const zh = locale === 'zh-CN'
+		await page.setViewportSize({ width: 1440, height: 900 })
+		await page.goto(`${zh ? '/zh-CN' : ''}/explore/price-predictions?scope=all`)
+		const progress = page.getByRole('columnheader', { name: zh ? '进度' : 'Progress', exact: true })
+		await expect(progress).toHaveAttribute('aria-sort', 'none')
+		await progress.getByRole('button').click()
+		await expect(progress).toHaveAttribute('aria-sort', 'descending')
+		await expect(page.locator('tbody tr').first()).toContainText('Saka')
+		await progress.getByRole('button').click()
+		await expect(progress).toHaveAttribute('aria-sort', 'ascending')
+		await expect(page.locator('tbody tr').first()).toContainText('Palmer')
+		await page.setViewportSize({ width: 390, height: 844 })
+		const mobileSort = page.getByRole('combobox', { name: zh ? '排序' : 'Sort', exact: true })
+		await mobileSort.click()
+		await page.getByRole('option', { name: zh ? '推荐排序' : 'Recommended', exact: true }).click()
+		await expect(mobileSort).toContainText(zh ? '推荐排序' : 'Recommended')
+		const cards = page.getByRole('link', { name: /^(Saka|Palmer)$/ })
+		await expect(cards).toHaveText(['Saka', 'Palmer'])
+		await mobileSort.click()
+		await page.getByRole('option', { name: `${zh ? '进度' : 'Progress'} ↓`, exact: true }).click()
+		await expect(cards).toHaveText(['Saka', 'Palmer'])
+		await page.setViewportSize({ width: 1440, height: 900 })
+		await expect(progress).toHaveAttribute('aria-sort', 'descending')
+		await page.setViewportSize({ width: 390, height: 844 })
+		await expect(mobileSort).toContainText(`${zh ? '进度' : 'Progress'} ↓`)
+	})
+}
