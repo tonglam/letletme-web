@@ -911,3 +911,27 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(page.getByRole('table').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
 	})
 }
+
+test('prediction route-ready telemetry is accepted by the receiver', async ({ page }) => {
+	// Beacon request bodies are not exposed by Playwright request.postDataJSON.
+	// Observe the actual Blob while forwarding it through the native sender.
+	await page.addInitScript(() => {
+		const send = navigator.sendBeacon.bind(navigator)
+		const samples: unknown[] = []
+		Object.assign(window, { observedVitalPayloads: samples })
+		navigator.sendBeacon = (url, data) => {
+			if (String(url) === '/api/vitals' && data instanceof Blob) {
+				void data.text().then(text => samples.push(JSON.parse(text)))
+			}
+			return send(url, data)
+		}
+	})
+	const reported = page.waitForResponse(response => response.url().endsWith('/api/vitals') && response.request().method() === 'POST')
+	await page.goto('/explore/price-predictions')
+	const response = await reported
+	await expect.poll(() => page.evaluate(() => {
+		const payloads = (window as unknown as { observedVitalPayloads: Array<{ samples: Array<{ metricName: string; navigationId: string }> }> }).observedVitalPayloads
+		return payloads.flatMap(payload => payload.samples).find(sample => sample.metricName === 'HOME_PRICE_CHANGES_READY')?.navigationId
+	})).toMatch(/^nav-[A-Za-z0-9_-]{8,52}$/)
+	expect(response.status(), await response.text()).toBe(204)
+})
