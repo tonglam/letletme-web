@@ -1318,3 +1318,79 @@ for (const locale of ['en', 'zh-CN']) {
 		})
 	}
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J19 legacy redirects and browser history ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Requires isolated live fixtures and database')
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   const session = await createSession({ entryId: 15702 })
+   const documents: { path: string; status: number; location: string | null }[] = []
+   page.on('response', response => {
+    if (response.request().resourceType() !== 'document') return
+    const url = new URL(response.url())
+    documents.push({ path: url.pathname + url.search, status: response.status(), location: response.headers().location ?? null })
+   })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    const predictions = `${prefix}/explore/price-predictions`
+    const assertPredictions = async () => {
+     await expect(page).toHaveURL(url => url.pathname === predictions)
+     await expect(page.getByRole('combobox', { name: locale === 'zh-CN' ? '预测范围' : 'Prediction scope', exact: true })).toBeEnabled()
+     const saka = page.getByRole('main').getByRole('link', { name: 'Saka', exact: true }).filter({ visible: true })
+     await expect(saka).toHaveCount(1)
+     await expect(saka).toHaveAttribute('href', `${prefix}/explore/player-stats?p1=1`)
+    }
+    await page.goto(predictions)
+    await assertPredictions()
+    await page.goto(`${prefix}/competitions/6?gw=1&created=1`)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('created') === '1' && url.searchParams.get('gw') === '1')
+    const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+    const team = board.getByRole('link', { name: 'E2E United Test Manager', exact: true }).filter({ visible: true })
+    await expect(team).toHaveCount(1)
+    await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=1`)
+    expect(documents.some(item => item.path === `${prefix}/competitions/6?gw=1&created=1`)).toBe(true)
+    expect(documents.some(item => item.path === `/${locale}/live/competitions/6?gw=1&created=1`)).toBe(true)
+    await page.goBack()
+    await assertPredictions()
+    await page.goForward()
+    await expect(team).toBeVisible()
+    await page.goto(`${prefix}/explore/price-changes`)
+    await assertPredictions()
+    expect(documents.some(item => item.path === `${prefix}/explore/price-changes`)).toBe(true)
+    await testInfo.attach('legacy-document-chain', { body: JSON.stringify(documents, null, 2), contentType: 'application/json' })
+   } finally { await session.cleanup() }
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J19 invalid legacy IDs never render a board ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture database')
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   const session = await createSession({ entryId: 15702 })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    for (const id of ['0', '-1', 'abc', '1.5', '9007199254740992']) {
+     const response = await page.goto(`${prefix}/competitions/${id}?gw=1&created=1`)
+     expect(response).not.toBeNull()
+     // Next streamed not-found responses can retain HTTP 200; require the explicit 404 payload.
+     expect([200, 404]).toContain(response!.status())
+     if (response!.status() === 200) {
+      expect(await response!.text()).toContain('NEXT_HTTP_ERROR_FALLBACK;404')
+     }
+     await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached()
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/${id}`)
+     // Dotted paths bypass the locale middleware matcher; an unprefixed path uses Next's root 404.
+     const title = locale === 'zh-CN' ? '找不到页面' : id.includes('.') ? 'This page could not be found.' : 'Page not found'
+     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
+     await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveCount(0)
+     await expect(page.getByRole('link', { name: 'E2E United Test Manager', exact: true })).toHaveCount(0)
+    }
+   } finally { await session.cleanup() }
+  })
+ }
+}
