@@ -365,11 +365,17 @@ test('live player detail ignores a late player response and retries after both r
 
 	await secondDialog.getByRole('button', { name: 'Close', exact: true }).click()
 	await expect(page.getByRole('dialog')).toHaveCount(0)
-	// The dependency failure installs the shared 30-second cooldown. Advance
-	// the deterministic clock before exercising the explicit recovery read;
-	// a manual refresh must not bypass a live server cooldown.
-	await page.clock.runFor(1)
-	await page.clock.fastForward(30_000)
+	// The two dependency failures extend the shared cooldown from 30 to 60
+	// seconds. Advance the deterministic clock before exercising the explicit
+	// recovery read; a manual refresh must not bypass a live server cooldown.
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1') || 0)
+			)
+		)
+		.toBeGreaterThan(0)
+	await page.clock.fastForward(61_000)
 	await pitch
 		.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()
