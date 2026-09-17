@@ -114,6 +114,17 @@ test('failed gameweek desk keeps the previously committed gameweek and recovers 
 test('a late superseded desk response cannot overwrite the current selection', async ({
 	page
 }) => {
+	// Model a transport that completes despite cancellation so the stale-data
+	// guard, rather than AbortController alone, must protect the current desk.
+	await page.addInitScript(() => {
+		const originalFetch = window.fetch.bind(window)
+		window.fetch = (input, init) => {
+			if (typeof input === 'string' && input === '/api/gameweek/desk?eventId=32') {
+				return originalFetch(input, { ...init, signal: undefined })
+			}
+			return originalFetch(input, init)
+		}
+	})
 	let release32: () => void = () => undefined
 	let request32Started: () => void = () => undefined
 	const started32 = new Promise<void>(resolve => {
@@ -140,11 +151,28 @@ test('a late superseded desk response cannot overwrite the current selection', a
 	await expect(
 		page.getByRole('heading', { name: 'GW31 Overview' })
 	).toBeVisible()
+	const committedOverview = await page
+		.locator('[data-gameweek-overview="true"]')
+		.innerText()
+	const lateResponse = page.waitForResponse(response =>
+		response.url().includes('/api/gameweek/desk?eventId=32') &&
+		response.status() === 200
+	)
 	release32()
+	const response = await lateResponse
+	expect(await response.json()).toMatchObject({ eventId: 32 })
+	await response.finished()
+	// Let the fetch continuation and React paint run before checking the winner.
+	await page.evaluate(() => new Promise<void>(resolve =>
+		requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+	))
 	await expect(
 		page.getByRole('heading', { name: 'GW31 Overview' })
 	).toBeVisible()
 	await expect(
 		page.getByRole('heading', { name: 'GW32 Overview' })
 	).not.toBeVisible()
+	await expect(page.locator('[data-gameweek-overview="true"]'))
+		.toHaveText(committedOverview, { useInnerText: true })
+	await expect(input).toHaveValue('31')
 })
