@@ -1,5 +1,47 @@
 import { expect, test } from '@playwright/test'
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test.describe(`fixture row identity ${locale} ${width}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+			test('DGW and BGW belong to the correct team and gameweek cells', async ({ page }) => {
+				await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+				const matrix = page.getByRole('region', {
+					name: locale === 'en' ? 'Team FDR' : '球队 FDR', exact: true
+				})
+				await expect(matrix.locator('tbody tr')).toHaveCount(3)
+				const headers = await matrix.getByRole('columnheader').allTextContents()
+				const gw33 = headers.findIndex(text => text.trim() === 'GW33')
+				const gw34 = headers.findIndex(text => text.trim() === 'GW34')
+				expect(gw33).toBeGreaterThanOrEqual(0)
+				expect(gw34).toBeGreaterThan(gw33)
+				// Resolve columns from their actual GW headings, not a fixed offset.
+				const arsenal = matrix.locator('#fdr-team-1')
+				const arsenal33 = arsenal.locator(':scope > td, :scope > th').nth(gw33)
+				await expect(arsenal33.locator('[title]')).toHaveCount(2)
+				await expect(arsenal33.getByText(locale === 'en' ? 'DGW' : '双赛轮', { exact: true })).toBeVisible()
+				await expect(arsenal33.getByTitle('GW33 · CHE (H) · FDR 2', { exact: true })).toHaveText('CHEH · FDR 2')
+				await expect(arsenal33.getByTitle('GW33 · EVE (A) · FDR 2', { exact: true })).toHaveText('EVEA · FDR 2')
+				const arsenal34 = arsenal.locator(':scope > td, :scope > th').nth(gw34)
+				await expect(arsenal34).toHaveText(locale === 'en' ? 'BGW' : '空白轮')
+				await expect(arsenal34.locator('[title]')).toHaveCount(0)
+				for (const [teamId, expected33, expected34] of [
+					[2, 'GW33 · ARS (A) · FDR 4', 'GW34 · EVE (H) · FDR 2'],
+					[3, 'GW33 · ARS (H) · FDR 4', 'GW34 · CHE (A) · FDR 3']
+				] as const) {
+					const row = matrix.locator(`#fdr-team-${teamId}`)
+					for (const [index, title] of [[gw33, expected33], [gw34, expected34]] as const) {
+						const cell = row.locator(':scope > td, :scope > th').nth(index)
+						await expect(cell.locator('[title]')).toHaveCount(1)
+						await expect(cell.getByTitle(title, { exact: true })).toBeVisible()
+						await expect(cell.getByText(locale === 'en' ? 'DGW' : '双赛轮', { exact: true })).toHaveCount(0)
+					}
+				}
+			})
+		})
+	}
+}
+
 function routeReadySamples(payloads: Array<Record<string, unknown>>) {
 	return payloads.flatMap(payload => {
 		const samples = payload.samples
