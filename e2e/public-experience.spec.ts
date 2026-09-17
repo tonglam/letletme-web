@@ -974,5 +974,9 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(progress).toHaveAttribute('aria-sort', 'descending')
 		await page.setViewportSize({ width: 390, height: 844 })
 		await expect(mobileSort).toContainText(`${zh ? '进度' : 'Progress'} ↓`)
+		await mobileSort.click()
+		await page.getByRole('option', { name: `${zh ? '进度' : 'Progress'} ↑`, exact: true }).click()
+		await expect(cards).toHaveText(['Palmer', 'Saka'])
+		await expect(mobileSort).toContainText(`${zh ? '进度' : 'Progress'} ↑`)
 	})
 }
