@@ -2035,11 +2035,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
       page.on('request', request => {
        if (request.headers()['next-action']) writes.push(request.url())
       })
-      for (const value of ['-1', '1.5', '']) {
+      const searches: string[] = []
+      await page.route('**/api/graphql', async route => {
+       const body = route.request().postDataJSON()
+       if (body?.operationName !== 'SearchEntries' && !String(body?.query).includes('query SearchEntries')) return route.fallback()
+       searches.push(body.variables.query)
+       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { searchEntries: [] } }) })
+      })
+      const submit = page.locator('#main-content button[type="submit"]')
+      for (const value of ['-1', '1.5']) {
        await input.fill(value)
        await expect(input).toHaveValue(value)
+       await submit.click()
+       await expect(page.getByText(locale === 'zh-CN' ? '本站没有匹配的球队。请改用参赛 ID，可查任意有效 FPL 球队。' : 'No matching team on LetLetMe. Try an entry ID — that looks up any valid FPL team.', { exact: true })).toBeVisible()
+       await expect(submit).toBeEnabled()
       }
-      await page.locator('#main-content button[type="submit"]').click()
+      expect(searches).toEqual(['-1', '1.5'])
+      await input.fill('')
+      await submit.click()
       await expect(input).toBeFocused()
       expect(await input.evaluate(element => (element as HTMLInputElement).validity.valueMissing)).toBe(true)
       expect(writes).toEqual([])
