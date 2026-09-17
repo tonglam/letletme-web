@@ -10,7 +10,7 @@ async function createSession(
 	options: {
 		entryId?: number
 	} = {}
-): Promise<{ cookie: string; userId: string; cleanup: () => Promise<void> }> {
+): Promise<{ cookie: string; userId: string; entryId: number | null; cleanup: () => Promise<void> }> {
 	const directDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL
 	if (!directDatabaseUrl) throw new Error('E2E_DIRECT_DATABASE_URL is required')
 	const sql = postgres(directDatabaseUrl, { max: 1, prepare: false })
@@ -62,6 +62,7 @@ async function createSession(
 	return {
 		cookie: `__Secure-letletme.session_token=${cookieValue}`,
 		userId,
+		entryId,
 		cleanup: async () => {
 			try {
 				await sql`DELETE FROM bauth.session WHERE id = ${sessionId}`
@@ -1496,14 +1497,23 @@ for (const locale of ['en', 'zh-CN'] as const) {
  const session = await createSession({ entryId: 15702 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
  const rules = [
-  { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: managerReview } },
-  ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: managerGameweek(eventId) } }))
+  { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, currentGameweek: { ...managerGameweek(3), entry: { ...managerReview.entry!, id: session.entryId! } } } } },
+  ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...managerGameweek(eventId), entry: { ...managerReview.entry!, id: session.entryId! } } } }))
  ]
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
   await page.setViewportSize({ width, height: 900 })
-  await page.goto(`${zh ? '/zh-CN' : ''}/my-fpl/team`)
+  const prefix = zh ? '/zh-CN' : ''
+  await page.goto(prefix || '/')
+  const nav = page.getByRole('navigation').first()
+  const href = `${prefix}/my-fpl/team`
+  if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+  else await nav.locator('details').filter({ has: page.locator(`a[href="${href}"]`) }).locator('summary').filter({ visible: true }).click()
+  const teamLink = nav.locator(`a[href="${href}"]`).filter({ visible: true })
+  await expect(teamLink).toHaveCount(1)
+  await teamLink.click()
+  await expect(page).toHaveURL(url => url.pathname === href)
   const season = page.getByRole('tab', { name: labels[0], exact: true })
   await season.click()
   await expect(season).toHaveAttribute('aria-selected', 'true')
@@ -1526,6 +1536,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await history.getByRole('button', { name: zh ? '打开第 1 轮' : 'Open gameweek 1', exact: true }).click()
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '1')
+  await expect.poll(async () => {
+   const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
+   return observed.requests.filter(request => request.operation === 'GetMyFplManagerGameweek' && request.variables.eventId === 1)
+  }).not.toHaveLength(0)
+  const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
+  const historicalReads = observed.requests.filter(request => request.operation === 'GetMyFplManagerGameweek' && request.variables.eventId === 1)
+  for (const request of historicalReads) expect(request.variables.snapshotRevision ?? null).toBeNull()
   await season.click()
   await expect(season).toHaveAttribute('aria-selected', 'true')
  } finally {
@@ -1534,5 +1551,48 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 })
 
+ }
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J10 pending review opens live points and returns ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Isolated live and manager fixtures required')
+   const session = await createSession({ entryId: 15702 })
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const pending = { ...managerGameweek(1), entry: { ...managerReview.entry!, id: session.entryId! }, state: 'PENDING', result: null, review: null, snapshotMeta: null }
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, currentGameweek: { ...managerGameweek(3), entry: { ...managerReview.entry!, id: session.entryId! } } } } },
+     { operation: 'GetMyFplManagerGameweek', variables: { eventId: 1 }, data: { myFplManagerGameweek: pending } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`${prefix}/my-fpl/team?view=gameweek&gw=1`)
+    const liveLink = page.getByRole('main').locator(`a[href="${prefix}/live/points/${session.entryId}"]`).filter({ visible: true })
+    await expect(liveLink).toHaveCount(1)
+    const returnUrl = page.url()
+    await liveLink.click()
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/${session.entryId}` && !url.searchParams.has('gw'))
+    const pitch = page.getByRole('region', { name: locale === 'zh-CN' ? /阵型/ : /formation/ })
+    await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+    await expect(page.getByRole('region', { name: /GW33/ })).toBeVisible()
+    const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
+    const reads = observed.requests.filter(request => request.operation === 'GetLiveCalcPoints')
+    expect(reads.length).toBeGreaterThan(0)
+    for (const request of reads) {
+     expect(request.variables.entryId).toBe(session.entryId)
+     expect(request.variables.eventId).toBe(33)
+    }
+    await page.goBack()
+    await expect(page).toHaveURL(returnUrl)
+    await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(liveLink).toHaveCount(1)
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
  }
 }
