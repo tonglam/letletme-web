@@ -984,3 +984,95 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(mobileSort).toContainText(`${zh ? '进度' : 'Progress'} ↑`)
 	})
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }) => {
+   let prefix = locale === 'en' ? '' : '/zh-CN'
+   let zh = locale === 'zh-CN'
+   const expectHomeData = async () => {
+    await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
+    await expect(page.locator(`a[href="${prefix}/live/points/15702?gw=33&from=home"]`)).toContainText('101')
+    const market = page.locator('[aria-labelledby="home-market-title"]')
+    await expect(market).toContainText('Saka')
+    await expect(page.locator('#home-price-changes-today')).toContainText(zh ? '2026年8月3日' : 'Aug 3, 2026')
+    const fixtures = page.locator('[data-home-matches]')
+    await expect(fixtures).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(fixtures).toContainText(/CHE|Chelsea/)
+    await expect(fixtures).toContainText(/ARS|Arsenal/)
+    await expect(fixtures.locator('[aria-busy="true"]')).toHaveCount(0)
+    await expect(fixtures.getByRole('alert')).toHaveCount(0)
+   }
+   const authWrites: string[] = []
+   page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/api/auth/') && request.method() !== 'GET') authWrites.push(request.method() + ' ' + new URL(request.url()).pathname)
+   })
+   await page.addInitScript(() => {
+    const protectedSelector = '#tournament-create-form, [data-competition-perf-ready="create"]'
+    const inspect = (node: Node) => {
+     if (node instanceof Element && (node.matches(protectedSelector) || node.querySelector(protectedSelector))) sessionStorage.setItem('j15-protected-content-observed', 'true')
+    }
+    const observer = new MutationObserver(records => {
+     for (const record of records) {
+      if (record.type === 'attributes') inspect(record.target)
+      for (const node of Array.from(record.addedNodes)) inspect(node)
+     }
+    })
+    observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-competition-perf-ready'] })
+    if (document.documentElement) inspect(document.documentElement)
+   })
+   await page.setViewportSize({ width, height: 900 })
+   await page.goto(prefix || '/')
+   await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
+   await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   await expectHomeData()
+   const nav = page.getByRole('navigation').first()
+   const createHref = `${prefix}/competitions/create`
+   if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+   else await nav.locator('details').filter({ has: page.locator(`a[href="${createHref}"]`) }).locator('summary').filter({ visible: true }).click()
+   const create = nav.locator(`a[href="${createHref}"]`).filter({ visible: true })
+   await expect(create).toHaveCount(1)
+   await create.click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === createHref)
+   const main = page.locator('#main-content')
+   await expect(main.getByRole('heading', { name: zh ? '登录' : 'Sign in', exact: true })).toBeVisible()
+   await main.getByLabel(zh ? '邮箱' : 'Email', { exact: true }).fill('j15@example.test')
+   await main.getByLabel(zh ? '密码' : 'Password', { exact: true }).fill('Fixture-only-password-123')
+   await expect(main.getByLabel(zh ? '邮箱' : 'Email', { exact: true })).toHaveValue('j15@example.test')
+   await expect(main.getByLabel(zh ? '密码' : 'Password', { exact: true })).toHaveValue('Fixture-only-password-123')
+   const nextLocale = zh ? 'en' : 'zh-CN'
+   await nav.locator('[data-locale-picker] > summary').click()
+   await nav.locator(`[data-locale-link][lang="${nextLocale}"]`).click()
+   zh = nextLocale === 'zh-CN'
+   prefix = zh ? '/zh-CN' : ''
+   await expect(page).toHaveURL(url => (url.pathname === `${prefix}/auth/login` || (!zh && url.pathname === '/en/auth/login')) && url.searchParams.get('next') === createHref)
+   await expect(main.getByRole('heading', { name: zh ? '登录' : 'Sign in', exact: true })).toBeVisible()
+   await main.locator(`a[href="${prefix}/auth/forgot-password"]`).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/forgot-password`)
+   await expect(main.getByRole('heading', { name: zh ? '重置密码' : 'Reset password', exact: true })).toBeVisible()
+   await main.getByLabel(zh ? '邮箱' : 'Email', { exact: true }).fill('j15@example.test')
+   await expect(main.getByLabel(zh ? '邮箱' : 'Email', { exact: true })).toHaveValue('j15@example.test')
+   await main.getByRole('link', { name: zh ? '返回登录' : 'Back to login', exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+   await main.locator(`a[href="${prefix}/auth/signup"]`).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/signup`)
+   await expect(main.getByRole('heading', { name: zh ? '创建账户' : 'Create account', exact: true })).toBeVisible()
+   await main.getByLabel(zh ? '姓名' : 'Name', { exact: true }).fill('J15 Fixture')
+   await main.getByLabel(zh ? '邮箱' : 'Email', { exact: true }).fill('j15@example.test')
+   await main.getByLabel(zh ? '密码' : 'Password', { exact: true }).fill('Fixture-only-password-123')
+   await expect(main.getByLabel(zh ? '姓名' : 'Name', { exact: true })).toHaveValue('J15 Fixture')
+   await expect(main.getByLabel(zh ? '邮箱' : 'Email', { exact: true })).toHaveValue('j15@example.test')
+   await expect(main.getByLabel(zh ? '密码' : 'Password', { exact: true })).toHaveValue('Fixture-only-password-123')
+   await main.getByRole('link', { name: zh ? '登录' : 'Sign in', exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+   await expect(main.getByRole('heading', { name: zh ? '登录' : 'Sign in', exact: true })).toBeVisible()
+   await nav.getByRole('link', { name: 'LetLetMe', exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+   await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
+   await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   await expectHomeData()
+   expect(await page.evaluate(() => sessionStorage.getItem('j15-protected-content-observed'))).toBeNull()
+   expect(authWrites).toEqual([])
+  })
+ }
+}
