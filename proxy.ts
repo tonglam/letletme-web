@@ -30,6 +30,7 @@ import {
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
+import { withAuthDatabaseTiming } from '@/lib/auth-database-timing'
 import { markAuthenticatedCapacitySession } from '@/lib/capacity-run'
 
 const handleI18nRouting = createMiddleware(routing)
@@ -170,7 +171,12 @@ export async function proxy(req: NextRequest) {
 		let session: Awaited<ReturnType<typeof getAuthorizationSession>>
 		try {
 			session = authTiming
-				? await authTiming.measure('fresh-session', () => getAuthorizationSession(req.headers))
+				? await authTiming.measure('fresh-session', () =>
+					withAuthDatabaseTiming(
+						() => authTiming.start('database-adapter'),
+						() => getAuthorizationSession(req.headers)
+					)
+				)
 				: await getAuthorizationSession(req.headers)
 		} finally {
 			if (authTiming) console.info('[proxy-auth]', {
@@ -272,7 +278,12 @@ export async function proxy(req: NextRequest) {
 	let session: Awaited<ReturnType<typeof getAuthorizationSession>>
 	try {
 		session = authTiming
-			? await authTiming.measure('fresh-session', () => getAuthorizationSession(req.headers))
+			? await authTiming.measure('fresh-session', () =>
+				withAuthDatabaseTiming(
+					() => authTiming.start('database-adapter'),
+					() => getAuthorizationSession(req.headers)
+				)
+			)
 			: await getAuthorizationSession(req.headers)
 	} finally {
 		if (authTiming) console.info('[proxy-auth]', {
