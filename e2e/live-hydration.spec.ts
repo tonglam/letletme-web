@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
 test.use({ timezoneId: 'Australia/Perth' })
+// All cases share the same isolated fixture server, including the original test.
+test.describe.configure({ mode: 'serial' })
 
 test('live match kickoff uses UTC on the server and browser local time after hydration', async ({
 	page
@@ -50,7 +52,7 @@ test('live match kickoff uses UTC on the server and browser local time after hyd
 // Fixture controls are shared within this isolated server; keep these cases serial.
 test.describe('J09 match status and player navigation', () => {
 	test.describe.configure({ mode: 'serial' })
-	test.skip(process.env.E2E_LIVE_HYDRATION !== '1', 'Uses the dedicated live fixture')
+	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Uses only the dedicated local live fixture')
 	const origin = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
 	test.afterEach(async () => {
 		const response = await fetch(`${origin}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
