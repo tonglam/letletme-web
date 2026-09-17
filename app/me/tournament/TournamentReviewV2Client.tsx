@@ -2147,6 +2147,7 @@ export default function TournamentReviewV2Client({
 								)}
 								{activeReview &&
 									state === 'READY' &&
+									!loading &&
 									!activeReview.points &&
 									!activeReview.h2h &&
 									!activeReview.knockout && (
