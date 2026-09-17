@@ -23,6 +23,9 @@ function getDb() {
 		idle_timeout: 20,
 		connect_timeout: 5,
 		prepare: false,
+		// The application schema uses scalar/JSON columns only. Avoid a type-catalog
+		// round trip on each new connection; the array-based role auditor uses its own client.
+		fetch_types: false,
 	})
 
 	_db = drizzle(client, { schema: { ...authSchema } })
