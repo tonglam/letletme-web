@@ -831,19 +831,36 @@ export default function TournamentReviewV2Client({
 	initialCatalog,
 	initialScope,
 	initialSelectedTournamentId,
-	initialEventId,
+	initialEventId: serverInitialEventId,
 	initialFinalizedEventIds,
-	initialGameweekReview,
-	initialSeasonReview,
-	initialSeasonSections = [],
-	initialError,
-	initialEventIndexError = null,
-	initialGameweekError = null,
-	initialSeasonError = null
+	initialGameweekReview: serverInitialGameweekReview,
+	initialSeasonReview: serverInitialSeasonReview,
+	initialSeasonSections: serverInitialSeasonSections = [],
+	initialError: serverInitialError,
+	initialEventIndexError: serverInitialEventIndexError = null,
+	initialGameweekError: serverInitialGameweekError = null,
+	initialSeasonError: serverInitialSeasonError = null
 }: TournamentReviewV2ClientProps) {
 	const t = useTranslations('TournamentStats')
 	const router = useRouter()
 	const pathname = usePathname()
+	const searchParams = useSearchParams()
+	const requestedEventId = Number(searchParams.get('gw'))
+	const restoresDifferentEvent =
+		Number(searchParams.get('tournamentId')) === initialSelectedTournamentId &&
+		Number.isSafeInteger(requestedEventId) &&
+		initialFinalizedEventIds.includes(requestedEventId) &&
+		requestedEventId !== serverInitialEventId
+	// Back/Forward can restore an older RSC seed after a client-owned GW change.
+	// Never render that seed under the restored URL's different GW.
+	const initialEventId = restoresDifferentEvent ? requestedEventId : serverInitialEventId
+	const initialGameweekReview = restoresDifferentEvent ? null : serverInitialGameweekReview
+	const initialSeasonReview = restoresDifferentEvent ? null : serverInitialSeasonReview
+	const initialSeasonSections = restoresDifferentEvent ? [] : serverInitialSeasonSections
+	const initialError = restoresDifferentEvent ? null : serverInitialError
+	const initialEventIndexError = restoresDifferentEvent ? null : serverInitialEventIndexError
+	const initialGameweekError = restoresDifferentEvent ? null : serverInitialGameweekError
+	const initialSeasonError = restoresDifferentEvent ? null : serverInitialSeasonError
 	const [catalog, setCatalog] = useState(initialCatalog)
 	const [scope, setScope] = useState<MyTournamentReviewScope>(initialScope)
 	const [selectedTournamentId, setSelectedTournamentId] = useState<
@@ -855,7 +872,6 @@ export default function TournamentReviewV2Client({
 	)
 	// History restoration can reuse an older server seed. The current URL
 	// owns presentation, including native replaceState and Back/Forward.
-	const searchParams = useSearchParams()
 	const view = parseTournamentStatsView(searchParams.get('view'))
 	const viewRef = useRef(view)
 	useEffect(() => {
@@ -1632,7 +1648,15 @@ export default function TournamentReviewV2Client({
 			return
 		setEventId(nextEventId)
 		setSelectedPhaseId(null)
-		replaceRoute({ eventId: nextEventId })
+		// The selected GW is loaded through the authenticated browser read path.
+		// Keep its deep link current without repeating the server seed loader.
+		const query = buildTournamentStatsQueryString({
+			tournamentId: selectedTournamentId,
+			view: viewRef.current,
+			gw: nextEventId,
+			scope: scope === 'MANAGED' ? 'ALL' : scope
+		})
+		window.history.replaceState(null, '', `${window.location.pathname}?${query}`)
 		void loadReview(selectedTournamentId, nextEventId)
 	}
 
