@@ -844,6 +844,21 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(team).toBeVisible()
 			if (recoveryMode === 'live-journey-pinned') {
 				await expect(page.getByRole('link', { name: /Pinned Viewer United/ }).filter({ visible: true })).toHaveCount(1)
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true }).click()
+				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 E2E United 进行对比' : 'Select E2E United for comparison', exact: true }).filter({ visible: true }).check()
+				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 Pinned Viewer United 进行对比' : 'Select Pinned Viewer United for comparison', exact: true }).filter({ visible: true }).check()
+				const compareOpener = page.getByRole('button', { name: locale === 'zh-CN' ? '对比（2）' : 'Compare (2)', exact: true })
+				await compareOpener.click()
+				await expect(page.getByRole('dialog')).toBeVisible()
+				await page.getByRole('dialog').press('Escape')
+				await expect(page.getByRole('dialog')).toHaveCount(0)
+				await expect(compareOpener).toBeFocused()
+				await compareOpener.press('Enter')
+				await expect(page.getByRole('dialog')).toBeVisible()
+				await page.getByRole('dialog').getByRole('button', { name: locale === 'zh-CN' ? '关闭' : 'Close', exact: true }).click()
+				await expect(page.getByRole('dialog')).toHaveCount(0)
+				await expect(compareOpener).toBeFocused()
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '取消' : 'Cancel', exact: true }).click()
 			}
 			const gameweekNavigations: string[] = []
 			const recordGameweekNavigation = (request: import('@playwright/test').Request) => {
