@@ -1705,3 +1705,58 @@ for (const width of [1440, 390]) {
 }
 
 }
+
+test.describe('J12 planned UTC dark mobile management states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const scenario of ['active', 'paused', 'setup-failed'] as const) {
+  test(`J12 state ${scenario} preserves state on cancellation`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated state fixture')
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const tournament = {
+    ...managedTournament,
+    state: scenario === 'paused' ? 'INACTIVE' : 'ACTIVE',
+    ...(scenario === 'setup-failed' ? {
+     setupStatus: 'FAILED', setupPhase: 'BUILDING_STRUCTURE',
+     setupCompletedUnits: 1, setupFinishedAt: null,
+     standingsReadyAt: null, profilesReadyAt: null, insightsReadyAt: null
+    } : {})
+   }
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: tournament } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto('/zh-CN/competitions/77/manage')
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+    const lifecycle = page.getByRole('button', { name: scenario === 'paused' ? '恢复并补齐数据' : '暂停', exact: true })
+    await expect(lifecycle).toBeEnabled()
+    await expect(page.getByRole('button', { name: scenario === 'paused' ? '暂停' : '恢复并补齐数据', exact: true })).toHaveCount(0)
+    const repair = page.getByRole('button', { name: '修复赛事设置', exact: true })
+    if (scenario === 'setup-failed') await expect(repair).toBeEnabled()
+    else await expect(repair).toHaveCount(0)
+    await page.getByRole('button', { name: '删除赛事', exact: true }).click()
+    const dialog = page.getByRole('alertdialog')
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(lifecycle).toBeEnabled()
+    expect(mutations).toEqual([])
+    await testInfo.attach('J12-state-scope', { body: JSON.stringify({ variantId: `J12.state.0${['active', 'paused', 'setup-failed'].indexOf(scenario) + 1}`, scenario, locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', scope: 'Management state and cancellation only; full state journey and performance remain unverified' }), contentType: 'application/json' })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
