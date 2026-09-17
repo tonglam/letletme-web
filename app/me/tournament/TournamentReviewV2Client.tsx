@@ -1976,10 +1976,16 @@ export default function TournamentReviewV2Client({
 							</div>
 						)}
 						{!selectedTournament ? (
-							<ReviewStateBanner
-								state="UNAVAILABLE"
-								message={t('noLinked')}
-							/>
+							catalogSearch ? (
+								<div role="status" className="rounded-3xl border bg-white p-5 text-sm text-slate-600 sm:p-6">
+									{loading ? t('reviewLoadingTournaments') : t('reviewSearchEmpty')}
+								</div>
+							) : (
+								<ReviewStateBanner
+									state="UNAVAILABLE"
+									message={t('noLinked')}
+								/>
+							)
 						) : (
 							<>
 								<div className="rounded-3xl border bg-white p-5 shadow-sm sm:p-6">

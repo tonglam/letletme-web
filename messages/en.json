@@ -2422,6 +2422,7 @@
 		"reviewAdminAccessibleScope": "Admin: show my tournaments",
 		"reviewSearchPlaceholder": "Search tournaments",
 		"reviewSearch": "Search",
+		"reviewSearchEmpty": "No tournaments match your search. Change or clear the search.",
 		"reviewClearSearch": "Clear search",
 		"reviewLoadMoreTournaments": "Load more tournaments",
 		"reviewLoadingTournaments": "Loading tournaments…"
