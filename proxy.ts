@@ -91,7 +91,11 @@ function invalidRouteResponse(
 	url.search = ''
 	return copyCookies(
 		i18nResponse,
-		withDocumentCacheHeaders(req, NextResponse.rewrite(url, { status: 404 }))
+		withDocumentCacheHeaders(
+			req,
+			NextResponse.rewrite(url, { status: 404 }),
+			hasSessionCookieHintInHeaders(req.headers)
+		)
 	)
 }
 
