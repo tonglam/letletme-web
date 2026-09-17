@@ -1432,7 +1432,7 @@ export default function TournamentClient({
 							const params = new URLSearchParams(searchParams.toString())
 							params.set('gw', String(gameweek))
 							if (selectedTournament) params.set('tournamentId', selectedTournament.id)
-							router.replace(`/live/competitions?${params.toString()}`, { scroll: false })
+							window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`)
 						}}
 						currentGameweek={currentGameweek}
 						maxGameweek={selectedTournamentIsOfficialH2H ? 38 : currentGameweek}
