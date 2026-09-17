@@ -16,7 +16,14 @@ export async function GET(request: Request) {
   try {
     session = await getAuthorizationSession(request.headers);
   } catch {
-    return NextResponse.json({ available: false, message: 'Authentication unavailable.' }, { status: 503 });
+    return NextResponse.json(
+      {
+        available: false,
+        message: 'Authentication unavailable.',
+        code: 'DEPENDENCY_UNAVAILABLE',
+      },
+      { status: 503, headers: { 'Retry-After': '30' } },
+    );
   }
   if (!session) {
     return NextResponse.json({ available: false, message: 'Unauthenticated.' }, { status: 401 });

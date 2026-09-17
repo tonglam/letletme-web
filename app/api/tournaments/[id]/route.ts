@@ -36,7 +36,17 @@ type VerifiedSession = Session & {
 }
 
 const errorResponse = (error: string, status: number) =>
-	NextResponse.json({ success: false, error }, { status })
+	NextResponse.json(
+		{
+			success: false,
+			error,
+			...(status === 503 ? { code: 'DEPENDENCY_UNAVAILABLE' } : {})
+		},
+		{
+			status,
+			headers: status === 503 ? { 'Retry-After': '30' } : undefined
+		}
+	)
 
 const getTournamentId = async (
 	context: RouteContext

@@ -12,7 +12,21 @@ export async function GET(
 	request: Request,
 	context: { params: Promise<{ id: string }> }
 ) {
-	const { entryId, session } = await getVerifiedEntryContext()
+	let entryId: number | null
+	let session: Awaited<ReturnType<typeof getVerifiedEntryContext>>['session']
+	try {
+		const context = await getVerifiedEntryContext()
+		entryId = context.entryId
+		session = context.session
+	} catch {
+		return NextResponse.json(
+			{ error: 'DEPENDENCY_UNAVAILABLE' },
+			{
+				status: 503,
+				headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '30' }
+			}
+		)
+	}
 	if (!entryId)
 		return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 	const tournamentId = Number((await context.params).id)
@@ -77,13 +91,23 @@ export async function GET(
 				? 409
 				: code === 'UNAUTHENTICATED'
 					? 401
-					: code === 'FORBIDDEN'
-						? 403
+				: code === 'FORBIDDEN'
+					? 403
+					: code === 'DEPENDENCY_UNAVAILABLE' ||
+					  (error instanceof GraphQLRequestError && error.status === 503)
+						? 503
 						: 502
+		const headers: Record<string, string> = {
+			'Cache-Control': 'private, no-store'
+		}
+		if (status === 503 && error instanceof GraphQLRequestError)
+			headers['Retry-After'] = String(Math.max(1, error.retryAfterSeconds ?? 30))
 		return NextResponse.json(
 			{
 				error:
-					status === 426
+					status === 503
+					? 'DEPENDENCY_UNAVAILABLE'
+					: status === 426
 						? 'CLIENT_UPGRADE_REQUIRED'
 						: status === 409
 						? code
@@ -93,7 +117,7 @@ export async function GET(
 								? 'FORBIDDEN'
 								: 'Comparison unavailable'
 			},
-			{ status, headers: { 'Cache-Control': 'private, no-store' } }
+			{ status, headers }
 		)
 	}
 }

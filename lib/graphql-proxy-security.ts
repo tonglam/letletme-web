@@ -57,6 +57,7 @@ const SAFE_GRAPHQL_ERROR_CODES = new Set([
 	'INTERNAL_SERVER_ERROR',
 	'LIVE_SCORE_REVISION_GONE',
 	'CLIENT_UPGRADE_REQUIRED',
+	'DEPENDENCY_UNAVAILABLE',
 	'NOT_FOUND',
 	'RATE_LIMITED',
 	'UNAUTHENTICATED',
@@ -79,6 +80,7 @@ function publicGraphQLErrorCode(status: number, value: unknown): string {
 	if (status === 403) return 'FORBIDDEN'
 	if (status === 404) return 'NOT_FOUND'
 	if (status === 429) return 'RATE_LIMITED'
+	if (status === 503) return 'DEPENDENCY_UNAVAILABLE'
 	return 'UPSTREAM_GRAPHQL_ERROR'
 }
 
@@ -88,6 +90,7 @@ function publicGraphQLRequestCode(status: number): string {
 	if (status === 403) return 'FORBIDDEN'
 	if (status === 404) return 'NOT_FOUND'
 	if (status === 429) return 'RATE_LIMITED'
+	if (status === 503) return 'DEPENDENCY_UNAVAILABLE'
 	return 'UPSTREAM_GRAPHQL_ERROR'
 }
 

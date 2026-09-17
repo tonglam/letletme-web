@@ -1,4 +1,9 @@
 import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
+import {
+	clearDependencyCooldown,
+	noteDependencyFailure,
+	readDependencyCooldown
+} from '@/lib/dependency-cooldown'
 import type {
 	EntryLiveCompetitionBoardPage,
 	EntryLiveCompetitionBoardHead,
@@ -15,6 +20,7 @@ export const LIVE_BOARD_CONTRACT_VERSION = 'entry-live-board-v3'
 export const LIVE_BOARD_PAGE_SIZE = 20
 const LIVE_BOARD_OPERATION = 'GetEntryLiveCompetitionBoard'
 const TRANSIENT_STATUSES = new Set([502, 503, 504])
+const NON_TRANSIENT_DEPENDENCY_CODES = new Set(['UPSTREAM_RESPONSE_TOO_LARGE'])
 
 export type LiveBoardFilterState = {
 	chips: string[]
@@ -741,8 +747,61 @@ export const boardRowToTournamentEntry = (
 const sleep = (milliseconds: number): Promise<void> =>
 	new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
 
-const retryDelayMs = (random: () => number): number =>
-	Math.min(800, Math.max(400, 400 + Math.floor(random() * 401)))
+const retryDelayMs = (attempt: number): number =>
+	Math.min(120_000, 30_000 * 2 ** Math.max(0, attempt))
+
+const createAbortError = (): Error => {
+	const error = new Error('The operation was aborted')
+	error.name = 'AbortError'
+	return error
+}
+
+/** Race injected/test sleeps with the caller signal so stale board requests
+ * do not remain alive for the full Retry-After window. */
+const sleepWithSignal = (
+	sleepImpl: (milliseconds: number) => Promise<void>,
+	milliseconds: number,
+	signal?: AbortSignal
+): Promise<void> => {
+	if (!signal) return sleepImpl(milliseconds)
+	if (signal.aborted) return Promise.reject(createAbortError())
+	return new Promise((resolve, reject) => {
+		let settled = false
+		const cleanup = () => signal.removeEventListener('abort', onAbort)
+		const onAbort = () => {
+			if (settled) return
+			settled = true
+			cleanup()
+			reject(createAbortError())
+		}
+		signal.addEventListener('abort', onAbort, { once: true })
+		void sleepImpl(milliseconds).then(
+			() => {
+				if (settled) return
+				settled = true
+				cleanup()
+				resolve()
+			},
+			error => {
+				if (settled) return
+				settled = true
+				cleanup()
+				reject(error)
+			}
+		)
+	})
+}
+
+const dependencyCooldownRequestError = (): LiveBoardRequestError | null => {
+	const state = readDependencyCooldown()
+	return state.active
+		? new LiveBoardRequestError({
+				status: 503,
+				code: 'DEPENDENCY_UNAVAILABLE',
+				retryAfterSeconds: state.remainingSeconds
+			})
+		: null
+}
 
 export async function fetchEntryLiveCompetitionBoard(
 	tournamentId: number,
@@ -755,11 +814,13 @@ export async function fetchEntryLiveCompetitionBoard(
 	} = {}
 ): Promise<EntryLiveCompetitionBoardPage> {
 	const fetchImpl = options.fetchImpl ?? fetch
-	const random = options.random ?? Math.random
 	const sleepImpl = options.sleepImpl ?? sleep
 	const startedAt = performance.now()
+	const requestStartedAt = Date.now()
 	let attempt = 0
 	for (;;) {
+		const cooldownError = dependencyCooldownRequestError()
+		if (cooldownError) throw cooldownError
 		let response: Response
 		try {
 			response = await fetchImpl(
@@ -778,34 +839,67 @@ export async function fetchEntryLiveCompetitionBoard(
 				}
 			)
 		} catch (error) {
-			if (options.signal?.aborted || attempt >= 1) throw error
+			if (options.signal?.aborted) throw error
+			const dependencyFailure = noteDependencyFailure()
+			if (attempt >= 1) throw error
 			attempt += 1
-			await sleepImpl(retryDelayMs(random))
+			await sleepWithSignal(
+				sleepImpl,
+				dependencyFailure.active
+					? dependencyFailure.remainingSeconds * 1_000
+					: retryDelayMs(attempt - 1),
+				options.signal
+			)
 			continue
 		}
 
 		const requestId = response.headers.get('x-request-id')
+		const retryAfterHeader = response.headers.get('retry-after')
+		const retryAfterSeconds = parseRetryAfter(retryAfterHeader)
+		const body = !response.ok
+			? ((await response.json().catch(() => null)) as { error?: string } | null)
+			: null
+		const code = body?.error || `LIVE_BOARD_HTTP_${response.status}`
+		const retryableTransient =
+			TRANSIENT_STATUSES.has(response.status) &&
+			!NON_TRANSIENT_DEPENDENCY_CODES.has(code)
+		const dependencyFailure =
+			retryableTransient && !options.signal?.aborted
+				? noteDependencyFailure(retryAfterHeader)
+				: null
+		const effectiveRetryAfterSeconds = dependencyFailure?.active
+			? dependencyFailure.remainingSeconds
+			: retryAfterSeconds === null
+				? null
+				: Math.max(1, retryAfterSeconds)
 		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as {
-				error?: string
-			} | null
-			const code = body?.error || `LIVE_BOARD_HTTP_${response.status}`
-			if (TRANSIENT_STATUSES.has(response.status) && attempt < 1) {
+			if (retryableTransient && attempt < 1) {
 				attempt += 1
-				await sleepImpl(retryDelayMs(random))
+				// A server supplied Retry-After is authoritative. The old fast
+				// retry ignored it and could immediately repeat a dependency
+				// outage, multiplying upstream and database traffic.
+				await sleepWithSignal(
+					sleepImpl,
+					effectiveRetryAfterSeconds === null
+						? retryDelayMs(attempt - 1)
+						: effectiveRetryAfterSeconds * 1_000,
+					options.signal
+				)
 				continue
 			}
 			throw new LiveBoardRequestError({
 				status: response.status,
 				code,
-				retryAfterSeconds: parseRetryAfter(response.headers.get('retry-after')),
+				retryAfterSeconds: effectiveRetryAfterSeconds,
 				requestId
 			})
 		}
 
 		const payload = await response.json().catch(() => null)
 		try {
-			return parseEntryLiveCompetitionBoardPage(payload)
+			const page = parseEntryLiveCompetitionBoardPage(payload)
+			clearDependencyCooldown(requestStartedAt)
+			return page
 		} catch (error) {
 			if (error instanceof LiveBoardInvalidResponseError) {
 				const durationMs = Math.round(performance.now() - startedAt)
@@ -835,9 +929,12 @@ export async function fetchLeagueLiveHead(
 	options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
 ): Promise<LeagueLiveHead> {
 	const fetchImpl = options.fetchImpl ?? fetch
-	const response = await fetchImpl(
-		`/api/live/competitions/${tournamentId}/head`,
-		{
+	const cooldownError = dependencyCooldownRequestError()
+	if (cooldownError) throw cooldownError
+	const requestStartedAt = Date.now()
+	let response: Response
+	try {
+		response = await fetchImpl(`/api/live/competitions/${tournamentId}/head`, {
 			method: 'POST',
 			cache: 'no-store',
 			credentials: 'include',
@@ -848,23 +945,42 @@ export async function fetchLeagueLiveHead(
 			},
 			body: JSON.stringify({ eventId, mode }),
 			signal: options.signal
-		}
-	)
+		})
+	} catch (error) {
+		if (!options.signal?.aborted) noteDependencyFailure()
+		throw error
+	}
 	const requestId = response.headers.get('x-request-id')
+	const retryAfterHeader = response.headers.get('retry-after')
+	const retryAfterSeconds = parseRetryAfter(retryAfterHeader)
+	const body = !response.ok
+		? ((await response.json().catch(() => null)) as { error?: string } | null)
+		: null
+	const code = body?.error || `LIVE_HEAD_HTTP_${response.status}`
+	const dependencyFailure =
+		TRANSIENT_STATUSES.has(response.status) &&
+		!NON_TRANSIENT_DEPENDENCY_CODES.has(code) &&
+		!options.signal?.aborted
+			? noteDependencyFailure(retryAfterHeader)
+			: null
+	const effectiveRetryAfterSeconds = dependencyFailure?.active
+		? dependencyFailure.remainingSeconds
+		: retryAfterSeconds === null
+			? null
+			: Math.max(1, retryAfterSeconds)
 	if (!response.ok) {
-		const body = (await response.json().catch(() => null)) as {
-			error?: string
-		} | null
 		throw new LiveBoardRequestError({
 			status: response.status,
-			code: body?.error || `LIVE_HEAD_HTTP_${response.status}`,
-			retryAfterSeconds: parseRetryAfter(response.headers.get('retry-after')),
+			code,
+			retryAfterSeconds: effectiveRetryAfterSeconds,
 			requestId
 		})
 	}
 	const payload = await response.json().catch(() => null)
 	try {
-		return parseLeagueLiveHead(payload)
+		const head = parseLeagueLiveHead(payload)
+		clearDependencyCooldown(requestStartedAt)
+		return head
 	} catch (error) {
 		if (error instanceof LiveBoardInvalidResponseError) {
 			recordBugReportDiagnostic({
