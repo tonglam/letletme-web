@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
 		try {
 			const { getAuthorizationSession } = await import('@/lib/auth')
 			session = await requestTiming.measure('sessionLookup', () =>
-				getAuthorizationSession(request.headers)
+				getAuthorizationSession(request.headers, { signal: request.signal })
 			)
 		} catch (error) {
 			logSafeAuthDiagnostic(
