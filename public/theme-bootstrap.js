@@ -44,7 +44,6 @@
 	}
 
 	const enableShellControls = () => {
-		if (shellControlsEnabled) return
 		shellControlsEnabled = true
 		document.querySelectorAll('[data-theme-picker]').forEach(picker => {
 			picker.removeAttribute('inert')
@@ -204,9 +203,7 @@
 
 	if (document.documentElement.hasAttribute('data-shell-hydrated')) {
 		enableShellControls()
-	} else {
-		document.addEventListener(shellReadyEvent, enableShellControls, {
-			once: true
-		})
 	}
+	// Locale layouts can replace the server-rendered controls after first hydration.
+	document.addEventListener(shellReadyEvent, enableShellControls)
 })()
