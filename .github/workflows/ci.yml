@@ -159,6 +159,15 @@ jobs:
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
           E2E_SSR_REMEDIATION: '1'
           E2E_LIVE_HYDRATION: '1'
+      - name: Briefing enabled and disabled E2E
+        run: |
+          BRIEFING_PUBLIC_ENABLED=true npx playwright test e2e/briefing.spec.ts --grep-invert 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-enabled
+          BRIEFING_PUBLIC_ENABLED=false npx playwright test e2e/briefing.spec.ts --grep 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-disabled
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - name: Preserve E2E evidence before the next test suite
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
