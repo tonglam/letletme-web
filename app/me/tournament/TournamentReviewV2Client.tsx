@@ -1788,6 +1788,7 @@ export default function TournamentReviewV2Client({
 			: (selectedPhase?.format ??
 				phaseAtEvent(seasonReview?.phases ?? [], eventId)?.format ??
 				null)
+	const hasCatalogItems = catalogItems(catalog).length > 0
 	const visibleError =
 		view === 'season'
 			? (eventIndexError ?? seasonError ?? error)
@@ -1976,9 +1977,13 @@ export default function TournamentReviewV2Client({
 							</div>
 						)}
 						{!selectedTournament ? (
-							catalogSearch ? (
+							hasCatalogItems || catalogSearch ? (
 								<div role="status" className="rounded-3xl border bg-white p-5 text-sm text-slate-600 sm:p-6">
-									{loading ? t('reviewLoadingTournaments') : t('reviewSearchEmpty')}
+									{loading
+										? t('reviewLoadingTournaments')
+										: hasCatalogItems
+											? t('selectTournament')
+											: t('reviewSearchEmpty')}
 								</div>
 							) : (
 								<ReviewStateBanner
