@@ -24,6 +24,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const INTERNAL_DEADLINE_MS = 8_000
+const EXISTING_PROBE_DEADLINE_MS = 30_000
 
 const WINDOW_VALUES = new Set<GovernanceWindow>(['1h', '6h', '3d', '28d'])
 const CONTRACT_KEY = /^[a-z0-9][a-z0-9.-]{0,63}$/
@@ -139,8 +140,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 		)
 	}
 	const timeoutController = new AbortController()
-	const deadlineAt = Date.now() + INTERNAL_DEADLINE_MS
-	const timeoutId = setTimeout(() => timeoutController.abort(), INTERNAL_DEADLINE_MS)
+	const deadlineMs =
+		contractKey === 'my-fpl' ? INTERNAL_DEADLINE_MS : EXISTING_PROBE_DEADLINE_MS
+	const deadlineAt = Date.now() + deadlineMs
+	const timeoutId = setTimeout(() => timeoutController.abort(), deadlineMs)
 	const signal = AbortSignal.any([request.signal, timeoutController.signal])
 	try {
 		const body = parseDataGovernanceProbeRequest(await request.json())

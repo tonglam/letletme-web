@@ -76,6 +76,9 @@ export class DataGovernanceProbeError extends Error {
 const positiveInteger = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 
+const ENTRY_DATA_TIMEOUT_MS = 30_000
+const DIRECTED_MY_FPL_TIMEOUT_MS = 8_000
+
 const nonNegativeIntegerOrNull = (value: unknown): number | null =>
 	value === null ||
 	value === undefined ||
@@ -299,8 +302,12 @@ type TournamentReviewPayload = NonNullable<
 	MyTournamentGameweekReviewResponse['myTournamentGameweekReview']['payload']
 >
 
-function reviewCollectionLengthMatchesCount(length: number, rowCount: number): boolean {
-	if (!Number.isSafeInteger(length) || length < 0 || length > rowCount) return false
+function reviewCollectionLengthMatchesCount(
+	length: number,
+	rowCount: number
+): boolean {
+	if (!Number.isSafeInteger(length) || length < 0 || length > rowCount)
+		return false
 	return rowCount === 0 ? length === 0 : length > 0
 }
 
@@ -434,7 +441,7 @@ async function probeEntryData(
 	// otherwise an optional request field must not silently retarget a periodic
 	// or shared contract.
 	const entryId = useRequestedEntryId
-		? input.entryId ?? config.entryId
+		? (input.entryId ?? config.entryId)
 		: config.entryId
 	if (!positiveInteger(entryId)) {
 		throw new DataGovernanceProbeError(
@@ -449,7 +456,15 @@ async function probeEntryData(
 			{ eventId, snapshotRevision: null },
 			{
 				cache: 'no-store',
-				timeoutMs: Math.min(options.timeoutMs ?? 8_000, 8_000),
+				timeoutMs: Math.min(
+					options.timeoutMs ??
+						(useRequestedEntryId
+							? DIRECTED_MY_FPL_TIMEOUT_MS
+							: ENTRY_DATA_TIMEOUT_MS),
+					useRequestedEntryId
+						? DIRECTED_MY_FPL_TIMEOUT_MS
+						: ENTRY_DATA_TIMEOUT_MS
+				),
 				signal: options.signal
 			}
 		)
@@ -833,7 +848,8 @@ async function probeTournamentReview(
 		)
 	}
 	const expectedCount = scope.expectedSubjectCount
-	const observedCount = scope.readySubjectCount + scope.notApplicableSubjectCount
+	const observedCount =
+		scope.readySubjectCount + scope.notApplicableSubjectCount
 	if (
 		![
 			scope.rowCount,
@@ -962,7 +978,10 @@ export async function probeDataContract(
 				break
 			}
 			case 'my-fpl': {
-				if (!positiveInteger(input.eventId) || !positiveInteger(input.entryId)) {
+				if (
+					!positiveInteger(input.eventId) ||
+					!positiveInteger(input.entryId)
+				) {
 					throw new DataGovernanceProbeError(
 						'INVALID_REQUEST',
 						'my-fpl probe requires eventId and entryId'
