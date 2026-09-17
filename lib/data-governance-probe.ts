@@ -43,6 +43,7 @@ export type DataGovernanceProbeResponse = {
 	success: true
 	contractKey: string
 	scopeKey: string
+	entryId?: number
 	graphqlSeenAt: string
 	webSeenAt: string
 	graphqlRevision: string
@@ -466,6 +467,7 @@ async function probeEntryData(
 		)
 	}
 	return {
+		entryId,
 		revision: snapshotRevision(meta),
 		settlementState: meta.settlementState,
 		coverageState: meta.coverageState,
@@ -876,6 +878,7 @@ export async function probeDataContract(
 	let coverageState: DataGovernanceProbeResponse['coverageState']
 	let timelinessState: DataGovernanceProbeResponse['timelinessState']
 	let finalizationDueAt: string | null | undefined
+	let consumerEntryId: number | undefined
 
 	try {
 		const config = canaryForContract(input.contractKey)
@@ -953,6 +956,7 @@ export async function probeDataContract(
 					)
 				}
 				const result = await probeMyFpl(input, config, options)
+				consumerEntryId = result.entryId
 				graphqlRevision = result.revision
 				settlementState = result.settlementState
 				coverageState = result.coverageState
@@ -1009,6 +1013,7 @@ export async function probeDataContract(
 		success: true,
 		contractKey: input.contractKey,
 		scopeKey: input.scopeKey,
+		...(consumerEntryId !== undefined ? { entryId: consumerEntryId } : {}),
 		graphqlSeenAt,
 		webSeenAt,
 		graphqlRevision: graphqlRevision!,

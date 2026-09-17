@@ -41,6 +41,8 @@ describe('data governance consumer probe contract', () => {
 		assert.match(probe, /signal: options\.signal/)
 		assert.match(probe, /Math\.min\(options\.timeoutMs \?\? 8_000, 8_000\)/)
 		assert.match(probe, /canarySession\(config, entryId\)/)
+		assert.match(probe, /consumerEntryId = result\.entryId/)
+		assert.match(probe, /entryId: number/)
 	})
 
 	it('uses server-only canaries for every authenticated business contract', async () => {
