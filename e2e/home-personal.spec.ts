@@ -1571,9 +1571,11 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
 }
 
 
+test.describe('J12 Perth baseline journeys', () => {
+ test.use({ timezoneId: 'Australia/Perth' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
- test(`J12 browse filters and owner cancel preserve read-only behavior ${locale} ${width}px`, async ({ page }) => {
+ test(`J12 browse filters and owner cancel preserve read-only behavior ${locale} ${width}px`, async ({ page }, testInfo) => {
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
  await page.setViewportSize({ width, height: 900 })
@@ -1653,6 +1655,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
   expect(mutations).toEqual([])
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+  await testInfo.attach('J12-baseline-scope', { body: JSON.stringify({ variantId: `J12.O.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, viewport: page.viewportSize(), timezone: 'Australia/Perth', theme: 'system', scope: 'One functional journey; cache cold/warm repetitions and performance remain unverified' }), contentType: 'application/json' })
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
@@ -1661,6 +1665,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
  }
 }
+
+})
 
 for (const locale of ['en', 'zh-CN'] as const) {
 for (const width of [1440, 390]) {
