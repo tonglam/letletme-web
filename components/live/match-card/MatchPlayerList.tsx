@@ -26,7 +26,7 @@ function formatPlayerPrice(price: number | null | undefined): string | null {
 	return `£${(price / 10).toFixed(1)}m`
 }
 
-function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player: PlayerStat) => void }) {
+function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player: PlayerStat, opener: HTMLElement) => void }) {
 	const t = useTranslations('LiveMatches')
 	const metrics = getPlayerMetrics(player)
 	const priceLabel = formatPlayerPrice(player.price)
@@ -49,7 +49,7 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 			type="button"
 			variant="ghost"
 			className="h-auto w-full flex-col items-stretch rounded-lg border border-transparent bg-accent/30 p-3 text-left whitespace-normal hover:border-border/50 hover:bg-accent/50"
-			onClick={() => onSelect(player)}
+			onClick={event => onSelect(player, event.currentTarget)}
 		>
 			<span className="flex items-start justify-between gap-3">
 				<span className="min-w-0">
@@ -109,14 +109,14 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 	)
 }
 
-function TeamPlayers({ team, onSelect }: { team: MatchTeam; onSelect: (player: PlayerStat, team: MatchTeam) => void }) {
+function TeamPlayers({ team, onSelect }: { team: MatchTeam; onSelect: (player: PlayerStat, team: MatchTeam, opener: HTMLElement) => void }) {
 	const t = useTranslations('LiveMatches')
 	const players = getPlayersWithPoints(team.players)
 	if (players.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">{t('noPlayerPoints')}</p>
 	return (
 		<div className="flex flex-col gap-2">
 			{players.map((player) => (
-				<PlayerRow key={player.element ?? player.player} player={player} onSelect={(selected) => onSelect(selected, team)} />
+				<PlayerRow key={player.element ?? player.player} player={player} onSelect={(selected, opener) => onSelect(selected, team, opener)} />
 			))}
 		</div>
 	)
@@ -124,14 +124,14 @@ function TeamPlayers({ team, onSelect }: { team: MatchTeam; onSelect: (player: P
 
 interface MatchPlayerListProps {
 	match: Match
-	onSelectPlayer: (player: PlayerStat, team: string, teamShort: string) => void
+	onSelectPlayer: (player: PlayerStat, team: string, teamShort: string, opener: HTMLElement) => void
 }
 
 export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps) {
 	const t = useTranslations('LiveMatches')
 	const [expanded, setExpanded] = useState(false)
 	const contentId = useId()
-	const selectPlayer = (player: PlayerStat, team: MatchTeam) => onSelectPlayer(player, team.name, team.shortName)
+	const selectPlayer = (player: PlayerStat, team: MatchTeam, opener: HTMLElement) => onSelectPlayer(player, team.name, team.shortName, opener)
 
 	return (
 		<section

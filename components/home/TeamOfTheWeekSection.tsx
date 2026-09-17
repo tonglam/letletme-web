@@ -73,6 +73,7 @@ function TeamOfTheWeekCard({
 }) {
 	const t = useTranslations('Home')
 	const tPitch = useTranslations('LivePoints')
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const shareRef = useRef<HTMLElement | null>(null)
 	const {
 		closePlayerDetail,
@@ -83,7 +84,8 @@ function TeamOfTheWeekCard({
 	} = useMatchPlayerDetail(currentEventId ?? undefined)
 	const pitchPlayers = teamOfTheWeek.map(mapTeamOfWeekPlayer)
 	const handlePlayerClick = useCallback(
-		(playerId: string) => {
+		(playerId: string, opener: HTMLElement) => {
+			playerOpenerRef.current = opener
 			const player = teamOfTheWeek.find(
 				candidate => String(candidate.id) === playerId
 			)
@@ -184,6 +186,7 @@ function TeamOfTheWeekCard({
 				)}
 			</Card>
 			<PlayerDetailModal
+				openerRef={playerOpenerRef}
 				player={selectedPlayer}
 				isOpen={isPlayerDetailOpen}
 				onClose={closePlayerDetail}

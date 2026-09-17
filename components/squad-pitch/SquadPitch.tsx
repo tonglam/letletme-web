@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
-import { forwardRef, type CSSProperties } from 'react'
+import { forwardRef, type CSSProperties, type MouseEvent } from 'react'
 
 export type SquadPosition = 'GKP' | 'DEF' | 'MID' | 'FWD'
 
@@ -86,7 +86,7 @@ export interface SquadPitchProps {
 	benchBoost?: boolean
 	benchBoostLabel?: string
 	benchPointsLabel?: string
-	onPlayerClick?: (playerId: string) => void
+	onPlayerClick?: (playerId: string, opener: HTMLElement) => void
 	showHeader?: boolean
 	title?: string
 	managerName?: string
@@ -307,11 +307,11 @@ function PlayerCard({
 }: {
 	player: SquadPitchPlayer
 	compact?: boolean
-	onPlayerClick?: (playerId: string) => void
+	onPlayerClick?: (playerId: string, opener: HTMLElement) => void
 	labels: SquadPitchLabels
 }) {
 	const isInteractive = Boolean(onPlayerClick || player.href)
-	const openPlayerDetail = () => onPlayerClick?.(player.id)
+	const openPlayerDetail = (event: MouseEvent<HTMLButtonElement>) => onPlayerClick?.(player.id, event.currentTarget)
 	const content = (
 		<>
 			<div
@@ -401,7 +401,7 @@ function PositionRow({
 	position: SquadPosition
 	players: readonly SquadPitchPlayer[]
 	benchVisible?: boolean
-	onPlayerClick?: (playerId: string) => void
+	onPlayerClick?: (playerId: string, opener: HTMLElement) => void
 	labels: SquadPitchLabels
 }) {
 	if (players.length === 0) return null
@@ -439,11 +439,11 @@ function BenchPlayerCard({
 	player: SquadPitchPlayer
 	label: string
 	pointsLabel: string
-	onPlayerClick?: (playerId: string) => void
+	onPlayerClick?: (playerId: string, opener: HTMLElement) => void
 	labels: SquadPitchLabels
 }) {
 	const isInteractive = Boolean(onPlayerClick || player.href)
-	const openPlayerDetail = () => onPlayerClick?.(player.id)
+	const openPlayerDetail = (event: MouseEvent<HTMLButtonElement>) => onPlayerClick?.(player.id, event.currentTarget)
 	const autoSubbedOut = player.autoSubRole?.endsWith('_OUT') ?? false
 	const content = (
 		<div

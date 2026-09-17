@@ -8,7 +8,7 @@ import type { PlayerDetail } from '@/types/player-detail'
 import { Zap } from 'lucide-react'
 import Image from 'next/image'
 import { useTranslations } from 'next-intl'
-import { useRef } from 'react'
+import { useRef, type RefObject } from 'react'
 import { ShareActions } from '@/components/share/ShareActions'
 
 interface PlayerDetailModalProps {
@@ -16,6 +16,7 @@ interface PlayerDetailModalProps {
 	isOpen: boolean
 	onClose: () => void
 	isLoading?: boolean
+	openerRef: RefObject<HTMLElement | null>
 }
 
 function coreMatchStatKeys(position: string): Array<{
@@ -138,10 +139,10 @@ export function PlayerDetailModal({
 	isOpen,
 	onClose,
 	isLoading = false,
+	openerRef,
 }: PlayerDetailModalProps) {
 	const t = useTranslations('LivePoints')
 	const shareRef = useRef<HTMLDivElement | null>(null)
-	const openerRef = useRef<HTMLElement | null>(null)
 	if (!player) return null
 
 	const breakdownLabels: Record<string, string> = {
@@ -208,16 +209,9 @@ export function PlayerDetailModal({
 	return (
 		<Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
 			<DialogContent
-				onOpenAutoFocus={() => {
-					// This controlled dialog is opened by player buttons outside DialogTrigger.
-					openerRef.current = document.activeElement instanceof HTMLElement
-						? document.activeElement
-						: null
-				}}
 				onCloseAutoFocus={event => {
 					event.preventDefault()
 					const opener = openerRef.current
-					openerRef.current = null
 					if (opener?.isConnected) opener.focus({ preventScroll: true })
 				}}
 				className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto overscroll-contain p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-lg">

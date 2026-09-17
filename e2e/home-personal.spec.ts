@@ -836,6 +836,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
 			for (const playerId of [1, 12]) {
 				const opener = pitch.getByRole('button', { name: locale === 'zh-CN' ? `查看 Player ${playerId} 的详情` : `View details for Player ${playerId}`, exact: true })
+				// Model browsers where pointer activation does not focus the button.
+				await opener.evaluate(element => element.addEventListener('mousedown', event => event.preventDefault(), { once: true }))
 				await opener.click()
 				const dialog = page.getByRole('dialog')
 				await expect(dialog.getByRole('heading', { name: `Player ${playerId}`, exact: true })).toBeVisible()
@@ -848,6 +850,18 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await page.keyboard.press('Escape')
 				await expect(dialog).toHaveCount(0)
 				await expect(opener).toBeFocused()
+				const row = page.getByRole('button', { name: locale === 'zh-CN' ? `查看 Player ${playerId} 的详情` : `View details for Player ${playerId}`, exact: true }).and(page.locator('div[role="button"]'))
+				await expect(row).toHaveCount(1)
+				await row.click()
+				await expect(dialog.getByRole('heading', { name: `Player ${playerId}`, exact: true })).toBeVisible()
+				await dialog.getByRole('button', { name: locale === 'zh-CN' ? '关闭' : 'Close', exact: true }).click()
+				await expect(dialog).toHaveCount(0)
+				await expect(row).toBeFocused()
+				await row.press('Enter')
+				await expect(dialog).toBeVisible()
+				await page.keyboard.press('Escape')
+				await expect(dialog).toHaveCount(0)
+				await expect(row).toBeFocused()
 			}
 			await page.getByRole('link', { name: locale === 'zh-CN' ? '返回赛事' : 'Back to competition', exact: true }).click()
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')

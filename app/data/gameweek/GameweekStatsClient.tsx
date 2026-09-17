@@ -286,6 +286,7 @@ export default function GameweekStatsClient({
 	const isOverviewPending = committedDesk.overviewState === 'PENDING'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 	const isBoardsPending = committedDesk.boardsState === 'PENDING'
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const overviewShareRef = useRef<HTMLElement | null>(null)
 	const haulShareRef = useRef<HTMLDivElement | null>(null)
 	const {
@@ -338,7 +339,8 @@ export default function GameweekStatsClient({
 		)
 	}, [committedDesk.publishedAt, formatter])
 	const handleHaulPlayerClick = useCallback(
-		(player: PlayerListItem) => {
+		(player: PlayerListItem, opener: HTMLElement) => {
+			playerOpenerRef.current = opener
 			const boardPlayer = haulPlayers.find(
 				candidate => candidate.id === player.id
 			)
@@ -693,6 +695,7 @@ export default function GameweekStatsClient({
 				</div>
 			</PageShell>
 			<PlayerDetailModal
+				openerRef={playerOpenerRef}
 				player={selectedPlayer}
 				isOpen={isPlayerDetailOpen}
 				onClose={closePlayerDetail}

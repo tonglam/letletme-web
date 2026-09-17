@@ -48,6 +48,7 @@ function MatchCardComponent({
 }: MatchCardProps) {
 	const highlights = useMemo(() => buildMatchHighlights(match), [match])
 	const detail = useMatchPlayerDetail(eventId)
+	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const shareT = useTranslations('Share')
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
@@ -84,7 +85,10 @@ function MatchCardComponent({
 				{isMatchStarted(match) ? (
 						<MatchPlayerList
 						match={match}
-						onSelectPlayer={detail.openPlayerDetail}
+						onSelectPlayer={(player, team, teamShort, opener) => {
+							playerOpenerRef.current = opener
+							void detail.openPlayerDetail(player, team, teamShort)
+						}}
 					/>
 					) : null}
 			</div>
@@ -100,6 +104,7 @@ function MatchCardComponent({
 				</div>
 			) : null}
 			<PlayerDetailModal
+				openerRef={playerOpenerRef}
 				player={detail.selectedPlayer}
 				isOpen={detail.isOpen}
 				onClose={detail.closePlayerDetail}
