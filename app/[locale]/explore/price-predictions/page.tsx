@@ -1,3 +1,4 @@
+import { createPerformanceCorrelationId } from '@/lib/analytics/performance-correlation'
 import { PriceChangesBoard } from '@/app/data/price-changes/PriceChangesBoard'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
@@ -111,7 +112,7 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 			error,
 		}))
 	const personalPromise = loadPersonalSquadSeed()
-	const navigationId = crypto.randomUUID()
+	const navigationId = createPerformanceCorrelationId('nav')
 	const { response: boardResponse, error: boardError } = await boardPromise
 
 	const board = boardResponse.priceChangeBoard

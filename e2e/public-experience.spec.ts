@@ -911,3 +911,38 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(page.getByRole('table').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
 	})
 }
+
+test('prediction route-ready telemetry passes receiver payload validation', async ({ page, request }) => {
+	// Observe the actual Blob while forwarding it through the native sender.
+	await page.addInitScript(() => {
+		const send = navigator.sendBeacon.bind(navigator)
+		const samples: unknown[] = []
+		Object.assign(window, { observedVitalPayloads: samples })
+		navigator.sendBeacon = (url, data) => {
+			if (String(url) === '/api/vitals' && data instanceof Blob) {
+				void data.text().then(text => samples.push(JSON.parse(text)))
+			}
+			return send(url, data)
+		}
+	})
+	await page.goto('/explore/price-predictions')
+	const targetPayload = () => page.evaluate(() => {
+		const payloads = (window as unknown as { observedVitalPayloads: Array<{ samples: Array<{ metricName: string; navigationId: string }> }> }).observedVitalPayloads
+		return payloads.find(payload => payload.samples.some(sample => sample.metricName === 'HOME_PRICE_CHANGES_READY'))
+	})
+	await expect.poll(targetPayload).toBeTruthy()
+	const payload = await targetPayload()
+	expect(payload?.samples.find(sample => sample.metricName === 'HOME_PRICE_CHANGES_READY')?.navigationId).toMatch(/^nav-[A-Za-z0-9_-]{8,52}$/)
+	// Replay the exact batch, so an unrelated vital cannot satisfy this check.
+	// The full suite shares a rate bucket. A specific 429 proves validation
+	// passed (the receiver validates before rate limiting), not ingestion.
+	const response = await request.post('/api/vitals', {
+		headers: { Origin: 'https://letletme.top' },
+		data: payload
+	})
+	if (response.status() === 429) {
+		expect(await response.json()).toEqual({ error: 'Too many web vital reports' })
+	} else {
+		expect(response.status(), await response.text()).toBe(204)
+	}
+})
