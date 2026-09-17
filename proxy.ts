@@ -29,7 +29,7 @@ import {
 } from '@/lib/competition-session-handoff'
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
-import { resolveRequestId } from '@/lib/request-timing'
+import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { markAuthenticatedCapacitySession } from '@/lib/capacity-run'
 
 const handleI18nRouting = createMiddleware(routing)
@@ -166,7 +166,19 @@ export async function proxy(req: NextRequest) {
 		}
 		if (!isProtectedApi(requestedPathname)) return NextResponse.next()
 
-		const session = await getAuthorizationSession(req.headers)
+		const authTiming = requestedPathname.startsWith('/api/live/competitions/') ? new RequestTiming() : null
+		let session: Awaited<ReturnType<typeof getAuthorizationSession>>
+		try {
+			session = authTiming
+				? await authTiming.measure('fresh-session', () => getAuthorizationSession(req.headers))
+				: await getAuthorizationSession(req.headers)
+		} finally {
+			if (authTiming) console.info('[proxy-auth]', {
+				scope: 'live-competition-api',
+				durationMs: Number(authTiming.elapsedMs().toFixed(2)),
+				stages: authTiming.snapshot()
+			})
+		}
 		if (!session) {
 			return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 		}
@@ -256,7 +268,19 @@ export async function proxy(req: NextRequest) {
 
 	// Protected routes must observe entry verification and revocation immediately,
 	// rather than trusting the five-minute session cookie cache.
-	const session = await getAuthorizationSession(req.headers)
+	const authTiming = pathname === '/live/competitions' ? new RequestTiming() : null
+	let session: Awaited<ReturnType<typeof getAuthorizationSession>>
+	try {
+		session = authTiming
+			? await authTiming.measure('fresh-session', () => getAuthorizationSession(req.headers))
+			: await getAuthorizationSession(req.headers)
+	} finally {
+		if (authTiming) console.info('[proxy-auth]', {
+			scope: 'live-competition-page',
+			durationMs: Number(authTiming.elapsedMs().toFixed(2)),
+			stages: authTiming.snapshot()
+		})
+	}
 
 	if (!session) {
 		const url = req.nextUrl.clone()
