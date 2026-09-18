@@ -2139,11 +2139,18 @@ for (const width of [1440, 390]) {
    await page.keyboard.press('Escape')
    await expect(dialog).toHaveCount(0)
    await expect(trigger).toBeFocused()
+   await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length).toBeGreaterThan(0)
    for (const horizon of [6, 5]) {
+    const previousReadyCount = reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length
     const button = page.getByRole('button', { name: zh ? `${horizon} 轮` : `${horizon} GWs`, exact: true })
     await button.click()
     await expect(button).toHaveAttribute('aria-pressed', 'true')
+    await expect(matrix.getByRole('columnheader').filter({ hasText: /^GW\d+$/ })).toHaveText(Array.from({ length: horizon }, (_, index) => `GW${33 + index}`))
+    await expect(cells.nth(gw33).locator('[title]')).toHaveCount(2)
+    await expect(cells.nth(gw34)).toHaveText(zh ? '空白轮' : 'BGW')
+    await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length).toBeGreaterThan(previousReadyCount)
    }
+   await testInfo.attach('fixture-window-readiness', { body: JSON.stringify({ fromGw: 33, horizons: [6, 5], teamId: 1, samples: reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null })) }), contentType: 'application/json' })
    await page.locator('#my-squad > summary').click()
    await expect(page.locator('#my-squad')).toHaveAttribute('open', '')
    if (scenario === 'slow-personal') {
