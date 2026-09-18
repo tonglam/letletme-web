@@ -73,7 +73,7 @@ test('Briefing runs both feature states and keeps their outputs separate', () =>
 	assert.equal(result.status, 0, result.stderr)
 	assert.deepEqual(result.calls.map(c => c.briefing), ['true', 'false'])
 	assert.deepEqual(result.calls.map(c => c.args), [
-		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
+		['playwright', 'test', 'e2e/briefing.spec.ts', 'e2e/briefing-state-metrics.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
 		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled']
 	])
 })
