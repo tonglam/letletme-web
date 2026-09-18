@@ -30,6 +30,13 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(search).toHaveValue('')
    await expect(disclosure.locator('li')).toHaveCount(6)
    await expect(page.locator('#market-availability-search-status')).toHaveText(zh ? '输入至少 2 个字符，在全部更新中查找球员。' : 'Enter at least 2 characters to search all updates.')
+   await disclosure.getByRole('link', { name: 'Palmer', exact: true }).click()
+   await expect(page).toHaveURL(new RegExp(`${zh ? '/zh-CN' : ''}/explore/player-stats\\?p1=2$`))
+   await expect(page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })).toContainText('Palmer')
+   await page.goBack()
+   await expect(page).toHaveURL(new RegExp(`${zh ? '/zh-CN' : ''}/explore/market$`))
+   await expect(page.locator('#market-most-selected-share li')).toHaveCount(4)
+
   })
  }
 }

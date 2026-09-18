@@ -4,7 +4,7 @@ const marketControlPlayers = ['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD']
  playerId: 801 + index, webName: `Market ${position}`, teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position, price: 50 + index, selectedByPercent: 20 - index
 }))
 const marketControlUpdates = Array.from({ length: 6 }, (_, index) => ({
- player: { ...marketControlPlayers[index % 4], playerId: 811 + index, webName: `Availability ${index + 1}` }, status: 'd', previousStatus: 'a', news: 'Fixture fitness update', newsAdded: '2026-08-03T09:00:00.000Z', observedDate: '2026-08-03', chanceOfPlayingThisRound: 75, chanceOfPlayingNextRound: 100
+ player: index === 0 ? { ...marketControlPlayers[2], playerId: 2, webName: 'Palmer', teamId: 2, teamName: 'Chelsea', teamShortName: 'CHE', price: 105 } : { ...marketControlPlayers[index % 4], playerId: 811 + index, webName: `Availability ${index + 1}` }, status: 'd', previousStatus: 'a', news: 'Fixture fitness update', newsAdded: '2026-08-03T09:00:00.000Z', observedDate: '2026-08-03', chanceOfPlayingThisRound: 75, chanceOfPlayingNextRound: 100
 }))
 
 const host = '127.0.0.1'
