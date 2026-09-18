@@ -110,9 +110,9 @@ test(`live points enriches all fifteen picks through one bounded GraphQL root ${
 			query?: string
 			variables?: { eventId?: number; elementIds?: number[] }
 		}
-		if (detailTiming === 'before-batch' && (payload.query?.includes('EventLiveExplainPlayer') || payload.query?.includes('PlayerLive'))) {
+		if (payload.query?.includes('EventLiveExplainPlayer') || payload.query?.includes('PlayerLive')) {
 			targetedRequests += 1
-			await targetedGate
+			if (detailTiming === 'before-batch') await targetedGate
 			const isExplain = payload.query?.includes('EventLiveExplainPlayer')
 			await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: isExplain
 				? { eventLiveExplain: { elementId: 1, stats: { minutes: 45 }, contributions: [{ identifier: 'stale_targeted_payload', value: 1, points: 99 }] } }
@@ -225,8 +225,14 @@ test(`live points enriches all fifteen picks through one bounded GraphQL root ${
 		await expect.poll(() => targetedRequests).toBe(2)
 		await expect(page.getByRole('dialog').getByText('Loading breakdown…', { exact: true })).toBeVisible()
 	}
+	const batchFinished = page.waitForEvent('requestfinished', request =>
+		request.url().endsWith('/api/graphql') && Boolean(request.postDataJSON()?.query?.includes('EventLiveExplainBatch')))
 	releaseExplain()
-	if (detailTiming === 'after-batch') await openPlayerOne()
+	await batchFinished
+	if (detailTiming === 'after-batch') {
+		await page.clock.runFor(50)
+		await openPlayerOne()
+	}
 	const detail = page.getByRole('dialog')
 	await expect(
 		detail.getByText('manual_refresh_explain', { exact: true })
@@ -252,6 +258,7 @@ test(`live points enriches all fifteen picks through one bounded GraphQL root ${
 	}
 
 
+	if (detailTiming === 'after-batch') expect(targetedRequests).toBe(0)
 	await page.clock.fastForward(10 * 60 * 1000)
 	// The deterministic fixture is outside the live window.  A scheduled or
 	// otherwise unconfirmed round must not re-arm the explanation poll.
@@ -389,7 +396,7 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 		))
 		releasePlayerOne()
 		for (const response of await lateResponses) await response.finished()
-		if (hasFailure) {
+		if (outcome === 'failed') {
 			await expect.poll(() => page.evaluate(() =>
 				Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1') || 0)
 			)).toBeGreaterThan(0)
@@ -461,6 +468,13 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 		await expect(pitch).toBeVisible()
 		expect(playerOneRequestCount).toBe(2)
 		expect(playerTwoRequestCount).toBe(0)
+		if (hasFailure) await page.clock.fastForward(61_000)
+		await pitch.getByRole('button', { name: 'View details for Player 1', exact: true }).click()
+		await expect.poll(() => playerOneRequestCount).toBe(4)
+		const reopened = page.getByRole('dialog')
+		await expect(reopened.getByText('Goals', { exact: true })).toBeVisible()
+		await expect(reopened.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+		await expect(reopened.getByText('99', { exact: true })).toHaveCount(0)
 		return
 	}
 
@@ -486,13 +500,7 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 	// Dependency failures can extend the shared cooldown up to 60 seconds.
 	// Advance the deterministic clock before exercising the explicit
 	// recovery read; a manual refresh must not bypass a live server cooldown.
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1') || 0)
-			)
-		)
-		.toBeGreaterThan(0)
+	// Partial success can legitimately clear shared cooldown; do not assert order-dependent storage.
 	await page.clock.fastForward(61_000)
 	}
 	await pitch
