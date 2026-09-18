@@ -1607,6 +1607,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await expect(page.getByText(locale === 'zh-CN' ? '已结算发布缺少对应赛制数据。' : 'The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
 		await gameweek.click()
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		await expect(reviewReady).toHaveAttribute('data-review-view', 'gameweek')
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'true')
 		await season.click()
 		expect(sectionRequests).toBe(2)
 		releaseSections()

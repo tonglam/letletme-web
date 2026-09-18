@@ -899,6 +899,7 @@ export default function TournamentReviewV2Client({
 			: null) ?? null
 	)
 	const [loading, setLoading] = useState(false)
+	const [loadingScope, setLoadingScope] = useState<'all' | 'season'>('all')
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
 	const [eventIndexError, setEventIndexError] = useState<string | null>(
@@ -1126,6 +1127,7 @@ export default function TournamentReviewV2Client({
 		++catalogQueryGeneration.current
 		setCatalogLoadingMore(false)
 		const requestId = ++requestSequence.current
+		setLoadingScope('all')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1199,6 +1201,7 @@ export default function TournamentReviewV2Client({
 			requestedRetry === null ||
 			requestedRetry === 'season'
 		const requestId = ++requestSequence.current
+		setLoadingScope('all')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1522,6 +1525,7 @@ export default function TournamentReviewV2Client({
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
 			scope === 'ALL' ? 'ACCESSIBLE' : 'ALL'
+		setLoadingScope('all')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1711,6 +1715,7 @@ export default function TournamentReviewV2Client({
 		if (seasonSectionLoad.current?.key === sectionRequestKey) return
 		const requestId = ++requestSequence.current
 		setSelectedPhaseId(phaseId)
+		setLoadingScope('season')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1850,7 +1855,8 @@ export default function TournamentReviewV2Client({
 		: seasonReview?.tournamentId === selectedTournamentId && seasonReview?.throughEventId === eventId &&
 			seasonReview?.latestRevision === selectedPhase?.revision && seasonPayloadComplete
 
-	const reviewReady = Boolean(!loading && !visibleError && state === 'READY' && hasActivePayload &&
+	const activeReviewLoading = loading && (loadingScope === 'all' || view === 'season')
+	const reviewReady = Boolean(!activeReviewLoading && !visibleError && state === 'READY' && hasActivePayload &&
 		reviewIdentityMatches && readyRevision && readyHash && (view !== 'season' || !retryPhaseId))
 	return (
 		<div className="min-h-screen bg-slate-50">
