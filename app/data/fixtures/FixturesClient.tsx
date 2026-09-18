@@ -9,6 +9,7 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { clearRouteReadyStart, markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import {
 	buildSquadTeamExposure,
 	squadPickKeys,
@@ -741,6 +742,28 @@ export default function FixturesClient({
 	)
 	const requestRef = useRef<AbortController | null>(null)
 	const requestGenerationRef = useRef(0)
+	const [windowInteraction, setWindowInteraction] = useState<{
+		id: string; key: string; horizon: FdrHorizon
+	} | null>(null)
+	const interactionClock = useRef<{ pathname: string; key: string } | null>(null)
+	const clearInteractionClock = useCallback(() => {
+		const clock = interactionClock.current
+		if (clock) clearRouteReadyStart(clock.pathname, clock.key)
+		interactionClock.current = null
+	}, [])
+	const beginWindowInteraction = useCallback((target: FdrHorizon) => {
+		clearInteractionClock()
+		const id = `interaction-${crypto.randomUUID()}`
+		const key = `fixtures:${target}:${id}`
+		const pathname = window.location.pathname
+		markRouteReadyStart(pathname, performance.now(), key)
+		interactionClock.current = { pathname, key }
+		setWindowInteraction({ id, key, horizon: target })
+	}, [clearInteractionClock])
+	useEffect(() => () => {
+		requestRef.current?.abort()
+		clearInteractionClock()
+	}, [clearInteractionClock])
 
 	const selectHorizon = useCallback(
 		(next: FdrHorizon) => {
@@ -749,6 +772,7 @@ export default function FixturesClient({
 			requestGenerationRef.current += 1
 			requestRef.current?.abort()
 			if (effectiveNext < horizon) {
+				beginWindowInteraction(effectiveNext)
 				setPendingHorizon(null)
 				setLoading(false)
 				setLoadError(false)
@@ -763,10 +787,12 @@ export default function FixturesClient({
 				eventId => !cacheRef.current.has(eventId) || unknownEvents.has(eventId)
 			)
 			if (effectiveNext === horizon && missing.length === 0) {
+				if (pendingHorizon != null) clearInteractionClock()
 				setPendingHorizon(null)
 				setLoadError(false)
 				return
 			}
+			beginWindowInteraction(effectiveNext)
 			if (missing.length === 0) {
 				setPendingHorizon(null)
 				setLoadError(false)
@@ -807,6 +833,7 @@ export default function FixturesClient({
 					).length
 
 					if (fulfilledCount === 0) {
+						clearInteractionClock()
 						setPendingHorizon(null)
 						setLoadError(true)
 						return
@@ -838,7 +865,7 @@ export default function FixturesClient({
 					}
 				})
 		},
-		[fromGw, horizon, pendingHorizon, unknownEvents]
+		[fromGw, horizon, pendingHorizon, unknownEvents, beginWindowInteraction, clearInteractionClock]
 	)
 
 	const model = useMemo(
@@ -899,8 +926,10 @@ export default function FixturesClient({
 		<>
 			<RouteReadyMarker
 				name="FIXTURES_WINDOW_READY"
-				ready={!loading && pendingHorizon == null}
-				readyKey={String(horizon)}
+				ready={!loading && pendingHorizon == null && !loadError && (!windowInteraction || windowInteraction.horizon === horizon)}
+				readyKey={windowInteraction?.key ?? String(horizon)}
+				readyKeyKind={windowInteraction ? 'interaction' : 'identity'}
+				interactionId={windowInteraction?.id}
 				audienceHint="public"
 				goodMs={1_000}
 				poorMs={1_500}

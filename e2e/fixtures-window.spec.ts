@@ -190,6 +190,8 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 	})
 	await page.goto('/explore/fixtures')
 
+	const interactionMetrics = () => routeReadySamples(reportedVitals).filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY' && sample.measurementKind === 'interaction')
+	await expect.poll(() => routeReadySamples(reportedVitals).filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length).toBe(1)
 	const fiveGws = page.getByRole('button', { name: '5 GWs' })
 	const sixGws = page.getByRole('button', { name: '6 GWs' })
 	await sixGws.click()
@@ -220,11 +222,17 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 	expect(windowMetric?.result).toBe('ok')
 	expect(windowMetric?.samplingProbability).toBe(1)
 	expect(windowMetric?.value).toEqual(expect.any(Number))
+	await expect.poll(() => interactionMetrics().length).toBe(1)
+	expect(interactionMetrics()[0].result).toBe('ok')
+	expect(interactionMetrics()[0].interactionId).toEqual(expect.any(String))
 
 	await fiveGws.click()
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')
+	await expect.poll(() => interactionMetrics().length).toBe(2)
 	await sixGws.click()
 	await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
+	await expect.poll(() => interactionMetrics().length).toBe(3)
+	expect(new Set(interactionMetrics().map(sample => sample.interactionId)).size).toBe(3)
 	expect(requestCount).toBe(1)
 })
 
