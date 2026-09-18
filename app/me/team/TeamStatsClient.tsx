@@ -171,7 +171,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		readySnapshot.eventId === readyEvent && managerReview?.entry?.id === props.entryId &&
 		(view === 'gameweek'
 			? gameweekState === 'READY' && teamStats?.eventId === selectedGameweek && teamStats.reviewSnapshot?.entryId === props.entryId
-			: reviewState === 'READY' && seasonOverall && seasonLogs && !isTransfersLoading))
+			: reviewState === 'READY' && (pastSeasonsState === 'READY' || pastSeasonsState === 'EMPTY') && seasonOverall && seasonLogs && !isTransfersLoading))
 
 	return (
 		<PageShell>
@@ -179,7 +179,9 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 				data-manager-ready={managerReady} data-manager-entry={props.entryId}
 				data-manager-view={view} data-manager-gw={readyEvent ?? undefined}
 				data-manager-revision={readySnapshot?.revision}>
-				<RouteReadyMarker name="MANAGER_REVIEW_READY" ready={managerReady} audienceHint="session-hint" />
+				<RouteReadyMarker name="MANAGER_REVIEW_READY" ready={managerReady}
+					readyKey={`${props.entryId}:${view}:${readyEvent ?? ""}:${readySnapshot?.revision ?? ""}`}
+					audienceHint="session-hint" />
 				<StatsPageHeader title={t('title')} />
 				<p className="-mt-5 mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:-mt-7 sm:mb-8">
 					{t('subtitle')}

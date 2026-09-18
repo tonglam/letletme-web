@@ -2191,6 +2191,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
  test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Shared manager fixture requires the dedicated single-worker SSR suite')
+ const metrics: Array<{ metricName: string }> = []
+ await page.route('**/api/vitals', async route => {
+  metrics.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
  const zh = locale === 'zh-CN'
  const labels = zh ? ['赛季复盘', '队长历史', '板凳得分', '转会历史', '道具卡使用', '轮次历史'] : ['Season Review', 'Captain History', 'Bench Points', 'Transfer History', 'Chip Usage', 'Gameweek History']
  const session = await createSession({ entryId: 15702 })
@@ -2256,6 +2261,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
    await expect(dialog).toHaveCount(0)
   }
   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
+  await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(0)
+  const initialReadySamples = metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length
   const historyGate = new Promise<void>(resolve => { releaseHistory = resolve })
   const historyRequest = page.waitForRequest(request => request.url().endsWith('/api/graphql') && request.postDataJSON()?.query?.includes('GetMyFplManagerGameweek') && request.postDataJSON()?.variables?.eventId === 1)
   await page.route('**/api/graphql', async route => {
@@ -2274,6 +2281,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '101')
+  await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(initialReadySamples)
   await expect.poll(async () => {
    const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
    return observed.requests.filter(request => request.operation === 'GetMyFplManagerGameweek' && request.variables.eventId === 1)
@@ -3555,3 +3563,28 @@ for (const format of ['H2H', 'KNOCKOUT'] as const) {
   }
  })
 }
+
+
+test('J10 past-season pending prevents complete season readiness until recovery', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const review = { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! } }
+ const configure = async (pending: boolean) => {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...review, pastSeasonsState: pending ? 'PENDING' : 'READY' } } }] }) })).ok).toBe(true)
+ }
+ try {
+  await configure(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/my-fpl/team')
+  await expect(page.getByRole('tab', { name: 'Season Review', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
+  await configure(false)
+  await page.reload()
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
