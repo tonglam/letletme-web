@@ -1595,6 +1595,7 @@ for (const width of [1440, 390]) {
     const warning = page.getByText('Refresh failed. The last available standings are still shown.', { exact: true })
     await expect(warning).toBeVisible()
     await expect(teams).toHaveText([/Alpha Coverage/, /Beta Coverage/])
+    await test.info().attach('pagination-retry-clock', { body: JSON.stringify(await page.evaluate(() => ({ now: Date.now(), cooldownUntil: sessionStorage.getItem('letletme:dependency-cooldown-until-v1'), failureAt: sessionStorage.getItem('letletme:dependency-cooldown-failure-at-v1') }))), contentType: 'application/json' })
     expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(2)
     // Respect the fixture's real one-second Retry-After before explicit recovery.
     await expect.poll(() => Date.now() - lastFailureAt).toBeGreaterThan(1_100)
