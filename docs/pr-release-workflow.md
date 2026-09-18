@@ -107,3 +107,26 @@ redis/data revision:
 smoke-test result:
 monitoring window:
 ```
+
+### Vercel promotion 超时后的恢复
+
+`vercel promote` 的 CLI 超时不取消后台 promotion。参见
+[Vercel promote 文档](https://vercel.com/docs/cli/promote)。命令失败不证明域名未变化，
+EdgeOne 恢复 `all-vercel` 也不等于 Vercel deployment 回滚。
+
+1. 记录本次 release SHA、候选 deployment ID、workflow run/attempt 及已知可回退 deployment。
+2. 用相同 project/team 执行 `vercel promote status <project-id> --scope <team>`，观察原操作；
+   不重复提交 promotion，不因观察超时创建新的候选。认证或网络错误也属于状态未知。
+3. 若观察仍未完成，本次 workflow 保持失败，禁止激活 Tencent 或恢复 split。
+   后续继续查询同一项目，并读取公共域名、Vercel origin 的 alias deployment ID 及
+   `/healthz` release；这些域名仍可能在 workflow 退出后变化，不能记录为已回滚。
+4. 后台已无 pending 操作后，核对候选/实际域名 SHA、当前 main、CI/review 与 Tencent
+   实际版本。目标仍为当前 main 时才通过现有精确 SHA 发布入口继续；目标已过期时，
+   完成当前 main 的发布门槛后发布当前 main，不盲目重跑旧 SHA。若发生关键业务回归，
+   使用已记录的稳定 deployment 执行既有回滚流程，并重新验证域名与实际流量。
+5. 只有两端 release、代表 API 和原登录浏览器业务路径都通过，才关闭发布不一致问题。
+   在此之前保留失败及后续恢复记录；健康响应或无 pending 操作均不是业务验收。
+
+发布 workflow 在创建候选前观察已有 promotion；本次 promote 返回非零时只观察原操作，
+随后仍须通过目标 release header 检查。观察再次失败时不会自动恢复旧 alias，
+必须按上述步骤继续核对异步终态，不能把有界等待当作取消或回滚保证。
