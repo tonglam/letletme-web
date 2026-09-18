@@ -648,7 +648,7 @@ export default function TrendsClient({
 		() =>
 			viewDefinitions.filter(view =>
 				(committed?.sections ?? []).some(section =>
-					view.capabilities.includes(section.capability)
+					view.capabilities.includes(section.capability) && section.state !== 'UNSUPPORTED'
 				)
 			),
 		[committed, viewDefinitions]

@@ -782,6 +782,49 @@ test.describe('SSR remediation', () => {
 		}
 	}
 
+	test('unsupported personal exposure stays absent across same-cohort scope switches', async ({ page }) => {
+		const session = await createSession({ entryId: 15702 })
+		const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+		const seed = await (await fetch(`${fixture}/graphql`, {method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({query:'query TrendCohortSnapshot { fixture }', variables:{cohortId:'competition:777',eventId:33,access:'PUBLIC'}})})).json()
+		const desk = seed.data.trendCohortSnapshot
+		const exposure = {...desk.sections[0], capability:'PERSONAL_EXPOSURE', state:'UNSUPPORTED', rows:null, evidenceContext:{...desk.sections[0].evidenceContext, availabilityState:'UNSUPPORTED'}}
+		desk.sections.push(exposure)
+		desk.cohort.capabilities.push({capability:'PERSONAL_EXPOSURE',state:'UNSUPPORTED'})
+		await page.route('**/api/trends/my-cohorts', async route => {
+			const response = await route.fetch(); const catalog = await response.json()
+			catalog.cohorts[0].id = 'competition:777'
+			await route.fulfill({response,json:catalog})
+		})
+		let privateReads = 0
+		await page.route('**/api/trends/my-desk?**', async route => {
+			const response = await route.fetch(); const body = await response.json()
+			const state = ++privateReads === 1 ? 'UNAVAILABLE' : 'READY'
+			body.trendCohortSnapshot = {...desk, cohort:{...desk.cohort,access:'MINE'}, sections:[...desk.sections.filter((section: {capability:string}) => section.capability !== 'PERSONAL_EXPOSURE'), {...exposure,state,evidenceContext:{...exposure.evidenceContext,availabilityState:state},rows:state === 'READY' ? [{...desk.sections[0].rows[0],playerName:'Private exposure player'}] : null}]}
+			await route.fulfill({response,json:body})
+		})
+		try {
+			expect((await fetch(`${fixture}/__performance`,{method:'POST',body:JSON.stringify({rules:[{operation:'TrendCohortSnapshot',data:seed.data}]})})).ok).toBe(true)
+			await addSessionCookie(page,session.cookie)
+			await page.goto('/explore/selections?scope=public&cohort=competition:777&gw=33')
+			await expect(page.getByRole('tab',{name:'My exposure',exact:true})).toHaveCount(0)
+			await expect(page.getByRole('tabpanel')).toContainText('Saka')
+			const mine = page.getByRole('button',{name:/^My Leagues/})
+			await expect(mine).toBeEnabled(); await mine.click()
+			await page.getByRole('tab',{name:'My exposure',exact:true}).click()
+			const retry = page.getByRole('button',{name:'Retry',exact:true})
+			await expect(retry).toBeVisible()
+			await retry.click()
+			await expect(page.getByRole('tabpanel')).toContainText('Private exposure player')
+			expect(privateReads).toBe(2)
+			await page.getByRole('button',{name:/^Public Leagues/}).click()
+			await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public' && url.searchParams.get('cohort') === 'competition:777')
+			await expect(page.getByRole('tab',{name:'My exposure',exact:true})).toHaveCount(0)
+			await expect(page.getByRole('tabpanel')).toContainText('Saka')
+			await expect(page.getByRole('tabpanel')).not.toContainText('Private exposure player')
+			await expect(page.getByRole('button',{name:'Retry',exact:true})).toHaveCount(0)
+		} finally { await fetch(`${fixture}/__performance`,{method:'POST',body:JSON.stringify({rules:[]})}); await session.cleanup() }
+	})
+
 	test('Trends desk readiness never reports stale data during scope switch', async ({ page }) => {
 		const session = await createSession({ entryId: 15702 })
 		const samples: Record<string, unknown>[] = []
