@@ -165,6 +165,12 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	const seedGw =
 		initialSelectedGameweek > 0 ? initialSelectedGameweek : maxGw || 1
 
+	const statusSnapshot = view === 'gameweek'
+		? (!isLoading && teamStats?.eventId === selectedGameweek &&
+			teamStats.reviewSnapshot?.entryId === props.entryId
+			? teamStats.reviewSnapshot : null)
+		: snapshotMeta
+
 	const readySnapshot = view === 'gameweek' ? teamStats?.reviewSnapshot : managerReview?.snapshotMeta
 	const readyEvent = view === 'gameweek' ? selectedGameweek : managerReview?.throughEventId
 	const managerReady = Boolean(!isLoading && !error && readySnapshot?.revision &&
@@ -187,9 +193,9 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 					{t('subtitle')}
 				</p>
 
-				{snapshotMeta ? (
+				{statusSnapshot ? (
 					<MyFplSnapshotStatus
-						meta={snapshotMeta}
+						meta={statusSnapshot}
 						liveHref={`/live/points/${props.entryId}`}
 					/>
 				) : null}
