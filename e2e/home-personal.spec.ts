@@ -2630,4 +2630,65 @@ for (const locale of ['en', 'zh-CN']) {
  }
 }
 
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation HOME04 dates and gameweek boundaries ${locale} ${width}px`, async ({ page }, testInfo) => {
+   const zh = locale === 'zh-CN'
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const teams = [{ id: 1, name: 'Arsenal', shortName: 'ARS' }, { id: 2, name: 'Chelsea', shortName: 'CHE' }, { id: 3, name: 'Everton', shortName: 'EVE' }]
+   const fixtures = [0, 1].map(index => ({ id: 3401 + index, code: 3401 + index, event: { id: 34, name: 'Gameweek 34' }, kickoffTime: `2026-08-${index ? '10' : '09'}T12:00:00.000Z`, finished: false, started: false, homeTeam: teams[index], awayTeam: teams[index + 1], homeScore: null, awayScore: null, homeTeamDifficulty: 2, awayTeamDifficulty: 3 }))
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomeEventFixtures', variables: { eventId: 34 }, data: { coreEventContext: { season: '2627', revision: '7', sourceCheckedAt: '2026-08-13T09:40:00.000Z', currentEventId: 33 }, eventFixtures: fixtures } }] }) })).ok).toBe(true)
+    await page.goto(zh ? '/zh-CN' : '/')
+    const requests: number[] = []
+    page.on('request', request => { const url = new URL(request.url()); if (url.pathname === '/api/home/fixtures') requests.push(Number(url.searchParams.get('eventId'))) })
+    const matches = page.locator('#main-content [data-home-matches]')
+    const previous = matches.getByRole('button', { name: zh ? '上一轮' : 'Previous gameweek', exact: true })
+    const next = matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true })
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await next.click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const tabs = matches.getByRole('tab')
+    await expect(tabs).toHaveCount(2)
+    await tabs.nth(0).click()
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+    await expect(matches.getByRole('tabpanel')).toContainText('ARS')
+    await expect(matches.getByRole('tabpanel')).not.toContainText('EVE')
+    await tabs.nth(1).click()
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+    await expect(matches.getByRole('tabpanel')).toContainText('EVE')
+    await expect(matches.getByRole('tabpanel')).not.toContainText('ARS')
+    await tabs.nth(1).press('Home')
+    await expect(tabs.nth(0)).toBeFocused()
+    await expect(matches.getByRole('tabpanel')).toContainText('ARS')
+    await tabs.nth(0).press('End')
+    await expect(tabs.nth(1)).toBeFocused()
+    await expect(matches.getByRole('tabpanel')).toContainText('EVE')
+    expect(requests).toEqual([34])
+    for (let event = 33; event >= 1; event -= 1) {
+     await previous.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+     await expect(matches.getByText(`GW${event}`, { exact: true })).toBeVisible()
+    }
+    await expect(previous).toBeDisabled()
+    await expect(next).toBeEnabled()
+    for (let event = 2; event <= 38; event += 1) {
+     await next.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+     await expect(matches.getByText(`GW${event}`, { exact: true })).toBeVisible()
+    }
+    await expect(next).toBeDisabled()
+    await expect(previous).toBeEnabled()
+    expect(requests.every(event => event >= 1 && event <= 38)).toBe(true)
+    expect(requests.filter(event => event === 34)).toHaveLength(1)
+    expect(requests.filter(event => event === 33)).toHaveLength(0)
+    await testInfo.attach('home-fixture-read-events', { body: JSON.stringify(requests), contentType: 'application/json' })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+}
+
 })
