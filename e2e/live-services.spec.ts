@@ -682,35 +682,74 @@ test('live points restores transfer details and distinguishes failure from empty
 	await expect(section).not.toContainText('Incoming Player')
 })
 
-test('public live points prompts anonymous visitors to sign in without querying protected transfers', async ({
-	page
-}) => {
-	test.skip(
-		Boolean(process.env.PLAYWRIGHT_BASE_URL),
-		'Uses the deterministic local GraphQL fixture'
-	)
-	let transferRequests = 0
-	await page.route('**/api/graphql', async route => {
-		const payload = route.request().postDataJSON() as { query?: string }
-		if (payload.query?.includes('GetEntryTransferHistory'))
-			transferRequests += 1
-		await continueToGraphqlFixture(route)
-	})
-	await page.goto('/live/points/123?gw=33&tournamentId=3&from=home')
-	const section = page.getByRole('region', { name: /Gameweek transfers/ })
-	await expect(
-		section.getByRole('link', { name: 'Sign in to view gameweek transfers' })
-	).toHaveAttribute(
-		'href',
-		'/auth/login?next=%2Flive%2Fpoints%2F123%3Fgw%3D33%26tournamentId%3D3%26from%3Dhome'
-	)
-	await expect(
-		section.getByRole('button', { name: 'Refresh transfers' })
-	).toHaveCount(0)
-	expect(transferRequests).toBe(0)
-})
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test(`public live points displays transfer details for anonymous visitors ${locale} ${width}px`, async ({
+			page
+		}) => {
+			test.skip(
+				Boolean(process.env.PLAYWRIGHT_BASE_URL),
+				'Uses the deterministic local GraphQL fixture'
+			)
+			await page.setViewportSize({ width, height: 900 })
+			let transferRequests = 0
+			await page.route('**/api/graphql', async route => {
+				const payload = route.request().postDataJSON() as {
+					query?: string
+					variables?: { entryId?: number }
+				}
+				if (!payload.query?.includes('GetEntryTransferHistory')) {
+					await continueToGraphqlFixture(route)
+					return
+				}
+				transferRequests += 1
+				expect(payload.variables?.entryId).toBe(123)
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						data: {
+							entryTransferHistory: [
+								{
+									eventId: 33,
+									eventTransfers: 1,
+									eventTransfersCost: 0,
+									transfers: [
+										{
+											event: 33,
+											elementOutWebName: 'Outgoing Player',
+											elementOutTeamShortName: 'OUT',
+											elementOutTypeName: 'MID',
+											elementOutCost: 5.5,
+											elementInWebName: 'Incoming Player',
+											elementInTeamShortName: 'IN',
+											elementInTypeName: 'MID',
+											elementInCost: 6.2,
+											time: '2026-08-04T10:00:00Z'
+										}
+									]
+								}
+							]
+						}
+					})
+				})
+			})
+			await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/live/points/123?gw=33&tournamentId=3&from=home`)
+			const section = page.getByRole('region', { name: locale === 'en' ? /Gameweek transfers/ : /本周转会/ })
+			await expect(section).toContainText('Incoming Player')
+			await expect(section).toContainText('Outgoing Player')
+			await expect(section).toContainText('£5.5m')
+			await expect(section).toContainText('£6.2m')
+			await expect(
+				section.getByRole('button', { name: locale === 'en' ? 'Refresh transfers' : '刷新转会', exact: true })
+			).toBeVisible()
+			await expect.poll(() => section.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+			expect(transferRequests).toBe(1)
+		})
+	}
+}
 
-test('live transfers offer reauthentication when a display session is no longer authorized', async ({
+test('public live transfers expose request failures and allow retry without a login gate', async ({
 	page
 }) => {
 	test.skip(
@@ -759,17 +798,13 @@ test('live transfers offer reauthentication when a display session is no longer 
 	})
 	await page.goto('/live/points/123?gw=33&tournamentId=3')
 	const section = page.getByRole('region', { name: /Gameweek transfers/ })
-	await expect(
-		section.getByRole('link', { name: 'Sign in to view gameweek transfers' })
-	).toHaveAttribute(
-		'href',
-		'/auth/login?next=%2Flive%2Fpoints%2F123%3Fgw%3D33%26tournamentId%3D3&reason=reauth'
-	)
-	await expect(
-		section.getByRole('button', { name: 'Refresh transfers' })
-	).toHaveCount(0)
-	await expect(section.getByRole('alert')).toHaveCount(0)
-	expect(transferRequests).toBe(1)
+	await expect(section.getByRole('alert')).toBeVisible()
+	await expect(section.getByRole('link')).toHaveCount(0)
+	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
+	await expect.poll(() => transferRequests).toBe(2)
+	await expect(section.getByRole('alert')).toBeVisible()
+
+	expect(transferRequests).toBe(2)
 })
 
 test('official-sync live points auto-refreshes without a polling label', async ({
