@@ -17,6 +17,7 @@ import {
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	eventResultFromManagerGameweek,
+	type ManagerReviewEventResult,
 	historyFromManagerReview,
 	transfersFromManagerReview
 } from './manager-review-projection'
@@ -71,6 +72,7 @@ export interface TeamSeasonOverallSnapshot {
 }
 
 export interface TeamStatsViewModel {
+	reviewSnapshot?: ManagerReviewEventResult['reviewSnapshot']
 	teamName: string
 	playerName: string
 	region: string
@@ -325,7 +327,7 @@ export function extractSeasonLogs(stats: TeamStatsViewModel): TeamSeasonLogs {
 }
 
 export const mapApiDataToTeamStats = (
-	entryEventResult: EntryEventResult,
+	entryEventResult: ManagerReviewEventResult,
 	entryHistoryResults: EntryHistoryItem[],
 	entrySeasonHistory: EntrySeasonHistoryItem[],
 	entryTransferHistory: EntryGameweekTransfers[]
@@ -337,6 +339,7 @@ export const mapApiDataToTeamStats = (
 	)
 
 	return {
+		reviewSnapshot: entryEventResult.reviewSnapshot,
 		teamName: entryEventResult.entry.entryName,
 		playerName: entryEventResult.entry.playerName ?? '-',
 		region: entryEventResult.entry.region ?? '-',
