@@ -23,8 +23,7 @@ import {
 } from '@/lib/analytics/client-vitals'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import {
-	isTrendCohortReady,
-	mergeVisibleTrendCohorts
+	isTrendCohortReady
 } from './_lib/trend-cohorts'
 import { buildTrendUrl } from './_lib/trend-url'
 import { buildTrendTemplate } from './_lib/trend-template'
@@ -50,6 +49,7 @@ type Props = {
 	publicCohorts: TrendCohort[]
 	publicCatalogState: TrendCatalogState
 	myCohorts: TrendCohort[]
+	deferMyCohorts?: boolean
 	canLoadMine: boolean
 	myCohortsLoadFailed: boolean
 	publicCohortsLoadFailed: boolean
@@ -513,9 +513,10 @@ function TrendTemplatePitch({
 export default function TrendsClient({
 	publicCohorts,
 	publicCatalogState,
-	myCohorts,
+	myCohorts: initialMyCohorts,
+	deferMyCohorts = false,
 	canLoadMine,
-	myCohortsLoadFailed,
+	myCohortsLoadFailed: initialMyCohortsLoadFailed,
 	publicCohortsLoadFailed,
 	initialDesk,
 	initialAccess,
@@ -525,6 +526,26 @@ export default function TrendsClient({
 }: Props) {
 	const t = useTranslations('Selections')
 	const locale = useLocale()
+	const [myCohorts, setMyCohorts] = useState(initialMyCohorts)
+	const [myCohortsLoadFailed, setMyCohortsLoadFailed] = useState(initialMyCohortsLoadFailed)
+	const [myCatalogAttempt, setMyCatalogAttempt] = useState(0)
+	const [myCatalogLoading, setMyCatalogLoading] = useState(deferMyCohorts)
+	useEffect(() => {
+		if (!canLoadMine || (!deferMyCohorts && myCatalogAttempt === 0)) return
+		const controller = new AbortController()
+		setMyCatalogLoading(true)
+		setMyCohortsLoadFailed(false)
+		void fetch('/api/trends/my-cohorts', { signal: controller.signal, cache: 'no-store' })
+			.then(async response => {
+				if (!response.ok) throw new Error('Private catalog failed')
+				const catalog = await response.json()
+				if (!controller.signal.aborted) setMyCohorts(catalog.cohorts)
+			})
+			.catch(() => { if (!controller.signal.aborted) setMyCohortsLoadFailed(true) })
+			.finally(() => { if (!controller.signal.aborted) setMyCatalogLoading(false) })
+		return () => controller.abort()
+	}, [canLoadMine, deferMyCohorts, myCatalogAttempt])
+
 	const [access, setAccess] = useState<TrendAccess>(initialAccess)
 	const [cohortId, setCohortId] = useState(initialCohortId ?? '')
 	const [eventId, setEventId] = useState(initialEventId)
@@ -551,12 +572,12 @@ export default function TrendsClient({
 	}, [initialAccess, initialDesk])
 
 	const cohorts = useMemo(
-		() => mergeVisibleTrendCohorts(myCohorts, publicCohorts),
+		() => [...myCohorts, ...publicCohorts],
 		[myCohorts, publicCohorts]
 	)
 	const selected =
-		cohorts.find(item => item.id === cohortId && isTrendCohortReady(item)) ??
-		cohorts.find(isTrendCohortReady) ??
+		cohorts.find(item => item.id === cohortId && item.access === access && isTrendCohortReady(item)) ??
+		cohorts.find(item => item.access === access && isTrendCohortReady(item)) ??
 		null
 	const groupedCohorts = useMemo(
 		() => ({
@@ -683,9 +704,10 @@ export default function TrendsClient({
 		nextCohort: string,
 		nextEvent: number,
 		pushHistory = true,
-		bypassCache = false
+		bypassCache = false,
+		requestedAccess: TrendAccess = access
 	) {
-		const knownCohort = cohorts.find(item => item.id === nextCohort)
+		const knownCohort = cohorts.find(item => item.id === nextCohort && item.access === requestedAccess)
 		if (!knownCohort || !isTrendCohortReady(knownCohort)) return
 		const nextAccess = knownCohort.access
 		const key = `${nextAccess}:${nextCohort}:${nextEvent}:${knownCohort.revision ?? ''}`
@@ -771,12 +793,12 @@ export default function TrendsClient({
 		const next = (
 			nextAccess === 'MINE' ? groupedCohorts.mine : groupedCohorts.public
 		).find(isTrendCohortReady)
-		if (next) void select(next.id, eventId)
+		if (next) void select(next.id, eventId, true, false, nextAccess)
 	}
 
 	useEffect(() => {
-		if (!committed) return
-		const key = `${access}:${committed.cohort.id}:${committed.eventId}:${committed.cohort.revision ?? ''}`
+		if (!committed || pending || committed.cohort.access !== access || committed.cohort.id !== cohortId || committed.eventId !== eventId) return
+		const key = `${committed.cohort.access}:${committed.cohort.id}:${committed.eventId}:${committed.cohort.revision ?? ''}`
 		if (pendingSwitch.current?.key !== key) return
 		const switchMs = performance.now() - pendingSwitch.current.startedAt
 		pendingSwitch.current = null
@@ -798,7 +820,7 @@ export default function TrendsClient({
 			},
 			{ always: true }
 		)
-	}, [access, committed])
+	}, [access, committed, pending, cohortId, eventId])
 
 	const shareText = useMemo(() => {
 		if (!committed) return ''
@@ -872,14 +894,13 @@ export default function TrendsClient({
 				)
 					? nextCohort
 					: `competition:${nextCohort}`
-				void select(normalizedCohort, nextEvent, false)
+				void select(normalizedCohort, nextEvent, false, false, params.get('scope') === 'mine' ? 'MINE' : 'PUBLIC')
 			}
 		}
 		window.addEventListener('popstate', onPopState)
 		return () => window.removeEventListener('popstate', onPopState)
-		// This handler intentionally observes the initial browser history only.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [])
+		// Refresh the handler as the asynchronously loaded catalog changes.
+	})
 
 	const boardError = !committed && error
 	const showEmptyBoard = !committed && !error
@@ -899,7 +920,12 @@ export default function TrendsClient({
 			/>
 			<RouteReadyMarker
 				name="TRENDS_DESK_READY"
-				ready={committed != null}
+				ready={
+					!pending &&
+					committed?.cohort.access === access &&
+					committed?.cohort.id === cohortId &&
+					committed?.eventId === eventId
+				}
 				readyKey={`${access}:${committed?.cohort.id ?? ''}:${committed?.eventId ?? ''}:${committed?.cohort.revision ?? ''}`}
 				audienceHint={audienceHint}
 				goodMs={1000}
@@ -955,6 +981,7 @@ export default function TrendsClient({
 											type="button"
 											aria-pressed={access === scope}
 											disabled={disabled}
+											aria-busy={isMine && myCatalogLoading}
 											onClick={() => selectScope(scope)}
 											className={cn(
 												'inline-flex min-h-9 items-center justify-center gap-2 rounded-md px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 sm:min-w-32',
@@ -1065,7 +1092,7 @@ export default function TrendsClient({
 							className="mb-3 flex flex-wrap gap-2 text-xs text-destructive"
 							role="status"
 						>
-							{myCohortsLoadFailed ? <span>{t('myLeaguesError')}</span> : null}
+							{myCohortsLoadFailed ? <><span>{t('myLeaguesError')}</span><button type="button" disabled={myCatalogLoading} onClick={() => setMyCatalogAttempt(attempt => attempt + 1)}>{t('retry')}</button></> : null}
 							{publicCohortsLoadFailed ? (
 								<span>{t('publicLeaguesError')}</span>
 							) : null}
