@@ -2068,9 +2068,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
+for (const profile of [
+ { name: 'baseline', timezoneId: 'Australia/Perth', theme: 'system' },
+ { name: 'state-probe', timezoneId: 'UTC', theme: 'dark' }
+] as const) {
+test.describe(`J01 ${profile.name}`, () => {
+ test.use({ timezoneId: profile.timezoneId, colorScheme: 'light' })
 for (const scenario of ['normal', 'slow-personal'] as const) {
 for (const locale of ['en', 'zh-CN'] as const) {
 for (const width of [1440, 390]) {
+ if (profile.name === 'state-probe' && (locale !== 'zh-CN' || width !== 390)) continue
  test(`${scenario === 'slow-personal' ? 'SSR remediation ' : ''}J01 continuous bound fixture comparison journey ${scenario} ${locale} ${width}px`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture database')
   test.skip(scenario === 'slow-personal' && process.env.E2E_SSR_REMEDIATION !== '1', 'Requires serial fixture control')
@@ -2079,9 +2086,14 @@ for (const width of [1440, 390]) {
   const session = await createSession({ entryId: 15702 })
   try {
    await page.setViewportSize({ width, height: 900 })
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), profile.theme)
    await addSessionCookie(page, session.cookie)
    await page.goto(zh ? '/zh-CN' : '/')
    await expect(page.getByRole('main')).toContainText('E2E United')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile.timezoneId)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(profile.theme)
+   await expect(page.locator('html')).toHaveClass(profile.theme === 'dark' ? /dark/ : /light/)
+   testInfo.annotations.push({ type: 'coverage-profile', description: `${profile.name}; ${profile.timezoneId}; ${profile.theme}; ${locale}; ${width}` })
    if (scenario === 'slow-personal') expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryHistory', delayMs: 2000 }] }) })).ok).toBe(true)
    const menu = width < 768 ? page.locator('details[data-navigation-mobile]') : page.locator('details[data-navigation-group="explore"]')
    await menu.locator(':scope > summary').click()
@@ -2162,4 +2174,6 @@ for (const width of [1440, 390]) {
  })
 }
 }
+}
+})
 }
