@@ -192,6 +192,26 @@ jobs:
             node ops/release/edgeone-purge.mjs \
               --target https://eo-personal-canary.letletme.top/__letletme_purge_authorization_probe__ >/dev/null
 
+      - name: Resolve prior promotion before creating another candidate
+        if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npx --yes "vercel@${VERCEL_CLI_VERSION}" promote status "$VERCEL_PROJECT_ID" \
+            --scope "$VERCEL_ORG_ID" \
+            --token "$VERCEL_TOKEN"; then
+            echo 'Prior promotion is unresolved; refusing to create another candidate. Observe the existing operation before retrying.' >&2
+            exit 1
+          fi
+
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" api "/v9/projects/$VERCEL_PROJECT_ID?rollbackInfo=true" \
+            --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" --raw | \
+            node ops/release/check-promotion-state.mjs
+
       - name: Build remotely and stage Vercel production candidate
         if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
         env:
@@ -246,6 +266,8 @@ jobs:
             const expectedUrl = process.env.CANDIDATE_URL;
             if (value.readyState !== "READY" || value.target !== "production") process.exit(1);
             if (`https://${value.url}` !== expectedUrl) process.exit(1);
+            if (typeof value.id !== "string" || !/^dpl_[a-zA-Z0-9]+$/.test(value.id)) process.exit(1);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `candidate_id=${value.id}\n`);
           '
           npx --yes "vercel@${VERCEL_CLI_VERSION}" curl /healthz \
             --yes \
@@ -306,6 +328,7 @@ jobs:
           EDGEONE_TENCENT_HEALTH_URL: ${{ vars.EDGEONE_TENCENT_HEALTH_URL }}
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_URL: ${{ steps.vercel-candidate.outputs.candidate_url }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.vercel-candidate.outputs.candidate_id }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -471,10 +494,26 @@ jobs:
           ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release verify '$RELEASE_SHA'"
 
+          # Observe asynchronous promotion after CLI failure; a timeout does not cancel it.
+          set +e
           npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL" \
             --yes \
             --scope "$VERCEL_ORG_ID" \
             --token "$VERCEL_TOKEN"
+          promotion_exit=$?
+          set -e
+          if [[ $promotion_exit -ne 0 ]]; then
+            echo "Promotion CLI exited $promotion_exit; observing the existing operation without resubmitting."
+            if ! npx --yes "vercel@${VERCEL_CLI_VERSION}" promote status "$VERCEL_PROJECT_ID" \
+              --scope "$VERCEL_ORG_ID" \
+              --token "$VERCEL_TOKEN"; then
+              echo 'Promotion remains unresolved; aliases may still change after this workflow exits. Tencent activation is blocked.' >&2
+              exit 1
+            fi
+          fi
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" api "/v9/projects/$VERCEL_PROJECT_ID?rollbackInfo=true" \
+            --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" --raw | \
+            node ops/release/check-promotion-state.mjs --require-success
           production_ready=0
           for attempt in $(seq 1 12); do
             production_headers=''
