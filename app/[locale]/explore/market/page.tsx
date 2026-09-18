@@ -134,6 +134,18 @@ async function MarketGlanceContent({
 	)
 }
 
+async function MarketContentReady({ settled }: { settled: Promise<unknown> }) {
+	await settled
+	return (
+		<RouteReadyMarker
+			name="MARKET_CONTENT_READY"
+			audienceHint="public"
+			goodMs={1_000}
+			poorMs={1_500}
+		/>
+	)
+}
+
 async function renderMarketContent({
 	locale,
 	period,
@@ -252,12 +264,9 @@ async function renderMarketContent({
 					) : null
 				}
 			/>
-			<RouteReadyMarker
-				name="MARKET_CONTENT_READY"
-				audienceHint="public"
-				goodMs={1_000}
-				poorMs={1_500}
-			/>
+			<Suspense fallback={null}>
+				<MarketContentReady settled={Promise.all([priceChangePromise, glanceOverviewPromise])} />
+			</Suspense>
 			{!pulse ? (
 				<Alert
 					variant="destructive"
