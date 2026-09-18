@@ -363,7 +363,7 @@ const planningFixturesForEvent = eventId => {
 			fixture(3302, everton, arsenal, 4, 2)
 		]
 	}
-	if (eventId === 34) return [fixture(3401, chelsea, everton, 2, 3)]
+	if (eventId >= 34 && eventId <= 38) return [fixture(eventId * 100 + 1, chelsea, everton, 2, 3)]
 	return []
 }
 
@@ -1924,7 +1924,7 @@ const server = createServer((request, response) => {
 					complete: false,
 					stale: false
 				},
-				mostSelected: [],
+				mostSelected: query.includes('GetFixturePlanningSignals') ? [{ ...marketPlayer, playerId: 2, webName: 'Palmer', teamId: 2, teamName: 'Chelsea', teamShortName: 'CHE', price: 105, selectedByPercent: 41.2 }] : [],
 				transferMovers: [],
 				availabilityUpdateCount: 0,
 				availabilityUpdates: [],
