@@ -12,13 +12,14 @@ const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
 async function createSession(
 	options: {
 		entryId?: number
+		userId?: string
 	} = {}
 ): Promise<{ cookie: string; userId: string; entryId: number | null; cleanup: () => Promise<void> }> {
 	const directDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL
 	if (!directDatabaseUrl) throw new Error('E2E_DIRECT_DATABASE_URL is required')
 	const sql = postgres(directDatabaseUrl, { max: 1, prepare: false })
 	const suffix = randomUUID()
-	const userId = `home-e2e-user-${suffix}`
+	const userId = options.userId ?? `home-e2e-user-${suffix}`
 	const sessionId = `home-e2e-session-${suffix}`
 	const token = `home-e2e-token-${suffix}`
 	const entryId =
@@ -1726,6 +1727,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker owner fixture')
  const session = await createSession({ entryId: 909090 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const browseRows = [
+  managedTournament,
+  { ...managedTournament, id: 78, name: 'J12 Finished Classic', state: 'FINISHED' },
+  { ...managedTournament, id: 79, name: 'J12 Paused Classic', state: 'INACTIVE' },
+  { ...managedTournament, id: 80, name: 'J12 Active H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES' },
+  { ...managedTournament, id: 81, name: 'J12 Finished H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'FINISHED' },
+  { ...managedTournament, id: 82, adminEntryId: 808080, name: 'J12 Paused H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'INACTIVE' }
+ ].map((row, index) => ({ ...row, updatedAt: `2026-09-0${index + 1}T00:00:00.000Z`, totalTeamNum: [2, 8, 4, 12, 6, 10][index] }))
+ const managementOnly = { ...managedTournament, id: 83, name: 'J12 Management Only' }
+ const manageableRows = [...browseRows.filter(row => row.adminEntryId === 909090), managementOnly]
  const mutations: string[] = []
  await page.route('**/api/tournaments/**', async route => {
   const method = route.request().method()
@@ -1737,8 +1748,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } },
-   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
-   { operation: 'GetEntryTournaments', data: { entryTournaments: [managedTournament] } }
+   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: browseRows } },
+   { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: manageableRows } },
+   { operation: 'GetEntryTournaments', data: { entryTournaments: browseRows } }
   ] }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
   await page.goto(`${prefix}/competitions/browse`)
@@ -1767,6 +1779,51 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(actions).toHaveCount(0)
   await status.getByRole('button', { name: zh ? '进行中' : 'Active', exact: true }).click()
   await expect(actions).toBeVisible()
+  await search.fill('')
+  const renderedNames = page.locator('tbody tr td:first-child > .font-medium')
+  for (const [typeName, typeMatches] of (zh ? [['全部', true], ['经典联赛', true], ['对战联赛', false]] : [['All', true], ['Classic', true], ['H2H', false]]) as Array<[string, boolean]>) {
+   await type.getByRole('button', { name: typeName, exact: true }).click()
+   for (const [statusName, statusMatches] of (zh ? [['全部', true], ['进行中', true], ['已结束', false], ['已暂停', false]] : [['All', true], ['Active', true], ['Finished', false], ['Paused', false]]) as Array<[string, boolean]>) {
+    const option = status.getByRole('button', { name: statusName, exact: true })
+    await option.click()
+    await expect(option).toHaveAttribute('aria-pressed', 'true')
+    await expect(actions).toHaveCount(typeMatches && statusMatches ? 1 : 0)
+    const typeIndex = (zh ? ['全部', '经典联赛', '对战联赛'] : ['All', 'Classic', 'H2H']).indexOf(typeName)
+    const stateIndex = (zh ? ['全部', '进行中', '已结束', '已暂停'] : ['All', 'Active', 'Finished', 'Paused']).indexOf(statusName)
+    const expectedNames = browseRows.filter(row => (typeIndex === 0 || row.leagueType === ['all', 'CLASSIC', 'H2H'][typeIndex]) && (stateIndex === 0 || row.state === ['all', 'ACTIVE', 'FINISHED', 'INACTIVE'][stateIndex])).map(row => row.name).sort()
+    await expect.poll(async () => (await renderedNames.allTextContents()).sort()).toEqual(expectedNames)
+   }
+  }
+  await type.getByRole('button', { name: zh ? '全部' : 'All', exact: true }).click()
+  await status.getByRole('button', { name: zh ? '全部' : 'All', exact: true }).click()
+  await search.fill('')
+  await expect(actions).toBeVisible()
+  const sortTrigger = page.getByRole('toolbar', { name: zh ? '赛事筛选' : 'Tournament filters', exact: true }).getByRole('button').filter({ has: page.locator('svg.lucide-arrow-up-down') })
+  await expect(sortTrigger).toHaveCount(1)
+  const orders = [
+   { label: zh ? '最近更新优先' : 'Last Updated (Newest)', indices: [5, 4, 3, 2, 1, 0] },
+   { label: zh ? '最早更新优先' : 'Last Updated (Oldest)', indices: [0, 1, 2, 3, 4, 5] },
+   { label: zh ? '名称（A–Z）' : 'Name (A–Z)', indices: [3, 1, 4, 0, 2, 5] },
+   { label: zh ? '名称（Z–A）' : 'Name (Z–A)', indices: [5, 2, 0, 4, 1, 3] },
+   { label: zh ? '参赛球队最多' : 'Most Participants', indices: [3, 5, 1, 4, 2, 0] }
+  ]
+  for (const order of orders) {
+   await sortTrigger.click()
+   await page.getByRole('menuitem', { name: order.label, exact: true }).click()
+   await expect(renderedNames).toHaveText(order.indices.map(index => browseRows[index].name))
+  }
+  const mine = page.getByRole('button', { name: zh ? '我管理的' : 'I manage', exact: true })
+  await mine.click()
+  await expect(mine).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL(url => url.searchParams.get('mine') === 'true')
+  await expect.poll(async () => (await renderedNames.allTextContents()).sort()).toEqual(manageableRows.map(row => row.name).sort())
+  await expect(page.getByRole('row').filter({ hasText: 'J12 Management Only' }).getByText(zh ? '可管理 · 未参赛' : 'Manageable · not participating', { exact: true })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: 'J12 Owned Cup' }).getByText(zh ? '可管理 · 已参赛' : 'Manageable · participating', { exact: true })).toBeVisible()
+  await mine.click()
+  await expect(mine).toHaveAttribute('aria-pressed', 'false')
+  await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
+  await expect.poll(async () => (await renderedNames.allTextContents()).sort()).toEqual(browseRows.map(row => row.name).sort())
+  await expect(page.getByText('J12 Management Only', { exact: true })).toHaveCount(0)
   await actions.click()
   const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
   await expect(manage).toHaveAttribute('href', `${prefix}/competitions/77/manage`)
@@ -2073,3 +2130,224 @@ for (const locale of ['en', 'zh-CN'] as const) {
   }
  }
 }
+
+for (const profile of [
+ { name: 'baseline', timezoneId: 'Australia/Perth', theme: 'system' },
+ { name: 'state-probe', timezoneId: 'UTC', theme: 'dark' }
+] as const) {
+test.describe(`J01 ${profile.name}`, () => {
+ test.use({ timezoneId: profile.timezoneId, colorScheme: 'light' })
+for (const scenario of ['normal', 'slow-personal'] as const) {
+for (const locale of ['en', 'zh-CN'] as const) {
+for (const width of [1440, 390]) {
+ if (profile.name === 'state-probe' && (locale !== 'zh-CN' || width !== 390)) continue
+ test(`${scenario === 'slow-personal' ? 'SSR remediation ' : ''}J01 continuous bound fixture comparison journey ${scenario} ${locale} ${width}px`, async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture database')
+  test.skip(scenario === 'slow-personal' && process.env.E2E_SSR_REMEDIATION !== '1', 'Requires serial fixture control')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const reportedVitals: Array<Record<string, unknown>> = []
+  await page.route('**/api/vitals', route => {
+   const payload = route.request().postDataJSON()
+   if (payload && Array.isArray(payload.samples)) reportedVitals.push(...payload.samples)
+   return route.fulfill({ status: 204, body: '' })
+  })
+  const zh = locale === 'zh-CN'
+  const session = await createSession({ entryId: 15702 })
+  try {
+   await page.setViewportSize({ width, height: 900 })
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), profile.theme)
+   await addSessionCookie(page, session.cookie)
+   await page.goto(zh ? '/zh-CN' : '/')
+   await expect(page.getByRole('main')).toContainText('E2E United')
+   await expect(page.locator('[data-home-personal-ready="true"]').filter({ visible: true })).toContainText('E2E United')
+   await expect(page.locator('[data-home-league-ranks-ready="true"]').filter({ visible: true })).toHaveCount(1)
+   await expect(page.locator('[data-home-matches]')).toHaveAttribute('data-home-fixtures-event', '33')
+   await expect.poll(() => ['HOME_TEAM_DESK_READY', 'HOME_LEAGUE_RANKS_READY'].every(name => reportedVitals.some(sample => sample.metricName === name))).toBe(true)
+   await testInfo.attach('home-personal-readiness', { body: JSON.stringify(reportedVitals.filter(sample => ['HOME_TEAM_DESK_READY', 'HOME_LEAGUE_RANKS_READY'].includes(String(sample.metricName))).map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null }))), contentType: 'application/json' })
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile.timezoneId)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(profile.theme)
+   await expect(page.locator('html')).toHaveClass(profile.theme === 'dark' ? /dark/ : /light/)
+   testInfo.annotations.push({ type: 'coverage-profile', description: `${profile.name}; ${profile.timezoneId}; ${profile.theme}; ${locale}; ${width}` })
+   if (scenario === 'slow-personal') expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryHistory', delayMs: 2000 }] }) })).ok).toBe(true)
+   const menu = width < 768 ? page.locator('details[data-navigation-mobile]') : page.locator('details[data-navigation-group="explore"]')
+   await menu.locator(':scope > summary').click()
+   await menu.getByRole('link', { name: zh ? '赛程' : 'Fixtures', exact: true }).click()
+   await expect(page).toHaveURL(/\/explore\/fixtures$/)
+   const matrix = page.getByRole('region', { name: zh ? '球队 FDR' : 'Team FDR', exact: true })
+   await expect(matrix.locator('tbody tr')).toHaveCount(3)
+   await matrix.getByRole('searchbox', { name: zh ? '搜索球队' : 'Search teams' }).fill('Arsenal')
+   await expect(matrix.locator('tbody tr')).toHaveCount(1)
+   if (scenario === 'slow-personal') {
+    const requests = (await (await fetch(fixture)).json()).requests
+    const history = requests.find((row: { operation: string }) => row.operation === 'GetEntryHistory')
+    expect(history).toBeDefined()
+    expect(history.finishedAt).toBeNull()
+   }
+   const arsenal = matrix.locator('#fdr-team-1')
+   const headings = await matrix.getByRole('columnheader').allTextContents()
+   const gw33 = headings.findIndex(text => text.trim() === 'GW33')
+   const gw34 = headings.findIndex(text => text.trim() === 'GW34')
+   expect(gw33).toBeGreaterThanOrEqual(0)
+   expect(gw34).toBeGreaterThan(gw33)
+   const cells = arsenal.locator(':scope > td, :scope > th')
+   await expect(cells.nth(gw33).getByText(zh ? '双赛轮' : 'DGW', { exact: true })).toBeVisible()
+   await expect(cells.nth(gw33).locator('[title]')).toHaveCount(2)
+   await expect(cells.nth(gw34)).toHaveText(zh ? '空白轮' : 'BGW')
+   await expect(cells.nth(gw34).locator('[title]')).toHaveCount(0)
+   const trigger = matrix.getByRole('button', { name: zh ? '查看 Arsenal 的整个赛季赛程' : "View Arsenal's full-season fixtures", exact: true })
+   await trigger.click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: /Arsenal/ })).toBeVisible()
+   await expect(dialog).toContainText('GW38')
+   await page.keyboard.press('Escape')
+   await expect(dialog).toHaveCount(0)
+   await expect(trigger).toBeFocused()
+   await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length).toBeGreaterThan(0)
+   for (const horizon of [6, 5]) {
+    const previousReadyCount = reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length
+    const button = page.getByRole('button', { name: zh ? `${horizon} 轮` : `${horizon} GWs`, exact: true })
+    await button.click()
+    await expect(button).toHaveAttribute('aria-pressed', 'true')
+    await expect(matrix.getByRole('columnheader').filter({ hasText: /^GW\d+$/ })).toHaveText(Array.from({ length: horizon }, (_, index) => `GW${33 + index}`))
+    await expect(cells.nth(gw33).locator('[title]')).toHaveCount(2)
+    await expect(cells.nth(gw34)).toHaveText(zh ? '空白轮' : 'BGW')
+    await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length).toBeGreaterThan(previousReadyCount)
+   }
+   await testInfo.attach('fixture-window-readiness', { body: JSON.stringify({ fromGw: 33, horizons: [6, 5], teamId: 1, samples: reportedVitals.filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null })) }), contentType: 'application/json' })
+   await page.locator('#my-squad > summary').click()
+   await expect(page.locator('#my-squad')).toHaveAttribute('open', '')
+   if (scenario === 'slow-personal') {
+    await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { operation: string }) => row.operation === 'GetEntryHistory')?.finishedAt).toBeTruthy()
+    await expect(page.locator('#my-squad').getByRole('button', { name: zh ? /^查看 Player 1 的赛程详情/ : /^View Player 1's fixture details/ }).filter({ visible: true })).toHaveCount(1)
+    await testInfo.attach('slow-personal-request-timeline', { body: JSON.stringify((await (await fetch(fixture)).json()).requests), contentType: 'application/json' })
+   }
+   const playerLink = page.getByRole('link', { name: zh ? 'Palmer — 打开球员深度页' : 'Palmer — Open player desk', exact: true }).filter({ visible: true })
+   await expect(playerLink).toHaveCount(1)
+   await playerLink.click()
+   await expect(page).toHaveURL(/p1=2/)
+   const overall = page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })
+   await expect(overall).toContainText('Palmer')
+   await page.getByRole('button', { name: zh ? '添加对比' : 'Add comparison', exact: true }).click()
+   await page.getByRole('region', { name: zh ? '球员' : 'Players', exact: true }).getByRole('button', { name: /^Saka/ }).click()
+   await expect(page).toHaveURL(/p1=2&p2=1/)
+   await expect(overall).toContainText('Palmer')
+   await expect(overall).toContainText('Saka')
+   const navigationId = await page.locator('[data-player-stats-navigation-id]').getAttribute('data-player-stats-navigation-id')
+   expect(navigationId).toBeTruthy()
+   await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'PLAYER_COMPARE_PAINT' && sample.navigationId === navigationId && sample.result === 'ok' && typeof sample.interactionId === 'string').length).toBeGreaterThan(0)
+   const samples = reportedVitals.filter(sample => sample.navigationId === navigationId).map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null }))
+   await testInfo.attach('current-player-navigation-readiness', { body: JSON.stringify({ url: page.url(), players: [2, 1], navigationId, samples }), contentType: 'application/json' })
+   await page.getByRole('navigation', { name: zh ? '区块' : 'Sections', exact: true }).getByRole('button', { name: zh ? '赛程' : 'Fixtures', exact: true }).click()
+   await expect(page).toHaveURL(/#ps-fixtures$/)
+   await expect(page.locator('#ps-fixtures')).toBeVisible()
+   const comparisonUrl = page.url()
+   await page.getByRole('link', { name: zh ? '在赛程页查看阵容规划' : 'Squad fixture plan on Fixtures', exact: true }).click()
+   await expect(page).toHaveURL(/\/explore\/fixtures#my-squad$/)
+   await expect(page.locator('#my-squad')).toBeVisible()
+   await page.goBack()
+   await expect(page).toHaveURL(comparisonUrl)
+   await expect(overall).toContainText('Saka')
+   await expect(overall).toContainText('Palmer')
+   await page.goForward()
+   await expect(page).toHaveURL(/\/explore\/fixtures#my-squad$/)
+   await expect(page.locator('#my-squad')).toBeVisible()
+   testInfo.annotations.push({ type: 'coverage-case', description: `J01 continuous ${scenario} bound path with DGW/BGW and section anchor; performance assertions remain separate` })
+  } finally {
+   try {
+    if (scenario === 'slow-personal') expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+   } finally { await session.cleanup() }
+  }
+ })
+}
+}
+}
+})
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J12 large browse list expands collapses and resets ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Serial isolated list fixture')
+   const zh = locale === 'zh-CN'
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const entries = Array.from({ length: 45 }, (_, index) => ({ ...managedTournament, id: 1000 + index, name: `Bulk ${String(index).padStart(3, '0')}`, updatedAt: new Date(Date.UTC(2026, 8, 1, 0, index)).toISOString() }))
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: entries } }] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${zh ? '/zh-CN' : ''}/competitions/browse`)
+    const names = page.locator('tbody tr td:first-child > .font-medium')
+    const ordered = [...entries].reverse().map(row => row.name)
+    await expect(names).toHaveText(ordered.slice(0, 20))
+    await page.getByRole('button', { name: zh ? '再显示 20 个赛事' : 'Show 20 more tournaments', exact: true }).click()
+    await expect(names).toHaveText(ordered.slice(0, 40))
+    await page.getByRole('button', { name: zh ? '再显示 5 个赛事' : 'Show 5 more tournaments', exact: true }).click()
+    await expect(names).toHaveText(ordered)
+    await page.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true }).click()
+    await expect(names).toHaveText(ordered.slice(0, 20))
+    await page.getByRole('button', { name: zh ? '显示全部 45 个赛事' : 'Show all 45 tournaments', exact: true }).click()
+    await expect(names).toHaveText(ordered)
+    const search = page.getByRole('textbox', { name: zh ? '搜索赛事' : 'Search tournaments', exact: true })
+    await search.fill('Bulk 04')
+    await expect(names).toHaveText(['Bulk 044', 'Bulk 043', 'Bulk 042', 'Bulk 041', 'Bulk 040'])
+    await expect(page.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true })).toHaveCount(0)
+    await search.fill('')
+    await expect(names).toHaveText(ordered.slice(0, 20))
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
+test.describe('J12 platform admin baseline profile', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J12 platform admin sees managed non-participating tournament ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-browse-platform-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Requires dedicated isolated dual-allowlist admin runtime')
+   const reportedVitals: Array<Record<string, unknown>> = []
+   await page.route('**/api/vitals', route => {
+    const payload = route.request().postDataJSON()
+    if (payload && Array.isArray(payload.samples)) reportedVitals.push(...payload.samples)
+    return route.fulfill({ status: 204, body: '' })
+   })
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+   const zh = locale === 'zh-CN'
+   const session = await createSession({ entryId: 909090, userId: 'e2e-browse-platform-admin' })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const other = { ...managedTournament, id: 88, adminEntryId: 808080, name: 'Other Owner Cup' }
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
+     { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: [managedTournament, other] } }
+    ] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${zh ? '/zh-CN' : ''}/competitions/browse`)
+    await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+    await expect(page.locator('html')).toHaveClass(/light/)
+    await expect(page.locator('[data-competition-perf-ready="browse"]')).toBeVisible()
+    await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'COMPETITIONS_BROWSE_READY').length).toBeGreaterThan(0)
+    await testInfo.attach('browse-admin-readiness', { body: JSON.stringify({ url: page.url(), persona: 'PA', timezone: 'Australia/Perth', theme: 'system', samples: reportedVitals.filter(sample => sample.metricName === 'COMPETITIONS_BROWSE_READY').map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null })) }), contentType: 'application/json' })
+    const mine = page.getByRole('button', { name: zh ? '我管理的' : 'I manage', exact: true })
+    await mine.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('mine') === 'true')
+    const otherRow = page.getByRole('row').filter({ hasText: 'Other Owner Cup' })
+    await expect(otherRow).toHaveCount(1)
+    await expect(otherRow.getByText(zh ? '可管理 · 未参赛' : 'Manageable · not participating', { exact: true })).toBeVisible()
+    await expect(page.getByRole('row').filter({ hasText: 'J12 Owned Cup' }).getByText(zh ? '可管理 · 已参赛' : 'Manageable · participating', { exact: true })).toBeVisible()
+    await mine.click()
+    await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
+    await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
+})
