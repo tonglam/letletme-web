@@ -797,8 +797,8 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned') ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -815,7 +815,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
 	}
 	const pageInfo = { hasNextPage: false, endCursor: null }
-	const reviewTournamentId = (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned') ? 6 : 77
+	const reviewTournamentId = recoveryMode.startsWith('live-journey') ? 6 : 77
 	const scope = { ...phase, tournamentId: reviewTournamentId, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
 	const rules = [
 		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: recoveryMode === 'search-empty', pageInfo, edges: [{ cursor: '77', node: { tournamentId: reviewTournamentId, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
@@ -842,7 +842,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
-		if ((recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned')) {
+		if (recoveryMode.startsWith('live-journey')) {
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
 			if (recoveryMode === 'live-journey-pinned') {
 				await page.route('**/api/live/competitions/6/board', async route => {
@@ -866,11 +866,52 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(live).toBeVisible()
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
 			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			let indexRequests = 0
+			if (recoveryMode === 'live-journey-index-retry') {
+				await page.route('**/api/live/competitions/6/selection-index?*', async route => {
+					indexRequests += 1
+					if (indexRequests === 1) await route.fulfill({ status: 503, json: { error: 'DEPENDENCY_UNAVAILABLE' } })
+					else await route.continue()
+				})
+			}
+			const selectionResponse = page.waitForResponse(response =>
+				response.url().includes('/api/live/competitions/6/selection-index?') && response.status() === 200)
 			await live.click()
+			if (recoveryMode === 'live-journey-index-retry') {
+				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
+				if (locale === 'zh-CN') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
+				const warning = page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })
+				await expect(warning).toBeVisible()
+				expect(indexRequests).toBe(1)
+				await warning.locator('..').getByRole('button', { name: locale === 'zh-CN' ? '刷新' : 'Refresh', exact: true }).click()
+				await expect(warning).toHaveCount(0)
+				await expect.poll(() => indexRequests).toBe(2)
+			}
+			const selection = await (await selectionResponse).json()
+			expect(selection.tournamentSelectionIndex).toMatchObject({
+				tournamentId: 6, eventId: 4, scoreCoreRevision: 'e2e-competition-score-v1',
+				rows: [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
+			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
 			const team = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
 			await expect(team).toHaveCount(1)
 			await expect(team).toBeVisible()
+			if (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-index-retry') {
+				if (locale === 'zh-CN' && recoveryMode !== 'live-journey-index-retry') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
+				const captain = page.getByRole('combobox', { name: locale === 'zh-CN' ? '按队长筛选积分榜' : 'Filter standings by captain', exact: true })
+				await expect(captain).toBeEnabled()
+				await captain.click()
+				const filtered = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.includes(1))
+				await page.getByRole('option', { name: 'Saka · MID · ARS', exact: true }).click()
+				const filteredResponse = await filtered
+				expect(filteredResponse.status()).toBe(200)
+				expect((await filteredResponse.json()).entryLiveCompetitionBoard).toMatchObject({ filteredEntries: 1, rows: [{ entry: 15702, captainId: 1 }] })
+				const cleared = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.length === 0)
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '移除队长 Saka' : 'Remove captain Saka', exact: true }).click()
+				expect((await cleared).status()).toBe(200)
+				if (locale === 'zh-CN') await page.keyboard.press('Escape')
+				await expect(team).toBeVisible()
+			}
 			if (recoveryMode === 'live-journey-pinned') {
 				await expect(page.getByRole('link', { name: /Pinned Viewer United/ }).filter({ visible: true })).toHaveCount(1)
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true }).click()
