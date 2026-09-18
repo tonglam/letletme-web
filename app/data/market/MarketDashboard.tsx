@@ -1,3 +1,4 @@
+import { MarketRegionReady } from './MarketReadiness'
 import { MarketAvailabilityDisclosure } from './MarketAvailabilityDisclosure'
 import { MarketAvailabilityList } from '@/components/data/MarketAvailabilityList'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
@@ -503,6 +504,7 @@ async function MarketPriceSection({
 		? [...observedPriceChanges.rises, ...observedPriceChanges.falls]
 		: dailyPriceChanges
 	return (
+		<>
 		<MarketPriceExplorer
 			changes={latestPriceChanges}
 			changeDate={observedPriceChanges?.changeDate ?? dailyPriceChangeDate}
@@ -517,6 +519,8 @@ async function MarketPriceSection({
 			}
 			initialOpen={initialOpen}
 		/>
+		<MarketRegionReady region="price" />
+		</>
 	)
 }
 
