@@ -519,6 +519,16 @@ for (const width of [1440, 390]) {
 		await batchReady
 		const pitch = page.getByRole('region', { name: chinese ? /阵型/ : /formation/ })
 		await expect(pitch.getByRole('button', { name: chinese ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+		const captainLabel = chinese ? '队长' : 'Captain'
+		const viceLabel = chinese ? '副队长' : 'Vice-captain'
+		const captain = pitch.getByRole('button', { name: chinese ? '查看 Player 1 的详情' : 'View details for Player 1', exact: true })
+		const vice = pitch.getByRole('button', { name: chinese ? '查看 Player 2 的详情' : 'View details for Player 2', exact: true })
+		await expect(pitch.getByRole('img', { name: captainLabel, exact: true })).toHaveCount(1)
+		await expect(pitch.getByRole('img', { name: viceLabel, exact: true })).toHaveCount(1)
+		await expect(captain.getByRole('img', { name: captainLabel, exact: true })).toBeVisible()
+		await expect(vice.getByRole('img', { name: viceLabel, exact: true })).toBeVisible()
+		await expect(captain.getByRole('img', { name: viceLabel, exact: true })).toHaveCount(0)
+		await expect(vice.getByRole('img', { name: captainLabel, exact: true })).toHaveCount(0)
 		for (const [id, position] of [[1, 'GKP'], [3, 'DEF'], [8, 'MID'], [13, 'FWD']] as const) {
 			const opener = pitch.getByRole('button', { name: chinese ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
 			await opener.click()
