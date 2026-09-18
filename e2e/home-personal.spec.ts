@@ -1024,6 +1024,16 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
 	let viewNavigationRequests = 0
+	let readyReports = 0
+	await page.route('**/api/vitals', async route => {
+		const samples = route.request().postDataJSON().samples ?? []
+		for (const sample of samples) {
+			if (sample.metricName !== 'TOURNAMENT_REVIEW_READY') continue
+			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'true')
+			readyReports += 1
+		}
+		await route.fulfill({ status: 204, body: '' })
+	})
 	try {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
@@ -1559,6 +1569,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(retry).toBeVisible()
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'false')
+			expect(readyReports).toBe(0)
 			expect(sectionRequests).toBe(0)
 			const seeded = await (await fetch(fixture)).json()
 			expect(seeded.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(2)
@@ -1568,10 +1580,17 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect.poll(() => sectionRequests).toBe(2)
 			await expect(retry).toHaveCount(0)
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'true')
+			await expect.poll(() => readyReports).toBe(1)
 			return
 		}
 		await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		const reviewReady = page.locator('[data-review-ready]')
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'true')
+		await expect(reviewReady).toHaveAttribute('data-review-view', 'gameweek')
+		await expect(reviewReady).toHaveAttribute('data-review-revision', '1')
+		await expect.poll(() => readyReports).toBe(1)
 		const observations = await (await fetch(fixture)).json()
 		expect(observations.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(0)
 		page.on('request', request => {
@@ -1582,6 +1601,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		const gameweek = page.getByRole('tab', { name: locale === 'zh-CN' ? '轮次' : 'Gameweek', exact: true })
 		await season.click()
 		await expect.poll(() => sectionRequests).toBe(2)
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'false')
+		await expect(reviewReady).toHaveAttribute('data-review-view', 'season')
 		expect(viewNavigationRequests).toBe(0)
 		await expect(page.getByText(locale === 'zh-CN' ? '已结算发布缺少对应赛制数据。' : 'The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
 		await gameweek.click()
@@ -1606,6 +1627,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await season.click()
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		expect(sectionRequests).toBe(failFirstSections ? 4 : 2)
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'true')
+		await expect(reviewReady).toHaveAttribute('data-review-phase', 'points-1')
+		expect(readyReports, 'View changes must not reuse the navigation clock for new samples').toBe(1)
 		await expect(page).toHaveURL(url =>
 			url.pathname === routePath &&
 			url.searchParams.get('tournamentId') === '77' &&
