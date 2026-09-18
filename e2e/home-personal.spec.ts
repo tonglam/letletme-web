@@ -4,7 +4,7 @@ import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
-import { managerReview, managerGameweek } from './fixtures/manager-review'
+import { managerReview, managerGameweek, managerSnapshot } from './fixtures/manager-review'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
@@ -3365,3 +3365,67 @@ test.describe('LP01 signed-in known entry input journey', () => {
 		}
 	}
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation TEAM03 transfer filters and progressive reveal ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated manager fixture')
+   const zh = locale === 'zh-CN'
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const timeline = Array.from({ length: 25 }, (_, index) => ({
+    ...managerReview.timeline[0], eventId: index + 1, eventChip: 'NONE',
+    eventTransfers: index === 24 ? 0 : 1, overallPoints: (index + 1) * 60
+   }))
+   const review = {
+    ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! },
+    throughEventId: 25, timeline, snapshotMeta: managerSnapshot(25),
+    summary: { ...managerReview.summary!, gameweeksReviewed: 25, totalNetPoints: 1500, chips: [] },
+    currentGameweek: { ...managerGameweek(3), eventId: 25, entry: { ...managerReview.entry!, id: session.entryId! }, snapshotMeta: managerSnapshot(25), result: { ...managerGameweek(3).result!, ...timeline[24] } },
+    context: { ...managerReview.context, currentEventId: 25, nextEventId: 26, latestFinalizedEventId: 25, latestPublishedEventId: 25 },
+    transfers: timeline.map(row => ({
+     ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers,
+     transfers: row.eventTransfers ? [{ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}`, elementOutWebName: `Transfer Out GW${row.eventId}`, evaluatedThroughEventId: row.eventId }] : []
+    }))
+   }
+   const readCount = async () => {
+    const observed = await (await fetch(fixture)).json() as { requests: { operation: string }[] }
+    return observed.requests.filter(row => row.operation.startsWith('GetMyFplManager')).length
+   }
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`${zh ? '/zh-CN' : ''}/my-fpl/team?view=season`)
+    await page.getByRole('tab', { name: zh ? '赛季复盘' : 'Season Review', exact: true }).click()
+    const section = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: zh ? '转会历史' : 'Transfer History', exact: true }) })
+    await expect(section).toHaveCount(1)
+    await expect(section.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+    const rows = section.getByRole('button', { name: zh ? /^打开第 \d+ 轮$/ : /^Open gameweek \d+$/ })
+    const expectWeeks = async (weeks: number[]) => {
+     await expect(rows).toHaveCount(weeks.length)
+     await expect(rows).toHaveText(weeks.map(gw => `GW${gw}`))
+    }
+    const descending = (first: number, count: number) => Array.from({ length: count }, (_, index) => first - index)
+    await expectWeeks(descending(24, 6))
+    const before = await readCount()
+    expect(before).toBeGreaterThan(0)
+    await section.getByRole('button', { name: zh ? '再显示 8 条' : 'Show 8 more', exact: true }).click()
+    await expectWeeks(descending(24, 14))
+    await section.getByRole('button', { name: zh ? '显示全部剩余（10）' : 'Show all remaining (10)', exact: true }).click()
+    await expectWeeks(descending(24, 24))
+    await section.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true }).click()
+    await expectWeeks(descending(24, 6))
+    await section.getByRole('button', { name: zh ? '全赛季' : 'Full season', exact: true }).click()
+    await expectWeeks(descending(25, 6))
+    await expect(section.getByText(zh ? '无转会' : 'No transfer', { exact: true })).toBeVisible()
+    await section.getByRole('button', { name: zh ? '有转会' : 'Active weeks', exact: true }).click()
+    await expectWeeks(descending(24, 6))
+    expect(await readCount()).toBe(before)
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+}
