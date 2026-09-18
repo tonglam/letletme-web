@@ -797,7 +797,7 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry'] as const) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
 for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
@@ -844,6 +844,19 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		})
 		if (recoveryMode.startsWith('live-journey')) {
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+			if (recoveryMode === 'live-journey-sort') {
+				await page.route('**/api/live/competitions/6/board', async route => {
+					const response = await route.fetch()
+					const body = await response.json()
+					const board = body.entryLiveCompetitionBoard
+					const low = { ...board.rows[0], entry: 201, entryName: 'Low Sort Team', teamValue: 900, overallRank: 10, transferCost: 0, score: { ...board.rows[0].score, eventPoints: 10, netEventPoints: 10, totalPoints: 100 } }
+					const high = { ...low, entry: 202, entryName: 'High Sort Team', teamValue: 1000, overallRank: 20, transferCost: 4, score: { ...low.score, eventPoints: 20, netEventPoints: 16, totalPoints: 200 } }
+					board.rows = route.request().postDataJSON().input.direction === 'ASC' ? [low, high] : [high, low]
+					board.viewerRow = null
+					board.totalEntries = board.filteredEntries = 2
+					await route.fulfill({ response, json: body })
+				})
+			}
 			if (recoveryMode === 'live-journey-pinned') {
 				await page.route('**/api/live/competitions/6/board', async route => {
 					const response = await route.fetch()
@@ -893,6 +906,32 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				rows: [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
 			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			if (recoveryMode === 'live-journey-sort') {
+				const columns = [
+					['TOTAL_POINTS', 'Total Pts', '总积分'], ['OVERALL_RANK', 'OR', '总排名'],
+					['TEAM_VALUE', 'TV', '阵容身价'], ['TRANSFER_COST', 'Cost', '扣分'], ['EVENT_POINTS', 'GW Pts', '本轮积分']
+				]
+				for (const [sort, en, zh] of columns) {
+					const responseFor = (direction?: string) => page.waitForResponse(response => {
+						if (!response.url().endsWith('/api/live/competitions/6/board')) return false
+						const input = response.request().postDataJSON()?.input
+						return input?.sort === sort && (!direction || input.direction === direction)
+					})
+					const changed = responseFor()
+					await page.getByRole('combobox', { name: locale === 'zh-CN' ? '积分榜排序方式' : 'Sort competition standings', exact: true }).click()
+					await page.getByRole('option', { name: locale === 'zh-CN' ? zh : en, exact: true }).click()
+					const first = await changed
+					expect(first.status()).toBe(200)
+					const direction = first.request().postDataJSON().input.direction
+					const links = page.getByRole('link', { name: /(?:Low|High) Sort Team/ }).filter({ visible: true })
+					await expect(links).toHaveText(direction === 'ASC' ? [/Low Sort Team/, /High Sort Team/] : [/High Sort Team/, /Low Sort Team/])
+					const flipped = responseFor(direction === 'ASC' ? 'DESC' : 'ASC')
+					await page.getByRole('button', { name: locale === 'zh-CN' ? (direction === 'ASC' ? '升序' : '降序') : (direction === 'ASC' ? 'Asc' : 'Desc'), exact: true }).click()
+					expect((await flipped).status()).toBe(200)
+					await expect(links).toHaveText(direction === 'ASC' ? [/High Sort Team/, /Low Sort Team/] : [/Low Sort Team/, /High Sort Team/])
+				}
+				return
+			}
 			const team = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
 			await expect(team).toHaveCount(1)
 			await expect(team).toBeVisible()
