@@ -1,5 +1,12 @@
 import { createServer } from 'node:http'
 
+const marketControlPlayers = ['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD'].map((position, index) => ({
+ playerId: 801 + index, webName: `Market ${position}`, teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position, price: 50 + index, selectedByPercent: 20 - index
+}))
+const marketControlUpdates = Array.from({ length: 6 }, (_, index) => ({
+ player: index === 0 ? { ...marketControlPlayers[2], playerId: 2, webName: 'Palmer', teamId: 2, teamName: 'Chelsea', teamShortName: 'CHE', price: 105 } : { ...marketControlPlayers[index % 4], playerId: 811 + index, webName: `Availability ${index + 1}` }, status: 'd', previousStatus: 'a', news: 'Fixture fitness update', newsAdded: '2026-08-03T09:00:00.000Z', observedDate: '2026-08-03', chanceOfPlayingThisRound: 75, chanceOfPlayingNextRound: 100
+}))
+
 const host = '127.0.0.1'
 const port = Number(process.env.E2E_GRAPHQL_PORT ?? 4100)
 const liveHydrationFixtureEnabled = process.env.E2E_LIVE_HYDRATION === '1'
@@ -1975,6 +1982,11 @@ const server = createServer((request, response) => {
 				availabilityState: 'EMPTY',
 				availabilityUpdates: []
 			}
+			if (query.includes('GetMarketPulseSummary')) {
+ pulse.mostSelected = marketControlPlayers
+ pulse.availabilityUpdateCount = marketControlUpdates.length
+ pulse.availabilityHighlights = marketControlUpdates.slice(0, 3)
+}
 			const data = query.includes('GetHomeMarketDesk')
 				? { homeMarketDesk }
 				: query.includes('GetMarketOwnershipDay') ||
@@ -2072,8 +2084,8 @@ const server = createServer((request, response) => {
 							capturedAt: '2026-08-03T09:40:00.000Z',
 							rowCount: 2
 						},
-						items: [],
-						totalCount: 0,
+						items: marketControlUpdates,
+						totalCount: marketControlUpdates.length,
 						nextOffset: null
 					}
 				}
