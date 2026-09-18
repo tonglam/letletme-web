@@ -3254,3 +3254,66 @@ for (const timezoneId of ['UTC', 'Australia/Perth']) {
 }
 
 })
+
+test.describe('SSR remediation TR03 planned bound dark UTC mobile', () => {
+	test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+	for (const state of ['stale', 'unpublished'] as const) {
+		test(`${state} preserves its distinct public state`, async ({ page }, testInfo) => {
+			test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture database')
+			test.skip(state === 'unpublished' && process.env.E2E_TRENDS_UNPUBLISHED !== '1', 'Requires isolated catalog cache')
+			const session = await createSession({ entryId: 15702 })
+			const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+			try {
+				await addSessionCookie(page, session.cookie)
+				await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+				if (state === 'unpublished') {
+					const response = await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'TrendCohorts', variables: { access: 'PUBLIC' }, data: { trendCohorts: { season: '2627', revision: 'unpublished-fixture', state: 'NOT_PUBLISHED', sourceCheckedAt: null, cohorts: [] } } }] }) })
+					expect(response.ok).toBe(true)
+				}
+				await page.goto(`/zh-CN/explore/selections?scope=public${state === 'stale' ? '&cohort=competition:777&gw=33' : ''}`)
+				await expect(page.locator('html')).toHaveClass(/dark/)
+				expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+				expect(page.viewportSize()?.width).toBe(390)
+				const auth = await page.request.get('/api/auth/get-session')
+				expect(auth.ok()).toBe(true)
+				expect((await auth.json()).user.id).toBe(session.userId)
+				expect(session.entryId).toBeGreaterThan(0)
+				await expect(page.getByRole('button', { name: /^我的联赛/ })).toBeEnabled()
+				if (state === 'unpublished') {
+					await expect(page.getByRole('heading', { name: '本赛季公共趋势尚未发布。', exact: true })).toBeVisible()
+					const ledger = await (await fetch(fixture)).json()
+					expect(ledger.requests.some((row: { operation: string; variables: { access?: string }; finishedAt: number | null }) => row.operation === 'TrendCohorts' && row.variables.access === 'PUBLIC' && row.finishedAt !== null)).toBe(true)
+					await expect(page.getByRole('tabpanel')).toHaveCount(0)
+					await expect(page.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+				} else {
+					await expect(page.getByRole('tabpanel')).toContainText('Saka')
+					await page.route('**/api/trends/public-desk?**', async route => {
+						const response = await route.fetch()
+						const payload = await response.json()
+						for (const section of payload.trendCohortSnapshot.sections) {
+							section.state = 'STALE'
+							section.evidenceContext.availabilityState = 'STALE'
+						}
+						await route.fulfill({ response, json: payload })
+					})
+					const cohort = page.getByRole('combobox', { name: '当前联赛', exact: true })
+					await cohort.selectOption('competition:779')
+					await expect(cohort).toHaveAttribute('aria-busy', 'false')
+					for (const name of ['持有率', '队长选择', '转会']) {
+						await page.getByRole('tab', { name, exact: true }).click()
+						const panel = page.getByRole('tabpanel')
+						await expect(panel.getByText('数据较旧', { exact: true }).first()).toBeVisible()
+						await expect(panel.getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+						await expect(panel).not.toContainText('Saka')
+						await expect(panel.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+					}
+					await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:779' && url.searchParams.get('gw') === '33' && url.searchParams.get('scope') === 'public')
+				}
+				await testInfo.attach('planned-variant-context', { body: JSON.stringify({ variantId: `TR03.state.0${state === 'unpublished' ? 2 : 3}`, identity: 'bound', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario: state }), contentType: 'application/json' })
+			} finally {
+				if (state === 'unpublished') await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+				await session.cleanup()
+			}
+		})
+	}
+})

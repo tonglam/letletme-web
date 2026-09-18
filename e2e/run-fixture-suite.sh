@@ -16,6 +16,7 @@ case "${1:-}" in
     ;;
   trends-unpublished)
     E2E_TRENDS_UNPUBLISHED=1 npx playwright test e2e/trends-unpublished.spec.ts --workers=1 --trace=on --output=test-results/trends-unpublished
+    E2E_TRENDS_UNPUBLISHED=1 E2E_SSR_REMEDIATION=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/home-personal.spec.ts --grep 'TR03 planned.*unpublished' --workers=1 --trace=on --output=test-results/trends-unpublished-bound
     ;;
   briefing)
     BRIEFING_PUBLIC_ENABLED=true npx playwright test e2e/briefing.spec.ts --grep-invert 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-enabled
