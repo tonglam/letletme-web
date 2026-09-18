@@ -52,3 +52,46 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`MKT02 late history cannot replace a new player ${locale} ${width}`, async ({ page }) => {
+   const zh = locale === 'zh-CN'
+   let release!: () => void
+   const held = new Promise<void>(resolve => { release = resolve })
+   let started!: () => void
+   const oldStarted = new Promise<void>(resolve => { started = resolve })
+   let finished!: () => void
+   const oldFinished = new Promise<void>(resolve => { finished = resolve })
+   await page.route('**/api/market/price-history?**', async route => {
+    const id = Number(new URL(route.request().url()).searchParams.get('playerId'))
+    if (id === 1) { started(); await held }
+    try {
+     await route.fulfill({ json: { items: [{ playerId: id, changeDate: '2026-08-03', oldValue: id === 1 ? 99 : 104, newValue: id === 1 ? 100 : 105, changeType: 'RISE', transfersIn: null, transfersOut: null }] } })
+    } finally { if (id === 1) finished() }
+   })
+   await page.setViewportSize({ width, height: 900 })
+   try {
+    await page.goto(`${zh ? '/zh-CN' : ''}/explore/market`)
+    const search = page.getByRole('searchbox', { name: zh ? '按姓名搜索球员' : 'Search players by name', exact: true })
+    const choose = async (name: string, term: string) => {
+     await search.fill(term)
+     const row = page.getByRole('list', { name: zh ? '球员搜索结果' : 'Player search results', exact: true }).getByRole('listitem').filter({ has: page.getByRole('link', { name, exact: true }) })
+     await row.getByRole('button', { name: zh ? '历史' : 'History', exact: true }).click()
+    }
+    await choose('Saka', 'Sa')
+    await oldStarted
+    await page.getByRole('button', { name: zh ? '选择其他球员' : 'Choose another player', exact: true }).click()
+    await choose('Palmer', 'Pa')
+    await expect(page.getByRole('heading', { level: 3, name: 'Palmer', exact: true })).toBeVisible()
+    await expect(page.getByText('£10.4m → £10.5m')).toBeVisible()
+    release()
+    await oldFinished
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    await expect(page.getByRole('heading', { level: 3, name: 'Palmer', exact: true })).toBeVisible()
+    await expect(page.getByText('£10.4m → £10.5m')).toBeVisible()
+    await expect(page.getByText('£9.9m → £10.0m')).toHaveCount(0)
+   } finally { release() }
+  })
+ }
+}
