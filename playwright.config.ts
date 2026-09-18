@@ -152,10 +152,13 @@ const graphqlServiceToken =
 	'e2e-graphql-service-token-at-least-thirty-two-bytes'
 const standaloneServerCommand =
 	'mkdir -p .next/standalone/public .next/standalone/.next/static && cp -R public/. .next/standalone/public/ && cp -R .next/static/. .next/standalone/.next/static/ && node --import ./e2e/fixtures/fpl-fetch.mjs .next/standalone/server.js'
+const selectedStandaloneCommand = process.env.E2E_NONTERMINAL_HORIZON === '1'
+	? 'node e2e/fixtures/isolated-standalone.mjs'
+	: standaloneServerCommand
 const nextCommand =
 	process.env.PLAYWRIGHT_USE_EXISTING_BUILD === '1'
-		? standaloneServerCommand
-		: `npm run build && ${standaloneServerCommand}`
+		? selectedStandaloneCommand
+		: `npm run build && ${selectedStandaloneCommand}`
 
 export default defineConfig({
 	testDir: './e2e',
@@ -196,6 +199,7 @@ export default defineConfig({
 				},
 				{
 					command: nextCommand,
+					gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
 					env: {
 						...process.env,
 						NODE_ENV: 'production',

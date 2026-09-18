@@ -387,3 +387,34 @@ for (const width of [390, 1440]) {
 		})
 	}
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const width of [1440, 390]) {
+		test.describe(`candidate position filter ${locale} ${width}`, () => {
+			test.use({ viewport: { width, height: 900 } })
+			test('position filters preserve candidate identity and restore all results', async ({ page }) => {
+				await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+				const actions = page.locator('[data-ssr-stream-content="fixtures-actions"]')
+				const rows = actions.locator('li')
+				await expect(rows.first()).toBeVisible()
+				const baseline = await rows.evaluateAll(items => items.map(item => ({
+					position: item.firstElementChild?.textContent?.trim(),
+					href: item.querySelector('a')?.getAttribute('href')
+				})))
+				expect(baseline.length).toBeGreaterThan(0)
+				expect(baseline.every(item => item.href && item.position)).toBe(true)
+				for (const position of ['GKP', 'DEF', 'MID', 'FWD']) {
+					const button = actions.getByRole('button', { name: position, exact: true })
+					await button.click()
+					await expect(button).toHaveAttribute('aria-pressed', 'true')
+					const expected = baseline.filter(item => item.position === position)
+					await expect(rows).toHaveCount(expected.length)
+					expect(await rows.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(expected.map(item => item.href))
+				}
+				await actions.getByRole('button', { name: locale === 'en' ? 'All' : '全部', exact: true }).click()
+				await expect(rows).toHaveCount(baseline.length)
+				expect(await rows.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(baseline.map(item => item.href))
+			})
+		})
+	}
+}
