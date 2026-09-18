@@ -78,7 +78,8 @@ async function continueToGraphqlFixture(route: Route) {
 	await route.continue({ url: graphqlFixtureUrl })
 }
 
-test('live points enriches all fifteen picks through one bounded GraphQL root', async ({
+for (const detailTiming of ['after-batch', 'before-batch'] as const) {
+test(`live points enriches all fifteen picks through one bounded GraphQL root ${detailTiming}`, async ({
 	page
 }) => {
 	test.skip(
@@ -94,6 +95,9 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 				variables?: { eventId?: number; elementIds?: number[] }
 		  }
 		| undefined
+	let targetedRequests = 0
+	let releaseTargeted!: () => void
+	const targetedGate = new Promise<void>(resolve => { releaseTargeted = resolve })
 	let clientLivePointsRequests = 0
 	let entryOverallRequests = 0
 	let explainBatchRequests = 0
@@ -105,6 +109,16 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		const payload = route.request().postDataJSON() as {
 			query?: string
 			variables?: { eventId?: number; elementIds?: number[] }
+		}
+		if (detailTiming === 'before-batch' && (payload.query?.includes('EventLiveExplainPlayer') || payload.query?.includes('PlayerLive'))) {
+			targetedRequests += 1
+			await targetedGate
+			const isExplain = payload.query?.includes('EventLiveExplainPlayer')
+			await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: isExplain
+				? { eventLiveExplain: { elementId: 1, stats: { minutes: 45 }, contributions: [{ identifier: 'stale_targeted_payload', value: 1, points: 99 }] } }
+				: { playerLive: { minutes: 45, goalsScored: 0, assists: 0, cleanSheets: 0, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 0, bps: 0, totalPoints: 99 } }
+			}) })
+			return
 		}
 		if (payload.query?.includes('EventLiveExplainBatch')) {
 			explainBatchRequests += 1
@@ -205,12 +219,14 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 
 	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
 	await expect.poll(() => clientLivePointsRequests).toBe(1)
+	const openPlayerOne = () => pitch.getByRole('button', { name: 'View details for Player 1', exact: true }).click()
+	if (detailTiming === 'before-batch') {
+		await openPlayerOne()
+		await expect.poll(() => targetedRequests).toBe(2)
+		await expect(page.getByRole('dialog').getByText('Loading breakdown…', { exact: true })).toBeVisible()
+	}
 	releaseExplain()
-
-	await page
-	pitch
-		.getByRole('button', { name: 'View details for Player 1', exact: true })
-		.click()
+	if (detailTiming === 'after-batch') await openPlayerOne()
 	const detail = page.getByRole('dialog')
 	await expect(
 		detail.getByText('manual_refresh_explain', { exact: true })
@@ -219,14 +235,33 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		detail.getByText('Goals Conceded', { exact: true }).first()
 	).toBeVisible()
 	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
+	if (detailTiming === 'before-batch') {
+		// The new batch source is visibly applied while old targeted reads remain pending.
+		await expect(detail.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+		const lateResponses = Promise.all(['EventLiveExplainPlayer', 'PlayerLive'].map(operation =>
+			page.waitForResponse(response => response.url().endsWith('/api/graphql') &&
+				Boolean(response.request().postDataJSON()?.query?.includes(operation)))))
+		releaseTargeted()
+		for (const response of await lateResponses) await response.finished()
+		await page.clock.runFor(50)
+		await expect(detail.getByText('manual_refresh_explain', { exact: true })).toBeVisible()
+		await expect(detail.getByText('stale_targeted_payload', { exact: true })).toHaveCount(0)
+		await expect(detail.getByText('99', { exact: true })).toHaveCount(0)
+		await expect(detail.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+		expect(targetedRequests).toBe(2)
+	}
+
 
 	await page.clock.fastForward(10 * 60 * 1000)
 	// The deterministic fixture is outside the live window.  A scheduled or
 	// otherwise unconfirmed round must not re-arm the explanation poll.
 	expect(explainBatchRequests).toBe(1)
 })
+}
 
-test('live player detail ignores a late player response and retries after both reads fail', async ({
+for (const outcome of ['failed', 'succeeded', 'explain-failed', 'live-failed', 'explain-mismatch'] as const) {
+for (const lateTarget of ['other-player', 'closed', 'same-player'] as const) {
+test(`live player detail settles ${outcome} late responses with ${lateTarget} selected`, async ({
 	page
 }) => {
 	test.skip(
@@ -234,6 +269,9 @@ test('live player detail ignores a late player response and retries after both r
 		'Uses the deterministic local GraphQL fixture'
 	)
 	await page.clock.install()
+	const hasFailure = outcome === 'failed' || outcome === 'explain-failed' || outcome === 'live-failed'
+	const failsOperation = (isExplain: boolean) => outcome === 'failed' ||
+		(outcome === 'explain-failed' && isExplain) || (outcome === 'live-failed' && !isExplain)
 
 	let playerOneRequestCount = 0
 	let playerTwoRequestCount = 0
@@ -310,16 +348,18 @@ test('live player detail ignores a late player response and retries after both r
 			: payload.variables?.playerId
 		if (playerId === 1) {
 			playerOneRequestCount += 1
-			// The first selection has both reads fail only after the user has
-			// moved on. The second selection proves close/reopen recovery.
+			// Hold both reads from the first selection until the asserted UI
+			// state is reached, then settle with the selected outcome.
 			if (playerOneRequestCount <= 2) {
 				await playerOneGate
+				if (failsOperation(isExplain)) {
 				await route.fulfill({
 					status: 503,
 					contentType: 'application/json',
 					body: JSON.stringify({ errors: [{ message: 'Detail unavailable' }] })
 				})
 				return
+				}
 			}
 		}
 		if (playerId === 2) playerTwoRequestCount += 1
@@ -328,11 +368,30 @@ test('live player detail ignores a late player response and retries after both r
 			contentType: 'application/json',
 			body: JSON.stringify({
 				data: isExplain
-					? { eventLiveExplain: explainPayload(playerId ?? 2) }
+					? { eventLiveExplain: { ...explainPayload(playerId ?? 2), ...(outcome === 'explain-mismatch' && playerId === 1 && playerOneRequestCount <= 2 ? { contributions: [{ identifier: 'minutes', value: 45, points: 99 }] } : {}) } }
 					: { playerLive: livePayload(playerId ?? 2) }
 			})
 		})
 	})
+
+	const settlePlayerOne = async () => {
+		const lateResponses = Promise.all(['EventLiveExplainPlayer', 'PlayerLive'].map(operation =>
+			page.waitForResponse(response => {
+				if (!response.url().endsWith('/api/graphql')) return false
+				const body = response.request().postDataJSON() as { query?: string; variables?: { elementId?: number; playerId?: number } }
+				return Boolean(body.query?.includes(operation)) &&
+					(body.variables?.elementId ?? body.variables?.playerId) === 1 && response.status() === (failsOperation(operation === 'EventLiveExplainPlayer') ? 503 : 200)
+			})
+		))
+		releasePlayerOne()
+		for (const response of await lateResponses) await response.finished()
+		if (hasFailure) {
+			await expect.poll(() => page.evaluate(() =>
+				Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1') || 0)
+			)).toBeGreaterThan(0)
+		}
+		await page.clock.runFor(50)
+	}
 
 	await page.goto('/live/points/123')
 	const pitch = page.getByRole('region', { name: /formation/ })
@@ -346,8 +405,37 @@ test('live player detail ignores a late player response and retries after both r
 	await expect.poll(() => playerOneRequestCount).toBe(2)
 	const firstDialog = page.getByRole('dialog')
 	await expect(firstDialog).toBeVisible()
+	if (lateTarget === 'same-player') {
+		await settlePlayerOne()
+		await expect(firstDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
+		await expect(firstDialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+		expect(playerOneRequestCount).toBe(2)
+		if (outcome === 'succeeded' || outcome === 'live-failed') {
+			await expect(firstDialog.getByText('Estimated', { exact: true })).toHaveCount(0)
+			await expect(firstDialog.getByText('Goals', { exact: true })).toBeVisible()
+		} else if (outcome === 'explain-failed' || outcome === 'explain-mismatch') {
+			await expect(firstDialog.getByText('Estimated', { exact: true })).toBeVisible()
+		}
+		// Closing deliberately clears the hook cache; reopening issues fresh reads.
+		await firstDialog.getByRole('button', { name: 'Close', exact: true }).click()
+		await expect(page.getByRole('dialog')).toHaveCount(0)
+		if (hasFailure) await page.clock.fastForward(61_000)
+		await pitch.getByRole('button', { name: 'View details for Player 1', exact: true }).click()
+		await expect.poll(() => playerOneRequestCount).toBe(4)
+		await expect(page.getByRole('dialog').getByText('Goals', { exact: true })).toBeVisible()
+		await expect(page.getByRole('dialog').getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+		return
+	}
 	await firstDialog.getByRole('button', { name: 'Close', exact: true }).click()
 	await expect(page.getByRole('dialog')).toHaveCount(0)
+	if (lateTarget === 'closed') {
+		await settlePlayerOne()
+		await expect(page.getByRole('dialog')).toHaveCount(0)
+		await expect(pitch).toBeVisible()
+		expect(playerOneRequestCount).toBe(2)
+		expect(playerTwoRequestCount).toBe(0)
+		return
+	}
 
 	await pitch
 		.getByRole('button', { name: 'View details for Player 2', exact: true })
@@ -357,16 +445,19 @@ test('live player detail ignores a late player response and retries after both r
 	await expect(secondDialog.getByRole('heading', { name: 'Player 2', exact: true })).toBeVisible()
 	await expect(secondDialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
 
-	// A's failed response arrives after B is already visible and must not
+	// A's response arrives after B is already visible and must not
 	// replace B's heading, loading state, or points.
-	releasePlayerOne()
+	await settlePlayerOne()
 	await expect(secondDialog.getByRole('heading', { name: 'Player 2', exact: true })).toBeVisible()
+	await expect(secondDialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
 	await expect(secondDialog.getByText('1', { exact: true }).first()).toBeVisible()
+	expect(playerTwoRequestCount).toBe(2)
 
 	await secondDialog.getByRole('button', { name: 'Close', exact: true }).click()
 	await expect(page.getByRole('dialog')).toHaveCount(0)
-	// The two dependency failures extend the shared cooldown from 30 to 60
-	// seconds. Advance the deterministic clock before exercising the explicit
+	if (hasFailure) {
+	// Dependency failures can extend the shared cooldown up to 60 seconds.
+	// Advance the deterministic clock before exercising the explicit
 	// recovery read; a manual refresh must not bypass a live server cooldown.
 	await expect
 		.poll(() =>
@@ -376,6 +467,7 @@ test('live player detail ignores a late player response and retries after both r
 		)
 		.toBeGreaterThan(0)
 	await page.clock.fastForward(61_000)
+	}
 	await pitch
 		.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()
@@ -384,6 +476,8 @@ test('live player detail ignores a late player response and retries after both r
 	await expect(recoveredDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
 	await expect(recoveredDialog.getByText('Goals', { exact: true })).toBeVisible()
 })
+}
+}
 
 test('live points restores transfer details and distinguishes failure from empty records', async ({
 	page
@@ -733,6 +827,12 @@ test('official-sync live points auto-refreshes without a polling label', async (
 
 	// The official post-deadline sync is expected lifecycle work.  It should
 	// recover through the cheap refresh loop without asking the user to retry.
+	const recoveredResponse = page.waitForResponse(async response => {
+		if (!response.url().endsWith('/api/graphql') ||
+			!response.request().postDataJSON()?.query?.includes('GetLiveCalcPoints')) return false
+		const body = await response.json()
+		return Boolean(body.data?.calcLivePointsByEntry)
+	})
 	if (refreshProfile === 'conserve') {
 		await page.clock.runFor(100_000)
 		expect(clientLivePointsRequests).toBe(1)
@@ -741,9 +841,10 @@ test('official-sync live points auto-refreshes without a polling label', async (
 		firstRefreshWindowMs - (refreshProfile === 'conserve' ? 100_000 : 0)
 	)
 	await expect.poll(() => clientLivePointsRequests).toBeGreaterThan(1)
-	// Flush the React update queued by the second network response while the
-	// browser fake clock is installed.
-	await page.clock.runFor(1)
+	// A request counter proves dispatch, not response completion. Wait for the
+	// successful body before advancing the installed clock for the React update.
+	await (await recoveredResponse).finished()
+	await page.clock.runFor(50)
 	const pitch = page.getByRole('region', { name: /formation/ })
 	await expect(
 		pitch.getByRole('heading', { level: 2, name: 'E2E United' })

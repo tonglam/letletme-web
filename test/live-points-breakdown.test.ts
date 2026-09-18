@@ -158,6 +158,15 @@ describe('resolvePointsBreakdown', () => {
 		assert.equal(resolved.source, 'provisional')
 		assert.equal(breakdownSum(resolved.lines), 26)
 	})
+	it('scales provisional lines for a triple-captain contribution without mutating the source', () => {
+		const player = basePlayer({ position: 'FWD', stats: { minutes: 90, goals: 2, bonusPoints: 3, points: 39 } })
+		const before = structuredClone(player)
+		const resolved = resolvePointsBreakdown({ official: [], officialMatchesTotal: false, player })
+		assert.equal(resolved.source, 'provisional')
+		assert.equal(breakdownSum(resolved.lines), 39)
+		assert.deepEqual(player, before)
+	})
+
 })
 
 describe('buildLivePlayerDetailWithPayload', () => {
