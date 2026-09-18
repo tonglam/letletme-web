@@ -6,9 +6,9 @@ const source = readFileSync('.github/workflows/release-web.yml', 'utf8')
 const start = source.includes('          # Observe asynchronous promotion') ? source.indexOf('          # Observe asynchronous promotion') : source.indexOf('          npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL"')
 const end = source.indexOf('          if [[ "$WEB_MAINTENANCE_MODE"', start)
 const block = source.slice(start, end).replace(/^          /gm, '')
-function run(promoteCode, statusCode, matching) {
+function run(promoteCode, statusCode, matching, rawStatus = 'succeeded') {
  const script = `set -euo pipefail
-npx() { if [[ "$*" == *"promote status"* ]]; then echo OBSERVE; return ${statusCode}; fi; echo PROMOTE; return ${promoteCode}; }
+npx() { if [[ "$*" == *" api "* ]]; then echo '${JSON.stringify({id:'fixture-project',accountId:'fixture-team',lastAliasRequest:{jobStatus:rawStatus,requestedAt:1,type:'promote',toDeploymentId:'fixture-candidate'}})}'; return 0; fi; if [[ "$*" == *"promote status"* ]]; then echo OBSERVE; return ${statusCode}; fi; echo PROMOTE; return ${promoteCode}; }
 curl() { echo 'x-letletme-release: ${matching ? 'expected' : 'old'}'; }
 sleep() { :; }
 ${block}
@@ -36,7 +36,7 @@ for (const statusCode of [0, 1]) {
   assert.ok(start>=0 && end>start)
   const section=source.slice(start,end)
   const script=section.slice(section.indexOf('        run: |')+'        run: |'.length).replace(/^          /gm,'')
-  const result=spawnSync('bash',['-c',`npx() { echo OBSERVE; return ${statusCode}; }
+  const result=spawnSync('bash',['-c',`npx() { if [[ "$*" == *" api "* ]]; then echo '{"id":"fixture-project","accountId":"fixture-team","lastAliasRequest":null}'; return 0; fi; echo OBSERVE; return ${statusCode}; }
 ${script}
 echo CREATE_CANDIDATE`],{encoding:'utf8',env:{...process.env,VERCEL_CLI_VERSION:'52.0.0',VERCEL_TOKEN:'fixture',VERCEL_ORG_ID:'fixture-team',VERCEL_PROJECT_ID:'fixture-project'}})
   assert.equal(result.status,statusCode)
@@ -45,3 +45,35 @@ echo CREATE_CANDIDATE`],{encoding:'utf8',env:{...process.env,VERCEL_CLI_VERSION:
   else assert.match(result.stdout,/CREATE_CANDIDATE/)
  })
 }
+
+test('old pending operation cannot pass when CLI status reports success', () => {
+ const result=run(1,0,true,'pending')
+ assert.notEqual(result.status,0)
+ assert.doesNotMatch(result.stdout,/VERIFIED/)
+})
+
+for (const [label, patch, expected] of [
+ ['old pending', { lastAliasRequest: { jobStatus: 'pending', requestedAt: 1 } }, 1],
+ ['old in-progress', { lastAliasRequest: { jobStatus: 'in-progress', requestedAt: 1 } }, 1],
+ ['unknown status', { lastAliasRequest: { jobStatus: 'future-state' } }, 1],
+ ['wrong project', { id: 'another-project' }, 1],
+ ['wrong team', { accountId: 'another-team' }, 1],
+ ['rolling release', { rollingRelease: { active: true } }, 1],
+ ['failed', { lastAliasRequest: { jobStatus: 'failed', type: 'promote' } }, 1],
+ ['skipped', { lastAliasRequest: { jobStatus: 'skipped', type: 'promote' } }, 1],
+ ['rollback', { lastAliasRequest: { jobStatus: 'succeeded', type: 'rollback' } }, 1],
+ ['no operation', { lastAliasRequest: null }, 1],
+ ['succeeded', {}, 0],
+]) {
+ test(`raw promotion state: ${label}`, () => {
+  const project={id:'fixture-project',accountId:'fixture-team',lastAliasRequest:{jobStatus:'succeeded',type:'promote',requestedAt:1},...patch}
+  const r=spawnSync(process.execPath,['ops/release/check-promotion-state.mjs','--require-success'],{input:JSON.stringify(project),encoding:'utf8',env:{...process.env,VERCEL_PROJECT_ID:'fixture-project',VERCEL_ORG_ID:'fixture-team'}})
+  assert.equal(r.status,expected,r.stderr)
+ })
+}
+test('missing and malformed raw project responses fail closed', () => {
+ for(const input of ['{','null','{}',JSON.stringify({id:'fixture-project',accountId:'fixture-team'})]) {
+  const r=spawnSync(process.execPath,['ops/release/check-promotion-state.mjs'],{input,encoding:'utf8',env:{...process.env,VERCEL_PROJECT_ID:'fixture-project',VERCEL_ORG_ID:'fixture-team'}})
+  assert.equal(r.status,1)
+ }
+})

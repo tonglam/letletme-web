@@ -208,6 +208,10 @@ jobs:
             exit 1
           fi
 
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" api "/v9/projects/$VERCEL_PROJECT_ID?rollbackInfo=true" \
+            --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" --raw | \
+            node ops/release/check-promotion-state.mjs
+
       - name: Build remotely and stage Vercel production candidate
         if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
         env:
@@ -504,6 +508,9 @@ jobs:
               exit 1
             fi
           fi
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" api "/v9/projects/$VERCEL_PROJECT_ID?rollbackInfo=true" \
+            --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" --raw | \
+            node ops/release/check-promotion-state.mjs --require-success
           production_ready=0
           for attempt in $(seq 1 12); do
             production_headers=''

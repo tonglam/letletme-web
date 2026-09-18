@@ -130,3 +130,9 @@ EdgeOne 恢复 `all-vercel` 也不等于 Vercel deployment 回滚。
 发布 workflow 在创建候选前观察已有 promotion；本次 promote 返回非零时只观察原操作，
 随后仍须通过目标 release header 检查。观察再次失败时不会自动恢复旧 alias，
 必须按上述步骤继续核对异步终态，不能把有界等待当作取消或回滚保证。
+
+CLI 52 的 status 命令会忽略三分钟前发起的请求，因此它返回成功后仍须读取
+`/v9/projects/<project-id>?rollbackInfo=true` 的原始 `lastAliasRequest.jobStatus`。
+workflow 使用 `check-promotion-state.mjs` 校验 project/team，拒绝 pending、in-progress、
+未知状态及 rolling release；后置检查只接受 succeeded 的 promote，随后继续核对实际 release。
+不以 requestedAt 过旧判定操作已结束。
