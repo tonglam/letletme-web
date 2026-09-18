@@ -36,6 +36,18 @@ for (const locale of ['en', 'zh-CN']) {
    await page.goBack()
    await expect(page).toHaveURL(new RegExp(`${zh ? '/zh-CN' : ''}/explore/market$`))
    await expect(page.locator('#market-most-selected-share li')).toHaveCount(4)
+   for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.getByRole('searchbox', { name: zh ? '按姓名搜索球员' : 'Search players by name', exact: true }).fill('Sa')
+    const results = page.getByRole('list', { name: zh ? '球员搜索结果' : 'Player search results', exact: true })
+    const saka = results.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Saka', exact: true }) })
+    await saka.getByRole('button', { name: zh ? '历史' : 'History', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 3, name: 'Saka', exact: true })).toBeVisible()
+    await expect(page.getByText('£9.9m → £10.0m')).toBeVisible()
+    await page.getByRole('button', { name: zh ? '选择其他球员' : 'Choose another player', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 3, name: 'Saka', exact: true })).toHaveCount(0)
+    await expect(page.getByText('£9.9m → £10.0m')).toHaveCount(0)
+   }
+
 
   })
  }
