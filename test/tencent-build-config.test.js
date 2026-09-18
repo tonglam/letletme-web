@@ -67,7 +67,17 @@ test('CI build environment rejects key mismatch and excludes unrelated CI secret
 	for (const name of ['TENCENT_RELEASE_SIGNING_KEY', 'VERCEL_TOKEN', 'NODE_OPTIONS', 'DATABASE_URL']) {
 		assert.equal(built[name], undefined)
 	}
-	assert.throws(() => buildEnvironment(host, 'a'.repeat(40), { ...env, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Buffer.alloc(32, 19).toString('base64') }))
+	assert.throws(() => buildEnvironment(host, 'a'.repeat(40), { ...env, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Buffer.alloc(32, 19).toString('base64') }), /HOST_KEY_MISMATCH/)
 	assert.throws(() => buildEnvironment(host, 'a'.repeat(40), { ...env, WEB_LIVE_REFRESH_PROFILE: 'unknown' }))
-	assert.throws(() => buildEnvironment({ ...host, publicEnvironment: { ...host.publicEnvironment, NODE_OPTIONS: 'injected' } }, 'a'.repeat(40), env))
+	assert.throws(() => buildEnvironment({ ...host, publicEnvironment: { ...host.publicEnvironment, NODE_OPTIONS: 'injected' } }, 'a'.repeat(40), env), /HOST_CONFIG_MISMATCH/)
+})
+
+
+test('artifact CLI failure reports fixed stage without reflecting arguments', () => {
+ const sentinel = 'secret-argument-must-not-appear'
+ const result = spawnSync(process.execPath, ['ops/tencent/scripts/build-release.mjs', sentinel], { encoding: 'utf8' })
+ assert.equal(result.status, 1)
+ assert.equal(result.stdout, '')
+ assert.equal(result.stderr, 'Tencent CI artifact build failed [arguments]\n')
+ assert.ok(!result.stderr.includes(sentinel))
 })
