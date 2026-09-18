@@ -1541,7 +1541,11 @@ for (const width of [1440, 390]) {
   let contentVersion = 1
   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
   try {
-   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryTournaments', data: { entryTournaments: [6, 7].map(id => ({ ...managedTournament, id, name: `Coverage League ${id}`, adminEntryId: 15702 })) } }] }) })).ok).toBe(true)
+   const liveSeed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveContext { __typename }' }) })).json()
+   expect(liveSeed.errors).toBeUndefined()
+   Object.assign(liveSeed.data.coreEventContext, { currentEventId: 4, nextEventId: 5, latestFinishedEventId: 3 })
+   Object.assign(liveSeed.data.liveContext, { eventId: 4, nextEventId: 5, anchorEventId: 4, latestFinalizedEventId: 3 })
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetLiveContext', data: liveSeed.data }, { operation: 'GetEntryTournaments', data: { entryTournaments: [6, 7].map(id => ({ ...managedTournament, id, name: `Coverage League ${id}`, adminEntryId: 15702 })) } }] }) })).ok).toBe(true)
    await page.setViewportSize({ width, height: 900 })
    await addSessionCookie(page, session.cookie)
    await page.route('**/api/live/competitions/6/board', async route => {
@@ -1578,6 +1582,7 @@ for (const width of [1440, 390]) {
     board.pageInfo = { hasNextPage: !after, endCursor: after ? null : 'coverage-page-2' }
     await route.fulfill({ response, json: body })
    })
+   await page.clock.install()
    await page.goto('/live/competitions?tournamentId=6&gw=4')
    const teams = page.getByRole('link', { name: /(?:Alpha|Beta|Gamma) Coverage/ }).filter({ visible: true })
    await expect(teams).toHaveCount(2)
@@ -1607,14 +1612,13 @@ for (const width of [1440, 390]) {
    await page.route('**/api/live/competitions/6/compare?*', async route => {
     comparisonAttempts += 1
     if (comparisonAttempts === 1) {
-     contentVersion = 2
      await route.fulfill({ status: 409, json: { error: 'LIVE_SCORE_REVISION_GONE' } })
     } else {
      const response = await route.fetch()
      const body = await response.json()
      const gamma = body.tournamentEntrySquads.entries.find((entry: { entry: number }) => entry.entry === 15704)
-     gamma.entryName = 'Rank Updated Gamma'
-     gamma.rank = { overallRank: 777 }
+     gamma.entryName = contentVersion === 3 ? 'Live Updated Gamma' : 'Rank Updated Gamma'
+     gamma.rank = { overallRank: contentVersion === 3 ? 555 : 777 }
      await route.fulfill({ response, json: body })
     }
    })
@@ -1634,13 +1638,31 @@ for (const width of [1440, 390]) {
    expect(comparisonUrl.searchParams.get('eventId')).toBe('4')
    const sheet = page.getByRole('dialog')
    await expect(sheet.getByRole('heading')).toContainText('Alpha Coverage')
-   await expect(sheet.getByRole('heading')).toContainText('Rank Updated Gamma')
+   await expect(sheet.getByRole('heading')).toContainText('Gamma Coverage')
    expect(comparisonUrl.searchParams.get('scoreCoreRevision')).toBe('e2e-competition-score-v1')
    await expect(sheet.getByText('Player 15', { exact: true })).toHaveCount(2)
-   await expect(sheet.getByText('777', { exact: true })).toHaveCount(1)
+   await expect(sheet.getByText('999', { exact: true })).toHaveCount(1)
+   await expect(sheet.getByText('TC', { exact: true })).toHaveCount(1)
+   await expect(sheet.getByText('9/11', { exact: true })).toHaveCount(1)
+   await page.route('**/api/live/competitions/6/head', async route => {
+    const response = await route.fetch()
+    const payload = await response.json()
+    const head = payload.leagueLiveHead ?? payload
+    head.contentRevision = `${boardRevision}-content-${contentVersion}`
+    await route.fulfill({ response, json: payload })
+   })
+   contentVersion = 3
+   const automaticBoard = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/6/board')
+   await page.clock.fastForward(140_000)
+   expect((await automaticBoard).status()).toBe(200)
+   await expect(sheet).toBeVisible()
+   await expect(sheet.getByRole('heading')).toContainText('Live Updated Gamma')
+   await expect(sheet.getByText('555', { exact: true })).toHaveCount(1)
    await expect(sheet.getByText('999', { exact: true })).toHaveCount(0)
    await expect(sheet.getByText('TC', { exact: true })).toHaveCount(0)
    await expect(sheet.getByText('9/11', { exact: true })).toHaveCount(0)
+   await page.unroute('**/api/live/competitions/6/head')
+
    await sheet.press('Escape')
    await expect(sheet).toHaveCount(0)
    await page.unroute('**/api/live/competitions/6/compare?*')

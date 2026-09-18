@@ -714,6 +714,7 @@ export function TournamentTable({
 						serverControl && tournamentId ? Number(tournamentId) : undefined
 					}
 					scoreCoreRevision={serverControl?.scoreCoreRevision}
+					contentRevision={serverControl?.contentRevision}
 					onRevisionGone={serverControl?.onRevisionGone}
 					openerRef={compareOpenerRef}
 					open={isCompareOpen}

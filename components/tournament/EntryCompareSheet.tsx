@@ -23,6 +23,7 @@ interface EntryCompareSheetProps {
 	/** Optional live-board context supplied by the paginated standings table. */
 	tournamentId?: number
 	scoreCoreRevision?: string
+	contentRevision?: string | null
 	onRevisionGone?: () => Promise<void>
 	open: boolean
 	onOpenChange: (open: boolean) => void
@@ -468,6 +469,7 @@ export function EntryCompareSheet({
 	gameweek,
 	tournamentId,
 	scoreCoreRevision,
+	contentRevision,
 	onRevisionGone,
 	open,
 	onOpenChange
@@ -477,7 +479,7 @@ export function EntryCompareSheet({
 	const [retry, setRetry] = useState(0)
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
-	const identity = JSON.stringify([tournamentId, gameweek, scoreCoreRevision, entryIdA, entryIdB, retry])
+	const identity = JSON.stringify([tournamentId, gameweek, scoreCoreRevision, contentRevision, entryIdA, entryIdB, retry])
 	const [result, setResult] = useState<{
 		identity: string
 		data: [TournamentLiveCalcData, TournamentLiveCalcData] | null
