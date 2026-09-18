@@ -199,7 +199,7 @@ test.describe('BRIEF02 exact planned states', () => {
    const reads = observations.requests.filter((row: { operation: string }) => row.operation === 'BriefingWeek')
    expect(reads.length).toBeGreaterThan(0)
    expect(reads.every((row: { variables: { locale: string } }) => row.variables.locale === 'ZH_CN')).toBe(true)
-   await testInfo.attach(variantId, { body: JSON.stringify({ variantId, locale: 'zh-CN', viewport: 390, timezone: 'UTC', theme: 'dark', state, readyMs: null, performanceStatus: 'N/A', assertionScope: 'Planned functional-only empty/stale state; no performance distribution.' }), contentType: 'application/json' })
+   await testInfo.attach(variantId, { body: JSON.stringify({ variantId, locale: 'zh-CN', viewport: 390, timezone: 'UTC', theme: 'dark', state, readyMs: null, performanceStatus: 'NOT_OBSERVED', assertionScope: 'Planned empty/stale functional assertions only; state readiness, runtime errors and layout shift remain unmeasured and are excluded from normal performance distributions.' }), contentType: 'application/json' })
   })
  }
 })
