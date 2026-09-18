@@ -8,6 +8,7 @@ import { getCurrentAndNextEvents } from '@/lib/events'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { loadTrendCohorts, loadTrendDesk } from '@/lib/trends-server'
 import type { TrendAccess, TrendCohort } from '@/lib/graphql/operations/trends'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 import { resolveReviewGameweekAnchor } from '@/lib/review-gameweek'
 
 export const dynamic = 'force-dynamic'
@@ -54,8 +55,9 @@ export default async function SelectionsPage({
 }: PageProps) {
 	await getPageLocale(params)
 	const query = await searchParams
-	const eventsPromise = getCurrentAndNextEvents()
-	const publicCatalogPromise = loadTrendCohorts('PUBLIC')
+	const timing = new RouteLoaderTiming('/explore/selections')
+	const eventsPromise = timing.measure('event-context', () => getCurrentAndNextEvents())
+	const publicCatalogPromise = timing.measure('public-catalog', () => loadTrendCohorts('PUBLIC'))
 		.then(catalog => ({ catalog, loadFailed: false }))
 		.catch(error => {
 			console.error('[trends] public catalog failed:', error)
@@ -70,11 +72,11 @@ export default async function SelectionsPage({
 				loadFailed: true
 			}
 		})
-	const sessionContext = await getVerifiedEntryContext()
+	const sessionContext = await timing.measure('session', () => getVerifiedEntryContext())
 	const deferMyCohorts = query.scope === 'public' && Boolean(sessionContext.session && sessionContext.entryId)
 	const myCohortsPromise =
 		!deferMyCohorts && sessionContext.session && sessionContext.entryId
-			? loadTrendCohorts('MINE', sessionContext.session)
+			? timing.measure('private-catalog', () => loadTrendCohorts('MINE', sessionContext.session))
 					.then(catalog => ({ cohorts: catalog.cohorts, loadFailed: false }))
 					.catch(error => {
 						console.error('[trends] private catalog failed:', error)
@@ -110,17 +112,19 @@ export default async function SelectionsPage({
 	let initialDeskError = false
 	if (selected) {
 		try {
-			initialDesk = await loadTrendDesk(
+			initialDesk = await timing.measure('desk', () => loadTrendDesk(
 				selected.id,
 				initialEventId,
 				selected.access,
 				sessionContext.session
-			)
+			))
 		} catch (error) {
 			console.error('[trends] initial desk failed:', error)
 			initialDeskError = true
 		}
 	}
+
+	timing.finish(initialDeskError ? 'unavailable' : publicCatalogResult.loadFailed || myCohortsResult.loadFailed ? 'partial' : 'ready')
 
 	return (
 		<TrendsClient
