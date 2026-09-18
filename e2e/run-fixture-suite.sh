@@ -11,6 +11,7 @@ case "${1:-}" in
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-readiness.spec.ts --workers=1 --trace=on --output=test-results/market-readiness
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh horizon
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh trends-unpublished
+    E2E_MARKET_HISTORY=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-historical-freshness.spec.ts --workers=1 --trace=on --output=test-results/market-history
     ;;
   horizon)
     E2E_NONTERMINAL_HORIZON=1 npx playwright test e2e/nonterminal-horizon.spec.ts --workers=1 --trace=on --output=test-results/horizon

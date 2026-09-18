@@ -12,7 +12,7 @@ function invoke(suite, fail = false) {
 	const log = path.join(temporary, 'calls.jsonl')
 	const stub = path.join(temporary, 'npx')
 	writeFileSync(stub, `#!${process.execPath}
-require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
+require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
 process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 `)
 	chmodSync(stub, 0o755)
@@ -32,7 +32,7 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 5)
+	assert.equal(result.calls.length, 6)
 	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/market-readiness.spec.ts', '--workers=1', '--trace=on', '--output=test-results/market-readiness'])
 	assert.equal(result.calls[1].market, '1')
 	assert.equal(result.calls[1].existingBuild, '1')
@@ -46,12 +46,15 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.equal(result.calls[0].cwd, root)
 	assert.deepEqual(result.calls[3].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])
 	assert.deepEqual(result.calls[4].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'TR03 planned.*unpublished', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished-bound'])
-	for (const call of result.calls.slice(3)) {
+	for (const call of result.calls.slice(3, 5)) {
 		assert.equal(call.unpublished, '1')
 		assert.equal(call.existingBuild, '1')
 		assert.equal(call.cwd, root)
 	}
 	assert.equal(result.calls[4].ssr, '1')
+	assert.equal(result.calls[5].marketHistory, '1')
+	assert.equal(result.calls[5].existingBuild, '1')
+	assert.ok(result.calls[5].args.includes('e2e/market-historical-freshness.spec.ts'))
 })
 
 test('standalone horizon keeps build enabled and separates its artifacts', () => {
