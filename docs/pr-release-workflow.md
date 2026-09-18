@@ -136,3 +136,6 @@ CLI 52 的 status 命令会忽略三分钟前发起的请求，因此它返回�
 workflow 使用 `check-promotion-state.mjs` 校验 project/team，拒绝 pending、in-progress、
 未知状态及 rolling release；后置检查只接受 succeeded 的 promote，随后继续核对实际 release。
 不以 requestedAt 过旧判定操作已结束。
+
+成功状态必须同时满足 `lastAliasRequest.toDeploymentId` 等于本次 inspect 验证并传递的
+候选 deployment ID。同一个 SHA 的配置或 maintenance 重建不能复用旧候选的成功记录。

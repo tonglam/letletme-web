@@ -14,7 +14,7 @@ sleep() { :; }
 ${block}
 echo VERIFIED
 `
- return spawnSync('bash', ['-c', script], { encoding:'utf8', env:{...process.env, VERCEL_CLI_VERSION:'52.0.0', VERCEL_TOKEN:'fixture', VERCEL_ORG_ID:'fixture-team', VERCEL_PROJECT_ID:'fixture-project', CANDIDATE_URL:'fixture-candidate', RELEASE_SHA:'expected'} })
+ return spawnSync('bash', ['-c', script], { encoding:'utf8', env:{...process.env, VERCEL_CLI_VERSION:'52.0.0', VERCEL_TOKEN:'fixture', VERCEL_ORG_ID:'fixture-team', VERCEL_PROJECT_ID:'fixture-project', CANDIDATE_DEPLOYMENT_ID:'fixture-candidate', CANDIDATE_URL:'fixture-candidate', RELEASE_SHA:'expected'} })
 }
 test('promotion timeout observes completion and verifies exact alias without repeating promotion', () => {
  const r=run(1,0,true); assert.equal(r.status,0,r.stderr); assert.match(r.stdout,/OBSERVE/); assert.match(r.stdout,/VERIFIED/); assert.equal(r.stdout.split('\n').filter(x=>x==='PROMOTE').length,1)
@@ -63,17 +63,25 @@ for (const [label, patch, expected] of [
  ['skipped', { lastAliasRequest: { jobStatus: 'skipped', type: 'promote' } }, 1],
  ['rollback', { lastAliasRequest: { jobStatus: 'succeeded', type: 'rollback' } }, 1],
  ['no operation', { lastAliasRequest: null }, 1],
+ ['wrong candidate', {lastAliasRequest:{jobStatus:'succeeded',type:'promote',toDeploymentId:'old-candidate'}}, 1],
+ ['missing candidate', {lastAliasRequest:{jobStatus:'succeeded',type:'promote'}}, 1],
  ['succeeded', {}, 0],
 ]) {
  test(`raw promotion state: ${label}`, () => {
-  const project={id:'fixture-project',accountId:'fixture-team',lastAliasRequest:{jobStatus:'succeeded',type:'promote',requestedAt:1},...patch}
-  const r=spawnSync(process.execPath,['ops/release/check-promotion-state.mjs','--require-success'],{input:JSON.stringify(project),encoding:'utf8',env:{...process.env,VERCEL_PROJECT_ID:'fixture-project',VERCEL_ORG_ID:'fixture-team'}})
+  const project={id:'fixture-project',accountId:'fixture-team',lastAliasRequest:{jobStatus:'succeeded',type:'promote',requestedAt:1,toDeploymentId:'fixture-candidate'},...patch}
+  const r=spawnSync(process.execPath,['ops/release/check-promotion-state.mjs','--require-success'],{input:JSON.stringify(project),encoding:'utf8',env:{...process.env,VERCEL_PROJECT_ID:'fixture-project',VERCEL_ORG_ID:'fixture-team',CANDIDATE_DEPLOYMENT_ID:'fixture-candidate'}})
   assert.equal(r.status,expected,r.stderr)
  })
 }
 test('missing and malformed raw project responses fail closed', () => {
  for(const input of ['{','null','{}',JSON.stringify({id:'fixture-project',accountId:'fixture-team'})]) {
-  const r=spawnSync(process.execPath,['ops/release/check-promotion-state.mjs'],{input,encoding:'utf8',env:{...process.env,VERCEL_PROJECT_ID:'fixture-project',VERCEL_ORG_ID:'fixture-team'}})
+  const r=spawnSync(process.execPath,['ops/release/check-promotion-state.mjs'],{input,encoding:'utf8',env:{...process.env,VERCEL_PROJECT_ID:'fixture-project',VERCEL_ORG_ID:'fixture-team',CANDIDATE_DEPLOYMENT_ID:'fixture-candidate'}})
   assert.equal(r.status,1)
  }
+})
+
+test('candidate identity is carried from validated inspect output to promotion check', () => {
+ assert.match(source, /typeof value.id !== "string"/)
+ assert.match(source, /fs\.appendFileSync\(process\.env\.GITHUB_OUTPUT, `candidate_id=\$\{value\.id\}\\n`\)/)
+ assert.match(source, /CANDIDATE_DEPLOYMENT_ID: \$\{\{ steps\.vercel-candidate\.outputs\.candidate_id \}\}/)
 })

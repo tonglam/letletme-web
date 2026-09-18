@@ -21,6 +21,9 @@ try {
   if (requireSuccess && (request.jobStatus !== 'succeeded' || request.type !== 'promote')) {
    throw new Error('Successful promotion is not confirmed')
   }
+  if (requireSuccess && (!process.env.CANDIDATE_DEPLOYMENT_ID || request.toDeploymentId !== process.env.CANDIDATE_DEPLOYMENT_ID)) {
+   throw new Error('Successful promotion does not match this candidate deployment')
+  }
   console.log('Alias operation is terminal; actual release identity must still be verified')
  }
 } catch (error) {

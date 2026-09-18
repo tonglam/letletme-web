@@ -266,6 +266,8 @@ jobs:
             const expectedUrl = process.env.CANDIDATE_URL;
             if (value.readyState !== "READY" || value.target !== "production") process.exit(1);
             if (`https://${value.url}` !== expectedUrl) process.exit(1);
+            if (typeof value.id !== "string" || !/^dpl_[a-zA-Z0-9]+$/.test(value.id)) process.exit(1);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `candidate_id=${value.id}\n`);
           '
           npx --yes "vercel@${VERCEL_CLI_VERSION}" curl /healthz \
             --yes \
@@ -326,6 +328,7 @@ jobs:
           EDGEONE_TENCENT_HEALTH_URL: ${{ vars.EDGEONE_TENCENT_HEALTH_URL }}
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_URL: ${{ steps.vercel-candidate.outputs.candidate_url }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.vercel-candidate.outputs.candidate_id }}
         shell: bash
         run: |
           set -Eeuo pipefail
