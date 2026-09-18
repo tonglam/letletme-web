@@ -272,8 +272,13 @@ async function doFetch<T>(
 	const controller = new AbortController()
 	const safeTimeoutMs = normalizeGraphQLTimeoutMs(timeoutMs)
 	let timedOut = false
+	let responseHeadersMs: number | null = null
+	let responseBodyMs: number | null = null
+	let timeoutFiredMs: number | null = null
+	const requestStages = () => ({ responseHeadersMs, responseBodyMs, timeoutFiredMs })
 	const timeoutId = globalThis.setTimeout(() => {
 		timedOut = true
+		timeoutFiredMs = Math.max(0, Date.now() - startedAt)
 		controller.abort()
 	}, safeTimeoutMs)
 	const abortFromCaller = () => controller.abort()
@@ -311,6 +316,7 @@ async function doFetch<T>(
 		if (next) fetchOptions.next = next
 
 		const response = await fetch(endpoint, fetchOptions)
+		responseHeadersMs = Math.max(0, Date.now() - startedAt)
 		requestId = response.headers.get('x-request-id') ?? undefined
 		let responseBytes: Uint8Array
 		try {
@@ -326,6 +332,7 @@ async function doFetch<T>(
 			// the JSON.parse call below can produce INVALID_RESPONSE.
 			throw error
 		}
+		responseBodyMs = Math.max(0, Date.now() - startedAt)
 		let result: { errors?: unknown; data?: unknown } | null
 		try {
 			result = JSON.parse(new TextDecoder().decode(responseBytes))
@@ -476,7 +483,8 @@ async function doFetch<T>(
 				status: response.status,
 				requestId,
 				durationMs,
-				timeoutMs: safeTimeoutMs
+				timeoutMs: safeTimeoutMs,
+				stages: requestStages()
 			})
 		}
 
@@ -559,7 +567,8 @@ async function doFetch<T>(
 							: 'UNKNOWN_ERROR',
 					requestId,
 					durationMs: Math.max(0, Date.now() - startedAt),
-					timeoutMs: safeTimeoutMs
+					timeoutMs: safeTimeoutMs,
+					stages: requestStages()
 				})
 			}
 			if (typeof window !== 'undefined') {
