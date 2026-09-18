@@ -506,7 +506,11 @@ export function EntryCompareSheet({
 				if (squad?.tournamentId !== tournamentId || squad.eventId !== gameweek || squad.scoreCoreRevision !== scoreCoreRevision || !Array.isArray(squad.entries) || squad.entries.length !== 2) throw new Error('Comparison scope mismatch')
 				const a = squad.entries.find(entry => entry.entry === Number(entryIdA))
 				const b = squad.entries.find(entry => entry.entry === Number(entryIdB))
-				if (!a || !b || a === b || ![a, b].every(entry => Array.isArray(entry.pickList) && entry.pickList.length > 0 && entry.score?.revisions.scoreCore === scoreCoreRevision)) throw new Error('Incomplete comparison')
+				if (!a || !b || a === b || ![a, b].every(entry => {
+					if (!Array.isArray(entry.pickList) || entry.pickList.length !== 15 || entry.score?.revisions.scoreCore !== scoreCoreRevision) return false
+					const positions = entry.pickList.map(pick => pick.position)
+					return new Set(positions).size === 15 && positions.every(position => Number.isInteger(position) && position >= 1 && position <= 15)
+				})) throw new Error('Incomplete comparison')
 				if (!controller.signal.aborted) setResult({ identity, data: [a, b], error: false })
 			} catch {
 				if (!controller.signal.aborted) setResult({ identity, data: null, error: true })

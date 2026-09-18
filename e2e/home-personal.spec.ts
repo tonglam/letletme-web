@@ -996,7 +996,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await expect(comparison.getByText(new RegExp(`^(?:\\([CV]\\) )?Player ${playerId}(?: \\([CV]\\))?$`))).toHaveCount(2)
 				}
 				await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
-				for (const fault of ['unavailable', 'revision', 'entry', 'gone'] as const) {
+				for (const fault of ['partial', 'duplicate-position', 'invalid-position', 'unavailable', 'revision', 'entry', 'gone'] as const) {
 					await comparison.press('Escape')
 					await expect(comparison).toHaveCount(0)
 					let attempts = 0
@@ -1009,7 +1009,10 @@ test(`SSR remediation tournament season sections load on demand without a false 
 						}
 						const response = await route.fetch()
 						const body = await response.json()
-						if (fault === 'revision') body.tournamentEntrySquads.scoreCoreRevision = 'wrong-revision'
+						if (fault === 'partial') body.tournamentEntrySquads.entries[0].pickList = body.tournamentEntrySquads.entries[0].pickList.slice(0, 14)
+						else if (fault === 'duplicate-position') body.tournamentEntrySquads.entries[0].pickList[14].position = 1
+						else if (fault === 'invalid-position') body.tournamentEntrySquads.entries[0].pickList[14].position = 16
+						else if (fault === 'revision') body.tournamentEntrySquads.scoreCoreRevision = 'wrong-revision'
 						else body.tournamentEntrySquads.entries[0].entry = 99999
 						await route.fulfill({ response, json: body })
 					})
