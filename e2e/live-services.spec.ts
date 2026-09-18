@@ -1296,3 +1296,105 @@ test('match head requests are cancelled when actual navigation unmounts the page
   releaseResponse?.()
  }
 })
+
+test('identical match HEAD revisions do not trigger FULL reads', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fixture reads')
+ await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+ let headCount = 0
+ let fullCount = 0
+ page.on('request', request => {
+  if (new URL(request.url()).pathname === '/api/live/matches') fullCount += 1
+ })
+ const seedResponse = await fetch(graphqlFixtureUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+ const seed = await seedResponse.json()
+ expect(seed.errors).toBeUndefined()
+ expect(seed.data.liveMatchday.snapshot.eventId).toBe(33)
+ const snapshot = seed.data.liveMatchday.snapshot
+ const { matches: _matches, ...headSnapshot } = snapshot
+ const revisions = { ...headSnapshot.revisions }
+ for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete revisions[key]
+ await page.route('**/api/graphql', async route => {
+  if (!route.request().postData()?.includes('GetLiveMatchdayHead')) { await route.continue(); return }
+  headCount += 1
+  await route.fulfill({ status: 200, json: { data: { liveMatchday: { ...seed.data.liveMatchday, snapshot: { ...headSnapshot, revisions } } } } })
+ })
+ await page.goto('/live/matches')
+ await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+ await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+ expect(fullCount).toBe(0)
+ for (let index = 0; index < 3; index += 1) {
+  const before = headCount
+  await page.clock.fastForward(Math.max(90_000, firstRefreshWindowMs))
+  await expect.poll(() => headCount).toBeGreaterThan(before)
+  await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+  expect(fullCount).toBe(0)
+ }
+ await page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+  document.dispatchEvent(new Event('visibilitychange'))
+ })
+ const beforeHidden = headCount
+ await page.clock.fastForward(firstRefreshWindowMs * 3)
+ expect(headCount).toBe(beforeHidden)
+ expect(fullCount).toBe(0)
+ await page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+  document.dispatchEvent(new Event('visibilitychange'))
+ })
+ await page.clock.fastForward(firstRefreshWindowMs)
+ await expect.poll(() => headCount).toBeGreaterThan(beforeHidden)
+ expect(fullCount).toBe(0)
+ await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+ await page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+  document.dispatchEvent(new Event('visibilitychange'))
+ })
+ const beforeChangedHidden = headCount
+ const changed = structuredClone(seed.data)
+ changed.liveMatchday.snapshot.revisions.deskGeneration += 1
+ changed.liveMatchday.snapshot.revisions.deskPublicationId = 'e2e-match-resume-new-publication'
+ changed.liveMatchday.snapshot.revisions.scoreState = 'b'.repeat(24)
+ changed.liveMatchday.snapshot.matches[0].homeScore = 1
+ Object.assign(revisions, changed.liveMatchday.snapshot.revisions)
+ for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete revisions[key]
+ await page.route('**/api/live/matches?*', route => route.fulfill({ status: 200, json: changed }))
+ await page.clock.fastForward(firstRefreshWindowMs * 2)
+ expect(headCount).toBe(beforeChangedHidden)
+ expect(fullCount).toBe(0)
+ await page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+  document.dispatchEvent(new Event('visibilitychange'))
+ })
+ await page.clock.fastForward(firstRefreshWindowMs)
+ await expect.poll(() => headCount).toBeGreaterThan(beforeChangedHidden)
+ await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
+ expect(fullCount).toBe(1)
+ await page.clock.fastForward(firstRefreshWindowMs)
+ expect(fullCount).toBe(1)
+})
+
+test('unavailable match publication remains explicit and recovers on refresh', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated publication fixture')
+ test.skip(test.info().config.workers !== 1, 'Global fixture controls require a dedicated single-worker run')
+ const controls = graphqlFixtureUrl.replace('/graphql', '/__performance')
+ const unavailable = { liveMatchday: { availability: 'UNAVAILABLE', delivery: { state: 'UNAVAILABLE', servedFrom: null, reasonCodes: ['DESK_UNAVAILABLE'] }, snapshot: null } }
+ try {
+  expect((await fetch(controls, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetLiveMatchdayV3', data: unavailable }] }) })).ok).toBe(true)
+  await page.goto('/live/matches')
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute('data-status', 'UNAVAILABLE')
+  await expect(page.getByRole('status').filter({ hasText: 'Official data is updating. Matches will appear when the official data is published.' })).toBeVisible()
+  await expect(page.locator('[data-live-match-card="true"]')).toHaveCount(0)
+  expect((await fetch(controls, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  const response = await refreshed
+  expect(response.status()).toBe(200)
+  expect((await response.json()).liveMatchday.snapshot.eventId).toBe(33)
+  await expect(page.locator('[data-live-match-card="true"]')).toHaveCount(1)
+  await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Official data is updating.' })).toHaveCount(0)
+ } finally {
+  await fetch(controls, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+ }
+})
