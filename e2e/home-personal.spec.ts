@@ -2772,15 +2772,24 @@ test('J13 prepared preview exposes every group and knockout format without creat
   await page.locator('#league-url').fill('https://fantasy.premierleague.com/leagues/123/standings/c')
   await page.getByRole('button', { name: 'Fetch league', exact: true }).click()
   await expect(page.locator('#group-format')).toBeVisible()
-  for (const format of ['No Group', 'Points Race', 'No Group']) {
+  for (const group of ['No Group', 'Points Race']) {
    await page.locator('#group-format').click()
-   await page.getByRole('option', { name: format, exact: true }).click()
-   await expect(page.locator('#group-format')).toHaveText(format)
+   await page.getByRole('option', { name: group, exact: true }).click()
+   await expect(page.locator('#group-format')).toHaveText(group)
+   for (const knockout of ['No Knockout', 'Single Elimination', 'Double Elimination']) {
+    await page.locator('#knockout-format').click()
+    await page.getByRole('option', { name: knockout, exact: true }).click()
+    await expect(page.locator('#knockout-format')).toHaveText(knockout)
+    await expect(page.locator('#group-num')).toHaveCount(group === 'Points Race' ? 1 : 0)
+    await expect(page.locator('#qualifiers-per-group')).toHaveCount(group === 'Points Race' && knockout !== 'No Knockout' ? 1 : 0)
+   }
   }
-  for (const format of ['Single Elimination', 'Double Elimination', 'No Knockout']) {
-   await page.locator('#knockout-format').click()
-   await page.getByRole('option', { name: format, exact: true }).click()
-   await expect(page.locator('#knockout-format')).toHaveText(format)
+  for (const field of ['start-gameweek', 'end-gameweek']) {
+   for (const gw of [1, 38]) {
+    await page.locator(`#${field}`).click()
+    await page.getByRole('option', { name: `Gameweek ${gw}`, exact: true }).click()
+    await expect(page.locator(`#${field}`)).toHaveText(`Gameweek ${gw}`)
+   }
   }
   expect(previews).toBe(1)
   expect(writes).toEqual([])
