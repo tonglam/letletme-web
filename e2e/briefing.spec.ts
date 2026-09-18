@@ -173,3 +173,33 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+test.describe('BRIEF02 exact planned states', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'true', 'Enabled isolated runtime only')
+ test.afterEach(async () => { await control() })
+ for (const [variantId, state, heading] of [
+  ['BRIEF02.state.01', 'READY', '本周还没有资讯'],
+  ['BRIEF02.state.02', 'STALE', '这一期已经过期']
+ ] as const) {
+  test(`${variantId} renders the planned empty or stale terminal state`, async ({ page }, testInfo) => {
+   await control([{ operation: 'BriefingWeek', variables: { locale: 'ZH_CN' }, data: { briefingWeek: {
+    state, revision: 10, publicationId: 'brief-planned-states', publishedAt: '2026-09-17T23:59:00Z', sourceCheckedAt: '2026-09-17T23:58:00Z', staleAt: '2026-09-18T00:00:00Z', event: null,
+    featured: state === 'STALE' ? [{ id: 'expired', slug: 'expired', storyRevision: 1, title: 'Expired content must stay hidden', summary: 'Expired summary must stay hidden', sourceName: null, sourceUrl: null, sourceCheckedAt: null, expiresAt: null }] : [], sections: []
+   } } }])
+   await page.goto('/zh-CN/briefing/week')
+   await expect(page).toHaveURL(/\/zh-CN\/briefing\/week$/)
+   await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible()
+   await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+   expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, dark: matchMedia('(prefers-color-scheme: dark)').matches }))).toEqual({ width: 390, timezone: 'UTC', dark: true })
+   await expect(page.locator('main article')).toHaveCount(0)
+   await expect(page.getByText('Expired content must stay hidden', { exact: true })).toHaveCount(0)
+   await expect(page.getByText('Expired summary must stay hidden', { exact: true })).toHaveCount(0)
+   const observations = await (await fetch(fixture)).json()
+   const reads = observations.requests.filter((row: { operation: string }) => row.operation === 'BriefingWeek')
+   expect(reads.length).toBeGreaterThan(0)
+   expect(reads.every((row: { variables: { locale: string } }) => row.variables.locale === 'ZH_CN')).toBe(true)
+   await testInfo.attach(variantId, { body: JSON.stringify({ variantId, locale: 'zh-CN', viewport: 390, timezone: 'UTC', theme: 'dark', state, readyMs: null, performanceStatus: 'N/A', assertionScope: 'Planned functional-only empty/stale state; no performance distribution.' }), contentType: 'application/json' })
+  })
+ }
+})
