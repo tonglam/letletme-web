@@ -868,6 +868,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					board.rows[0].score.revisions.scoreCore = comparisonBoardRevision
 					board.rows[0].score.eventPoints = comparisonBoardRevision.endsWith('-v2') ? 77 : 52
 					board.rows[0].score.netEventPoints = board.rows[0].score.eventPoints
+					board.rows[0].overallRank = comparisonBoardRevision.endsWith('-v2') ? 777 : 333
+					board.rows[0].chip = comparisonBoardRevision.endsWith('-v2') ? 'BENCH_BOOST' : 'NONE'
+					board.rows[0].played = comparisonBoardRevision.endsWith('-v2') ? 7 : 3
 					board.viewerRow = { ...board.rows[0], entry: 123, entryName: 'Pinned Viewer United', liveRank: 90 }
 					board.totalEntries = 2
 					board.filteredEntries = 2
@@ -1093,6 +1096,11 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				try {
 					await compareOpener.click()
 					await expect(comparison.getByText('77', { exact: true })).toHaveCount(4)
+					await expect(comparison.getByText('777', { exact: true })).toHaveCount(2)
+					await expect(comparison.getByText('333', { exact: true })).toHaveCount(0)
+					await expect(comparison.getByText('BB', { exact: true })).toHaveCount(2)
+					await expect(comparison.getByText('7/15', { exact: true })).toHaveCount(2)
+					await expect(comparison.getByText('3/11', { exact: true })).toHaveCount(0)
 					await expect(comparison.getByText('52', { exact: true })).toHaveCount(0)
 					await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
 					await expect(comparison.getByRole('alert')).toHaveCount(0)

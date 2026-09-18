@@ -125,25 +125,26 @@ export function TournamentTable({
 		useState<TournamentSortDirection>('desc')
 	/** Checkboxes only appear while compare mode is on. */
 	const [compareMode, setCompareMode] = useState(false)
-	const [compareSelection, setCompareSelection] = useState<TournamentEntry[]>(
-		[]
-	)
+	const [compareSelectionIds, setCompareSelectionIds] = useState<string[]>([])
+	const compareSelection = compareSelectionIds
+		.map(id => entries.find(entry => entry.id === id) ??
+			(pinnedViewerEntry?.id === id ? pinnedViewerEntry : undefined))
+		.filter((entry): entry is TournamentEntry => entry !== undefined)
 	const [isCompareOpen, setIsCompareOpen] = useState(false)
 	const compareOpenerRef = useRef<HTMLButtonElement | null>(null)
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
 	const exitCompareMode = () => {
 		setCompareMode(false)
-		setCompareSelection([])
+		setCompareSelectionIds([])
 		setIsCompareOpen(false)
 	}
 
 	const toggleCompare = (entry: TournamentEntry) => {
-		setCompareSelection(prev => {
-			const exists = prev.find(e => e.id === entry.id)
-			if (exists) return prev.filter(e => e.id !== entry.id)
-			if (prev.length >= 2) return [prev[1], entry]
-			return [...prev, entry]
+		setCompareSelectionIds(prev => {
+			if (prev.includes(entry.id)) return prev.filter(id => id !== entry.id)
+			if (prev.length >= 2) return [prev[1], entry.id]
+			return [...prev, entry.id]
 		})
 	}
 
