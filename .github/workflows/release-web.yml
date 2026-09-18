@@ -550,6 +550,6 @@ jobs:
           cleanup_remote_root
           echo "Vercel and Tencent are active at exact SHA $RELEASE_SHA; EdgeOne split routing restored."
 
-      - name: Print skipped documentation release
+      - name: Print skipped automatic release
         if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'false'
-        run: echo "Documentation-only change; no Vercel or Tencent release was attempted."
+        run: echo "Automatic release gate skipped this run; no Vercel or Tencent release was attempted."
