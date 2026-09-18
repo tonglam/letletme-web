@@ -566,11 +566,14 @@ test('live points restores transfer details and distinguishes failure from empty
 		})
 	})
 	let transferRequests = 0
+	let emptyTransfers = false
+	const liveGameweeks: number[] = []
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as {
 			query?: string
-			variables?: { entryId?: number }
+			variables?: { entryId?: number; eventId?: number }
 		}
+		if (payload.query?.includes('GetLiveCalcPoints')) liveGameweeks.push(payload.variables?.eventId ?? -1)
 		if (!payload.query?.includes('GetEntryTransferHistory')) {
 			await continueToGraphqlFixture(route)
 			return
@@ -593,7 +596,7 @@ test('live points restores transfer details and distinguishes failure from empty
 			body: JSON.stringify({
 				data: {
 					entryTransferHistory:
-						transferRequests === 2
+						!emptyTransfers
 							? [
 									{
 										eventId: 33,
@@ -638,6 +641,20 @@ test('live points restores transfer details and distinguishes failure from empty
 	await expect(section).toContainText('Outgoing Player')
 	await expect(section).toContainText('£5.5m')
 	await expect(section).toContainText('£6.2m')
+	await page.getByRole('button', { name: 'Previous gameweek', exact: true }).click()
+	const previousSection = page.getByRole('region', { name: /Gameweek transfers\s*GW32/ })
+	await expect.poll(() => liveGameweeks.includes(32)).toBe(true)
+	await expect(previousSection).toContainText('No synced transfer records for this gameweek.')
+	await expect(previousSection.getByRole('alert')).toHaveCount(0)
+	await expect(previousSection).not.toContainText('Incoming Player')
+	await expect(previousSection).not.toContainText('Outgoing Player')
+	await expect(section).toHaveCount(0)
+	await page.getByRole('button', { name: 'Next gameweek', exact: true }).click()
+	await expect.poll(() => liveGameweeks.includes(33)).toBe(true)
+	await expect(section).toContainText('Incoming Player')
+	await expect(section).toContainText('Outgoing Player')
+	await expect(previousSection).toHaveCount(0)
+	emptyTransfers = true
 	await section
 		.getByRole('button', { name: 'Refresh transfers', exact: true })
 		.click()
