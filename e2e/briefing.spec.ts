@@ -92,3 +92,39 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  })
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test.describe(`BRIEF02 week states ${locale} ${width}`, () => {
+   test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'true', 'Enabled isolated runtime only')
+   test.afterEach(async () => { await control() })
+   test('state transitions exclude expired content and recover the published edition', async ({ page }) => {
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const gqlLocale = locale === 'en' ? 'EN' : 'ZH_CN'
+    const story = { id: 'brief02-story', slug: 'brief02-story', storyRevision: 1, title: 'BRIEF02 published story', summary: 'BRIEF02 publication summary', sourceName: 'Fixture source', sourceUrl: null, sourceCheckedAt: '2026-09-15T10:00:00Z', expiresAt: null }
+    const base = { revision: 8, publicationId: 'brief02-publication', publishedAt: '2026-09-15T11:00:00Z', sourceCheckedAt: story.sourceCheckedAt, staleAt: null, event: { seasonCode: '2627', eventId: 4, name: 'BRIEF02 GW4', deadlineTime: null }, featured: [story], sections: [] }
+    const visit = async (state: string, empty = false) => {
+     await control([{ operation: 'BriefingWeek', variables: { locale: gqlLocale }, data: { briefingWeek: { ...base, state, featured: empty ? [] : [story] } } }])
+     await page.goto(`${prefix}/briefing/week`)
+    }
+    await visit('READY')
+    await expect(page.getByRole('link', { name: story.title, exact: true })).toBeVisible()
+    for (const [state, title] of [
+     ['STALE', locale === 'en' ? 'This edition has expired' : '这一期已经过期'],
+     ['UNAVAILABLE', locale === 'en' ? 'Briefing temporarily unavailable' : '资讯暂时不可用'],
+     ['NOT_PUBLISHED', locale === 'en' ? 'This briefing has not been published' : '本期资讯尚未发布'],
+     ['READY', locale === 'en' ? 'No briefing stories yet' : '本周还没有资讯']
+    ]) {
+     await visit(state, state === 'READY')
+     await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible()
+     await expect(page.getByRole('link', { name: story.title, exact: true })).toHaveCount(0)
+     await expect(page.getByText(story.summary, { exact: true })).toHaveCount(0)
+    }
+    await visit('READY')
+    await expect(page.getByRole('link', { name: story.title, exact: true })).toBeVisible()
+    await expect(page.getByText('BRIEF02 GW4', { exact: true })).toBeVisible()
+   })
+  })
+ }
+}
