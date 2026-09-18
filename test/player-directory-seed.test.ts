@@ -3,8 +3,27 @@ import { readFile } from 'node:fs/promises'
 import { describe, it } from 'node:test'
 
 import { buildPlayerDirectoryQueryKey } from '@/lib/player-directory-seed'
+import { resolvePlayerSeasonStatsAvailability } from '@/app/data/player-stats/_lib/player-data-availability'
 
 describe('PlayerDirectorySeed', () => {
+	it('uses recovered detail availability instead of the unavailable initial directory seed', () => {
+		assert.deepEqual(resolvePlayerSeasonStatsAvailability(
+			{ statsContext: { status: 'AVAILABLE' } },
+			{ available: false, status: 'UNAVAILABLE' }
+		), { available: true, status: 'AVAILABLE' })
+	})
+	it('does not let an available seed hide unavailable detail or erase stale evidence', () => {
+		for (const status of ['UNAVAILABLE', 'INCOMPLETE', 'PRESEASON', 'STALE'] as const) {
+			assert.deepEqual(resolvePlayerSeasonStatsAvailability(
+				{ statsContext: { status } }, { available: true, status: 'AVAILABLE' }
+			), { available: status === 'STALE', status })
+		}
+	})
+	it('preserves directory state only while no detail is present', () => {
+		assert.deepEqual(resolvePlayerSeasonStatsAvailability(null,
+			{ available: false, status: 'PRESEASON' }
+		), { available: false, status: 'PRESEASON' })
+	})
 	it('uses a stable key for the default public directory query', () => {
 		assert.equal(
 			buildPlayerDirectoryQueryKey({
