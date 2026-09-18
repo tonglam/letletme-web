@@ -910,10 +910,10 @@ export default function TrendsClient({
 			<RouteReadyMarker
 				name="TRENDS_CATALOG_READY"
 				ready={
-					cohorts.length > 0 &&
+					scopeCohorts.length > 0 &&
 					(access === 'MINE' || publicCatalogState === 'PUBLISHED')
 				}
-				readyKey={`${access}:${publicCatalogState}:${cohorts.length}`}
+				readyKey={`${access}:${publicCatalogState}:${scopeCohorts.length}`}
 				audienceHint={audienceHint}
 				goodMs={1000}
 				poorMs={1500}

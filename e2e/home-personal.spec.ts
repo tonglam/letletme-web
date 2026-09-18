@@ -681,6 +681,12 @@ test.describe('SSR remediation', () => {
 	})
 
 	test('PUBLIC Trends is usable while its private catalog is pending', async ({ page }, testInfo) => {
+		const catalogSamples: unknown[] = []
+		await page.route('**/api/vitals', async route => {
+			const payload = route.request().postDataJSON()
+			catalogSamples.push(...(payload.samples ?? []).filter((sample: { metricName: string }) => sample.metricName === 'TRENDS_CATALOG_READY'))
+			await route.fulfill({ status: 204, body: '' })
+		})
 		const session = await createSession({ entryId: 15702 })
 		await control([{ operation: 'TrendCohorts', variables: { access: 'MINE' }, delayMs: 4000 }])
 		try {
@@ -696,6 +702,9 @@ test.describe('SSR remediation', () => {
 			await expect(cohort).toHaveValue('competition:779')
 			await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public' && url.searchParams.get('cohort') === 'competition:779')
 			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+			await expect(page.getByRole('button', { name: /^My Leagues/ })).toBeEnabled()
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			expect(catalogSamples).toHaveLength(1)
 		} finally {
 			await testInfo.attach('private-catalog-timeline', { body: JSON.stringify(await observations()), contentType: 'application/json' })
 			await session.cleanup()
