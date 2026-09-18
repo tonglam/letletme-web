@@ -199,6 +199,7 @@ export default defineConfig({
 				},
 				{
 					command: nextCommand,
+					gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
 					env: {
 						...process.env,
 						NODE_ENV: 'production',
