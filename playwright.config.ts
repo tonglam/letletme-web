@@ -159,6 +159,10 @@ const nextCommand =
 
 export default defineConfig({
 	testDir: './e2e',
+	// Keep the global fixture request ledger exclusive to this boundary suite.
+	testMatch: process.env.E2E_LIVE_ENTRY_BOUNDARY === '1'
+		? '**/live-entry-boundary.spec.ts'
+		: undefined,
 	fullyParallel: true,
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 2 : 0,
