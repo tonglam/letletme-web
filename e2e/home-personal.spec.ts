@@ -2082,6 +2082,12 @@ for (const width of [1440, 390]) {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture database')
   test.skip(scenario === 'slow-personal' && process.env.E2E_SSR_REMEDIATION !== '1', 'Requires serial fixture control')
   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const reportedVitals: Array<Record<string, unknown>> = []
+  await page.route('**/api/vitals', route => {
+   const payload = route.request().postDataJSON()
+   if (payload && Array.isArray(payload.samples)) reportedVitals.push(...payload.samples)
+   return route.fulfill({ status: 204, body: '' })
+  })
   const zh = locale === 'zh-CN'
   const session = await createSession({ entryId: 15702 })
   try {
@@ -2151,6 +2157,11 @@ for (const width of [1440, 390]) {
    await expect(page).toHaveURL(/p1=2&p2=1/)
    await expect(overall).toContainText('Palmer')
    await expect(overall).toContainText('Saka')
+   const navigationId = await page.locator('[data-player-stats-navigation-id]').getAttribute('data-player-stats-navigation-id')
+   expect(navigationId).toBeTruthy()
+   await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'PLAYER_COMPARE_PAINT' && sample.navigationId === navigationId && sample.result === 'ok' && typeof sample.interactionId === 'string').length).toBeGreaterThan(0)
+   const samples = reportedVitals.filter(sample => sample.navigationId === navigationId).map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null }))
+   await testInfo.attach('current-player-navigation-readiness', { body: JSON.stringify({ url: page.url(), players: [2, 1], navigationId, samples }), contentType: 'application/json' })
    await page.getByRole('navigation', { name: zh ? '区块' : 'Sections', exact: true }).getByRole('button', { name: zh ? '赛程' : 'Fixtures', exact: true }).click()
    await expect(page).toHaveURL(/#ps-fixtures$/)
    await expect(page.locator('#ps-fixtures')).toBeVisible()
