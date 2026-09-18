@@ -24,6 +24,8 @@ case "${1:-}" in
   briefing)
     BRIEFING_PUBLIC_ENABLED=true npx playwright test e2e/briefing.spec.ts e2e/briefing-state-metrics.spec.ts --grep-invert 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-enabled
     BRIEFING_PUBLIC_ENABLED=false npx playwright test e2e/briefing.spec.ts --grep 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-disabled
+    E2E_BRIEFING_ADMIN=1 BRIEFING_ADMIN_ENABLED=true BRIEFING_EDITOR_EMAILS=editor@briefing.e2e.test,both@briefing.e2e.test BRIEFING_PUBLISHER_EMAILS=publisher@briefing.e2e.test,both@briefing.e2e.test npx playwright test e2e/briefing-admin.spec.ts --workers=1 --trace=on --output=test-results/briefing-admin
+    E2E_BRIEFING_ADMIN=1 BRIEFING_ADMIN_ENABLED=false BRIEFING_EDITOR_EMAILS=editor@briefing.e2e.test,both@briefing.e2e.test BRIEFING_PUBLISHER_EMAILS=publisher@briefing.e2e.test,both@briefing.e2e.test npx playwright test e2e/briefing-admin.spec.ts --workers=1 --trace=on --output=test-results/briefing-admin-disabled
     ;;
   *)
     echo 'Usage: bash e2e/run-fixture-suite.sh {ssr|horizon|trends-unpublished|briefing}' >&2

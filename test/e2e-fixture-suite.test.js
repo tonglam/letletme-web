@@ -12,7 +12,7 @@ function invoke(suite, fail = false) {
 	const log = path.join(temporary, 'calls.jsonl')
 	const stub = path.join(temporary, 'npx')
 	writeFileSync(stub, `#!${process.execPath}
-require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
+require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, adminFixture:process.env.E2E_BRIEFING_ADMIN, admin:process.env.BRIEFING_ADMIN_ENABLED, editors:process.env.BRIEFING_EDITOR_EMAILS, publishers:process.env.BRIEFING_PUBLISHER_EMAILS, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
 process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 `)
 	chmodSync(stub, 0o755)
@@ -71,11 +71,23 @@ test('standalone horizon keeps build enabled and separates its artifacts', () =>
 test('Briefing runs both feature states and keeps their outputs separate', () => {
 	const result = invoke('briefing')
 	assert.equal(result.status, 0, result.stderr)
-	assert.deepEqual(result.calls.map(c => c.briefing), ['true', 'false'])
+	assert.deepEqual(result.calls.slice(0, 2).map(c => c.briefing), ['true', 'false'])
 	assert.deepEqual(result.calls.map(c => c.args), [
 		['playwright', 'test', 'e2e/briefing.spec.ts', 'e2e/briefing-state-metrics.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
-		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled']
+		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled'],
+		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin'],
+		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin-disabled']
 	])
+})
+
+test('Briefing admin uses explicit isolated allowlists in both feature states', () => {
+ const result = invoke('briefing')
+ assert.deepEqual(result.calls.slice(2).map(c => c.admin), ['true', 'false'])
+ for (const call of result.calls.slice(2)) {
+  assert.equal(call.adminFixture, '1')
+  assert.equal(call.editors, 'editor@briefing.e2e.test,both@briefing.e2e.test')
+  assert.equal(call.publishers, 'publisher@briefing.e2e.test,both@briefing.e2e.test')
+ }
 })
 
 test('failed suites keep their exit code and do not continue after a failure', () => {
