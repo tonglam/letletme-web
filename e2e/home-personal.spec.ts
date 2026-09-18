@@ -1761,6 +1761,19 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(actions).toHaveCount(0)
   await status.getByRole('button', { name: zh ? '进行中' : 'Active', exact: true }).click()
   await expect(actions).toBeVisible()
+  for (const [typeName, typeMatches] of (zh ? [['全部', true], ['经典联赛', true], ['对战联赛', false]] : [['All', true], ['Classic', true], ['H2H', false]]) as Array<[string, boolean]>) {
+   await type.getByRole('button', { name: typeName, exact: true }).click()
+   for (const [statusName, statusMatches] of (zh ? [['全部', true], ['进行中', true], ['已结束', false], ['已暂停', false]] : [['All', true], ['Active', true], ['Finished', false], ['Paused', false]]) as Array<[string, boolean]>) {
+    const option = status.getByRole('button', { name: statusName, exact: true })
+    await option.click()
+    await expect(option).toHaveAttribute('aria-pressed', 'true')
+    await expect(actions).toHaveCount(typeMatches && statusMatches ? 1 : 0)
+   }
+  }
+  await type.getByRole('button', { name: zh ? '全部' : 'All', exact: true }).click()
+  await status.getByRole('button', { name: zh ? '全部' : 'All', exact: true }).click()
+  await search.fill('')
+  await expect(actions).toBeVisible()
   await actions.click()
   const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
   await expect(manage).toHaveAttribute('href', `${prefix}/competitions/77/manage`)
