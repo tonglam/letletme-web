@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
+import { GET_PLAYER_STATS_BOOTSTRAP } from '../lib/graphql/operations/players'
 
 function routeReadySamples(payloads: Array<Record<string, unknown>>) {
 	return payloads.flatMap(payload => {
@@ -190,6 +191,41 @@ test.describe('SSR detail stream', () => {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 	}
 	test.afterEach(async () => { await control() })
+
+	for (const locale of ['en', 'zh-CN'] as const) {
+		for (const compare of [false, true]) {
+			test(`recovers all detail sections from an unavailable directory seed ${locale} ${compare ? 'compare' : 'single'}`, async ({ page }) => {
+				await page.setViewportSize({ width: compare ? 390 : 1440, height: 900 })
+				await control()
+				const initialPlayerId = runPlayerId(compare ? 8 : 7)
+				const bootstrap = await (await fetch(fixture.replace('/__performance', '/graphql'), {
+					method: 'POST', headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ query: GET_PLAYER_STATS_BOOTSTRAP })
+				})).json()
+				bootstrap.data.playerStatsBootstrap.statsContext.status = 'UNAVAILABLE'
+				await control([
+					{ operation: 'GetPlayerStatsBootstrap', data: bootstrap.data },
+					{ operation: 'GetPlayerStatsDeskOverview', error: true }
+				])
+				await page.goto(`/${locale}/explore/player-stats?p1=${initialPlayerId}${compare ? '&p2=2' : ''}`)
+				const retry = page.getByRole('button', { name: locale === 'en' ? 'Retry' : '重试', exact: true })
+				await expect(retry).toHaveCount(1)
+				await expect(retry).toBeVisible()
+				await control()
+				await retry.click()
+				const profile = page.locator('#ps-profile')
+				const state = page.locator('#ps-state')
+				await expect(profile).toBeVisible()
+				await expect(state).toBeVisible()
+				const unavailable = locale === 'en' ? 'Season total temporarily unavailable' : '赛季总分暂时不可用'
+				await expect(profile).not.toContainText(unavailable)
+				await expect(state).not.toContainText(unavailable)
+				await expect(page.getByRole('button', { name: locale === 'en' ? 'Recent GWs' : '近期轮次', exact: true })).toBeVisible()
+				await expect(page.getByRole('button', { name: locale === 'en' ? 'Process' : '比赛过程', exact: true })).toBeVisible()
+				await expect(page).toHaveURL(new RegExp(`p1=${initialPlayerId}${compare ? '&p2=2' : ''}`))
+			})
+		}
+	}
 
 	test('directory is interactive before a slow initial overview, and a new choice wins', async ({ page }, testInfo) => {
 		const initialPlayerId = runPlayerId(1)

@@ -32,7 +32,10 @@ import { PlayerPriceHistoryBlock } from './PlayerPriceHistoryBlock'
 import { PlayerRecentGameweeks } from './PlayerRecentGameweeks'
 import { PlayerStateContext, PlayerStateProfile } from './PlayerStateProfile'
 import type { PlayerEvidenceSection } from '../_hooks/usePlayerDetailSlot'
-import { playerDataAvailabilityIssuesForPlayers } from '../_lib/player-data-availability'
+import {
+	playerDataAvailabilityIssuesForPlayers,
+	resolvePlayerSeasonStatsAvailability
+} from '../_lib/player-data-availability'
 import {
 	PlayerSectionNav,
 	scrollToPlayerStatsSection
@@ -621,9 +624,14 @@ export function PlayerStatsView({
 	stateContextError,
 	comparisonStateContextError,
 	anchorGw,
-	seasonStatsAvailable,
-	seasonStatsStatus
+	seasonStatsAvailable: initialSeasonStatsAvailable,
+	seasonStatsStatus: initialSeasonStatsStatus
 }: PlayerStatsViewProps) {
+	const { available: seasonStatsAvailable, status: seasonStatsStatus } =
+		resolvePlayerSeasonStatsAvailability(player, {
+			available: initialSeasonStatsAvailable,
+			status: initialSeasonStatsStatus
+		})
 	const t = useTranslations('PlayerStats')
 	const tl = useTranslations('PlayerStats.labels')
 	const common = useTranslations('Common')
