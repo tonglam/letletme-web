@@ -18,6 +18,7 @@ import {
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { executeServerQuery } from '@/lib/graphql-server'
+import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,8 +39,9 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const { from, gw, tournamentId } = await searchParams
 	const entryId = Number(id)
+	if (!Number.isSafeInteger(entryId) || entryId <= 0) notFound()
+	const { from, gw, tournamentId } = await searchParams
 	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
 	const speculativeEventId =
 		requestedGameweekValue !== null &&
