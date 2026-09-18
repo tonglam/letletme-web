@@ -11,8 +11,8 @@ export interface PlayerDetail {
   bps: number | null;
   bonusPoints: number;
   breakdownPending?: boolean;
-  /** official explain vs pick-derived provisional when explain is empty/out of sync */
-  breakdownSource?: 'official' | 'provisional' | 'none';
+  /** Snapshot totals are historical source values without an official event breakdown. */
+  breakdownSource?: 'official' | 'provisional' | 'snapshot' | 'none';
   playingStatus?: 'NOT_STARTED' | 'PLAYING' | 'FINISHED';
   stats: {
     minutes: number;

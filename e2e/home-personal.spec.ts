@@ -2307,6 +2307,20 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '2')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '102')
   await expect(page.locator('[data-manager-ready]').getByRole('alert')).toContainText('2002')
+  const openSnapshotDetail = async (name: string, points: number) => {
+   const opener = page.getByRole('button', { name: zh ? `查看 ${name} 的详情` : `View details for ${name}`, exact: true })
+   await expect(opener).toHaveCount(1)
+   await opener.click()
+   const modal = page.getByRole('dialog')
+   await expect(modal.getByRole('heading', { name, exact: true })).toBeVisible()
+   await expect(modal.getByText(zh ? '积分来自所选轮次的历史快照；该快照未包含逐项计分明细。' : 'These points come from the selected gameweek snapshot. Detailed scoring events are not included in this snapshot.', { exact: true })).toBeVisible()
+   await expect(modal.getByText(zh ? '估算' : 'Provisional', { exact: true })).toHaveCount(0)
+   await expect(modal.getByText(`+${points}`, { exact: true }).first()).toBeVisible()
+   await modal.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+   await expect(modal).toHaveCount(0)
+   await expect(opener).toBeFocused()
+  }
+  await openSnapshotDetail('Saka GW2', 10)
   await page.getByRole('button', { name: zh ? '关闭第 2 轮' : 'Close gameweek 2', exact: true }).click()
   await expect(page.getByRole('tab', { name: 'GW2', exact: true })).toHaveCount(0)
   await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -2317,6 +2331,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]').getByRole('alert')).toContainText('2003')
   await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
   await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
+  await openSnapshotDetail('Review Player 12 GW3', 1)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
  } finally {
   releaseHistory?.()

@@ -348,6 +348,11 @@ export function PlayerDetailModal({
 									</span>
 								) : null}
 							</div>
+							{player.breakdownSource === 'snapshot' ? (
+								<p className="mb-2 text-xs text-muted-foreground">
+									{t('breakdownSnapshotHint')}
+								</p>
+							) : null}
 							{player.breakdownSource === 'provisional' ? (
 								<p className="mb-2 text-xs text-muted-foreground">
 									{t('breakdownProvisionalHint')}
