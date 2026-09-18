@@ -8,7 +8,7 @@ test('historical manager results retain their own snapshot revision', () => {
   const source = managerGameweek(eventId)
   const projected = eventResultFromManagerGameweek(source)
   assert.deepEqual(projected?.reviewSnapshot, {
-   entryId: source.entry!.id, eventId, revision: String(100 + eventId)
+   ...source.snapshotMeta, entryId: source.entry!.id
   })
  }
 })
@@ -31,3 +31,12 @@ test('missing manager identity or result cannot produce a ready projection', () 
  assert.equal(eventResultFromManagerGameweek({ ...source, entry: null }), null)
  assert.equal(eventResultFromManagerGameweek({ ...source, result: null }), null)
 })
+
+ test('historical status keeps the selected publication dates and settlement', () => {
+  const source = managerGameweek(1)
+  source.snapshotMeta = { ...managerSnapshot(1), publishedAt: '2026-08-01T01:02:03Z', sourceMaxCheckedAt: '2026-08-01T00:00:00Z', settlementState: 'DELAYED' }
+  const projected = eventResultFromManagerGameweek(source)
+  assert.equal(projected?.reviewSnapshot?.publishedAt, source.snapshotMeta.publishedAt)
+  assert.equal(projected?.reviewSnapshot?.sourceMaxCheckedAt, source.snapshotMeta.sourceMaxCheckedAt)
+  assert.equal(projected?.reviewSnapshot?.settlementState, 'DELAYED')
+ })

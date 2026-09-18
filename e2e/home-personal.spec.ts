@@ -2202,7 +2202,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
  const distinctGameweek = (eventId: number) => {
   const data = managerGameweek(eventId)
-  return { ...data, result: { ...data.result!, picks: data.result!.picks.map(pick => ({ ...pick, webName: `${pick.webName} GW${eventId}` })) } }
+  return { ...data, snapshotMeta: { ...data.snapshotMeta!, publishedAt: `200${eventId}-02-03T04:05:06.000Z`, sourceMaxCheckedAt: `200${eventId}-02-03T01:02:03.000Z` }, result: { ...data.result!, picks: data.result!.picks.map(pick => ({ ...pick, webName: `${pick.webName} GW${eventId}` })) } }
  }
  const rules = [
   { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, currentGameweek: { ...distinctGameweek(3), entry: { ...managerReview.entry!, id: session.entryId! } } } } },
@@ -2275,12 +2275,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-view', 'gameweek')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
+  await expect(page.locator('[data-manager-ready]').getByRole('alert').filter({ hasText: /200[123]|2026/ })).toHaveCount(0)
   releaseHistory!()
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '101')
+  await expect(page.locator('[data-manager-ready]').getByRole('alert')).toContainText('2001')
   await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(initialReadySamples)
   await expect.poll(async () => {
    const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
@@ -2291,6 +2293,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
   for (const request of historicalReads) expect(request.variables.snapshotRevision ?? null).toBeNull()
   await season.click()
   await expect(season).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('[data-manager-ready]').getByRole('alert')).toContainText('2026')
+  await expect(page.locator('[data-manager-ready]').getByRole('alert')).not.toContainText('2001')
   await history.getByRole('button', { name: zh ? '打开第 2 轮' : 'Open gameweek 2', exact: true }).click()
   for (const gw of [1, 2, 3]) await expect(page.getByRole('tab', { name: `GW${gw}`, exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'GW2', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -2302,6 +2306,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '2')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '102')
+  await expect(page.locator('[data-manager-ready]').getByRole('alert')).toContainText('2002')
   await page.getByRole('button', { name: zh ? '关闭第 2 轮' : 'Close gameweek 2', exact: true }).click()
   await expect(page.getByRole('tab', { name: 'GW2', exact: true })).toHaveCount(0)
   await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -2309,6 +2314,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '3')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
+  await expect(page.locator('[data-manager-ready]').getByRole('alert')).toContainText('2003')
   await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
   await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
@@ -3622,6 +3628,75 @@ test('J10 past-season pending prevents complete season readiness until recovery'
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
  } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+
+test('manager snapshot status survives a late historical read and failed selection', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ let releaseSlow: (() => void) | undefined
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+   { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, currentGameweek: { ...managerGameweek(3), entry: { ...managerReview.entry!, id: session.entryId! } } } } },
+   ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...managerGameweek(eventId), entry: { ...managerReview.entry!, id: session.entryId! } } } }))
+  ] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.clock.install()
+  await page.goto('/my-fpl/team')
+  const status = page.locator('[data-manager-ready]').getByRole('alert').filter({ hasText: /snapshot/ })
+  await expect(status).toContainText('2026')
+  const slow = new Promise<void>(resolve => { releaseSlow = resolve })
+  const historicalRequests: number[] = []
+  let failure = true
+  let slowDelivered = false
+  await page.route('**/api/graphql', async route => {
+   const payload = route.request().postDataJSON()
+   if (!payload?.query?.includes('GetMyFplManagerGameweek')) { await route.continue(); return }
+   const eventId = payload.variables.eventId
+   historicalRequests.push(eventId)
+   if (eventId === 1) await slow
+   if (eventId === 2 && failure) { await route.fulfill({ status: 503, json: { errors: [{ message: 'isolated historical read failure' }] } }); return }
+   const data = managerGameweek(eventId)
+   try {
+    await route.fulfill({ status: 200, json: { data: { myFplManagerGameweek: { ...data, entry: { ...data.entry!, id: session.entryId! }, snapshotMeta: { ...data.snapshotMeta!, publishedAt: `200${eventId}-02-03T04:05:06Z`, sourceMaxCheckedAt: `200${eventId}-02-03T01:02:03Z` } } } } })
+   } finally { if (eventId === 1) slowDelivered = true }
+  })
+  const season = page.getByRole('tab', { name: 'Season Review', exact: true })
+  const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: 'Gameweek History', exact: true }) })
+  const slowRequest = page.waitForRequest(r => r.postData()?.includes('GetMyFplManagerGameweek') === true && r.postDataJSON().variables.eventId === 1)
+  await history.getByRole('button', { name: 'Open gameweek 1', exact: true }).click()
+  await slowRequest
+  await expect(status).toHaveCount(0)
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
+  await expect(status).toContainText('2026')
+  const failedRequest = page.waitForResponse(r => r.request().postData()?.includes('GetMyFplManagerGameweek') === true && r.request().postDataJSON().variables.eventId === 2)
+  await history.getByRole('button', { name: 'Open gameweek 2', exact: true }).click()
+  expect((await failedRequest).status()).toBe(503)
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
+  await expect(status).toHaveCount(0)
+  releaseSlow!()
+  await expect.poll(() => slowDelivered).toBe(true)
+  await expect(page).toHaveURL(url => url.searchParams.get('gw') === '2')
+  await expect(status).toHaveCount(0)
+  // A transient 503 deliberately activates the existing 30-second dependency fence.
+  // Recovery is expected after that fence, not an immediate retry storm.
+  await page.clock.fastForward(31_000)
+  failure = false
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
+  await expect(status).toContainText('2026')
+  await history.getByRole('button', { name: 'Open gameweek 2', exact: true }).click()
+  await expect.poll(() => historicalRequests.filter(id => id === 2).length, 'reopening failed GW2 must issue another read').toBe(2)
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+  await expect(status).toContainText('2002')
+  await expect(status).not.toContainText('2001')
+ } finally {
+  releaseSlow?.()
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
  }
