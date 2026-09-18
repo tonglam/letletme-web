@@ -184,30 +184,23 @@ function ProcessSourceEvidence({
 	samePosition: boolean
 	tl: ReturnType<typeof useTranslations>
 }) {
-	const processMetrics = (profile: PlayerStateProfileData | null) =>
-		profile?.dimensions
+	const processMetrics = (profile: PlayerStateProfileData | null) => {
+		const sourceAvailable = profile?.coverage.sources.some(
+			source =>
+				source.provider === 'UNDERSTAT' &&
+				source.scope === 'CURRENT' &&
+				source.dataStatus === 'AVAILABLE' &&
+				source.mappingStatus === 'VERIFIED'
+		)
+		if (!sourceAvailable) return []
+		return profile?.dimensions
 			.find(dimension => dimension.kind === 'REAL_WORLD_PROCESS')
 			?.metrics.filter(metric => metric.source === 'UNDERSTAT_CURRENT') ?? []
+	}
 	const firstMetrics = processMetrics(playerState)
 	const secondMetrics = processMetrics(comparisonState)
-	const firstUnderstatAvailable = Boolean(
-		playerState?.coverage.sources.some(
-			source =>
-				source.provider === 'UNDERSTAT' &&
-				source.scope === 'CURRENT' &&
-				source.dataStatus === 'AVAILABLE' &&
-				source.mappingStatus === 'VERIFIED'
-		)
-	)
-	const secondUnderstatAvailable = Boolean(
-		comparisonState?.coverage.sources.some(
-			source =>
-				source.provider === 'UNDERSTAT' &&
-				source.scope === 'CURRENT' &&
-				source.dataStatus === 'AVAILABLE' &&
-				source.mappingStatus === 'VERIFIED'
-		)
-	)
+	const firstUnderstatAvailable = firstMetrics.length > 0
+	const secondUnderstatAvailable = secondMetrics.length > 0
 	const gkp = player.elementType === 1
 
 	if (comparison && !samePosition) {

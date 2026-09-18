@@ -422,3 +422,51 @@ test('clearing a shared pending history restore updates the URL before the respo
   await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
  } finally { release() }
 })
+
+
+test.describe('process evidence availability', () => {
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   for (const scenario of ['empty-single', 'empty-both', 'valid-single', 'valid-second', 'unverified-first'] as const) {
+    test(`${scenario} ${locale} ${width}px`, async ({ page }) => {
+     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Response replacement is isolated-only')
+     const zh = locale === 'zh-CN'
+     const compare = !scenario.endsWith('single')
+     let processResponses = 0
+     await page.setViewportSize({ width, height: 900 })
+     await page.route('**/api/player-stats/desk?**', async route => {
+      if (new URL(route.request().url()).searchParams.get('section') !== 'process') return route.continue()
+      const response = await route.fetch()
+      expect(response.ok()).toBe(true)
+      const body = await response.json()
+      for (const entry of body.entries) {
+       const dimension = entry.state.dimensions.find((item: { kind: string }) => item.kind === 'REAL_WORLD_PROCESS')
+       expect(dimension.metrics).toHaveLength(1)
+       const empty = scenario.startsWith('empty') || (scenario === 'valid-second' && entry.playerId === 1)
+       if (empty) dimension.metrics = []
+       if (scenario === 'unverified-first' && entry.playerId === 1) dimension.metrics[0].value = 9.99
+       entry.state.coverage.sources = [{ provider: 'UNDERSTAT', scope: 'CURRENT', dataStatus: 'AVAILABLE', mappingStatus: scenario === 'unverified-first' && entry.playerId === 1 ? 'UNVERIFIED' : 'VERIFIED', seasons: ['2627'] }]
+      }
+      processResponses += 1
+      await route.fulfill({ response, json: body })
+     })
+     await page.goto(`${zh ? '/zh-CN' : ''}/explore/player-stats?p1=1${compare ? '&p2=2' : ''}`)
+     const overall = page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })
+     await expect(overall).toContainText('Saka')
+     if (compare) await expect(overall).toContainText('Palmer')
+     await page.getByRole('button', { name: zh ? '比赛过程' : 'Process', exact: true }).click()
+     const section = page.locator('#ps-process')
+     await expect(section).toBeVisible()
+     await expect.poll(() => processResponses).toBeGreaterThan(0)
+     if (scenario.startsWith('empty')) {
+      await expect(section).toContainText(zh ? '暂无已验证的当前 Understat 比赛过程，不生成过程判断。' : 'Verified current Understat process is unavailable; no process claim is made.')
+     } else {
+      await expect(section).toContainText('0.31')
+      await expect(section).not.toContainText('9.99')
+     }
+     await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && url.hash === '#ps-process')
+    })
+   }
+  }
+ }
+})
