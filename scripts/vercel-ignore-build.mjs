@@ -22,6 +22,24 @@ export function isDocumentationPath(file) {
 	)
 }
 
+// Keep this allowlist narrow: dependency, build, CI and deployment changes still
+// build. Application files named *.test.* are deliberately not exempted.
+export function isVerificationOnlyPath(file) {
+	if (
+		typeof file !== 'string' ||
+		file.startsWith('/') ||
+		file.includes('\\') ||
+		file.split('/').some(part => part === '..' || part === '.')
+	) {
+		return false
+	}
+	return (
+		file.startsWith('test/') ||
+		file.startsWith('e2e/') ||
+		file === 'playwright.config.ts'
+	)
+}
+
 export function listGitChangedFiles(previousSha, currentSha, run = execFileSync) {
 	for (const sha of [previousSha, currentSha]) {
 		run('git', ['cat-file', '-e', `${sha}^{commit}`], {
@@ -89,12 +107,14 @@ export function decideVercelBuild(
 		return build('Git diff was empty or unavailable')
 	}
 
-	const runtimeFiles = files.filter(file => !isDocumentationPath(file))
+	const runtimeFiles = files.filter(
+		file => !isDocumentationPath(file) && !isVerificationOnlyPath(file)
+	)
 	if (runtimeFiles.length > 0) {
 		return build(`runtime-affecting files changed: ${runtimeFiles.join(', ')}`, files)
 	}
 
-	return skip(`all ${files.length} changed files are documentation`, files)
+	return skip(`all ${files.length} changed files are documentation or verification-only`, files)
 }
 
 export function run() {
