@@ -95,3 +95,18 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`MKT01 future date never masquerades as published data ${locale} ${width}`, async ({ page }) => {
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   await page.setViewportSize({ width, height: 900 })
+   await page.goto(`${prefix}/explore/market?period=DAILY&date=2099-01-01`)
+   await expect(page.locator('#market-most-selected-share li')).toHaveCount(4)
+   await expect(page.locator('main')).not.toContainText('2099')
+   await expect(page.locator('a[aria-current="date"][href*="2099"]')).toHaveCount(0)
+   await expect(page.locator('a[href*="date=2026-08-03"]')).toBeVisible()
+   await expect(page.locator('a[aria-current="date"]')).toHaveAttribute('href', /date=2026-08-03/)
+  })
+ }
+}
