@@ -1490,7 +1490,10 @@ for (const width of [1440, 390]) {
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
   let failedNextPage = 0
   let lastFailureAt = 0
+  let boardRevision = 'e2e-competition-score-v1'
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
   try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryTournaments', data: { entryTournaments: [6, 7].map(id => ({ ...managedTournament, id, name: `Coverage League ${id}`, adminEntryId: 15702 })) } }] }) })).ok).toBe(true)
    await page.setViewportSize({ width, height: 900 })
    await addSessionCookie(page, session.cookie)
    await page.route('**/api/live/competitions/6/board', async route => {
@@ -1508,11 +1511,14 @@ for (const width of [1440, 390]) {
     expect(response.ok()).toBe(true)
     const body = await response.json()
     const board = body.entryLiveCompetitionBoard
+    board.head.contentRevision = boardRevision
+    board.head.publication.revisions.scoreCore = boardRevision
+    board.rows[0].score.revisions.scoreCore = boardRevision
     const template = board.rows[0]
     const rows = [
      { ...template, entry: 15702, entryName: 'Alpha Coverage', score: { ...template.score, eventPoints: 30, totalPoints: 100 } },
      { ...template, entry: 15703, entryName: 'Beta Coverage', score: { ...template.score, eventPoints: 20, totalPoints: 300 } },
-     { ...template, entry: 15704, entryName: 'Gamma Coverage', score: { ...template.score, eventPoints: 10, totalPoints: 200 } }
+     { ...template, entry: 15704, entryName: 'Gamma Coverage', chip: 'TRIPLE_CAPTAIN', played: 9, overallRank: 999, score: { ...template.score, eventPoints: 10, totalPoints: 200 } }
     ]
     if (input.sort === 'TOTAL_POINTS') rows.sort((a, b) => input.direction === 'ASC' ? a.score.totalPoints - b.score.totalPoints : b.score.totalPoints - a.score.totalPoints)
     const after = input.after != null
@@ -1549,9 +1555,22 @@ for (const width of [1440, 390]) {
    await expect(selectedAlpha).toBeChecked()
    await page.getByRole('checkbox', { name: 'Select Gamma Coverage for comparison', exact: true }).filter({ visible: true }).check()
    await expect(page.getByRole('checkbox', { name: 'Select Beta Coverage for comparison', exact: true }).filter({ visible: true })).toBeDisabled()
-   const compared = page.waitForResponse(response => response.url().includes('/api/live/competitions/6/compare?'))
+   let comparisonAttempts = 0
+   await page.route('**/api/live/competitions/6/compare?*', async route => {
+    comparisonAttempts += 1
+    if (comparisonAttempts === 1) await route.fulfill({ status: 409, json: { error: 'LIVE_SCORE_REVISION_GONE' } })
+    else await route.continue()
+   })
+   const refreshedBoard = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/6/board' && !response.request().postDataJSON()?.input?.after)
    await page.getByRole('button', { name: 'Compare (2)', exact: true }).click()
+   expect((await refreshedBoard).status()).toBe(200)
+   await expect(page.getByRole('dialog')).toBeVisible()
+   await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible()
+   expect(comparisonAttempts).toBe(1)
+   const compared = page.waitForResponse(response => response.url().includes('/api/live/competitions/6/compare?'))
+   await page.getByRole('dialog').getByRole('button', { name: 'Refresh', exact: true }).click()
    const comparisonResponse = await compared
+   expect(comparisonAttempts).toBe(2)
    expect(comparisonResponse.status()).toBe(200)
    const comparisonUrl = new URL(comparisonResponse.url())
    expect(comparisonUrl.searchParams.get('entryIds')?.split(',').sort()).toEqual(['15702', '15704'])
@@ -1560,6 +1579,35 @@ for (const width of [1440, 390]) {
    await expect(sheet.getByRole('heading')).toContainText('Alpha Coverage')
    await expect(sheet.getByRole('heading')).toContainText('Gamma Coverage')
    await expect(sheet.getByText('Player 15', { exact: true })).toHaveCount(2)
+   await expect(sheet.getByText('TC', { exact: true })).toHaveCount(1)
+   await expect(sheet.getByText('9/11', { exact: true })).toHaveCount(1)
+   await sheet.press('Escape')
+   await expect(sheet).toHaveCount(0)
+   await page.unroute('**/api/live/competitions/6/compare?*')
+   const revisions: string[] = []
+   await page.route('**/api/live/competitions/6/compare?*', async route => {
+    const revision = new URL(route.request().url()).searchParams.get('scoreCoreRevision')!
+    revisions.push(revision)
+    if (revision.endsWith('-v1')) {
+     boardRevision = 'e2e-competition-score-v2'
+     await route.fulfill({ status: 409, json: { error: 'LIVE_SCORE_REVISION_GONE' } })
+    } else {
+     const response = await route.fetch()
+     const body = await response.json()
+     body.tournamentEntrySquads.entries.find((entry: { entry: number }) => entry.entry === 15704).entryName = 'Updated Gamma'
+     await route.fulfill({ response, json: body })
+    }
+   })
+   await page.getByRole('button', { name: 'Compare (2)', exact: true }).click()
+   await expect(sheet.getByRole('heading')).toContainText('Updated Gamma')
+   await expect(sheet.getByRole('heading')).not.toContainText('Gamma Coverage')
+   await expect(sheet.getByText('77', { exact: true })).toHaveCount(4)
+   await expect(sheet.getByText('TC', { exact: true })).toHaveCount(0)
+   await expect(sheet.getByText('9/11', { exact: true })).toHaveCount(0)
+   await expect(sheet.getByText('999', { exact: true })).toHaveCount(0)
+   await expect(sheet.getByText('Player 15', { exact: true })).toHaveCount(2)
+   await expect(sheet.getByRole('alert')).toHaveCount(0)
+   expect(revisions).toEqual(['e2e-competition-score-v1', 'e2e-competition-score-v2'])
    await sheet.press('Escape')
    await expect(sheet).toHaveCount(0)
    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -1575,7 +1623,24 @@ for (const width of [1440, 390]) {
    await expect(teams.nth(1)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'ASC' })
    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+   await page.getByRole('button', { name: 'Compare', exact: true }).click()
+   await page.getByRole('checkbox', { name: 'Select Gamma Coverage for comparison', exact: true }).filter({ visible: true }).check()
+   await expect(page.getByText('Select 1 more to compare', { exact: true })).toBeVisible()
+   await page.getByRole('button', { name: 'Classic', exact: true }).click()
+   const switched = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/7/board')
+   await page.getByRole('menuitem', { name: 'Coverage League 7', exact: true }).click()
+   const switchedResponse = await switched
+   expect(switchedResponse.status()).toBe(200)
+   expect((await switchedResponse.json()).entryLiveCompetitionBoard.head).toMatchObject({ tournamentId: 7, eventId: 4 })
+   await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '7' && url.searchParams.get('gw') === '4')
+   await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+   await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeVisible()
+   await expect(page.getByText('Select 1 more to compare', { exact: true })).toHaveCount(0)
+   await page.getByRole('button', { name: 'Compare', exact: true }).click()
+   await expect(page.getByText('Select 2 teams', { exact: true })).toBeVisible()
+   await expect(page.getByRole('checkbox', { name: 'Select E2E United for comparison', exact: true }).filter({ visible: true })).not.toBeChecked()
   } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
   }
  })

@@ -12,10 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { TournamentEntrySquadsResponse, TournamentLiveCalcData } from '@/lib/graphql/operations/tournaments'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useEffectEvent, useState, type RefObject } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
+	overviewCurrent: [boolean, boolean]
 	openerRef: RefObject<HTMLElement | null>
 	entries: [TournamentEntry, TournamentEntry]
 	gameweek: number
@@ -463,6 +464,7 @@ function PlayerCompareRow({
 export function EntryCompareSheet({
 	openerRef,
 	entries,
+	overviewCurrent,
 	gameweek,
 	tournamentId,
 	scoreCoreRevision,
@@ -485,6 +487,7 @@ export function EntryCompareSheet({
 	const isLoading = open && !current
 	const failed = current?.error === true
 	const liveData = current?.data ?? [null, null]
+	const recoverRevision = useEffectEvent(async () => { await onRevisionGone?.() })
 
 	useEffect(() => {
 		if (!open) return
@@ -497,7 +500,7 @@ export function EntryCompareSheet({
 				if (controller.signal.aborted) return
 				if (response.status === 409) {
 					setResult({ identity, data: null, error: true })
-					await onRevisionGone?.()
+					await recoverRevision()
 					return
 				}
 				if (!response.ok) throw new Error('Comparison unavailable')
@@ -517,10 +520,17 @@ export function EntryCompareSheet({
 			}
 		})()
 		return () => controller.abort()
-	}, [open, tournamentId, gameweek, scoreCoreRevision, entryIdA, entryIdB, identity, onRevisionGone])
+	}, [open, tournamentId, gameweek, scoreCoreRevision, entryIdA, entryIdB, identity])
 
-	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData
+	const [entryA, entryB] = entries.map((entry, index) => overviewCurrent[index] ? entry : {
+		...entry,
+		teamName: liveData[index]?.entryName ?? `#${entry.id}`,
+		gwPoints: null, livePoints: null, gwNetPoints: undefined,
+		eventCost: undefined, totalPoints: null,
+		overallRank: liveData[index]?.rank?.overallRank ?? undefined,
+		captainName: ''
+	})
 
 	const gwPtsA = liveA?.score?.eventPoints ?? entryA.gwPoints ?? entryA.livePoints
 	const gwPtsB = liveB?.score?.eventPoints ?? entryB.gwPoints ?? entryB.livePoints
@@ -629,15 +639,15 @@ export function EntryCompareSheet({
 								/>
 								<OverviewRow
 									label={t('chip')}
-									leftValue={<ChipBadges chips={entryA.chips} />}
-									rightValue={<ChipBadges chips={entryB.chips} />}
+									leftValue={overviewCurrent[0] ? <ChipBadges chips={entryA.chips} /> : '—'}
+									rightValue={overviewCurrent[1] ? <ChipBadges chips={entryB.chips} /> : '—'}
 								/>
 								<OverviewRow
 									label={t('played')}
-									leftValue={`${entryA.playersPlayed}/${playedLimitA}`}
-									rightValue={`${entryB.playersPlayed}/${playedLimitB}`}
-									leftWins={entryA.playersPlayed > entryB.playersPlayed}
-									rightWins={entryB.playersPlayed > entryA.playersPlayed}
+									leftValue={overviewCurrent[0] ? `${entryA.playersPlayed}/${playedLimitA}` : '—'}
+									rightValue={overviewCurrent[1] ? `${entryB.playersPlayed}/${playedLimitB}` : '—'}
+									leftWins={overviewCurrent.every(Boolean) && entryA.playersPlayed > entryB.playersPlayed}
+									rightWins={overviewCurrent.every(Boolean) && entryB.playersPlayed > entryA.playersPlayed}
 								/>
 							</div>
 						</div>
