@@ -116,6 +116,8 @@ export function LiveMatchesClient({
 	const matchesRef = useRef<Match[]>(initialMatches)
 	const hasSavedTabPreference = useRef(false)
 	const hasUserSelectedTab = useRef(false)
+	const fullRequestController = useRef<AbortController | null>(null)
+	const headRequestController = useRef<AbortController | null>(null)
 	const isFetchInFlight = useRef(false)
 	const pendingRefreshRef = useRef<{ useActiveEvent: boolean } | null>(null)
 	const mountedRef = useRef(true)
@@ -134,6 +136,8 @@ export function LiveMatchesClient({
 		mountedRef.current = true
 		return () => {
 			mountedRef.current = false
+			fullRequestController.current?.abort()
+			headRequestController.current?.abort()
 		}
 	}, [])
 
@@ -154,6 +158,8 @@ export function LiveMatchesClient({
 			}
 
 			isFetchInFlight.current = true
+			const controller = new AbortController()
+			fullRequestController.current = controller
 			const fullRequestStartedAt = performance.now()
 
 			try {
@@ -171,9 +177,11 @@ export function LiveMatchesClient({
 							? null
 							: (eventIds?.currentEventId ?? resolvedCurrentEventId ?? null),
 						{
-							preferHttp: true
+							preferHttp: true,
+							signal: controller.signal
 						}
 					))
+				if (controller.signal.aborted || !mountedRef.current) return
 				reportLiveMatchClientSignal({
 					view: 'FULL',
 					durationMs: performance.now() - fullRequestStartedAt,
@@ -229,6 +237,7 @@ export function LiveMatchesClient({
 					setActiveTab(getPreferredLiveMatchesTab(matchesWithRetainedDetails))
 				}
 			} catch (err) {
+				if (controller.signal.aborted) return
 				reportLiveMatchClientSignal({
 					view: 'FULL',
 					durationMs: performance.now() - fullRequestStartedAt,
@@ -239,6 +248,7 @@ export function LiveMatchesClient({
 					setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
 				}
 			} finally {
+				if (fullRequestController.current === controller) fullRequestController.current = null
 				isFetchInFlight.current = false
 				if (!mountedRef.current) {
 					pendingRefreshRef.current = null
@@ -265,11 +275,14 @@ export function LiveMatchesClient({
 		const eventId = resolvedCurrentEventId
 		if (!eventId) return Promise.resolve()
 
+		const controller = new AbortController()
+		headRequestController.current = controller
 		const request = (async () => {
 			const probeHead = async (eventId: number | null) => {
 				const headRequestStartedAt = performance.now()
 				try {
-					const result = await getLiveMatchesHead(executeQuery, eventId)
+					const result = await getLiveMatchesHead(executeQuery, eventId, { signal: controller.signal })
+					if (controller.signal.aborted || !mountedRef.current) throw new DOMException('The operation was aborted', 'AbortError')
 					reportLiveMatchClientSignal({
 						view: 'HEAD',
 						durationMs: performance.now() - headRequestStartedAt,
@@ -281,6 +294,7 @@ export function LiveMatchesClient({
 					})
 					return result
 				} catch (error) {
+					if (controller.signal.aborted) throw error
 					reportLiveMatchClientSignal({
 						view: 'HEAD',
 						durationMs: performance.now() - headRequestStartedAt,
@@ -355,12 +369,14 @@ export function LiveMatchesClient({
 				reportLiveMatchClientSignal({ revisionChanged: true })
 				await fetchMatches(true)
 			} catch (probeError) {
+				if (controller.signal.aborted || !mountedRef.current) return
 				console.error('Failed to check live match freshness:', probeError)
 				setError(t('refreshFailed'))
 			}
 		})()
 		freshnessRequestRef.current = request
 		void request.finally(() => {
+			if (headRequestController.current === controller) headRequestController.current = null
 			if (freshnessRequestRef.current === request) {
 				freshnessRequestRef.current = null
 			}

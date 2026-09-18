@@ -1207,3 +1207,66 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	expect(probeCount).toBe(0)
 	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
 })
+
+test('match requests are cancelled when actual navigation unmounts the page', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fault injection')
+ await page.clock.install({ time: new Date('2026-08-04T18:00:00.000Z') })
+ let releaseResponse: (() => void) | undefined
+ const responseGate = new Promise<void>(resolve => { releaseResponse = resolve })
+ const failed: string[] = []
+ page.on('requestfailed', request => {
+  if (new URL(request.url()).pathname === '/api/live/matches') failed.push(request.failure()?.errorText ?? 'unknown')
+ })
+ await page.route('**/api/live/matches?*', async route => {
+  await responseGate
+  await route.fulfill({ status: 503, json: { error: 'Delayed isolated response' } }).catch(() => {})
+ })
+ try {
+  await page.goto('/live/matches')
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  const requestStarted = page.waitForRequest(request => new URL(request.url()).pathname === '/api/live/matches')
+  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  await requestStarted
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Market', exact: true }).click()
+  await expect(page).toHaveURL(/\/explore\/market$/)
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toHaveCount(0)
+  await expect.poll(() => failed.length).toBe(1)
+  expect(failed[0]).toMatch(/abort|cancel/i)
+  releaseResponse?.()
+  await expect(page).toHaveURL(/\/explore\/market$/)
+ } finally {
+  releaseResponse?.()
+ }
+})
+
+test('match head requests are cancelled when actual navigation unmounts the page', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fault injection')
+ await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+ let releaseResponse: (() => void) | undefined
+ const responseGate = new Promise<void>(resolve => { releaseResponse = resolve })
+ const failed: string[] = []
+ page.on('requestfailed', request => {
+  if (new URL(request.url()).pathname === '/api/graphql' && Boolean(request.postData()?.includes('GetLiveMatchdayHead'))) failed.push(request.failure()?.errorText ?? 'unknown')
+ })
+ await page.route('**/api/graphql', async route => {
+  if (!route.request().postData()?.includes('GetLiveMatchdayHead')) { await route.continue(); return }
+  await responseGate
+  await route.fulfill({ status: 503, json: { error: 'Delayed isolated response' } }).catch(() => {})
+ })
+ try {
+  await page.goto('/live/matches')
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  const requestStarted = page.waitForRequest(request => new URL(request.url()).pathname === '/api/graphql' && Boolean(request.postData()?.includes('GetLiveMatchdayHead')))
+  await page.clock.fastForward(Math.max(90_000, firstRefreshWindowMs))
+  await requestStarted
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Market', exact: true }).click()
+  await expect(page).toHaveURL(/\/explore\/market$/)
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toHaveCount(0)
+  await expect.poll(() => failed.length).toBe(1)
+  expect(failed[0]).toMatch(/abort|cancel/i)
+  releaseResponse?.()
+  await expect(page).toHaveURL(/\/explore\/market$/)
+ } finally {
+  releaseResponse?.()
+ }
+})
