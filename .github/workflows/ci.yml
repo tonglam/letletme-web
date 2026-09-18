@@ -151,6 +151,14 @@ jobs:
           E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
           E2E_ROUTE_ERROR_RECOVERY: '1'
+      - name: Isolated live entry boundary E2E
+        run: npx playwright test e2e/live-entry-boundary.spec.ts --workers=1 --trace=on --output=test-results/live-entry-boundary
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+          E2E_LIVE_ENTRY_BOUNDARY: '1'
       - name: Production E2E
         run: npm run test:e2e
         env:
