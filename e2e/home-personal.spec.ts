@@ -1316,10 +1316,13 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const width of [1440, 390]) {
- test(`canonical competition board sort and pagination preserve request scope at ${width}px`, async ({ page }) => {
+ for (const failure of [false, true]) {
+ test(`canonical competition board sort and pagination preserve request scope at ${width}px${failure ? ' with next-page failure recovery' : ''}`, async ({ page }) => {
   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated board fixtures')
   const session = await createSession({ entryId: 123 })
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
+  let failedNextPage = 0
+  let lastFailureAt = 0
   try {
    await page.setViewportSize({ width, height: 900 })
    await addSessionCookie(page, session.cookie)
@@ -1328,6 +1331,12 @@ for (const width of [1440, 390]) {
     expect(payload.eventId).toBe(4)
     const input = payload.input ?? {}
     inputs.push(input)
+    if (failure && input.after && failedNextPage < 2) {
+     failedNextPage += 1
+     lastFailureAt = Date.now()
+     await route.fulfill({ status: 503, headers: { 'retry-after': '1' }, json: { error: 'DEPENDENCY_UNAVAILABLE' } })
+     return
+    }
     const response = await route.fetch()
     expect(response.ok()).toBe(true)
     const body = await response.json()
@@ -1353,6 +1362,17 @@ for (const width of [1440, 390]) {
    await expect(teams).toHaveCount(2)
    await expect(teams.nth(0)).toContainText('Alpha Coverage')
    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+   if (failure) {
+    const warning = page.getByText('Refresh failed. The last available standings are still shown.', { exact: true })
+    await expect(warning).toBeVisible()
+    await expect(teams).toHaveText([/Alpha Coverage/, /Beta Coverage/])
+    expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(2)
+    // Respect the fixture's real one-second Retry-After before explicit recovery.
+    await expect.poll(() => Date.now() - lastFailureAt).toBeGreaterThan(1_100)
+    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+    await expect(warning).toHaveCount(0)
+    expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(3)
+   }
    await expect(teams).toHaveCount(3)
    await expect(teams.nth(2)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ after: 'coverage-page-2' })
@@ -1372,6 +1392,7 @@ for (const width of [1440, 390]) {
    await session.cleanup()
   }
  })
+}
 }
 
 for (const locale of ['en', 'zh-CN']) {
