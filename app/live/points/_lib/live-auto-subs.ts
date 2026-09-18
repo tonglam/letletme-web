@@ -105,20 +105,24 @@ const isOfficialLineup = (live: ProjectionInput): boolean =>
 	live.snapshot?.state === 'FINALIZED' ||
 	live.snapshot?.state === 'GW_REVIEW'
 
-const deriveOfficialProjection = ({
-	picks,
-	picksById,
-	effectivePositions,
-	benchBoostActive
-}: {
+type PublishedProjectionInput = {
 	picks: LivePick[]
 	picksById: ReadonlyMap<string, LivePick>
 	effectivePositions: Record<string, number>
 	benchBoostActive: boolean
-}): LiveAutoSubProjection => {
-	// Terminal entry rows already contain FPL's settled multipliers and active
-	// flags. They take precedence over any inference from minutes, including
-	// after a late official correction.
+	state: Exclude<LiveAutoSubState, 'NONE'>
+}
+
+const derivePublishedProjection = ({
+	picks,
+	picksById,
+	effectivePositions,
+	benchBoostActive,
+	state
+}: PublishedProjectionInput): LiveAutoSubProjection => {
+	// Published entry rows already contain the authoritative multipliers and
+	// active flags. They take precedence over any inference from minutes,
+	// including after a late official correction.
 	const hasPublishedActiveFlags = picks.every(
 		pick => typeof pick.pickActive === 'boolean'
 	)
@@ -145,13 +149,13 @@ const deriveOfficialProjection = ({
 					playerInName: publishedCaptain.webName,
 					playerOutId: String(originalCaptain.element),
 					playerOutName: originalCaptain.webName,
-					state: 'OFFICIAL' as const
+					state
 				}
 			: null
 
 	if (benchBoostActive) {
 		return {
-			state: captainPromotion ? 'OFFICIAL' : 'NONE',
+			state: captainPromotion ? state : 'NONE',
 			benchBoostActive,
 			substitutions: [],
 			captainPromotion,
@@ -211,14 +215,14 @@ const deriveOfficialProjection = ({
 			playerOutId: starterId,
 			playerOutName: starter.webName,
 			playerOutOriginalPosition: starter.position,
-			state: 'OFFICIAL'
+			state
 		})
 	}
 
 	return {
 		state:
 			substitutions.length > 0 || captainPromotion !== null
-				? 'OFFICIAL'
+				? state
 				: 'NONE',
 		benchBoostActive,
 		substitutions,
@@ -227,6 +231,11 @@ const deriveOfficialProjection = ({
 		effectivePositions
 	}
 }
+
+const deriveOfficialProjection = (
+	input: Omit<PublishedProjectionInput, 'state'>
+): LiveAutoSubProjection =>
+	derivePublishedProjection({ ...input, state: 'OFFICIAL' })
 
 /**
  * Derive the XI that should be shown right now.
@@ -255,6 +264,18 @@ export function deriveLiveAutoSubProjection(
 			picksById,
 			effectivePositions,
 			benchBoostActive
+		})
+	}
+	const hasPublishedLineup = picks.every(
+		pick => typeof pick.pickActive === 'boolean' && typeof pick.autoSub === 'boolean'
+	)
+	if (hasPublishedLineup) {
+		return derivePublishedProjection({
+			picks,
+			picksById,
+			effectivePositions,
+			benchBoostActive,
+			state: 'PREDICTED'
 		})
 	}
 
