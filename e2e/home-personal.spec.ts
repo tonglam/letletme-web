@@ -2160,9 +2160,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
  const labels = zh ? ['赛季复盘', '队长历史', '板凳得分', '转会历史', '道具卡使用', '轮次历史'] : ['Season Review', 'Captain History', 'Bench Points', 'Transfer History', 'Chip Usage', 'Gameweek History']
  const session = await createSession({ entryId: 15702 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const distinctGameweek = (eventId: number) => {
+  const data = managerGameweek(eventId)
+  return { ...data, result: { ...data.result!, picks: data.result!.picks.map(pick => ({ ...pick, webName: `${pick.webName} GW${eventId}` })) } }
+ }
  const rules = [
-  { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, currentGameweek: { ...managerGameweek(3), entry: { ...managerReview.entry!, id: session.entryId! } } } } },
-  ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...managerGameweek(eventId), entry: { ...managerReview.entry!, id: session.entryId! } } } }))
+  { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, currentGameweek: { ...distinctGameweek(3), entry: { ...managerReview.entry!, id: session.entryId! } } } } },
+  ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...distinctGameweek(eventId), entry: { ...managerReview.entry!, id: session.entryId! } } } }))
  ]
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
@@ -2228,7 +2232,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await history.getByRole('button', { name: zh ? '打开第 2 轮' : 'Open gameweek 2', exact: true }).click()
   for (const gw of [1, 2, 3]) await expect(page.getByRole('tab', { name: `GW${gw}`, exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'GW2', exact: true })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByText('Review Player 1', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true }).first()).toBeVisible()
   await page.getByRole('button', { name: zh ? '关闭第 1 轮' : 'Close gameweek 1', exact: true }).click()
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveCount(0)
   await expect(page.getByRole('tab', { name: 'GW2', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -2237,7 +2241,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.getByRole('tab', { name: 'GW2', exact: true })).toHaveCount(0)
   await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
-  await expect(page.getByText('Review Player 1', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
