@@ -3472,3 +3472,57 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+for (const format of ['H2H', 'KNOCKOUT'] as const) {
+ test(`SSR remediation review readiness waits for required ${format} sections`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture controls only')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const session = await createSession({ entryId: 123 })
+  const phase = { phaseId: 'format-phase', format, startEventId: 1, endEventId: 4, state: 'READY', revision: '9', semanticSha256: 'b'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+  const scope = { ...phase, tournamentId: 78, eventId: 4, rowCount: 2, expectedSubjectCount: 2, readySubjectCount: 2, notApplicableSubjectCount: 0 }
+  const home = { entryId: 123, entryName: 'Readiness Home', isAverage: false, grossPoints: 75, transferCost: 4, netPoints: 71, matchPoints: 3, rank: 1, goalsScored: 2, goalsConceded: 0 }
+  const away = { ...home, entryId: 456, entryName: 'Readiness Away', grossPoints: 50, transferCost: 0, netPoints: 50, matchPoints: 0, rank: 2 }
+  const standing = { groupId: 1, entryId: 123, entryName: home.entryName, rank: 1, played: 1, won: 1, drawn: 0, lost: 0, matchPoints: 3, pointsFor: 71, pointsAgainst: 50 }
+  const h2h = { matches: [{ matchId: 'r1', groupId: 1, home, away, isBye: false }], standings: [standing], nextCursor: null, hasNextPage: false }
+  const knockout = { matches: [{ round: 1, name: 'Readiness Final', matchId: 1, playAgainstId: 2, home, away, winnerEntryId: 123 }], nextCursor: null, hasNextPage: false }
+  const pageInfo = { hasNextPage: false, endCursor: null }
+  const sections = format === 'H2H' ? ['H2H_STANDINGS', 'H2H_FIXTURES'] : ['KNOCKOUT_BRACKET']
+  const rules = [
+   { operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '78', node: { tournamentId: 78, name: 'Readiness Format Cup', creator: 'Fixture', leagueId: 78, leagueType: 'CLASSIC', totalTeamNum: 2, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
+   { operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 78, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
+   { operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: format === 'H2H' ? { format, h2h } : { format, knockout } } } },
+   ...sections.map(section => ({ operation: 'GetMyTournamentSeasonReviewSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 78, throughEventId: 4, section, points: null, h2h: format === 'H2H' ? { ...h2h, matches: section === 'H2H_FIXTURES' ? h2h.matches : [], standings: section === 'H2H_STANDINGS' ? h2h.standings : [] } : null, knockout: format === 'KNOCKOUT' ? knockout : null, pageInfo } } }))
+  ]
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  let heldRequests = 0
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/graphql', async route => {
+    const body = route.request().postDataJSON()
+    if (body.query?.includes('GetMyTournamentSeasonReviewSection') && body.variables.section === sections.at(-1)) { heldRequests++; await gate }
+    await route.continue()
+   })
+   await page.goto('/my-fpl/competitions?tournamentId=78&view=gameweek&gw=4')
+   const ready = page.locator('[data-review-ready]')
+   await expect(ready).toHaveAttribute('data-review-ready', 'true')
+   await expect(ready).toHaveAttribute('data-review-revision', '9')
+   await page.getByRole('tab', { name: 'Season', exact: true }).click()
+   await expect.poll(() => heldRequests).toBe(1)
+   await expect(ready).toHaveAttribute('data-review-ready', 'false')
+   release()
+   await expect(ready).toHaveAttribute('data-review-ready', 'true')
+   await expect(ready).toHaveAttribute('data-review-view', 'season')
+   await expect(ready).toHaveAttribute('data-review-phase', phase.phaseId)
+   await expect(ready).toHaveAttribute('data-review-hash', phase.semanticSha256)
+   await expect(page.getByText('Readiness Away', { exact: true })).toBeVisible()
+   if (format === 'H2H') await expect(page.getByRole('cell', { name: 'Readiness Home', exact: true })).toBeVisible()
+   else await expect(page.getByText('Readiness Final', { exact: true })).toBeVisible()
+  } finally {
+   release()
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
