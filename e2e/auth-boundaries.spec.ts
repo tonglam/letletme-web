@@ -149,3 +149,53 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  const prefix = locale === 'en' ? '' : '/zh-CN'
+  const t = (locale === 'en' ? en : zh).Auth
+  const routes = [
+   { caseId: 'R03', path: '/auth/forgot-password', field: t.email, link: t.backToLogin, target: '/auth/login', targetField: t.password },
+   { caseId: 'R04', path: '/auth/login', field: t.password, link: t.forgotPassword, target: '/auth/forgot-password', targetField: t.email },
+   { caseId: 'R05', path: '/auth/reset-password', field: null, link: t.requestNewLink, target: '/auth/forgot-password', targetField: t.email },
+   { caseId: 'R06', path: '/auth/signup', field: t.confirmPassword, link: t.signIn, target: '/auth/login', targetField: t.password }
+  ]
+  for (const route of routes) {
+   test(`${route.caseId}.05 auth reload Back Forward ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated anonymous session only')
+    await page.setViewportSize({ width, height: 900 })
+    const visited: string[] = []
+    let authWrites = 0
+    page.on('request', request => {
+     if (new URL(request.url()).pathname.startsWith('/api/auth/') && request.method() !== 'GET') authWrites++
+    })
+    const assertSource = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}${route.path}`)
+     if (route.field) await expect(page.getByLabel(route.field, { exact: true })).toBeEnabled()
+     else {
+      await expect(page.getByText(t.invalidResetLink, { exact: false })).toBeVisible()
+      await expect(page.locator('input[type="password"]')).toHaveCount(0)
+     }
+     visited.push(page.url())
+    }
+    const assertTarget = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}${route.target}`)
+     await expect(page.getByLabel(route.targetField, { exact: true })).toBeEnabled()
+     visited.push(page.url())
+    }
+    await page.goto(`${prefix}${route.path}`)
+    await assertSource()
+    await page.reload()
+    await assertSource()
+    await page.locator('#main-content').getByRole('link', { name: route.link, exact: true }).click()
+    await assertTarget()
+    await page.goBack()
+    await assertSource()
+    await page.goForward()
+    await assertTarget()
+    expect(authWrites).toBe(0)
+    await testInfo.attach('auth-history-journey', { body: JSON.stringify({ caseId: route.caseId, locale, width, visited, authWrites }), contentType: 'application/json' })
+   })
+  }
+ }
+}
