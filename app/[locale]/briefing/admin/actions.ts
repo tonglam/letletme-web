@@ -1,7 +1,8 @@
 'use server'
 
 import { publishBriefingWeekEdition } from '@/lib/briefing-admin-server'
-import { getCurrentSession } from '@/lib/session'
+import { headers } from 'next/headers'
+import { getAuthorizationSession } from '@/lib/auth'
 
 type AdminRole = 'editor' | 'publisher'
 
@@ -16,7 +17,7 @@ const configuredEmails = (key: string): Set<string> =>
 async function requireAdmin(role: AdminRole) {
 	if (process.env.BRIEFING_ADMIN_ENABLED !== 'true')
 		throw new Error('Briefing admin is disabled')
-	const session = await getCurrentSession()
+	const session = await getAuthorizationSession(await headers())
 	const user = session?.user as { id?: string; email?: string } | undefined
 	const email = user?.email?.trim().toLowerCase()
 	const key =

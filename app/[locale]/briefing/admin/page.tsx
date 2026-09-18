@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
-import { getCurrentSession } from '@/lib/session'
+import { headers } from 'next/headers'
+import { getAuthorizationSession } from '@/lib/auth'
 import { publishBriefingWeekEditionAction } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +21,7 @@ const allowed = (email: string | undefined, key: string): boolean =>
 
 export default async function BriefingAdminPage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
-	const session = await getCurrentSession()
+	const session = await getAuthorizationSession(await headers())
 	const user = session?.user as { email?: string } | undefined
 	const canEdit = allowed(user?.email, 'BRIEFING_EDITOR_EMAILS')
 	const canPublish = allowed(user?.email, 'BRIEFING_PUBLISHER_EMAILS')

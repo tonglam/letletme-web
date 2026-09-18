@@ -68,10 +68,11 @@ test('standalone horizon keeps build enabled and separates its artifacts', () =>
 test('Briefing runs both feature states and keeps their outputs separate', () => {
 	const result = invoke('briefing')
 	assert.equal(result.status, 0, result.stderr)
-	assert.deepEqual(result.calls.map(c => c.briefing), ['true', 'false'])
+	assert.deepEqual(result.calls.slice(0, 2).map(c => c.briefing), ['true', 'false'])
 	assert.deepEqual(result.calls.map(c => c.args), [
 		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
-		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled']
+		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled'],
+		['playwright', 'test', 'e2e/briefing-authorization.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-authorization']
 	])
 })
 
