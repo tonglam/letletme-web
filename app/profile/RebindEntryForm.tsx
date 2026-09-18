@@ -227,6 +227,7 @@ export default function RebindEntryForm({
 						size="sm"
 						className="h-8 px-2"
 						onClick={() => setEditing(false)}
+						aria-label={t('cancel')}
 					>
 						<X className="h-4 w-4" />
 					</Button>
