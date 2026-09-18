@@ -7,14 +7,15 @@ const compiled = ts.transpileModule(readFileSync('app/[locale]/briefing/admin/ac
  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function harness(options: { enabled?: string; user?: { id?: string; email?: string }; fail?: boolean } = {}) {
+function harness(options: { enabled?: string; user?: { id?: string; email?: string }; fail?: boolean; revoked?: boolean } = {}) {
  const calls: unknown[][] = []
  const state = { user: options.user }
  const exports: { publishBriefingWeekEditionAction?: (data: FormData) => Promise<void> } = {}
  const env = { BRIEFING_ADMIN_ENABLED: options.enabled ?? 'true', BRIEFING_EDITOR_EMAILS: 'editor@test.invalid', BRIEFING_PUBLISHER_EMAILS: ' publisher@test.invalid ' }
  const load = (name: string) => {
   if (name === 'next/headers') return { headers: async () => new Headers() }
-  if (name === '@/lib/auth') return { getAuthorizationSession: async () => state.user ? { user: state.user } : null }
+  if (name === '@/lib/auth') return { getAuthorizationSession: async () => options.revoked ? null : state.user ? { user: state.user } : null }
+  if (name === '@/lib/session') return { getCurrentSession: async () => state.user ? { user: state.user } : null }
   if (name === '@/lib/briefing-admin-server') return { publishBriefingWeekEdition: async (...args: unknown[]) => { calls.push(args); if (options.fail) throw new Error('fixture downstream unavailable') } }
   throw new Error(`Unexpected dependency ${name}`)
  }
@@ -65,4 +66,36 @@ test('each action rechecks session and propagates downstream failure', async () 
  h.state.user = { id: 'actor', email: 'editor@test.invalid' }
  await assert.rejects(h.run(form), /role required/)
  assert.equal(h.calls.length, 1)
+})
+
+test('revoked authorization rejects despite a cached publisher session', async () => {
+ const h = harness({ user: { id: 'revoked-publisher', email: 'publisher@test.invalid' }, revoked: true })
+ await assert.rejects(h.run(validForm()), /role required/)
+ assert.equal(h.calls.length, 0)
+})
+
+test('admin page rejects revoked cached identity and accepts current publisher', async () => {
+ const source = ts.transpileModule(readFileSync('app/[locale]/briefing/admin/page.tsx', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
+ }).outputText
+ for (const revoked of [true, false]) {
+  const requestHeaders = new Headers({ 'x-test-request': 'briefing-admin' })
+  const user = { id: 'publisher', email: 'publisher@test.invalid' }
+  let freshReads = 0
+  const exports: { default?: (props: unknown) => Promise<unknown> } = {}
+  const load = (name: string) => {
+   if (name === 'react/jsx-runtime') return { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) }
+   if (name === 'next/navigation') return { notFound: () => { throw new Error('NOT_FOUND') } }
+   if (name === 'next/headers') return { headers: async () => requestHeaders }
+   if (name === '@/i18n/page') return { getPageLocale: async () => ({ locale: 'en' }) }
+   if (name === '@/lib/session') return { getCurrentSession: async () => ({ user }) }
+   if (name === '@/lib/auth') return { getAuthorizationSession: async (headers: Headers) => { assert.equal(headers, requestHeaders); freshReads++; return revoked ? null : { user } } }
+   if (name === './actions') return { publishBriefingWeekEditionAction: () => { throw new Error('must not publish while rendering') } }
+   throw new Error(`Unexpected page dependency ${name}`)
+  }
+  new Function('require', 'exports', 'process', source)(load, exports, { env: { BRIEFING_ADMIN_ENABLED: 'true', BRIEFING_PUBLISHER_EMAILS: user.email } })
+  if (revoked) await assert.rejects(exports.default!({ params: Promise.resolve({ locale: 'en' }) }), /NOT_FOUND/)
+  else assert.ok(await exports.default!({ params: Promise.resolve({ locale: 'en' }) }))
+  assert.equal(freshReads, 1)
+ }
 })

@@ -76,14 +76,18 @@ test('Briefing runs both feature states and keeps their outputs separate', () =>
 		['playwright', 'test', 'e2e/briefing.spec.ts', 'e2e/briefing-state-metrics.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
 		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled'],
 		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin'],
-		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin-disabled']
+		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin-disabled'],
+		['playwright', 'test', 'e2e/briefing-authorization.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-authorization']
 	])
 })
 
 test('Briefing admin uses explicit isolated allowlists in both feature states', () => {
  const result = invoke('briefing')
- assert.deepEqual(result.calls.slice(2).map(c => c.admin), ['true', 'false'])
- for (const call of result.calls.slice(2)) {
+ assert.equal(result.calls[4].adminFixture, '1')
+ assert.equal(result.calls[4].admin, 'true')
+ assert.equal(result.calls[4].publishers, 'publisher@briefing.e2e.test')
+ assert.deepEqual(result.calls.slice(2, 4).map(c => c.admin), ['true', 'false'])
+ for (const call of result.calls.slice(2, 4)) {
   assert.equal(call.adminFixture, '1')
   assert.equal(call.editors, 'editor@briefing.e2e.test,both@briefing.e2e.test')
   assert.equal(call.publishers, 'publisher@briefing.e2e.test,both@briefing.e2e.test')
