@@ -3,7 +3,7 @@ import {
 	MarketGlance
 } from '@/app/data/market/MarketDashboard'
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
-import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { MarketReadiness, MarketRegionReady } from '@/app/data/market/MarketReadiness'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -109,11 +109,14 @@ async function MarketGlanceContent({
 	locale: string
 }) {
 	const renderAvailableGlance = () => (
+		<>
 		<MarketGlance
 			dailyOwnership={dailyOverview}
 			gameweekOwnership={gameweekOverview}
 			locale={locale}
 		/>
+		<MarketRegionReady region="glance" />
+		</>
 	)
 	const glanceResult = await glanceOverviewPromise
 	if (glanceResult.status === 'rejected') {
@@ -124,6 +127,7 @@ async function MarketGlanceContent({
 	if (!alternateOverview) return renderAvailableGlance()
 
 	return (
+		<>
 		<MarketGlance
 			dailyOwnership={period === 'DAILY' ? dailyOverview : alternateOverview}
 			gameweekOwnership={
@@ -131,18 +135,8 @@ async function MarketGlanceContent({
 			}
 			locale={locale}
 		/>
-	)
-}
-
-async function MarketContentReady({ settled }: { settled: Promise<unknown> }) {
-	await settled
-	return (
-		<RouteReadyMarker
-			name="MARKET_CONTENT_READY"
-			audienceHint="public"
-			goodMs={1_000}
-			poorMs={1_500}
-		/>
+		<MarketRegionReady region="glance" />
+		</>
 	)
 }
 
@@ -264,9 +258,6 @@ async function renderMarketContent({
 					) : null
 				}
 			/>
-			<Suspense fallback={null}>
-				<MarketContentReady settled={Promise.all([priceChangePromise, glanceOverviewPromise])} />
-			</Suspense>
 			{!pulse ? (
 				<Alert
 					variant="destructive"
@@ -277,6 +268,7 @@ async function renderMarketContent({
 					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
 				</Alert>
 			) : null}
+			<MarketReadiness key={`${locale}:${period}:${date ?? 'latest'}`}>
 			<MarketDashboard
 				pulse={pulse}
 				ownership={ownership}
@@ -292,6 +284,7 @@ async function renderMarketContent({
 				locale={locale}
 				glance={marketGlance}
 			/>
+			</MarketReadiness>
 		</>
 	)
 }

@@ -11,12 +11,14 @@ test(`market full readiness waits for streamed dependencies without blocking the
  let atReady: Request[] = []
  let observed = false
  let priceRevision: string | null = null
+ let glanceVisible = false
  await page.route('**/api/vitals', async route => {
   const body = route.request().postDataJSON()
   if (body.samples?.some((s: { metricName: string }) => s.metricName === 'MARKET_CONTENT_READY')) {
    const data = await (await fetch(fixture)).json()
    atReady = data.requests.filter(relevant)
    priceRevision = await page.locator('[data-price-change-revision]').getAttribute('data-price-change-revision')
+   glanceVisible = await page.locator('#market-glance-share').isVisible()
    observed = true
   }
   await route.fulfill({ status: 204, body: '' })
@@ -25,8 +27,8 @@ test(`market full readiness waits for streamed dependencies without blocking the
   const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
   seed.data.priceChangeBoard.latestEvent = { outcome: 'NO_CHANGE', observedAt: '2026-08-03T09:40:00.000Z', deadline: '2026-08-03T09:00:00.000Z', changeDate: '2026-08-03', changes: [] }
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
-   { operation: 'GetPriceChangeBoard', delayMs: 2500, ...(fails ? { error: true } : { data: seed.data }) },
-   { operation: 'GetMarketOwnershipOverview', variables: { period: 'GAMEWEEK' }, delayMs: 3500, error: fails }
+   { operation: 'GetPriceChangeBoard', delayMs: fails ? 3500 : 2500, ...(fails ? { error: true } : { data: seed.data }) },
+   { operation: 'GetMarketOwnershipOverview', variables: { period: 'GAMEWEEK' }, delayMs: fails ? 2500 : 3500, error: fails }
   ] }) })).ok).toBe(true)
   await page.goto('/explore/market', { waitUntil: 'commit' })
   await expect(page.locator('#market-most-selected-share')).toBeVisible()
@@ -35,11 +37,12 @@ test(`market full readiness waits for streamed dependencies without blocking the
   expect(before.every(r => r.finishedAt === null), 'Main content must stream while dependencies are pending').toBe(true)
   expect(observed).toBe(false)
   await expect.poll(() => observed).toBe(true)
-  await testInfo.attach('market-ready-streams', { body: JSON.stringify({ before, atReady, priceRevision }), contentType: 'application/json' })
+  await testInfo.attach('market-ready-streams', { body: JSON.stringify({ before, atReady, priceRevision, glanceVisible }), contentType: 'application/json' })
   expect(atReady, 'Both producers must execute; cached responses do not prove this scenario').toHaveLength(2)
   expect(atReady.every(r => r.finishedAt !== null)).toBe(true)
   expect(priceRevision, 'The price section must commit the observed board before reporting readiness').toBe(fails ? 'fallback' : 'price-changes-7')
   expect(priceRevision).not.toBeNull()
+  expect(glanceVisible, 'The glance consumer must commit, not merely finish its fetch').toBe(true)
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
  }
