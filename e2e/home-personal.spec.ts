@@ -2295,10 +2295,19 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
+test.describe('J12 platform admin baseline profile', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
-  test(`J12 platform admin sees managed non-participating tournament ${locale} ${width}px`, async ({ page }) => {
+  test(`J12 platform admin sees managed non-participating tournament ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-browse-platform-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Requires dedicated isolated dual-allowlist admin runtime')
+   const reportedVitals: Array<Record<string, unknown>> = []
+   await page.route('**/api/vitals', route => {
+    const payload = route.request().postDataJSON()
+    if (payload && Array.isArray(payload.samples)) reportedVitals.push(...payload.samples)
+    return route.fulfill({ status: 204, body: '' })
+   })
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
    const zh = locale === 'zh-CN'
    const session = await createSession({ entryId: 909090, userId: 'e2e-browse-platform-admin' })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -2312,6 +2321,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await addSessionCookie(page, session.cookie)
     await page.goto(`${zh ? '/zh-CN' : ''}/competitions/browse`)
     await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+    await expect(page.locator('html')).toHaveClass(/light/)
+    await expect(page.locator('[data-competition-perf-ready="browse"]')).toBeVisible()
+    await expect.poll(() => reportedVitals.filter(sample => sample.metricName === 'COMPETITIONS_BROWSE_READY').length).toBeGreaterThan(0)
+    await testInfo.attach('browse-admin-readiness', { body: JSON.stringify({ url: page.url(), persona: 'PA', timezone: 'Australia/Perth', theme: 'system', samples: reportedVitals.filter(sample => sample.metricName === 'COMPETITIONS_BROWSE_READY').map(sample => ({ ...sample, validDurationMs: sample.result === 'ok' && typeof sample.value === 'number' ? sample.value : null })) }), contentType: 'application/json' })
     const mine = page.getByRole('button', { name: zh ? '我管理的' : 'I manage', exact: true })
     await mine.click()
     await expect(page).toHaveURL(url => url.searchParams.get('mine') === 'true')
@@ -2328,3 +2343,5 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+})
