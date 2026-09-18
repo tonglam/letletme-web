@@ -2455,8 +2455,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await search.fill('')
     await expect(names).toHaveText(ordered.slice(0, 20))
    } finally {
-    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
-    await session.cleanup()
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
    }
   })
  }
@@ -2505,8 +2504,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
     await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
    } finally {
-    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
-    await session.cleanup()
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
    }
   })
  }
