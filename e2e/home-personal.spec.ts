@@ -1536,7 +1536,6 @@ for (const width of [1440, 390]) {
   const session = await createSession({ entryId: 123 })
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
   let failedNextPage = 0
-  let lastFailureAt = 0
   let boardRevision = 'e2e-competition-score-v1'
   let contentVersion = 1
   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -1555,7 +1554,6 @@ for (const width of [1440, 390]) {
     inputs.push(input)
     if (failure && input.after && failedNextPage < 2) {
      failedNextPage += 1
-     lastFailureAt = Date.now()
      await route.fulfill({ status: 503, headers: { 'retry-after': '1' }, json: { error: 'DEPENDENCY_UNAVAILABLE' } })
      return
     }
@@ -1590,15 +1588,20 @@ for (const width of [1440, 390]) {
    await page.getByRole('button', { name: 'Compare', exact: true }).click()
    const selectedAlpha = page.getByRole('checkbox', { name: 'Select Alpha Coverage for comparison', exact: true }).filter({ visible: true })
    await selectedAlpha.check()
+   if (failure) await page.clock.pauseAt(new Date(Date.now() + 1_000))
    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
    if (failure) {
+    await expect.poll(() => failedNextPage).toBe(1)
+    await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1')) > Date.now())).toBe(true)
+    await page.clock.runFor(1_100)
     const warning = page.getByText('Refresh failed. The last available standings are still shown.', { exact: true })
     await expect(warning).toBeVisible()
     await expect(teams).toHaveText([/Alpha Coverage/, /Beta Coverage/])
     await test.info().attach('pagination-retry-clock', { body: JSON.stringify(await page.evaluate(() => ({ now: Date.now(), cooldownUntil: sessionStorage.getItem('letletme:dependency-cooldown-until-v1'), failureAt: sessionStorage.getItem('letletme:dependency-cooldown-failure-at-v1') }))), contentType: 'application/json' })
     expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(2)
-    // Respect the fixture's real one-second Retry-After before explicit recovery.
-    await expect.poll(() => Date.now() - lastFailureAt).toBeGreaterThan(1_100)
+    // Advance the same browser clock used by Retry-After and the cooldown fence.
+    await page.clock.runFor(1_100)
+    await page.clock.resume()
     await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
     await expect(warning).toHaveCount(0)
     expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(3)
