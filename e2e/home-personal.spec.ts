@@ -781,6 +781,48 @@ test.describe('SSR remediation', () => {
 		}
 	}
 
+	test('Trends desk readiness never reports stale data during scope switch', async ({ page }) => {
+		const session = await createSession({ entryId: 15702 })
+		const samples: Record<string, unknown>[] = []
+		await page.route('**/api/vitals', route => {
+			const payload = route.request().postDataJSON()
+			if (Array.isArray(payload?.samples)) samples.push(...payload.samples)
+			return route.fulfill({ status: 204, body: '' })
+		})
+		await page.route('**/api/trends/my-cohorts', async route => {
+			const response = await route.fetch()
+			const catalog = await response.json()
+			catalog.cohorts[0].id = 'competition:777'
+			await route.fulfill({ response, json: catalog })
+		})
+		let release!: () => void
+		const gate = new Promise<void>(resolve => { release = resolve })
+		let waiting = false
+		await page.route('**/api/trends/my-desk?**', async route => {
+			const response = await route.fetch()
+			waiting = true
+			await gate
+			await route.fulfill({ response })
+		})
+		try {
+			await addSessionCookie(page, session.cookie)
+			await page.goto('/explore/selections?scope=public&cohort=competition:777&gw=33')
+			await expect(page.getByRole('button', { name: /^My Leagues/ })).toBeEnabled()
+			await expect.poll(() => samples.filter(row => row.metricName === 'TRENDS_DESK_READY').length).toBeGreaterThan(0)
+			const initial = samples.length
+			await page.getByRole('button', { name: /^My Leagues/ }).click()
+			await expect.poll(() => waiting).toBe(true)
+			await expect(page.getByRole('combobox', { name: 'Active league', exact: true })).toHaveAttribute('aria-busy', 'true')
+			await page.waitForTimeout(500)
+			const pendingSamples = samples.slice(initial)
+			expect(pendingSamples.filter(row => row.metricName === 'TRENDS_DESK_READY' || row.metricName === 'TRENDS_SWITCH_READY')).toEqual([])
+			release()
+			await expect(page.getByRole('combobox', { name: 'Active league', exact: true })).toHaveAttribute('aria-busy', 'false')
+			await expect.poll(() => samples.filter(row => row.metricName === 'TRENDS_SWITCH_READY').length).toBeGreaterThan(0)
+			await expect.poll(() => samples.slice(initial).filter(row => row.metricName === 'TRENDS_DESK_READY' && row.result === 'ok').length).toBeGreaterThan(0)
+		} finally { release(); await session.cleanup() }
+	})
+
 	test('MINE Trends never shares cache entries between two verified users', async ({ request }) => {
 		const sessions = await Promise.all([createSession({ entryId: 15702 }), createSession({ entryId: 31056 })])
 		await control()

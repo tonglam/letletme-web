@@ -797,8 +797,8 @@ export default function TrendsClient({
 	}
 
 	useEffect(() => {
-		if (!committed) return
-		const key = `${access}:${committed.cohort.id}:${committed.eventId}:${committed.cohort.revision ?? ''}`
+		if (!committed || pending || committed.cohort.access !== access || committed.cohort.id !== cohortId || committed.eventId !== eventId) return
+		const key = `${committed.cohort.access}:${committed.cohort.id}:${committed.eventId}:${committed.cohort.revision ?? ''}`
 		if (pendingSwitch.current?.key !== key) return
 		const switchMs = performance.now() - pendingSwitch.current.startedAt
 		pendingSwitch.current = null
@@ -820,7 +820,7 @@ export default function TrendsClient({
 			},
 			{ always: true }
 		)
-	}, [access, committed])
+	}, [access, committed, pending, cohortId, eventId])
 
 	const shareText = useMemo(() => {
 		if (!committed) return ''
@@ -920,7 +920,12 @@ export default function TrendsClient({
 			/>
 			<RouteReadyMarker
 				name="TRENDS_DESK_READY"
-				ready={committed != null}
+				ready={
+					!pending &&
+					committed?.cohort.access === access &&
+					committed?.cohort.id === cohortId &&
+					committed?.eventId === eventId
+				}
 				readyKey={`${access}:${committed?.cohort.id ?? ''}:${committed?.eventId ?? ''}:${committed?.cohort.revision ?? ''}`}
 				audienceHint={audienceHint}
 				goodMs={1000}
