@@ -113,9 +113,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$WEB_MAINTENANCE_MODE" == true ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch || "$WEB_MAINTENANCE_MODE" == true ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Maintenance mode requires a fresh Web deployment even when the SHA is otherwise documentation-only."
+            echo "Explicit releases and maintenance changes rebuild even without application changes."
             exit 0
           fi
           previous_headers=''
@@ -140,7 +140,7 @@ jobs:
           set -e
           if [[ $decision -eq 0 ]]; then
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Documentation-only SHA; Web release skipped."
+            echo "Only documentation or verification changed since production; Web release skipped."
           elif [[ $decision -eq 1 ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
@@ -545,6 +545,6 @@ jobs:
           cleanup_remote_root
           echo "Vercel and Tencent are active at exact SHA $RELEASE_SHA; EdgeOne split routing restored."
 
-      - name: Print skipped documentation release
+      - name: Print skipped automatic release
         if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'false'
-        run: echo "Documentation-only change; no Vercel or Tencent release was attempted."
+        run: echo "Automatic release gate skipped this run; no Vercel or Tencent release was attempted."
