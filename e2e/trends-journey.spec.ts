@@ -178,3 +178,43 @@ for (const locale of ['en', 'zh-CN']) {
 		})
 	}
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const width of [1440, 390]) {
+		for (const retained of [false, true]) {
+			test(`TR03 stale section retains truthful availability ${locale} ${width}px rows=${retained}`, async ({ page }) => {
+				const zh = locale === 'zh-CN'
+				await page.setViewportSize({ width, height: 900 })
+				await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&cohort=competition:777&gw=33`)
+				await expect(page.getByRole('tabpanel')).toContainText('Saka')
+				await page.route('**/api/trends/public-desk?**', async route => {
+					const response = await route.fetch()
+					const payload = await response.json()
+					const desk = payload.trendCohortSnapshot ?? payload
+					for (const section of desk.sections) {
+						section.state = 'STALE'
+						section.evidenceContext.availabilityState = 'STALE'
+						if (!retained) section.rows = null
+					}
+					await route.fulfill({ response, json: payload })
+				})
+				const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
+				await cohort.selectOption('competition:779')
+				await expect(cohort).toHaveAttribute('aria-busy', 'false')
+				await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:779' && url.searchParams.get('gw') === '33')
+				for (const name of zh ? ['持有率', '队长选择', '转会'] : ['Ownership', 'Captaincy', 'Transfers']) {
+					await page.getByRole('tab', { name, exact: true }).click()
+					const panel = page.getByRole('tabpanel')
+					await expect(panel.getByText(zh ? '数据较旧' : 'Stale data', { exact: true }).first()).toBeVisible()
+					await expect(panel.getByRole('button', { name: zh ? '重试' : 'Retry', exact: true })).toHaveCount(0)
+					if (retained) await expect(panel.getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+					else {
+						await expect(panel.getByRole('link')).toHaveCount(0)
+						await expect(panel.getByText(zh ? '当前显示上次成功采集的选人数据。' : 'Showing the last successfully collected selection data.', { exact: true }).first()).toBeVisible()
+					}
+					await expect(panel).not.toContainText('Saka')
+				}
+			})
+		}
+	}
+}

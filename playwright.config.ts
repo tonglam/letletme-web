@@ -152,7 +152,7 @@ const graphqlServiceToken =
 	'e2e-graphql-service-token-at-least-thirty-two-bytes'
 const standaloneServerCommand =
 	'mkdir -p .next/standalone/public .next/standalone/.next/static && cp -R public/. .next/standalone/public/ && cp -R .next/static/. .next/standalone/.next/static/ && node --import ./e2e/fixtures/fpl-fetch.mjs .next/standalone/server.js'
-const selectedStandaloneCommand = process.env.E2E_NONTERMINAL_HORIZON === '1'
+const selectedStandaloneCommand = (process.env.E2E_NONTERMINAL_HORIZON === '1' || process.env.E2E_TRENDS_UNPUBLISHED === '1')
 	? 'node e2e/fixtures/isolated-standalone.mjs'
 	: standaloneServerCommand
 const nextCommand =

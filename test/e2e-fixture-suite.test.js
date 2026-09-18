@@ -12,7 +12,7 @@ function invoke(suite, fail = false) {
 	const log = path.join(temporary, 'calls.jsonl')
 	const stub = path.join(temporary, 'npx')
 	writeFileSync(stub, `#!${process.execPath}
-require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, fixture:process.env.E2E_LIVE_HYDRATION, horizon:process.env.E2E_NONTERMINAL_HORIZON, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
+require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, fixture:process.env.E2E_LIVE_HYDRATION, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
 process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 `)
 	chmodSync(stub, 0o755)
@@ -32,7 +32,7 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 2)
+	assert.equal(result.calls.length, 4)
 	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/nonterminal-horizon.spec.ts', '--workers=1', '--trace=on', '--output=test-results/horizon'])
 	assert.equal(result.calls[1].horizon, '1')
 	assert.equal(result.calls[1].existingBuild, '1')
@@ -41,6 +41,14 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', 'e2e/player-stats.spec.ts', '--grep', 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12', '--workers=1', '--trace=on'])
 	assert.equal(result.calls[0].fixture, '1')
 	assert.equal(result.calls[0].cwd, root)
+	assert.deepEqual(result.calls[2].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])
+	assert.deepEqual(result.calls[3].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'TR03 planned.*unpublished', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished-bound'])
+	for (const call of result.calls.slice(2)) {
+		assert.equal(call.unpublished, '1')
+		assert.equal(call.existingBuild, '1')
+		assert.equal(call.cwd, root)
+	}
+	assert.equal(result.calls[3].ssr, '1')
 })
 
 test('standalone horizon keeps build enabled and separates its artifacts', () => {
@@ -62,7 +70,7 @@ test('Briefing runs both feature states and keeps their outputs separate', () =>
 })
 
 test('failed suites keep their exit code and do not continue after a failure', () => {
-	for (const suite of ['ssr', 'briefing', 'horizon']) {
+	for (const suite of ['ssr', 'briefing', 'horizon', 'trends-unpublished']) {
 		const result = invoke(suite, true)
 		assert.equal(result.status, 17)
 		assert.equal(result.calls.length, 1)

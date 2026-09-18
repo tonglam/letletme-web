@@ -3254,3 +3254,105 @@ for (const timezoneId of ['UTC', 'Australia/Perth']) {
 }
 
 })
+
+test.describe('SSR remediation TR03 planned bound dark UTC mobile', () => {
+	test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+	for (const state of ['stale', 'unpublished'] as const) {
+		test(`${state} preserves its distinct public state`, async ({ page }, testInfo) => {
+			test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture database')
+			test.skip(state === 'unpublished' && process.env.E2E_TRENDS_UNPUBLISHED !== '1', 'Requires isolated catalog cache')
+			const session = await createSession({ entryId: 15702 })
+			const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+			try {
+				await addSessionCookie(page, session.cookie)
+				await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+				if (state === 'unpublished') {
+					const response = await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'TrendCohorts', variables: { access: 'PUBLIC' }, data: { trendCohorts: { season: '2627', revision: 'unpublished-fixture', state: 'NOT_PUBLISHED', sourceCheckedAt: null, cohorts: [] } } }] }) })
+					expect(response.ok).toBe(true)
+				}
+				await page.goto(`/zh-CN/explore/selections?scope=public${state === 'stale' ? '&cohort=competition:777&gw=33' : ''}`)
+				await expect(page.locator('html')).toHaveClass(/dark/)
+				expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+				expect(page.viewportSize()?.width).toBe(390)
+				const auth = await page.request.get('/api/auth/get-session')
+				expect(auth.ok()).toBe(true)
+				expect((await auth.json()).user.id).toBe(session.userId)
+				expect(session.entryId).toBeGreaterThan(0)
+				await expect(page.getByRole('button', { name: /^我的联赛/ })).toBeEnabled()
+				if (state === 'unpublished') {
+					await expect(page.getByRole('heading', { name: '本赛季公共趋势尚未发布。', exact: true })).toBeVisible()
+					const ledger = await (await fetch(fixture)).json()
+					expect(ledger.requests.some((row: { operation: string; variables: { access?: string }; finishedAt: number | null }) => row.operation === 'TrendCohorts' && row.variables.access === 'PUBLIC' && row.finishedAt !== null)).toBe(true)
+					await expect(page.getByRole('tabpanel')).toHaveCount(0)
+					await expect(page.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+				} else {
+					await expect(page.getByRole('tabpanel')).toContainText('Saka')
+					await page.route('**/api/trends/public-desk?**', async route => {
+						const response = await route.fetch()
+						const payload = await response.json()
+						for (const section of payload.trendCohortSnapshot.sections) {
+							section.state = 'STALE'
+							section.evidenceContext.availabilityState = 'STALE'
+						}
+						await route.fulfill({ response, json: payload })
+					})
+					const cohort = page.getByRole('combobox', { name: '当前联赛', exact: true })
+					await cohort.selectOption('competition:779')
+					await expect(cohort).toHaveAttribute('aria-busy', 'false')
+					for (const name of ['持有率', '队长选择', '转会']) {
+						await page.getByRole('tab', { name, exact: true }).click()
+						const panel = page.getByRole('tabpanel')
+						await expect(panel.getByText('数据较旧', { exact: true }).first()).toBeVisible()
+						await expect(panel.getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+						await expect(panel).not.toContainText('Saka')
+						await expect(panel.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+					}
+					await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:779' && url.searchParams.get('gw') === '33' && url.searchParams.get('scope') === 'public')
+				}
+				await testInfo.attach('planned-variant-context', { body: JSON.stringify({ variantId: `TR03.state.0${state === 'unpublished' ? 2 : 3}`, identity: 'bound', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario: state }), contentType: 'application/json' })
+			} finally {
+				if (state === 'unpublished') await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+				await session.cleanup()
+			}
+		})
+	}
+})
+
+test.describe('LP01 signed-in known entry input journey', () => {
+	test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+	for (const locale of ['en', 'zh-CN']) {
+		for (const width of [1440, 390]) {
+			test(`${locale} ${width}px submits the visible form and renders the requested team`, async ({ page }, testInfo) => {
+				test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Known fixture entry only; lookup can trigger synchronization')
+				const requestedPath = `${locale === 'zh-CN' ? '/zh-CN' : ''}/live/points`
+				await page.goto(requestedPath)
+				await expect(page).toHaveURL(url => url.pathname.endsWith('/auth/login') && url.searchParams.get('next') === requestedPath)
+				await expect(page.locator('#live-points-entry-id')).toHaveCount(0)
+				const session = await createSession({ entryId: 15702 })
+				try {
+				await addSessionCookie(page, session.cookie)
+				const zh = locale === 'zh-CN'
+				await page.setViewportSize({ width, height: 900 })
+				const liveRequests: Record<string, unknown>[] = []
+				page.on('request', request => {
+					if (!request.url().endsWith('/api/graphql') || request.method() !== 'POST') return
+					const payload = request.postDataJSON()
+					if (payload.query?.includes('calcLivePointsByEntry')) liveRequests.push(payload.variables)
+				})
+				await page.goto(`${zh ? '/zh-CN' : ''}/live/points`)
+				const input = page.getByLabel(zh ? 'FPL 参赛 ID' : 'FPL entry ID', { exact: true })
+				await expect(input).toBeEnabled()
+				await input.fill('123')
+				await page.getByRole('button', { name: zh ? '查看实时积分' : 'View Live Points', exact: true }).click()
+				await expect.poll(() => liveRequests.some(row => row.entryId === 123 && row.eventId === 33)).toBe(true)
+				const pitch = page.getByRole('region', { name: /^E2E United/ })
+				await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
+				await expect(pitch.getByRole('button', { name: /Player \d+/ })).toHaveCount(15)
+				await expect(input).toHaveValue('123')
+				await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/points`)
+				await testInfo.attach('entry-input-requests', { body: JSON.stringify({ caseId: 'LP01', stepId: 'LP01.01', locale, width, liveRequests }), contentType: 'application/json' })
+				} finally { await session.cleanup() }
+			})
+		}
+	}
+})
