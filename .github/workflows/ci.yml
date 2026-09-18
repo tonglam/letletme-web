@@ -167,6 +167,8 @@ jobs:
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
           E2E_SSR_REMEDIATION: '1'
           E2E_LIVE_HYDRATION: '1'
+          PLATFORM_ADMIN_USER_IDS: 'e2e-browse-platform-admin'
+          PLATFORM_ADMIN_FPL_ENTRY_IDS: '909090'
       - name: Briefing enabled and disabled E2E
         run: |
           BRIEFING_PUBLIC_ENABLED=true npx playwright test e2e/briefing.spec.ts --grep-invert 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-enabled

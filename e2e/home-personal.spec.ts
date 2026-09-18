@@ -12,13 +12,14 @@ const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
 async function createSession(
 	options: {
 		entryId?: number
+		userId?: string
 	} = {}
 ): Promise<{ cookie: string; userId: string; entryId: number | null; cleanup: () => Promise<void> }> {
 	const directDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL
 	if (!directDatabaseUrl) throw new Error('E2E_DIRECT_DATABASE_URL is required')
 	const sql = postgres(directDatabaseUrl, { max: 1, prepare: false })
 	const suffix = randomUUID()
-	const userId = `home-e2e-user-${suffix}`
+	const userId = options.userId ?? `home-e2e-user-${suffix}`
 	const sessionId = `home-e2e-session-${suffix}`
 	const token = `home-e2e-token-${suffix}`
 	const entryId =
@@ -2287,6 +2288,40 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(page.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true })).toHaveCount(0)
     await search.fill('')
     await expect(names).toHaveText(ordered.slice(0, 20))
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J12 platform admin sees managed non-participating tournament ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-browse-platform-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Requires dedicated isolated dual-allowlist admin runtime')
+   const zh = locale === 'zh-CN'
+   const session = await createSession({ entryId: 909090, userId: 'e2e-browse-platform-admin' })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const other = { ...managedTournament, id: 88, adminEntryId: 808080, name: 'Other Owner Cup' }
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
+     { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: [managedTournament, other] } }
+    ] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${zh ? '/zh-CN' : ''}/competitions/browse`)
+    await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
+    const mine = page.getByRole('button', { name: zh ? '我管理的' : 'I manage', exact: true })
+    await mine.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('mine') === 'true')
+    const otherRow = page.getByRole('row').filter({ hasText: 'Other Owner Cup' })
+    await expect(otherRow).toHaveCount(1)
+    await expect(otherRow.getByText(zh ? '可管理 · 未参赛' : 'Manageable · not participating', { exact: true })).toBeVisible()
+    await expect(page.getByRole('row').filter({ hasText: 'J12 Owned Cup' }).getByText(zh ? '可管理 · 已参赛' : 'Manageable · participating', { exact: true })).toBeVisible()
+    await mine.click()
+    await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
+    await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
    } finally {
     try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
    }
