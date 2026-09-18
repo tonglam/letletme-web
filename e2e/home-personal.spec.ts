@@ -1733,7 +1733,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   { ...managedTournament, id: 80, name: 'J12 Active H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES' },
   { ...managedTournament, id: 81, name: 'J12 Finished H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'FINISHED' },
   { ...managedTournament, id: 82, name: 'J12 Paused H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'INACTIVE' }
- ]
+ ].map((row, index) => ({ ...row, updatedAt: `2026-09-0${index + 1}T00:00:00.000Z`, totalTeamNum: [2, 8, 4, 12, 6, 10][index] }))
  const mutations: string[] = []
  await page.route('**/api/tournaments/**', async route => {
   const method = route.request().method()
@@ -1788,6 +1788,20 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await status.getByRole('button', { name: zh ? '全部' : 'All', exact: true }).click()
   await search.fill('')
   await expect(actions).toBeVisible()
+  const sortTrigger = page.getByRole('toolbar', { name: zh ? '赛事筛选' : 'Tournament filters', exact: true }).getByRole('button').filter({ has: page.locator('svg.lucide-arrow-up-down') })
+  await expect(sortTrigger).toHaveCount(1)
+  const orders = [
+   { label: zh ? '最近更新优先' : 'Last Updated (Newest)', indices: [5, 4, 3, 2, 1, 0] },
+   { label: zh ? '最早更新优先' : 'Last Updated (Oldest)', indices: [0, 1, 2, 3, 4, 5] },
+   { label: zh ? '名称（A–Z）' : 'Name (A–Z)', indices: [3, 1, 4, 0, 2, 5] },
+   { label: zh ? '名称（Z–A）' : 'Name (Z–A)', indices: [5, 2, 0, 4, 1, 3] },
+   { label: zh ? '参赛球队最多' : 'Most Participants', indices: [3, 5, 1, 4, 2, 0] }
+  ]
+  for (const order of orders) {
+   await sortTrigger.click()
+   await page.getByRole('menuitem', { name: order.label, exact: true }).click()
+   await expect(renderedNames).toHaveText(order.indices.map(index => browseRows[index].name))
+  }
   await actions.click()
   const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
   await expect(manage).toHaveAttribute('href', `${prefix}/competitions/77/manage`)
