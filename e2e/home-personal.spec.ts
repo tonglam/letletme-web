@@ -1024,6 +1024,16 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
 	let viewNavigationRequests = 0
+	let readyReports = 0
+	await page.route('**/api/vitals', async route => {
+		const samples = route.request().postDataJSON().samples ?? []
+		for (const sample of samples) {
+			if (sample.metricName !== 'TOURNAMENT_REVIEW_READY') continue
+			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'true')
+			readyReports += 1
+		}
+		await route.fulfill({ status: 204, body: '' })
+	})
 	try {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
@@ -1559,6 +1569,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(retry).toBeVisible()
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'false')
+			expect(readyReports).toBe(0)
 			expect(sectionRequests).toBe(0)
 			const seeded = await (await fetch(fixture)).json()
 			expect(seeded.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(2)
@@ -1568,10 +1580,17 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect.poll(() => sectionRequests).toBe(2)
 			await expect(retry).toHaveCount(0)
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'true')
+			await expect.poll(() => readyReports).toBe(1)
 			return
 		}
 		await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		const reviewReady = page.locator('[data-review-ready]')
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'true')
+		await expect(reviewReady).toHaveAttribute('data-review-view', 'gameweek')
+		await expect(reviewReady).toHaveAttribute('data-review-revision', '1')
+		await expect.poll(() => readyReports).toBe(1)
 		const observations = await (await fetch(fixture)).json()
 		expect(observations.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(0)
 		page.on('request', request => {
@@ -1582,10 +1601,14 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		const gameweek = page.getByRole('tab', { name: locale === 'zh-CN' ? '轮次' : 'Gameweek', exact: true })
 		await season.click()
 		await expect.poll(() => sectionRequests).toBe(2)
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'false')
+		await expect(reviewReady).toHaveAttribute('data-review-view', 'season')
 		expect(viewNavigationRequests).toBe(0)
 		await expect(page.getByText(locale === 'zh-CN' ? '已结算发布缺少对应赛制数据。' : 'The finalized publication has no format payload.', { exact: true })).toHaveCount(0)
 		await gameweek.click()
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		await expect(reviewReady).toHaveAttribute('data-review-view', 'gameweek')
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'true')
 		await season.click()
 		expect(sectionRequests).toBe(2)
 		releaseSections()
@@ -1606,6 +1629,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await season.click()
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 		expect(sectionRequests).toBe(failFirstSections ? 4 : 2)
+		await expect(reviewReady).toHaveAttribute('data-review-ready', 'true')
+		await expect(reviewReady).toHaveAttribute('data-review-phase', 'points-1')
+		expect(readyReports, 'View changes must not reuse the navigation clock for new samples').toBe(1)
 		await expect(page).toHaveURL(url =>
 			url.pathname === routePath &&
 			url.searchParams.get('tournamentId') === '77' &&
@@ -3474,4 +3500,58 @@ for (const locale of ['en', 'zh-CN'] as const) {
    }
   })
  }
+}
+
+for (const format of ['H2H', 'KNOCKOUT'] as const) {
+ test(`SSR remediation review readiness waits for required ${format} sections`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture controls only')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const session = await createSession({ entryId: 123 })
+  const phase = { phaseId: 'format-phase', format, startEventId: 1, endEventId: 4, state: 'READY', revision: '9', semanticSha256: 'b'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+  const scope = { ...phase, tournamentId: 78, eventId: 4, rowCount: 2, expectedSubjectCount: 2, readySubjectCount: 2, notApplicableSubjectCount: 0 }
+  const home = { entryId: 123, entryName: 'Readiness Home', isAverage: false, grossPoints: 75, transferCost: 4, netPoints: 71, matchPoints: 3, rank: 1, goalsScored: 2, goalsConceded: 0 }
+  const away = { ...home, entryId: 456, entryName: 'Readiness Away', grossPoints: 50, transferCost: 0, netPoints: 50, matchPoints: 0, rank: 2 }
+  const standing = { groupId: 1, entryId: 123, entryName: home.entryName, rank: 1, played: 1, won: 1, drawn: 0, lost: 0, matchPoints: 3, pointsFor: 71, pointsAgainst: 50 }
+  const h2h = { matches: [{ matchId: 'r1', groupId: 1, home, away, isBye: false }], standings: [standing], nextCursor: null, hasNextPage: false }
+  const knockout = { matches: [{ round: 1, name: 'Readiness Final', matchId: 1, playAgainstId: 2, home, away, winnerEntryId: 123 }], nextCursor: null, hasNextPage: false }
+  const pageInfo = { hasNextPage: false, endCursor: null }
+  const sections = format === 'H2H' ? ['H2H_STANDINGS', 'H2H_FIXTURES'] : ['KNOCKOUT_BRACKET']
+  const rules = [
+   { operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '78', node: { tournamentId: 78, name: 'Readiness Format Cup', creator: 'Fixture', leagueId: 78, leagueType: 'CLASSIC', totalTeamNum: 2, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
+   { operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 78, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
+   { operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: format === 'H2H' ? { format, h2h } : { format, knockout } } } },
+   ...sections.map(section => ({ operation: 'GetMyTournamentSeasonReviewSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 78, throughEventId: 4, section, points: null, h2h: format === 'H2H' ? { ...h2h, matches: section === 'H2H_FIXTURES' ? h2h.matches : [], standings: section === 'H2H_STANDINGS' ? h2h.standings : [] } : null, knockout: format === 'KNOCKOUT' ? knockout : null, pageInfo } } }))
+  ]
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  let heldRequests = 0
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/graphql', async route => {
+    const body = route.request().postDataJSON()
+    if (body.query?.includes('GetMyTournamentSeasonReviewSection') && body.variables.section === sections.at(-1)) { heldRequests++; await gate }
+    await route.continue()
+   })
+   await page.goto('/my-fpl/competitions?tournamentId=78&view=gameweek&gw=4')
+   const ready = page.locator('[data-review-ready]')
+   await expect(ready).toHaveAttribute('data-review-ready', 'true')
+   await expect(ready).toHaveAttribute('data-review-revision', '9')
+   await page.getByRole('tab', { name: 'Season', exact: true }).click()
+   await expect.poll(() => heldRequests).toBe(1)
+   await expect(ready).toHaveAttribute('data-review-ready', 'false')
+   release()
+   await expect(ready).toHaveAttribute('data-review-ready', 'true')
+   await expect(ready).toHaveAttribute('data-review-view', 'season')
+   await expect(ready).toHaveAttribute('data-review-phase', phase.phaseId)
+   await expect(ready).toHaveAttribute('data-review-hash', phase.semanticSha256)
+   await expect(page.getByText('Readiness Away', { exact: true })).toBeVisible()
+   if (format === 'H2H') await expect(page.getByRole('cell', { name: 'Readiness Home', exact: true })).toBeVisible()
+   else await expect(page.getByText('Readiness Final', { exact: true })).toBeVisible()
+  } finally {
+   release()
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
 }

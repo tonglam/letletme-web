@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
@@ -898,6 +899,7 @@ export default function TournamentReviewV2Client({
 			: null) ?? null
 	)
 	const [loading, setLoading] = useState(false)
+	const [loadingScope, setLoadingScope] = useState<'all' | 'season'>('all')
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
 	const [eventIndexError, setEventIndexError] = useState<string | null>(
@@ -1125,6 +1127,7 @@ export default function TournamentReviewV2Client({
 		++catalogQueryGeneration.current
 		setCatalogLoadingMore(false)
 		const requestId = ++requestSequence.current
+		setLoadingScope('all')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1198,6 +1201,7 @@ export default function TournamentReviewV2Client({
 			requestedRetry === null ||
 			requestedRetry === 'season'
 		const requestId = ++requestSequence.current
+		setLoadingScope('all')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1521,6 +1525,7 @@ export default function TournamentReviewV2Client({
 		const requestId = ++requestSequence.current
 		const nextScope: MyTournamentReviewScope =
 			scope === 'ALL' ? 'ACCESSIBLE' : 'ALL'
+		setLoadingScope('all')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1710,6 +1715,7 @@ export default function TournamentReviewV2Client({
 		if (seasonSectionLoad.current?.key === sectionRequestKey) return
 		const requestId = ++requestSequence.current
 		setSelectedPhaseId(phaseId)
+		setLoadingScope('season')
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
@@ -1834,6 +1840,24 @@ export default function TournamentReviewV2Client({
 		format &&
 		(state === 'READY' || (state === 'DEGRADED' && hasActivePayload))
 	)
+	const readyRevision = view === 'gameweek' ? gameweekReview?.scope?.revision : selectedPhase?.revision
+	const readyHash = view === 'gameweek' ? gameweekReview?.scope?.semanticSha256 : selectedPhase?.semanticSha256
+	// Section responses are identity-checked at fetchSeasonSection and merged
+	// into render state by combineSeasonSections. Read that state here, not
+	// the mutable request cache; incomplete section merges remain DEGRADED.
+	const seasonPayloadComplete = selectedPhase?.format === 'POINTS'
+		? Boolean(seasonReview?.points && seasonReview.trajectoryPoints)
+		: selectedPhase?.format === 'H2H'
+			? Boolean(seasonReview?.h2h)
+			: selectedPhase?.format === 'KNOCKOUT' && Boolean(seasonReview?.knockout)
+	const reviewIdentityMatches = view === 'gameweek'
+		? gameweekReview?.scope?.tournamentId === selectedTournamentId && gameweekReview?.scope?.eventId === eventId
+		: seasonReview?.tournamentId === selectedTournamentId && seasonReview?.throughEventId === eventId &&
+			seasonReview?.latestRevision === selectedPhase?.revision && seasonPayloadComplete
+
+	const activeReviewLoading = loading && (loadingScope === 'all' || view === 'season')
+	const reviewReady = Boolean(!activeReviewLoading && !visibleError && state === 'READY' && hasActivePayload &&
+		reviewIdentityMatches && readyRevision && readyHash && (view !== 'season' || !retryPhaseId))
 	return (
 		<div className="min-h-screen bg-slate-50">
 			<div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -1991,7 +2015,15 @@ export default function TournamentReviewV2Client({
 						</div>
 					</aside>
 
-					<main className="min-w-0">
+					<main className="min-w-0"
+						data-review-ready={reviewReady}
+						data-review-tournament={selectedTournamentId ?? undefined}
+						data-review-gw={eventId ?? undefined}
+						data-review-view={view}
+						data-review-phase={view === 'season' ? selectedPhase?.phaseId : undefined}
+						data-review-revision={readyRevision ?? undefined}
+						data-review-hash={readyHash ?? undefined}>
+						<RouteReadyMarker name="TOURNAMENT_REVIEW_READY" ready={reviewReady} audienceHint="session-hint" />
 						{visibleError && (
 							<div className="mb-4">
 								<ReviewStateBanner
