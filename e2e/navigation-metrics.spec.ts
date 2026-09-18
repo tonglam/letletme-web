@@ -4,7 +4,7 @@ type Sample = { metricName: string; measurementKind: string; result: string; val
 
 for (const locale of ['en', 'zh-CN']) {
 	for (const width of [1440, 390]) {
-		test(`C14 actual navigation clocks ${locale} ${width}px`, async ({ page }) => {
+		test(`C14 actual navigation clocks ${locale} ${width}px`, async ({ page }, testInfo) => {
 			test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated SSR fixture suite only')
 			const zh = locale === 'zh-CN'
 			const prefix = zh ? '/zh-CN' : ''
@@ -39,8 +39,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await assertMetric('MARKET_CONTENT_READY', 'in_page_navigation', before)
 			before = samples.length
 			await page.goForward()
+			await expect(page).toHaveURL(url => url.pathname === `${prefix}/explore/player-stats`)
 			await expect(page.getByRole('region', { name: zh ? '球员' : 'Players', exact: true })).toContainText('Saka')
 			await assertMetric('PLAYER_DIRECTORY_PAINT', 'in_page_navigation', before)
+			await testInfo.attach('navigation-metric-samples', {
+				body: JSON.stringify({ locale, viewport: { width, height: 900 }, samples }, null, 2),
+				contentType: 'application/json'
+			})
 		})
 	}
 }
