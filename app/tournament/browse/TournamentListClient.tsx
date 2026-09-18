@@ -383,6 +383,7 @@ export default function TournamentListClient({
 										variant="outline"
 										size="sm"
 										className="flex items-center gap-2"
+										aria-label={t('sort')}
 									>
 										<ArrowUpDown className="h-4 w-4" />
 										<span className="hidden sm:inline">{t('sort')}</span>
