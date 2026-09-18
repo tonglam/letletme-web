@@ -14,7 +14,7 @@ export function buildEnvironment(hostConfig, sha, env) {
 		NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 	}
 	const actualConfig = readBuildConfig(configuration)
-	if (actualConfig.serverActionsKeySha256 !== hostConfig.serverActionsKeySha256) throw new Error('HOST_KEY_MISMATCH')
+	if (actualConfig.serverActionsKeySha256 !== hostConfig.serverActionsKeySha256) throw new Error('SERVER_ACTIONS_KEY_MISMATCH')
 	if (!isDeepStrictEqual(actualConfig, hostConfig)) throw new Error('HOST_CONFIG_MISMATCH')
 	assert.ok(['true', 'false'].includes(env.WEB_PRICE_CHANGE_LIVE_ENABLED))
 	assert.ok(['normal', 'conserve', 'manual'].includes(env.WEB_LIVE_REFRESH_PROFILE))
@@ -63,7 +63,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 		writeFileSync(join(root, '.letletme-release-sha'), sha + '\n')
 		verifyPrebuiltRelease(root, sha, hostConfig)
 	} catch (error) {
-		const code = ['HOST_KEY_MISMATCH', 'HOST_CONFIG_MISMATCH'].includes(error?.message) ? error.message : stage
+		const code = ['SERVER_ACTIONS_KEY_MISMATCH', 'HOST_CONFIG_MISMATCH'].includes(error?.message) ? error.message : stage
 		// Only fixed codes: never print exception messages, configuration or secrets.
 		process.stderr.write(`Tencent CI artifact build failed [${code}]\n`)
 		process.exitCode = 1

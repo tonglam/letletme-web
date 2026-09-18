@@ -67,7 +67,7 @@ test('CI build environment rejects key mismatch and excludes unrelated CI secret
 	for (const name of ['TENCENT_RELEASE_SIGNING_KEY', 'VERCEL_TOKEN', 'NODE_OPTIONS', 'DATABASE_URL']) {
 		assert.equal(built[name], undefined)
 	}
-	assert.throws(() => buildEnvironment(host, 'a'.repeat(40), { ...env, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Buffer.alloc(32, 19).toString('base64') }), /HOST_KEY_MISMATCH/)
+	assert.throws(() => buildEnvironment(host, 'a'.repeat(40), { ...env, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Buffer.alloc(32, 19).toString('base64') }), /SERVER_ACTIONS_KEY_MISMATCH/)
 	assert.throws(() => buildEnvironment(host, 'a'.repeat(40), { ...env, WEB_LIVE_REFRESH_PROFILE: 'unknown' }))
 	assert.throws(() => buildEnvironment({ ...host, publicEnvironment: { ...host.publicEnvironment, NODE_OPTIONS: 'injected' } }, 'a'.repeat(40), env), /HOST_CONFIG_MISMATCH/)
 })
