@@ -66,6 +66,7 @@ interface TournamentTableProps {
 		isLoadingMore: boolean
 		onLoadMore: () => void
 		scoreCoreRevision: string
+		contentRevision: string | null
 		onRevisionGone?: () => Promise<void>
 	}
 }
@@ -125,11 +126,11 @@ export function TournamentTable({
 		useState<TournamentSortDirection>('desc')
 	/** Checkboxes only appear while compare mode is on. */
 	const [compareMode, setCompareMode] = useState(false)
-	const [selectedSnapshots, setSelectedSnapshots] = useState<Array<{ entry: TournamentEntry; revision: string | undefined }>>([])
+	const [selectedSnapshots, setSelectedSnapshots] = useState<Array<{ entry: TournamentEntry; revision: string | undefined; contentRevision: string | null | undefined }>>([])
 	const selectedRows = selectedSnapshots.map(snapshot => {
 		const current = entries.find(entry => entry.id === snapshot.entry.id) ??
 			(pinnedViewerEntry?.id === snapshot.entry.id ? pinnedViewerEntry : undefined)
-		return { entry: current ?? snapshot.entry, current: Boolean(current) || snapshot.revision === serverControl?.scoreCoreRevision }
+		return { entry: current ?? snapshot.entry, current: Boolean(current) || (snapshot.revision === serverControl?.scoreCoreRevision && snapshot.contentRevision != null && snapshot.contentRevision === serverControl?.contentRevision) }
 	})
 	const compareSelection = selectedRows.map(row => row.entry)
 	const [isCompareOpen, setIsCompareOpen] = useState(false)
@@ -145,7 +146,7 @@ export function TournamentTable({
 	const toggleCompare = (entry: TournamentEntry) => {
 		setSelectedSnapshots(prev => {
 			if (prev.some(snapshot => snapshot.entry.id === entry.id)) return prev.filter(snapshot => snapshot.entry.id !== entry.id)
-			const snapshot = { entry, revision: serverControl?.scoreCoreRevision }
+			const snapshot = { entry, revision: serverControl?.scoreCoreRevision, contentRevision: serverControl?.contentRevision }
 			return prev.length >= 2 ? [prev[1], snapshot] : [...prev, snapshot]
 		})
 	}

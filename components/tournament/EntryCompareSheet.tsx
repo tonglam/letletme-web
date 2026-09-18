@@ -98,7 +98,7 @@ type ComparePickSource = {
 type ComparePick = {
 	element?: number
 	webName: string
-	totalPoints: number
+	totalPoints: number | null
 	minutes: number
 	starts: boolean
 	isCaptain: boolean
@@ -145,7 +145,7 @@ function toComparePick(
 	return {
 		element: pick.element,
 		webName: pick.webName,
-		totalPoints: pick.totalPoints ?? 0,
+		totalPoints: pick.totalPoints ?? null,
 		minutes: pick.minutes ?? 0,
 		starts: pick.starts ?? false,
 		isCaptain: pick.isCaptain ?? captainName === pick.webName,
@@ -392,10 +392,10 @@ function PlayerCompareRow({
 	const bg = isBench ? 'bg-accent/20' : ''
 	const leftStatus = leftPick ? getPlayedStatus(leftPick) : 'NOT_STARTED'
 	const rightStatus = rightPick ? getPlayedStatus(rightPick) : 'NOT_STARTED'
-	const leftPts = leftPick?.totalPoints ?? 0
-	const rightPts = rightPick?.totalPoints ?? 0
-	const leftWins = leftPts > rightPts
-	const rightWins = rightPts > leftPts
+	const leftPts = leftPick?.totalPoints ?? null
+	const rightPts = rightPick?.totalPoints ?? null
+	const leftWins = leftPts != null && rightPts != null && leftPts > rightPts
+	const rightWins = leftPts != null && rightPts != null && rightPts > leftPts
 
 	return (
 		<div
@@ -419,7 +419,7 @@ function PlayerCompareRow({
 						<span
 							className={`text-xs font-mono w-6 text-right flex-shrink-0 ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
 						>
-							{leftPts}
+							{leftPts ?? '—'}
 						</span>
 					</>
 				) : (
@@ -439,7 +439,7 @@ function PlayerCompareRow({
 						<span
 							className={`text-xs font-mono w-6 text-left flex-shrink-0 ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
 						>
-							{rightPts}
+							{rightPts ?? '—'}
 						</span>
 						<PlayedDot status={rightStatus} />
 						<span
