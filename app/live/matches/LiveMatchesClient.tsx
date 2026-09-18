@@ -716,6 +716,11 @@ export function LiveMatchesClient({
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<RouteReadyMarker
 					name="LIVE_MATCHDAY_READY"
+					readyKey={
+						snapshot
+							? `${snapshot.season}:${snapshot.eventId}:${snapshot.revisions.deskPublicationId}:${snapshot.revisions.scoreState}:${snapshot.revisions.detailObservation}`
+							: undefined
+					}
 					ready={!isLoading}
 					audienceHint="public"
 					goodMs={1000}
