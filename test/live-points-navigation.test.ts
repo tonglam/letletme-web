@@ -31,6 +31,7 @@ describe('live points navigation context', () => {
 		assert.match(dashboard, /key=\{`\$\{liveData\.entry\}:\$\{gameweek\}`\}/)
 		assert.match(transfers, /week\.eventId === eventId/)
 		assert.match(transfers, /return \(\) => controller\.abort\(\)/)
+		assert.doesNotMatch(transfers, /useSession|sessionPending|transfersSignIn/)
 	})
 
 	it('keeps transfer failures separate from empty records without deriving hits', () => {
