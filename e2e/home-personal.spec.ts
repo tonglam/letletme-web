@@ -3317,3 +3317,42 @@ test.describe('SSR remediation TR03 planned bound dark UTC mobile', () => {
 		})
 	}
 })
+
+test.describe('LP01 signed-in known entry input journey', () => {
+	test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+	for (const locale of ['en', 'zh-CN']) {
+		for (const width of [1440, 390]) {
+			test(`${locale} ${width}px submits the visible form and renders the requested team`, async ({ page }, testInfo) => {
+				test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Known fixture entry only; lookup can trigger synchronization')
+				const requestedPath = `${locale === 'zh-CN' ? '/zh-CN' : ''}/live/points`
+				await page.goto(requestedPath)
+				await expect(page).toHaveURL(url => url.pathname.endsWith('/auth/login') && url.searchParams.get('next') === requestedPath)
+				await expect(page.locator('#live-points-entry-id')).toHaveCount(0)
+				const session = await createSession({ entryId: 15702 })
+				try {
+				await addSessionCookie(page, session.cookie)
+				const zh = locale === 'zh-CN'
+				await page.setViewportSize({ width, height: 900 })
+				const liveRequests: Record<string, unknown>[] = []
+				page.on('request', request => {
+					if (!request.url().endsWith('/api/graphql') || request.method() !== 'POST') return
+					const payload = request.postDataJSON()
+					if (payload.query?.includes('calcLivePointsByEntry')) liveRequests.push(payload.variables)
+				})
+				await page.goto(`${zh ? '/zh-CN' : ''}/live/points`)
+				const input = page.getByLabel(zh ? 'FPL 参赛 ID' : 'FPL entry ID', { exact: true })
+				await expect(input).toBeEnabled()
+				await input.fill('123')
+				await page.getByRole('button', { name: zh ? '查看实时积分' : 'View Live Points', exact: true }).click()
+				await expect.poll(() => liveRequests.some(row => row.entryId === 123 && row.eventId === 33)).toBe(true)
+				const pitch = page.getByRole('region', { name: /^E2E United/ })
+				await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
+				await expect(pitch.getByRole('button', { name: /Player \d+/ })).toHaveCount(15)
+				await expect(input).toHaveValue('123')
+				await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/points`)
+				await testInfo.attach('entry-input-requests', { body: JSON.stringify({ caseId: 'LP01', stepId: 'LP01.01', locale, width, liveRequests }), contentType: 'application/json' })
+				} finally { await session.cleanup() }
+			})
+		}
+	}
+})
