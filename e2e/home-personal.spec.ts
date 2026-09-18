@@ -1726,6 +1726,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker owner fixture')
  const session = await createSession({ entryId: 909090 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const browseRows = [
+  managedTournament,
+  { ...managedTournament, id: 78, name: 'J12 Finished Classic', state: 'FINISHED' },
+  { ...managedTournament, id: 79, name: 'J12 Paused Classic', state: 'INACTIVE' },
+  { ...managedTournament, id: 80, name: 'J12 Active H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES' },
+  { ...managedTournament, id: 81, name: 'J12 Finished H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'FINISHED' },
+  { ...managedTournament, id: 82, name: 'J12 Paused H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'INACTIVE' }
+ ]
  const mutations: string[] = []
  await page.route('**/api/tournaments/**', async route => {
   const method = route.request().method()
@@ -1737,8 +1745,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } },
-   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
-   { operation: 'GetEntryTournaments', data: { entryTournaments: [managedTournament] } }
+   { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: browseRows } },
+   { operation: 'GetEntryTournaments', data: { entryTournaments: browseRows } }
   ] }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
   await page.goto(`${prefix}/competitions/browse`)
@@ -1761,6 +1769,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(actions).toHaveCount(0)
   await status.getByRole('button', { name: zh ? '进行中' : 'Active', exact: true }).click()
   await expect(actions).toBeVisible()
+  await search.fill('')
+  const renderedNames = page.locator('tbody tr td:first-child > .font-medium')
   for (const [typeName, typeMatches] of (zh ? [['全部', true], ['经典联赛', true], ['对战联赛', false]] : [['All', true], ['Classic', true], ['H2H', false]]) as Array<[string, boolean]>) {
    await type.getByRole('button', { name: typeName, exact: true }).click()
    for (const [statusName, statusMatches] of (zh ? [['全部', true], ['进行中', true], ['已结束', false], ['已暂停', false]] : [['All', true], ['Active', true], ['Finished', false], ['Paused', false]]) as Array<[string, boolean]>) {
@@ -1768,6 +1778,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await option.click()
     await expect(option).toHaveAttribute('aria-pressed', 'true')
     await expect(actions).toHaveCount(typeMatches && statusMatches ? 1 : 0)
+    const typeIndex = (zh ? ['全部', '经典联赛', '对战联赛'] : ['All', 'Classic', 'H2H']).indexOf(typeName)
+    const stateIndex = (zh ? ['全部', '进行中', '已结束', '已暂停'] : ['All', 'Active', 'Finished', 'Paused']).indexOf(statusName)
+    const expectedNames = browseRows.filter(row => (typeIndex === 0 || row.leagueType === ['all', 'CLASSIC', 'H2H'][typeIndex]) && (stateIndex === 0 || row.state === ['all', 'ACTIVE', 'FINISHED', 'INACTIVE'][stateIndex])).map(row => row.name).sort()
+    await expect.poll(async () => (await renderedNames.allTextContents()).sort()).toEqual(expectedNames)
    }
   }
   await type.getByRole('button', { name: zh ? '全部' : 'All', exact: true }).click()
