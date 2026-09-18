@@ -479,6 +479,38 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 }
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
+for (const width of [1440, 390]) {
+	test(`live player details cover every position and restore opener focus in ${locale} at ${width}px`, async ({ page }) => {
+		test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the deterministic local GraphQL fixture')
+		const chinese = locale === 'zh-CN'
+		await page.setViewportSize({ width, height: 900 })
+		const batchReady = page.waitForResponse(response =>
+			response.url().endsWith('/api/graphql') &&
+			Boolean(response.request().postDataJSON()?.query?.includes('EventLiveExplainBatch')))
+		await page.goto(`/${locale}/live/points/123`)
+		await (await batchReady).finished()
+		const pitch = page.getByRole('region', { name: chinese ? /阵型/ : /formation/ })
+		await expect(pitch.getByRole('button', { name: chinese ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+		for (const [id, position] of [[1, 'GKP'], [3, 'DEF'], [8, 'MID'], [13, 'FWD']] as const) {
+			const opener = pitch.getByRole('button', { name: chinese ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
+			await opener.click()
+			const dialog = page.getByRole('dialog')
+			await expect(dialog).toHaveCount(1)
+			await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+			await expect(dialog.getByText(position, { exact: true })).toBeVisible()
+			await expect(dialog.getByText(chinese ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+			await expect(dialog.getByText(chinese ? '估算' : 'Estimated', { exact: true })).toHaveCount(0)
+			await expect(dialog.getByText(chinese ? '（45 分钟）' : '(45 min)', { exact: true })).toBeVisible()
+			await dialog.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true }).click()
+			await expect(page.getByRole('dialog')).toHaveCount(0)
+			await expect(opener).toBeFocused()
+		}
+	})
+}
+
+}
+
 test('live points restores transfer details and distinguishes failure from empty records', async ({
 	page
 }) => {
