@@ -1022,6 +1022,24 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				for (const [label, count] of [['GKP', 2], ['DEF', 5], ['MID', 4], ['SUB', 4]] as const) {
 					await expect(comparison.getByText(label, { exact: true })).toHaveCount(count)
 				}
+				for (const totalScope of ['UNKNOWN', 'OVERALL'] as const) {
+					await comparison.press('Escape')
+					await page.route('**/api/live/competitions/6/compare?*', async route => {
+						const response = await route.fetch()
+						const payload = await response.json()
+						for (const entry of payload.tournamentEntrySquads.entries) {
+							entry.score.totalScope = totalScope
+							entry.score.totalPoints = 98765
+						}
+						await route.fulfill({ response, json: payload })
+					})
+					await compareOpener.click()
+					await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
+					const totalRow = comparison.getByText(locale === 'zh-CN' ? '总积分' : 'Total Pts', { exact: true }).locator('..')
+					await expect(totalRow.getByText(totalScope === 'UNKNOWN' ? '—' : '98765', { exact: true })).toHaveCount(2)
+					if (totalScope === 'UNKNOWN') await expect(totalRow.getByText('98765', { exact: true })).toHaveCount(0)
+					await page.unroute('**/api/live/competitions/6/compare?*')
+				}
 				for (const fault of ['partial', 'duplicate-position', 'invalid-position', 'unavailable', 'revision', 'entry', 'gone'] as const) {
 					await comparison.press('Escape')
 					await expect(comparison).toHaveCount(0)

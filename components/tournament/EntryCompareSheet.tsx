@@ -538,8 +538,12 @@ export function EntryCompareSheet({
 	const gwNetB = liveB?.score?.netEventPoints ?? entryB.gwNetPoints
 	const costA = liveA?.score?.transferCost ?? entryA.eventCost ?? 0
 	const costB = liveB?.score?.transferCost ?? entryB.eventCost ?? 0
-	const totalA = liveA?.score?.totalPoints ?? entryA.totalPoints ?? entryA.livePoints
-	const totalB = liveB?.score?.totalPoints ?? entryB.totalPoints ?? entryB.livePoints
+	const totalA = liveA?.score
+		? liveA.score.totalScope === 'OVERALL' ? liveA.score.totalPoints : null
+		: entryA.totalPoints ?? entryA.livePoints
+	const totalB = liveB?.score
+		? liveB.score.totalScope === 'OVERALL' ? liveB.score.totalPoints : null
+		: entryB.totalPoints ?? entryB.livePoints
 	const playedLimitA = getPlayedPlayerLimit(entryA.chips)
 	const playedLimitB = getPlayedPlayerLimit(entryB.chips)
 
