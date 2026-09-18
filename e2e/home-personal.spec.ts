@@ -2068,10 +2068,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
+for (const scenario of ['normal', 'slow-personal'] as const) {
 for (const locale of ['en', 'zh-CN'] as const) {
 for (const width of [1440, 390]) {
- test(`J01 continuous bound fixture comparison journey ${locale} ${width}px`, async ({ page }, testInfo) => {
+ test(`${scenario === 'slow-personal' ? 'SSR remediation ' : ''}J01 continuous bound fixture comparison journey ${scenario} ${locale} ${width}px`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture database')
+  test.skip(scenario === 'slow-personal' && process.env.E2E_SSR_REMEDIATION !== '1', 'Requires serial fixture control')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
   const zh = locale === 'zh-CN'
   const session = await createSession({ entryId: 15702 })
   try {
@@ -2079,6 +2082,7 @@ for (const width of [1440, 390]) {
    await addSessionCookie(page, session.cookie)
    await page.goto(zh ? '/zh-CN' : '/')
    await expect(page.getByRole('main')).toContainText('E2E United')
+   if (scenario === 'slow-personal') expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryHistory', delayMs: 2000 }] }) })).ok).toBe(true)
    const menu = width < 768 ? page.locator('details[data-navigation-mobile]') : page.locator('details[data-navigation-group="explore"]')
    await menu.locator(':scope > summary').click()
    await menu.getByRole('link', { name: zh ? '赛程' : 'Fixtures', exact: true }).click()
@@ -2087,6 +2091,12 @@ for (const width of [1440, 390]) {
    await expect(matrix.locator('tbody tr')).toHaveCount(3)
    await matrix.getByRole('searchbox', { name: zh ? '搜索球队' : 'Search teams' }).fill('Arsenal')
    await expect(matrix.locator('tbody tr')).toHaveCount(1)
+   if (scenario === 'slow-personal') {
+    const requests = (await (await fetch(fixture)).json()).requests
+    const history = requests.find((row: { operation: string }) => row.operation === 'GetEntryHistory')
+    expect(history).toBeDefined()
+    expect(history.finishedAt).toBeNull()
+   }
    const arsenal = matrix.locator('#fdr-team-1')
    const headings = await matrix.getByRole('columnheader').allTextContents()
    const gw33 = headings.findIndex(text => text.trim() === 'GW33')
@@ -2113,6 +2123,11 @@ for (const width of [1440, 390]) {
    }
    await page.locator('#my-squad > summary').click()
    await expect(page.locator('#my-squad')).toHaveAttribute('open', '')
+   if (scenario === 'slow-personal') {
+    await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { operation: string }) => row.operation === 'GetEntryHistory')?.finishedAt).toBeTruthy()
+    await expect(page.locator('#my-squad').getByRole('button', { name: zh ? /^查看 Player 1 的赛程详情/ : /^View Player 1's fixture details/ }).filter({ visible: true })).toHaveCount(1)
+    await testInfo.attach('slow-personal-request-timeline', { body: JSON.stringify((await (await fetch(fixture)).json()).requests), contentType: 'application/json' })
+   }
    const playerLink = page.getByRole('link', { name: zh ? 'Palmer — 打开球员深度页' : 'Palmer — Open player desk', exact: true }).filter({ visible: true })
    await expect(playerLink).toHaveCount(1)
    await playerLink.click()
@@ -2138,8 +2153,13 @@ for (const width of [1440, 390]) {
    await page.goForward()
    await expect(page).toHaveURL(/\/explore\/fixtures#my-squad$/)
    await expect(page.locator('#my-squad')).toBeVisible()
-   testInfo.annotations.push({ type: 'coverage-case', description: 'J01 continuous normal bound path with DGW/BGW and section anchor; slow-personal and performance assertions remain separate' })
-  } finally { await session.cleanup() }
+   testInfo.annotations.push({ type: 'coverage-case', description: `J01 continuous ${scenario} bound path with DGW/BGW and section anchor; performance assertions remain separate` })
+  } finally {
+   try {
+    if (scenario === 'slow-personal') expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+   } finally { await session.cleanup() }
+  }
  })
+}
 }
 }
