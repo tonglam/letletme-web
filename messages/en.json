@@ -745,6 +745,7 @@
 		"shareImageCopyFailed": "Could not copy the squad image. Try again.",
 		"shareImageCopyUnsupported": "This browser cannot copy images to the clipboard.",
 		"breakdownProvisional": "Estimated",
+		"breakdownSnapshotHint": "These points come from the selected gameweek snapshot. Detailed scoring events are not included in this snapshot.",
 		"breakdownProvisionalHint": "Official scoring events are still syncing. This estimate is built from live pick stats and may differ until the backend explain payload is ready.",
 		"breakdownSum": "Total",
 		"liveTotalShort": "Live",
