@@ -573,9 +573,31 @@ test.describe('SSR remediation', () => {
 				if (pathname.includes('fixtures')) await page.getByRole('button', { name: 'Hardest first', exact: true }).click()
 				else await page.locator('#price-change-search').fill('Saka')
 				await expect(page.locator('#my-squad')).not.toContainText('Loading your squad', { timeout: 5000 })
-				await expect(page.locator('#my-squad li')).not.toHaveCount(0)
-				if (pathname.includes('fixtures')) await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
-				else await expect(page.locator('#price-change-search')).toHaveValue('Saka')
+				const squad = page.locator('#my-squad')
+				await expect(squad).toHaveAttribute('open', '')
+				if (pathname.includes('fixtures')) {
+					const players = squad.getByRole('button', { name: /^View Player \d+'s fixture details;/ })
+					await expect(players).toHaveCount(15)
+					for (let id = 1; id <= 15; id += 1) {
+						await expect(squad.getByRole('button', { name: new RegExp(`^View Player ${id}'s fixture details;`) })).toBeVisible()
+					}
+					await expect(page.getByRole('button', { name: 'Hardest first', exact: true })).toHaveAttribute('aria-pressed', 'true')
+				}
+				else {
+					const visiblePlayers = squad.locator('a[href*="/player-stats?p1="]:visible')
+					await expect(visiblePlayers).toHaveCount(2)
+					expect(await visiblePlayers.evaluateAll(links => links.map(link =>
+						Number(new URL((link as HTMLAnchorElement).href).searchParams.get('p1'))
+					).sort((a, b) => a - b))).toEqual([1, 2])
+					await expect(squad.locator('li:visible')).toHaveCount(15)
+					for (let id = 3; id <= 15; id += 1) {
+						await expect(squad.getByText(`Player ${id}`, { exact: true })).toBeVisible()
+					}
+					await expect(page.locator('#price-change-search')).toHaveValue('Saka')
+					const results = page.locator('table:visible tbody tr')
+					await expect(results).toHaveCount(1)
+					await expect(results.getByRole('link', { name: 'Saka', exact: true })).toHaveAttribute('href', /\/player-stats\?p1=1$/)
+				}
 			} finally { await session.cleanup() }
 		})
 	}
