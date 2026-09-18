@@ -968,8 +968,26 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 E2E United 进行对比' : 'Select E2E United for comparison', exact: true }).filter({ visible: true }).check()
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 Pinned Viewer United 进行对比' : 'Select Pinned Viewer United for comparison', exact: true }).filter({ visible: true }).check()
 				const compareOpener = page.getByRole('button', { name: locale === 'zh-CN' ? '对比（2）' : 'Compare (2)', exact: true })
+				const detailResponses = [15702, 123].map(entryId => page.waitForResponse(response => {
+					if (!response.url().endsWith('/api/graphql')) return false
+					const payload = response.request().postDataJSON()
+					return payload?.query?.includes('GetLiveCalcPoints') && payload.variables.entryId === entryId && payload.variables.eventId === 4
+				}))
 				await compareOpener.click()
-				await expect(page.getByRole('dialog')).toBeVisible()
+				for (const [index, response] of Array.from((await Promise.all(detailResponses)).entries())) {
+					expect(response.status()).toBe(200)
+					const body = await response.json()
+					expect(body.errors).toBeUndefined()
+					expect(body.data.calcLivePointsByEntry).toMatchObject({ entry: [15702, 123][index], event: 4, availability: 'READY' })
+					expect(body.data.calcLivePointsByEntry.pickList).toHaveLength(15)
+				}
+				const comparison = page.getByRole('dialog')
+				await expect(comparison.getByRole('heading')).toContainText('E2E United')
+				await expect(comparison.getByRole('heading')).toContainText('Pinned Viewer United')
+				for (let playerId = 1; playerId <= 15; playerId += 1) {
+					await expect(comparison.getByText(new RegExp(`^(?:\\([CV]\\) )?Player ${playerId}(?: \\([CV]\\))?$`))).toHaveCount(2)
+				}
+				await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
 				await page.getByRole('dialog').press('Escape')
 				await expect(page.getByRole('dialog')).toHaveCount(0)
 				await expect(compareOpener).toBeFocused()
