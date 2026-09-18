@@ -1332,7 +1332,8 @@ test('match head requests are cancelled when actual navigation unmounts the page
  }
 })
 
-test('identical match HEAD revisions do not trigger FULL reads', async ({ page }, testInfo) => {
+for (const update of ['score', 'detail-only'] as const) {
+test(`identical match HEAD revisions do not trigger FULL reads (${update})`, async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fixture reads')
  const metricSamples: { metricName: string; measurementKind: string; result: string }[] = []
  await page.route('**/api/vitals', async route => {
@@ -1391,10 +1392,24 @@ test('identical match HEAD revisions do not trigger FULL reads', async ({ page }
  })
  const beforeChangedHidden = headCount
  const changed = structuredClone(seed.data)
- changed.liveMatchday.snapshot.revisions.deskGeneration += 1
- changed.liveMatchday.snapshot.revisions.deskPublicationId = 'e2e-match-resume-new-publication'
- changed.liveMatchday.snapshot.revisions.scoreState = 'b'.repeat(24)
- changed.liveMatchday.snapshot.matches[0].homeScore = 1
+ if (update === 'score') {
+  changed.liveMatchday.snapshot.revisions.deskGeneration += 1
+  changed.liveMatchday.snapshot.revisions.deskPublicationId = 'e2e-match-resume-new-publication'
+  changed.liveMatchday.snapshot.revisions.scoreState = 'b'.repeat(24)
+  changed.liveMatchday.snapshot.matches[0].homeScore = 1
+ } else {
+  changed.liveMatchday.snapshot.revisions.detailObservation = 'e'.repeat(24)
+  changed.liveMatchday.snapshot.revisions.detailPublicationId = 'e2e-detail-only'
+  changed.liveMatchday.snapshot.revisions.detailGeneration = 2
+  changed.liveMatchday.snapshot.revisions.playerDetail = 'e'.repeat(24)
+  changed.liveMatchday.snapshot.detailDelivery = { state: 'FRESH', servedFrom: 'REDIS_CURRENT', reasonCodes: [] }
+  for (const field of ['detailSourceCheckedAt', 'detailContentUpdatedAt', 'detailPublishedAt', 'detailStaleAt']) {
+   changed.liveMatchday.snapshot.times[field] = '2026-08-04T18:30:00.000Z'
+  }
+  Object.assign(headSnapshot.times, changed.liveMatchday.snapshot.times)
+  headSnapshot.detailDelivery = { state: 'PENDING', servedFrom: 'REDIS_CURRENT', reasonCodes: [] }
+
+ }
  Object.assign(revisions, changed.liveMatchday.snapshot.revisions)
  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete revisions[key]
  await page.route('**/api/live/matches?*', route => route.fulfill({ status: 200, json: changed }))
@@ -1407,8 +1422,8 @@ test('identical match HEAD revisions do not trigger FULL reads', async ({ page }
  })
  await page.clock.fastForward(firstRefreshWindowMs)
  await expect.poll(() => headCount).toBeGreaterThan(beforeChangedHidden)
- await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
- expect(fullCount).toBe(1)
+ await expect(page.getByText(update === 'score' ? /1\s*[–-]\s*0/ : /0\s*[–-]\s*0/)).toBeVisible()
+ await expect.poll(() => fullCount).toBe(1)
  await page.clock.fastForward(2_000)
  await testInfo.attach('simulated-resume-metrics', { body: JSON.stringify(metricSamples), contentType: 'application/json' })
  if (firstRefreshWindowMs < 60_000) {
@@ -1434,6 +1449,8 @@ test('identical match HEAD revisions do not trigger FULL reads', async ({ page }
  await page.clock.fastForward(2_000)
  expect(metricSamples.slice(reportedBeforePolling).filter(sample => sample.metricName === 'LIVE_MATCHDAY_READY' && sample.result === 'ok')).toEqual([])
 })
+
+}
 
 test('unavailable match publication remains explicit and recovers on refresh', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated publication fixture')
