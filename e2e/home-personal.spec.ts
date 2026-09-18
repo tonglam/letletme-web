@@ -2009,3 +2009,61 @@ test('J13 prepared preview exposes every group and knockout format without creat
   expect(writes).toEqual([])
  } finally { await session.cleanup() }
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  for (const persona of ['anonymous', 'unbound', 'bound'] as const) {
+   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated identity fixtures')
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const session = persona === 'anonymous' ? null : await createSession(persona === 'bound' ? { entryId: 909090 } : {})
+    try {
+     await page.setViewportSize({ width, height: 900 })
+     if (session) await addSessionCookie(page, session.cookie)
+     await page.goto(`${prefix}/onboarding/bind-entry?next=${encodeURIComponent('/auth/forgot-password')}`)
+     if (persona === 'anonymous') {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
+      await expect(page.locator('#main-content input[type="password"]')).toBeEnabled()
+     } else if (persona === 'bound') {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/forgot-password`)
+      await expect(page.locator('#main-content input[type="email"]')).toBeEnabled()
+     } else {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/onboarding/bind-entry`)
+      const input = page.locator('#main-content input[name="entryId"]')
+      await expect(input).toBeEnabled()
+      const writes: string[] = []
+      page.on('request', request => {
+       if (request.headers()['next-action']) writes.push(request.url())
+      })
+      const searches: string[] = []
+      await page.route('**/api/graphql', async route => {
+       const body = route.request().postDataJSON()
+       if (body?.operationName !== 'SearchEntries' && !String(body?.query).includes('query SearchEntries')) return route.fallback()
+       searches.push(body.variables.query)
+       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { searchEntries: [] } }) })
+      })
+      const submit = page.locator('#main-content button[type="submit"]')
+      for (const value of ['-1', '1.5']) {
+       await input.fill(value)
+       await expect(input).toHaveValue(value)
+       await submit.click()
+       await expect(page.getByText(locale === 'zh-CN' ? '本站没有匹配的球队。请改用参赛 ID，可查任意有效 FPL 球队。' : 'No matching team on LetLetMe. Try an entry ID — that looks up any valid FPL team.', { exact: true })).toBeVisible()
+       await expect(submit).toBeEnabled()
+      }
+      expect(searches).toEqual(['-1', '1.5'])
+      await input.fill('')
+      await submit.click()
+      await expect(input).toBeFocused()
+      expect(await input.evaluate(element => (element as HTMLInputElement).validity.valueMissing)).toBe(true)
+      expect(writes).toEqual([])
+      const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+      try {
+       const [row] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session!.userId}`
+       expect(row).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
+      } finally { await sql.end() }
+     }
+    } finally { if (session) await session.cleanup() }
+   })
+  }
+ }
+}
