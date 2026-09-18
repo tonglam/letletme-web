@@ -946,7 +946,9 @@ const server = createServer((request, response) => {
 				entries: variables.comparedEntryIds.map(entry => ({
 					entry, entryName: entry === 123 ? 'Pinned Viewer United' : 'E2E United',
 					playerName: 'Test Manager', score: liveScore(revision.endsWith('-v2') ? 77 : 52, revision), rank: null,
-					pickList: livePicks
+					pickList: squadPicks.map(({ element, webName, elementTypeName, position, multiplier, pickActive, autoSub, isCaptain, isViceCaptain, teamShortName, teamName, totalPoints, minutes, starts, isGwFinished, isGwStarted, isPlayed }) => ({
+						element, webName, elementTypeName, position, multiplier, pickActive, autoSub, isCaptain, isViceCaptain, teamShortName, teamName, totalPoints, minutes, starts, isGwFinished, isGwStarted, isPlayed
+					}))
 				}))
 			} } })
 			return

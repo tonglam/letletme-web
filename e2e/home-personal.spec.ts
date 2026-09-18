@@ -1005,7 +1005,13 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const body = await response.json()
 				expect(body.tournamentEntrySquads).toMatchObject({ tournamentId: 6, eventId: 4, scoreCoreRevision: 'e2e-competition-score-v1' })
 				expect(body.tournamentEntrySquads.entries.map((entry: { entry: number }) => entry.entry).sort()).toEqual([123, 15702])
-				for (const entry of body.tournamentEntrySquads.entries) expect(entry.pickList).toHaveLength(15)
+				for (const entry of body.tournamentEntrySquads.entries) {
+					expect(entry.pickList).toHaveLength(15)
+					for (const pick of entry.pickList) {
+						expect(pick.elementType).toBeUndefined()
+						expect(pick.elementTypeName).toMatch(/^(GOALKEEPER|DEFENDER|MIDFIELDER|FORWARD)$/)
+					}
+				}
 				const comparison = page.getByRole('dialog')
 				await expect(comparison.getByRole('heading')).toContainText('E2E United')
 				await expect(comparison.getByRole('heading')).toContainText('Pinned Viewer United')
@@ -1013,6 +1019,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await expect(comparison.getByText(new RegExp(`^(?:\\([CV]\\) )?Player ${playerId}(?: \\([CV]\\))?$`))).toHaveCount(2)
 				}
 				await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
+				for (const [label, count] of [['GKP', 2], ['DEF', 5], ['MID', 4], ['SUB', 4]] as const) {
+					await expect(comparison.getByText(label, { exact: true })).toHaveCount(count)
+				}
 				for (const fault of ['partial', 'duplicate-position', 'invalid-position', 'unavailable', 'revision', 'entry', 'gone'] as const) {
 					await comparison.press('Escape')
 					await expect(comparison).toHaveCount(0)
