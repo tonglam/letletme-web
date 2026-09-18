@@ -2731,6 +2731,20 @@ for (const timezoneId of ['UTC', 'Australia/Perth']) {
      await testInfo.attach('home05-all-requests', { body: JSON.stringify(observations), contentType: 'application/json' })
      expect(requestedEvents).toContain(34)
      expect(requestedEvents).not.toContain(33)
+     for (const targetLocale of [locale === 'en' ? 'zh-CN' : 'en', locale]) {
+      const switcher = page.locator('details[data-locale-picker]').filter({ visible: true })
+      await expect(switcher).toHaveCount(1)
+      await switcher.locator(':scope > summary').click()
+      await switcher.getByRole('radio', { name: targetLocale === 'en' ? 'English' : '简体中文', exact: true }).click()
+      await expect(page).toHaveURL(url => targetLocale === 'en' ? ['/', '/en'].includes(url.pathname) : url.pathname === '/zh-CN')
+      await expect(page.locator('html')).toHaveAttribute('lang', targetLocale)
+      const switchedDeadline = new Intl.DateTimeFormat(targetLocale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: timezoneId }).format(new Date(deadline))
+      await expect(card.locator('[data-countdown-deadline] time')).toHaveText(switchedDeadline)
+      await expect(card.locator('[data-countdown-title]')).toContainText('34')
+      await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+      await expect(matches).toContainText('CHE')
+      await expect(matches).toContainText('EVE')
+     }
      expect(hydrationErrors).toEqual([])
      await testInfo.attach('home-deadline-localized', { body: JSON.stringify({ timezoneId, locale, deadline, expected, requestedEvents, hydrationErrors, ssrUtcText: 'NOT_OBSERVED' }), contentType: 'application/json' })
     } finally {
