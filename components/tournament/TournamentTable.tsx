@@ -66,6 +66,7 @@ interface TournamentTableProps {
 		isLoadingMore: boolean
 		onLoadMore: () => void
 		scoreCoreRevision: string
+		contentRevision: string | null
 		onRevisionGone?: () => Promise<void>
 	}
 }
@@ -125,25 +126,28 @@ export function TournamentTable({
 		useState<TournamentSortDirection>('desc')
 	/** Checkboxes only appear while compare mode is on. */
 	const [compareMode, setCompareMode] = useState(false)
-	const [compareSelection, setCompareSelection] = useState<TournamentEntry[]>(
-		[]
-	)
+	const [selectedSnapshots, setSelectedSnapshots] = useState<Array<{ entry: TournamentEntry; revision: string | undefined; contentRevision: string | null | undefined }>>([])
+	const selectedRows = selectedSnapshots.map(snapshot => {
+		const current = entries.find(entry => entry.id === snapshot.entry.id) ??
+			(pinnedViewerEntry?.id === snapshot.entry.id ? pinnedViewerEntry : undefined)
+		return { entry: current ?? snapshot.entry, current: Boolean(current) || (snapshot.revision === serverControl?.scoreCoreRevision && snapshot.contentRevision != null && snapshot.contentRevision === serverControl?.contentRevision) }
+	})
+	const compareSelection = selectedRows.map(row => row.entry)
 	const [isCompareOpen, setIsCompareOpen] = useState(false)
 	const compareOpenerRef = useRef<HTMLButtonElement | null>(null)
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
 	const exitCompareMode = () => {
 		setCompareMode(false)
-		setCompareSelection([])
+		setSelectedSnapshots([])
 		setIsCompareOpen(false)
 	}
 
 	const toggleCompare = (entry: TournamentEntry) => {
-		setCompareSelection(prev => {
-			const exists = prev.find(e => e.id === entry.id)
-			if (exists) return prev.filter(e => e.id !== entry.id)
-			if (prev.length >= 2) return [prev[1], entry]
-			return [...prev, entry]
+		setSelectedSnapshots(prev => {
+			if (prev.some(snapshot => snapshot.entry.id === entry.id)) return prev.filter(snapshot => snapshot.entry.id !== entry.id)
+			const snapshot = { entry, revision: serverControl?.scoreCoreRevision, contentRevision: serverControl?.contentRevision }
+			return prev.length >= 2 ? [prev[1], snapshot] : [...prev, snapshot]
 		})
 	}
 
@@ -704,11 +708,13 @@ export function TournamentTable({
 			{isCompareOpen && compareSelection.length === 2 ? (
 				<EntryCompareSheet
 					entries={[compareSelection[0], compareSelection[1]]}
+					overviewCurrent={[selectedRows[0].current, selectedRows[1].current]}
 					gameweek={gameweek}
 					tournamentId={
 						serverControl && tournamentId ? Number(tournamentId) : undefined
 					}
 					scoreCoreRevision={serverControl?.scoreCoreRevision}
+					contentRevision={serverControl?.contentRevision}
 					onRevisionGone={serverControl?.onRevisionGone}
 					openerRef={compareOpenerRef}
 					open={isCompareOpen}

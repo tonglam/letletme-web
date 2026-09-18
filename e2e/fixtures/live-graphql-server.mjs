@@ -933,6 +933,26 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetTournamentEntrySquads')) {
+			const revision = variables.ref?.scoreCoreRevision
+			if (!['e2e-competition-score-v1', 'e2e-competition-score-v2'].includes(revision)) {
+				json(response, 200, { errors: [{ message: 'Fixture revision unavailable', extensions: { code: 'LIVE_SCORE_REVISION_GONE' } }] })
+				return
+			}
+			json(response, 200, { data: { tournamentEntrySquads: {
+				tournamentId: Number(variables.tournamentId),
+				eventId: Number(variables.ref.eventId),
+				scoreCoreRevision: revision,
+				entries: variables.comparedEntryIds.map(entry => ({
+					entry, entryName: entry === 123 ? 'Pinned Viewer United' : 'E2E United',
+					playerName: 'Test Manager', score: liveScore(revision.endsWith('-v2') ? 77 : 52, revision), rank: null,
+					pickList: squadPicks.map(({ element, webName, elementTypeName, position, multiplier, pickActive, autoSub, isCaptain, isViceCaptain, teamShortName, teamName, totalPoints, minutes, starts, isGwFinished, isGwStarted, isPlayed }) => ({
+						element, webName, elementTypeName, position, multiplier, pickActive, autoSub, isCaptain, isViceCaptain, teamShortName, teamName, totalPoints, minutes, starts, isGwFinished, isGwStarted, isPlayed
+					}))
+				}))
+			} } })
+			return
+		}
 		if (query.includes('GetTournamentSelectionIndex')) {
 			json(response, 200, { data: { tournamentSelectionIndex: {
 				tournamentId: Number(variables.tournamentId),

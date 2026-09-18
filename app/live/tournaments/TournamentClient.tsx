@@ -1278,6 +1278,7 @@ export default function TournamentClient({
 						onLoadMore: () => void loadMore(),
 						scoreCoreRevision:
 							boardPage.head.publication?.revisions.scoreCore ?? '',
+						contentRevision: boardPage.head.contentRevision,
 						onRevisionGone: handleBoardRevisionGone
 					}
 				: undefined,
