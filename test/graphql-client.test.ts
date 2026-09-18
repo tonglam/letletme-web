@@ -57,6 +57,10 @@ test('executeQuery aborts a stalled request at the configured deadline', async (
 		assert.equal(observedLog?.operation, 'TimeoutProbe')
 		assert.equal(observedLog?.timeoutMs, 5)
 		assert.equal(typeof observedLog?.durationMs, 'number')
+		const stages = observedLog?.stages as Record<string, unknown>
+		assert.equal(stages.responseHeadersMs, null)
+		assert.equal(stages.responseBodyMs, null)
+		assert.equal(typeof stages.timeoutFiredMs, 'number')
 	} finally {
 		globalThis.fetch = originalFetch
 		console.error = originalError
@@ -65,6 +69,9 @@ test('executeQuery aborts a stalled request at the configured deadline', async (
 
 test('executeQuery classifies a response body timeout as REQUEST_TIMEOUT', async () => {
 	const originalFetch = globalThis.fetch
+	const originalError = console.error
+	let diagnostic: Record<string, unknown> | undefined
+	console.error = (_message, detail) => { diagnostic = detail }
 	let cancelled = false
 	globalThis.fetch = (async () =>
 		new Response(
@@ -85,8 +92,13 @@ test('executeQuery classifies a response body timeout as REQUEST_TIMEOUT', async
 				error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT'
 		)
 		assert.equal(cancelled, true)
+		const stages = diagnostic?.stages as Record<string, unknown>
+		assert.equal(typeof stages.responseHeadersMs, 'number')
+		assert.equal(stages.responseBodyMs, null)
+		assert.equal(typeof stages.timeoutFiredMs, 'number')
 	} finally {
 		globalThis.fetch = originalFetch
+		console.error = originalError
 	}
 })
 
@@ -619,5 +631,37 @@ test('browser network errors use a fixed public message', async () => {
 		} else {
 			Reflect.deleteProperty(globalThis, 'window')
 		}
+	}
+})
+
+test('server slow-request stages separate header wait from body consumption', async () => {
+	const originalFetch = globalThis.fetch
+	const originalNow = Date.now
+	const originalWarn = console.warn
+	let clock = 10000
+	let diagnostic: Record<string, unknown> | undefined
+	Date.now = () => clock
+	console.warn = (_message, detail) => { diagnostic = detail }
+	globalThis.fetch = (async () => {
+		clock += 2000
+		return new Response(new ReadableStream<Uint8Array>({
+			pull(controller) {
+				clock += 3000
+				controller.enqueue(new TextEncoder().encode(JSON.stringify({ data: { ok: true } })))
+				controller.close()
+			}
+		}, { highWaterMark: 0 }), { headers: { 'x-request-id': 'stage-test' } })
+	}) as typeof fetch
+	try {
+		assert.deepEqual(await executeQuery('query StageTimingProbe { ok }'), { ok: true })
+		const stages = diagnostic?.stages as Record<string, number | null>
+		assert.equal(diagnostic?.requestId, 'stage-test')
+		assert.equal(stages.responseBodyMs, 5000)
+		assert.equal(stages.timeoutFiredMs, null)
+		assert.equal(stages.responseHeadersMs, 2000)
+	} finally {
+		globalThis.fetch = originalFetch
+		Date.now = originalNow
+		console.warn = originalWarn
 	}
 })
