@@ -128,3 +128,48 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test.describe(`BRIEF01 content ${locale} ${width}`, () => {
+   test.use({ viewport: { width, height: 900 } })
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'true', 'Enabled isolated runtime only')
+   test.afterEach(async () => { await control() })
+   test('long titles and section stories remain readable through actual detail and return links', async ({ page }) => {
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const gqlLocale = locale === 'en' ? 'EN' : 'ZH_CN'
+    const stories = ['lead', 'supporting', 'section'].map((kind, index) => ({
+     id: `brief-content-${kind}`, slug: `brief-content-${kind}`, storyRevision: index + 1,
+     title: `${kind}: ${locale === 'en' ? 'A detailed match report with a long title that wraps across multiple lines without losing the story context '.repeat(3) : '这是一篇需要在手机和桌面完整显示并保持可读性的详细比赛资讯标题'.repeat(5)}`,
+     summary: `Summary for ${kind}`, sourceName: null, sourceUrl: null, sourceCheckedAt: null, expiresAt: null
+    }))
+    await control([
+     { operation: 'BriefingWeek', variables: { locale: gqlLocale }, data: { briefingWeek: { state: 'READY', revision: 9, publicationId: 'brief-content-publication', publishedAt: null, sourceCheckedAt: null, staleAt: null, event: null, featured: stories.slice(0, 2), sections: [{ key: 'match-reports', title: 'Match reports fixture', items: [stories[2]] }] } } },
+     ...stories.map(story => ({ operation: 'BriefingStory', variables: { locale: gqlLocale, slug: story.slug }, data: { briefingStory: { state: 'READY', canonicalSlug: story.slug, story } } }))
+    ])
+    await page.goto(`${prefix}/briefing/week`)
+    for (const story of stories) {
+     await expect(page.getByRole('heading', { name: 'Match reports fixture', exact: true })).toBeVisible()
+     const link = page.getByRole('link', { name: story.title, exact: true })
+     await expect(link).toHaveCount(1)
+     await expect(link).toBeVisible()
+     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+     await link.click()
+     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/story/${story.slug}$`))
+     const title = page.getByRole('heading', { level: 1, name: story.title, exact: true })
+     await expect(title).toBeVisible()
+     await expect(page.getByText(story.summary, { exact: true })).toBeVisible()
+     const geometry = await title.evaluate(element => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight, overflow: getComputedStyle(element).overflow, lineClamp: getComputedStyle(element).webkitLineClamp }))
+     console.log('BRIEF-title-geometry', JSON.stringify({ locale, width, slug: story.slug, ...geometry }))
+     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1)
+     expect(geometry.overflow).toBe('visible')
+     expect(geometry.lineClamp).toBe('none')
+     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+     await page.locator(`article a[href="${prefix}/briefing/week"]`).click()
+     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/week$`))
+     await expect(link).toBeVisible()
+    }
+   })
+  })
+ }
+}
