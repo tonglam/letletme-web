@@ -109,12 +109,20 @@ function mapPick(pick: MyFplManagerPick): EntryEventPick {
 	}
 }
 
+// Client projection metadata, not a GraphQL response field.
+export type ManagerReviewEventResult = EntryEventResult & {
+	reviewSnapshot?: { entryId: number; eventId: number; revision: string }
+}
+
 export function eventResultFromManagerGameweek(
 	gameweek: MyFplManagerGameweek | null | undefined
-): EntryEventResult | null {
+): ManagerReviewEventResult | null {
 	if (!gameweek?.result || !gameweek.entry) return null
 	const result = gameweek.result
 	return {
+		reviewSnapshot: gameweek.snapshotMeta?.eventId === result.eventId && gameweek.eventId === result.eventId
+			? { entryId: gameweek.entry.id, eventId: result.eventId, revision: gameweek.snapshotMeta.revision }
+			: undefined,
 		eventId: result.eventId,
 		eventPoints: result.eventPoints,
 		overallPoints: result.overallPoints,
