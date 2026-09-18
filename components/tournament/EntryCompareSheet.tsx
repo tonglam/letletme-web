@@ -1,5 +1,6 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
 	Sheet,
@@ -8,12 +9,7 @@ import {
 	SheetTitle
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { executeQuery } from '@/lib/graphql-client'
-import {
-	GET_LIVE_POINTS,
-	type LiveCalcData,
-	type LiveCalcDataResponse
-} from '@/lib/graphql/operations/live'
+import type { TournamentEntrySquadsResponse, TournamentLiveCalcData } from '@/lib/graphql/operations/tournaments'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
 import { useEffect, useState, type RefObject } from 'react'
@@ -468,73 +464,75 @@ export function EntryCompareSheet({
 	openerRef,
 	entries,
 	gameweek,
+	tournamentId,
+	scoreCoreRevision,
+	onRevisionGone,
 	open,
 	onOpenChange
 }: EntryCompareSheetProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
-	const [liveData, setLiveData] = useState<
-		[LiveCalcData | null, LiveCalcData | null]
-	>([null, null])
-	const [isLoading, setIsLoading] = useState(false)
-
+	const [retry, setRetry] = useState(0)
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
+	const identity = JSON.stringify([tournamentId, gameweek, scoreCoreRevision, entryIdA, entryIdB, retry])
+	const [result, setResult] = useState<{
+		identity: string
+		data: [TournamentLiveCalcData, TournamentLiveCalcData] | null
+		error: boolean
+	} | null>(null)
+	const current = result?.identity === identity ? result : null
+	const isLoading = open && !current
+	const failed = current?.error === true
+	const liveData = current?.data ?? [null, null]
 
-	// Depend on stable entry ids — parent often passes a new `entries` array each render.
 	useEffect(() => {
-		if (!open || !entryIdA || !entryIdB) return
-
-		let cancelled = false
-		void Promise.resolve().then(async () => {
-			if (cancelled) return
-			setIsLoading(true)
-			setLiveData([null, null])
-
-			const [resA, resB] = await Promise.allSettled([
-				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
-					entryId: Number(entryIdA),
-					eventId: gameweek
-				}),
-				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
-					entryId: Number(entryIdB),
-					eventId: gameweek
-				})
-			])
-
-			if (cancelled) return
-
-			const a =
-				resA.status === 'fulfilled' ? resA.value.calcLivePointsByEntry : null
-			const b =
-				resB.status === 'fulfilled' ? resB.value.calcLivePointsByEntry : null
-			setLiveData([a, b])
-			setIsLoading(false)
-		})
-
-		return () => {
-			cancelled = true
-		}
-	}, [open, entryIdA, entryIdB, gameweek])
+		if (!open) return
+		const controller = new AbortController()
+		void (async () => {
+			try {
+				if (!tournamentId || !scoreCoreRevision || !entryIdA || !entryIdB) throw new Error('Missing comparison context')
+				const params = new URLSearchParams({ eventId: String(gameweek), scoreCoreRevision, entryIds: `${entryIdA},${entryIdB}` })
+				const response = await fetch(`/api/live/competitions/${tournamentId}/compare?${params}`, { cache: 'no-store', signal: controller.signal })
+				if (controller.signal.aborted) return
+				if (response.status === 409) {
+					setResult({ identity, data: null, error: true })
+					await onRevisionGone?.()
+					return
+				}
+				if (!response.ok) throw new Error('Comparison unavailable')
+				const body = await response.json() as TournamentEntrySquadsResponse
+				const squad = body.tournamentEntrySquads
+				if (squad?.tournamentId !== tournamentId || squad.eventId !== gameweek || squad.scoreCoreRevision !== scoreCoreRevision || !Array.isArray(squad.entries) || squad.entries.length !== 2) throw new Error('Comparison scope mismatch')
+				const a = squad.entries.find(entry => entry.entry === Number(entryIdA))
+				const b = squad.entries.find(entry => entry.entry === Number(entryIdB))
+				if (!a || !b || a === b || ![a, b].every(entry => Array.isArray(entry.pickList) && entry.pickList.length > 0 && entry.score?.revisions.scoreCore === scoreCoreRevision)) throw new Error('Incomplete comparison')
+				if (!controller.signal.aborted) setResult({ identity, data: [a, b], error: false })
+			} catch {
+				if (!controller.signal.aborted) setResult({ identity, data: null, error: true })
+			}
+		})()
+		return () => controller.abort()
+	}, [open, tournamentId, gameweek, scoreCoreRevision, entryIdA, entryIdB, identity, onRevisionGone])
 
 	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData
 
-	const gwPtsA = entryA.gwPoints ?? entryA.livePoints
-	const gwPtsB = entryB.gwPoints ?? entryB.livePoints
-	const gwNetA = entryA.gwNetPoints
-	const gwNetB = entryB.gwNetPoints
-	const costA = entryA.eventCost ?? 0
-	const costB = entryB.eventCost ?? 0
-	const totalA = entryA.totalPoints ?? entryA.livePoints
-	const totalB = entryB.totalPoints ?? entryB.livePoints
+	const gwPtsA = liveA?.score?.eventPoints ?? entryA.gwPoints ?? entryA.livePoints
+	const gwPtsB = liveB?.score?.eventPoints ?? entryB.gwPoints ?? entryB.livePoints
+	const gwNetA = liveA?.score?.netEventPoints ?? entryA.gwNetPoints
+	const gwNetB = liveB?.score?.netEventPoints ?? entryB.gwNetPoints
+	const costA = liveA?.score?.transferCost ?? entryA.eventCost ?? 0
+	const costB = liveB?.score?.transferCost ?? entryB.eventCost ?? 0
+	const totalA = liveA?.score?.totalPoints ?? entryA.totalPoints ?? entryA.livePoints
+	const totalB = liveB?.score?.totalPoints ?? entryB.totalPoints ?? entryB.livePoints
 	const playedLimitA = getPlayedPlayerLimit(entryA.chips)
 	const playedLimitB = getPlayedPlayerLimit(entryB.chips)
 
-	const picksA = (liveA ? liveA.pickList : entryA.picks)
+	const picksA = (liveA?.pickList ?? [])
 		.map(pick => toComparePick(pick, liveA?.captainName ?? entryA.captainName))
 		.sort((a, b) => a.position - b.position)
-	const picksB = (liveB ? liveB.pickList : entryB.picks)
+	const picksB = (liveB?.pickList ?? [])
 		.map(pick => toComparePick(pick, liveB?.captainName ?? entryB.captainName))
 		.sort((a, b) => a.position - b.position)
 	const alignedPicks = alignComparePicks(picksA, picksB)
@@ -643,7 +641,12 @@ export function EntryCompareSheet({
 
 					{/* Squad comparison section */}
 					<div className="px-3 pt-2 pb-3">
-						{isLoading ? (
+						{failed ? (
+							<div role="alert" className="rounded-lg border p-4 text-sm">
+								<p>{t('comparisonUnavailable')}</p>
+								<Button type="button" variant="outline" onClick={() => setRetry(value => value + 1)}>{t('refresh')}</Button>
+							</div>
+						) : isLoading ? (
 							<div className="border rounded-lg overflow-hidden">
 								{Array.from({ length: 15 }).map((_, i) => (
 									<div

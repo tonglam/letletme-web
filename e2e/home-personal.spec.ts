@@ -843,6 +843,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await route.continue()
 		})
 		if (recoveryMode.startsWith('live-journey')) {
+			let comparisonBoardRevision = 'e2e-competition-score-v1'
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
 			if (recoveryMode === 'live-journey-sort') {
 				await page.route('**/api/live/competitions/6/board', async route => {
@@ -862,6 +863,11 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					const response = await route.fetch()
 					const body = await response.json()
 					const board = body.entryLiveCompetitionBoard
+					board.head.contentRevision = comparisonBoardRevision
+					board.head.publication.revisions.scoreCore = comparisonBoardRevision
+					board.rows[0].score.revisions.scoreCore = comparisonBoardRevision
+					board.rows[0].score.eventPoints = comparisonBoardRevision.endsWith('-v2') ? 77 : 52
+					board.rows[0].score.netEventPoints = board.rows[0].score.eventPoints
 					board.viewerRow = { ...board.rows[0], entry: 123, entryName: 'Pinned Viewer United', liveRank: 90 }
 					board.totalEntries = 2
 					board.filteredEntries = 2
@@ -968,19 +974,21 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 E2E United 进行对比' : 'Select E2E United for comparison', exact: true }).filter({ visible: true }).check()
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 Pinned Viewer United 进行对比' : 'Select Pinned Viewer United for comparison', exact: true }).filter({ visible: true }).check()
 				const compareOpener = page.getByRole('button', { name: locale === 'zh-CN' ? '对比（2）' : 'Compare (2)', exact: true })
-				const detailResponses = [15702, 123].map(entryId => page.waitForResponse(response => {
-					if (!response.url().endsWith('/api/graphql')) return false
-					const payload = response.request().postDataJSON()
-					return payload?.query?.includes('GetLiveCalcPoints') && payload.variables.entryId === entryId && payload.variables.eventId === 4
-				}))
+				const detailResponse = page.waitForResponse(response => {
+					const url = new URL(response.url())
+					return url.pathname === '/api/live/competitions/6/compare'
+				}, { timeout: 5_000 })
 				await compareOpener.click()
-				for (const [index, response] of Array.from((await Promise.all(detailResponses)).entries())) {
-					expect(response.status()).toBe(200)
-					const body = await response.json()
-					expect(body.errors).toBeUndefined()
-					expect(body.data.calcLivePointsByEntry).toMatchObject({ entry: [15702, 123][index], event: 4, availability: 'READY' })
-					expect(body.data.calcLivePointsByEntry.pickList).toHaveLength(15)
-				}
+				const response = await detailResponse
+				expect(response.status()).toBe(200)
+				const requestUrl = new URL(response.url())
+				expect(requestUrl.searchParams.get('eventId')).toBe('4')
+				expect(requestUrl.searchParams.get('scoreCoreRevision')).toBe('e2e-competition-score-v1')
+				expect(requestUrl.searchParams.get('entryIds')?.split(',').sort()).toEqual(['123', '15702'])
+				const body = await response.json()
+				expect(body.tournamentEntrySquads).toMatchObject({ tournamentId: 6, eventId: 4, scoreCoreRevision: 'e2e-competition-score-v1' })
+				expect(body.tournamentEntrySquads.entries.map((entry: { entry: number }) => entry.entry).sort()).toEqual([123, 15702])
+				for (const entry of body.tournamentEntrySquads.entries) expect(entry.pickList).toHaveLength(15)
 				const comparison = page.getByRole('dialog')
 				await expect(comparison.getByRole('heading')).toContainText('E2E United')
 				await expect(comparison.getByRole('heading')).toContainText('Pinned Viewer United')
@@ -988,6 +996,107 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await expect(comparison.getByText(new RegExp(`^(?:\\([CV]\\) )?Player ${playerId}(?: \\([CV]\\))?$`))).toHaveCount(2)
 				}
 				await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
+				for (const fault of ['unavailable', 'revision', 'entry', 'gone'] as const) {
+					await comparison.press('Escape')
+					await expect(comparison).toHaveCount(0)
+					let attempts = 0
+					await page.route('**/api/live/competitions/6/compare?*', async route => {
+						attempts += 1
+						if (attempts > 1) return route.continue()
+						if (fault === 'unavailable' || fault === 'gone') {
+							await route.fulfill({ status: fault === 'gone' ? 409 : 503, json: { error: fault === 'gone' ? 'LIVE_SCORE_REVISION_GONE' : 'DEPENDENCY_UNAVAILABLE' } })
+							return
+						}
+						const response = await route.fetch()
+						const body = await response.json()
+						if (fault === 'revision') body.tournamentEntrySquads.scoreCoreRevision = 'wrong-revision'
+						else body.tournamentEntrySquads.entries[0].entry = 99999
+						await route.fulfill({ response, json: body })
+					})
+					try {
+						const refreshedBoard = fault === 'gone' ? page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board')) : null
+						await compareOpener.click()
+						if (refreshedBoard) {
+							const refreshed = await refreshedBoard
+							expect(refreshed.status()).toBe(200)
+							expect(refreshed.request().postDataJSON().eventId).toBe(4)
+						}
+						const error = comparison.getByRole('alert')
+						await expect(error).toContainText(locale === 'zh-CN' ? '两边阵容加载失败' : 'The two squads could not be loaded')
+						await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
+						await expect(comparison.getByText(/Player 15/)).toHaveCount(0)
+						expect(attempts).toBe(1)
+						await error.getByRole('button', { name: locale === 'zh-CN' ? '刷新' : 'Refresh', exact: true }).click()
+						await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
+						await expect(error).toHaveCount(0)
+						expect(attempts).toBe(2)
+					} finally {
+						await page.unroute('**/api/live/competitions/6/compare?*')
+					}
+				}
+				await comparison.press('Escape')
+				await expect(comparison).toHaveCount(0)
+				let releaseOld!: () => void
+				let markStarted!: () => void
+				let markSettled!: () => void
+				const held = new Promise<void>(resolve => { releaseOld = resolve })
+				const started = new Promise<void>(resolve => { markStarted = resolve })
+				const settled = new Promise<void>(resolve => { markSettled = resolve })
+				let detailAttempts = 0
+				await page.route('**/api/live/competitions/6/compare?*', async route => {
+					detailAttempts += 1
+					if (detailAttempts > 1) return route.continue()
+					try {
+						const response = await route.fetch()
+						const body = await response.json()
+						for (const entry of body.tournamentEntrySquads.entries) {
+							for (const pick of entry.pickList) pick.webName = 'Late obsolete player'
+						}
+						markStarted()
+						await held
+						await route.fulfill({ response, json: body })
+					} finally { markSettled() }
+				})
+				try {
+					await compareOpener.click()
+					await started
+					await expect(comparison.locator('.animate-pulse')).toHaveCount(30)
+					await comparison.press('Escape')
+					await expect(comparison).toHaveCount(0)
+					await compareOpener.click()
+					await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
+					expect(detailAttempts).toBe(2)
+					releaseOld()
+					await settled
+					await expect(comparison).toBeVisible()
+					await expect(comparison.getByText('Late obsolete player', { exact: true })).toHaveCount(0)
+					await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
+					await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
+				} finally {
+					releaseOld()
+					await page.unroute('**/api/live/competitions/6/compare?*')
+				}
+				await comparison.press('Escape')
+				await expect(comparison).toHaveCount(0)
+				const observedRevisions: string[] = []
+				await page.route('**/api/live/competitions/6/compare?*', async route => {
+					const revision = new URL(route.request().url()).searchParams.get('scoreCoreRevision')!
+					observedRevisions.push(revision)
+					if (revision === 'e2e-competition-score-v1') {
+						comparisonBoardRevision = 'e2e-competition-score-v2'
+						await route.fulfill({ status: 409, json: { error: 'LIVE_SCORE_REVISION_GONE' } })
+					} else await route.continue()
+				})
+				try {
+					await compareOpener.click()
+					await expect(comparison.getByText('77', { exact: true })).toHaveCount(4)
+					await expect(comparison.getByText('52', { exact: true })).toHaveCount(0)
+					await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
+					await expect(comparison.getByRole('alert')).toHaveCount(0)
+					expect(observedRevisions).toEqual(['e2e-competition-score-v1', 'e2e-competition-score-v2'])
+				} finally {
+					await page.unroute('**/api/live/competitions/6/compare?*')
+				}
 				await page.getByRole('dialog').press('Escape')
 				await expect(page.getByRole('dialog')).toHaveCount(0)
 				await expect(compareOpener).toBeFocused()
@@ -1008,6 +1117,21 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=3`)
 			expect(gameweekNavigations).toEqual([])
 			page.off('request', recordGameweekNavigation)
+			if (recoveryMode === 'live-journey-pinned') {
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true }).click()
+				for (const teamName of ['E2E United', 'Pinned Viewer United']) {
+					await page.getByRole('checkbox', { name: locale === 'zh-CN' ? `选择 ${teamName} 进行对比` : `Select ${teamName} for comparison`, exact: true }).filter({ visible: true }).check()
+				}
+				const gw3Response = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/6/compare')
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比（2）' : 'Compare (2)', exact: true }).click()
+				const response = await gw3Response
+				expect(new URL(response.url()).searchParams.get('eventId')).toBe('3')
+				expect(response.status()).toBe(200)
+				expect((await response.json()).tournamentEntrySquads).toMatchObject({ tournamentId: 6, eventId: 3, scoreCoreRevision: 'e2e-competition-score-v2' })
+				await expect(page.getByRole('dialog').getByText('Player 15', { exact: true })).toHaveCount(2)
+				await page.getByRole('dialog').press('Escape')
+				await expect(page.getByRole('dialog')).toHaveCount(0)
+			}
 			await page.reload()
 			await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=3`)
 			await page.getByRole('button', { name: locale === 'zh-CN' ? '下一轮' : 'Next gameweek', exact: true }).click()
