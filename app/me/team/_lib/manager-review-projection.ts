@@ -11,7 +11,8 @@ import type {
 	MyFplEntryIdentity,
 	MyFplManagerGameweek,
 	MyFplManagerPick,
-	MyFplManagerReview
+	MyFplManagerReview,
+	MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
 import type { SeasonIdentity } from './team-stats-model'
 
@@ -111,7 +112,7 @@ function mapPick(pick: MyFplManagerPick): EntryEventPick {
 
 // Client projection metadata, not a GraphQL response field.
 export type ManagerReviewEventResult = EntryEventResult & {
-	reviewSnapshot?: { entryId: number; eventId: number; revision: string }
+	reviewSnapshot?: MyFplSnapshotMeta & { entryId: number }
 }
 
 export function eventResultFromManagerGameweek(
@@ -121,7 +122,7 @@ export function eventResultFromManagerGameweek(
 	const result = gameweek.result
 	return {
 		reviewSnapshot: gameweek.snapshotMeta?.eventId === result.eventId && gameweek.eventId === result.eventId
-			? { entryId: gameweek.entry.id, eventId: result.eventId, revision: gameweek.snapshotMeta.revision }
+			? { ...gameweek.snapshotMeta, entryId: gameweek.entry.id }
 			: undefined,
 		eventId: result.eventId,
 		eventPoints: result.eventPoints,
