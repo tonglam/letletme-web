@@ -2823,3 +2823,246 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 })
+
+test.describe('Home coverage fixture scenarios', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated single-worker fixture suite')
+ test.describe.configure({ mode: 'serial' })
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation HOME01 public regions precede personal desk ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture controls')
+   const zh = locale === 'zh-CN'
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession({ entryId: 15702 })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', delayMs: 3500 }] }) })).ok).toBe(true)
+    await page.goto(zh ? '/zh-CN' : '/', { waitUntil: 'commit' })
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const performance = page.getByRole('region', { name: zh ? '本轮表现' : 'Matchday performance', exact: true })
+    await expect(performance).toContainText('101')
+    await expect(performance).toContainText('Saka')
+    await expect(page.getByRole('region', { name: zh ? '市场看板' : 'Market desk', exact: true })).toContainText('Saka')
+    const matches = page.locator('[data-home-matches]')
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(matches).toContainText('ARS')
+    await expect(matches).toContainText('CHE')
+    const pending = (await (await fetch(fixture)).json()).requests.find((row: { operation: string }) => row.operation === 'GetHomePersonalDesk')
+    expect(pending).toBeDefined()
+    expect(pending.finishedAt).toBeNull()
+    await expect(page.locator('[data-home-personal-ready="true"]')).toHaveCount(0)
+    await matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true }).click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    await expect(page.locator('[data-home-personal-ready="true"]')).toContainText('E2E United')
+    await expect(page.locator('[data-home-league-ranks-ready="true"]')).toHaveCount(1)
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    await testInfo.attach('home-personal-request-timeline', { body: JSON.stringify((await (await fetch(fixture)).json()).requests), contentType: 'application/json' })
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation HOME01 personal failure preserves public content and retries ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture controls')
+   const zh = locale === 'zh-CN'
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession({ entryId: 15702 })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', error: true }] }) })).ok).toBe(true)
+    await page.goto(zh ? '/zh-CN' : '/')
+    const unavailable = page.locator('#main-content [data-home-personal-ready="unavailable"]').filter({ visible: true })
+    await expect(unavailable).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const performance = page.getByRole('region', { name: zh ? '本轮表现' : 'Matchday performance', exact: true })
+    await expect(performance).toContainText('101')
+    await expect(performance).toContainText('Saka')
+    const market = page.getByRole('region', { name: zh ? '市场看板' : 'Market desk', exact: true })
+    await expect(market).toContainText('Saka')
+    const matches = page.locator('[data-home-matches]')
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(matches).toContainText('ARS')
+    await expect(matches).toContainText('CHE')
+    await matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true }).click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const before = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'GetHomePersonalDesk').length
+    expect(before).toBeGreaterThan(0)
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ reset: false, rules: [] }) })).ok).toBe(true)
+    await unavailable.getByRole('button', { name: zh ? '重试' : 'Try again', exact: true }).click()
+    await expect(page.locator('[data-home-personal-ready="true"]')).toContainText('E2E United')
+    await expect(unavailable).toHaveCount(0)
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    await expect(performance).toContainText('101')
+    await expect(market).toContainText('Saka')
+    const requests = (await (await fetch(fixture)).json()).requests
+    expect(requests.filter((row: { operation: string }) => row.operation === 'GetHomePersonalDesk').length).toBeGreaterThan(before)
+    await testInfo.attach('home-personal-recovery-timeline', { body: JSON.stringify(requests), contentType: 'application/json' })
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation HOME01 unbound identity preserves public regions ${locale} ${width}px`, async ({ page }, testInfo) => {
+   const zh = locale === 'zh-CN'
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession()
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+    const response = await page.goto(zh ? '/zh-CN' : '/')
+    expect(response?.headers()['cache-control']).toContain('private')
+    const main = page.locator('#main-content')
+    await expect(main.getByText(zh ? '绑定你的 FPL 球队' : 'Link your FPL team', { exact: true })).toBeVisible()
+    const bind = main.getByRole('link', { name: zh ? '绑定 FPL 球队' : 'Link FPL entry', exact: true })
+    await expect(bind).toHaveAttribute('href', zh ? '/zh-CN/onboarding/bind-entry' : '/onboarding/bind-entry')
+    await expect(main.locator('[data-home-personal-ready]')).toHaveCount(0)
+    await expect(main.getByRole('region', { name: zh ? '本轮表现' : 'Matchday performance', exact: true })).toContainText('101')
+    await expect(main.getByRole('region', { name: zh ? '市场看板' : 'Market desk', exact: true })).toContainText('Saka')
+    const matches = main.locator('[data-home-matches]')
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(matches).toContainText('ARS')
+    await matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true }).click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const requests = (await (await fetch(fixture)).json()).requests
+    expect(requests.filter((row: { operation: string }) => row.operation === 'GetHomePersonalDesk')).toHaveLength(0)
+    await testInfo.attach('home-unbound-request-timeline', { body: JSON.stringify(requests), contentType: 'application/json' })
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation HOME04 dates and gameweek boundaries ${locale} ${width}px`, async ({ page }, testInfo) => {
+   const zh = locale === 'zh-CN'
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const teams = [{ id: 1, name: 'Arsenal', shortName: 'ARS' }, { id: 2, name: 'Chelsea', shortName: 'CHE' }, { id: 3, name: 'Everton', shortName: 'EVE' }]
+   const fixtures = [0, 1].map(index => ({ id: 3401 + index, code: 3401 + index, event: { id: 34, name: 'Gameweek 34' }, kickoffTime: `2026-08-${index ? '10' : '09'}T12:00:00.000Z`, finished: false, started: false, homeTeam: teams[index], awayTeam: teams[index + 1], homeScore: null, awayScore: null, homeTeamDifficulty: 2, awayTeamDifficulty: 3 }))
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomeEventFixtures', variables: { eventId: 34 }, data: { coreEventContext: { season: '2627', revision: '7', sourceCheckedAt: '2026-08-13T09:40:00.000Z', currentEventId: 33 }, eventFixtures: fixtures } }] }) })).ok).toBe(true)
+    await page.goto(zh ? '/zh-CN' : '/')
+    const requests: number[] = []
+    page.on('request', request => { const url = new URL(request.url()); if (url.pathname === '/api/home/fixtures') requests.push(Number(url.searchParams.get('eventId'))) })
+    const matches = page.locator('#main-content [data-home-matches]')
+    const previous = matches.getByRole('button', { name: zh ? '上一轮' : 'Previous gameweek', exact: true })
+    const next = matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true })
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await next.click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const tabs = matches.getByRole('tab')
+    await expect(tabs).toHaveCount(2)
+    await tabs.nth(0).click()
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+    await expect(matches.getByRole('tabpanel')).toContainText('ARS')
+    await expect(matches.getByRole('tabpanel')).not.toContainText('EVE')
+    await tabs.nth(1).click()
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+    await expect(matches.getByRole('tabpanel')).toContainText('EVE')
+    await expect(matches.getByRole('tabpanel')).not.toContainText('ARS')
+    await tabs.nth(1).press('Home')
+    await expect(tabs.nth(0)).toBeFocused()
+    await expect(matches.getByRole('tabpanel')).toContainText('ARS')
+    await tabs.nth(0).press('End')
+    await expect(tabs.nth(1)).toBeFocused()
+    await expect(matches.getByRole('tabpanel')).toContainText('EVE')
+    expect(requests).toEqual([34])
+    for (let event = 33; event >= 1; event -= 1) {
+     await previous.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+     await expect(matches.getByText(`GW${event}`, { exact: true })).toBeVisible()
+    }
+    await expect(previous).toBeDisabled()
+    await expect(next).toBeEnabled()
+    for (let event = 2; event <= 38; event += 1) {
+     await next.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+     await expect(matches.getByText(`GW${event}`, { exact: true })).toBeVisible()
+    }
+    await expect(next).toBeDisabled()
+    await expect(previous).toBeEnabled()
+    expect(requests.every(event => event >= 1 && event <= 38)).toBe(true)
+    expect(requests.filter(event => event === 34)).toHaveLength(1)
+    expect(requests.filter(event => event === 33)).toHaveLength(0)
+    await testInfo.attach('home-fixture-read-events', { body: JSON.stringify(requests), contentType: 'application/json' })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+}
+
+for (const timezoneId of ['UTC', 'Australia/Perth']) {
+ test.describe(`HOME05 ${timezoneId}`, () => {
+  test.use({ timezoneId })
+  for (const locale of ['en', 'zh-CN']) {
+   test(`SSR remediation HOME05 finished current event uses next deadline ${locale}`, async ({ page }, testInfo) => {
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+    const deadline = '2030-01-01T18:30:00.000Z'
+    const hydrationErrors: string[] = []
+    page.on('pageerror', error => hydrationErrors.push(error.message))
+    page.on('console', message => { if (message.type() === 'error' && /hydrat|server rendered/i.test(message.text())) hydrationErrors.push(message.text()) })
+    try {
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePublicBootstrap', data: { homePublicBootstrap: { context: { season: '2627', revision: 'home05', sourceCheckedAt: '2026-09-18T00:00:00.000Z', currentEventId: 33, latestFinishedEventId: 33, nextEventId: 34, nextDeadlineTime: deadline }, fixtures: [] } } }] }) })).ok).toBe(true)
+     // The shared standalone server keeps the real five-second bootstrap cache.
+     // Establish this scenario before observing the tested navigation.
+     await expect.poll(async () => {
+      await (await page.request.get('/')).body()
+      const requests = (await (await fetch(fixture)).json()).requests
+      return requests.some((row: { operation: string; finishedAt: number | null }) => row.operation === 'GetHomePublicBootstrap' && row.finishedAt !== null)
+     }, { timeout: 12_000, intervals: [100, 250, 500] }).toBe(true)
+     const setupRequests = (await (await fetch(fixture)).json()).requests.length
+     await page.goto(locale === 'zh-CN' ? '/zh-CN' : '/')
+     const card = page.locator('#main-content [data-countdown-card]')
+     await expect(card.locator('[data-countdown-title]')).toContainText('34')
+     const expected = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: timezoneId }).format(new Date(deadline))
+     await expect(card.locator('[data-countdown-deadline] time')).toHaveText(expected)
+     const matches = page.locator('#main-content [data-home-matches]')
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+     await expect(matches).toContainText('CHE')
+     await expect(matches).toContainText('EVE')
+     const observations = (await (await fetch(fixture)).json()).requests.slice(setupRequests)
+     const requestedEvents = observations.filter((row: { operation: string }) => row.operation === 'GetHomeEventFixtures').map((row: { variables: { eventId: number } }) => row.variables.eventId)
+     await testInfo.attach('home05-all-requests', { body: JSON.stringify(observations), contentType: 'application/json' })
+     expect(requestedEvents).toContain(34)
+     expect(requestedEvents).not.toContain(33)
+     for (const targetLocale of [locale === 'en' ? 'zh-CN' : 'en', locale]) {
+      const switcher = page.locator('details[data-locale-picker]').filter({ visible: true })
+      await expect(switcher).toHaveCount(1)
+      await switcher.locator(':scope > summary').click()
+      await switcher.getByRole('radio', { name: targetLocale === 'en' ? 'English' : '简体中文', exact: true }).click()
+      await expect(page).toHaveURL(url => targetLocale === 'en' ? ['/', '/en'].includes(url.pathname) : url.pathname === '/zh-CN')
+      await expect(page.locator('html')).toHaveAttribute('lang', targetLocale)
+      const switchedDeadline = new Intl.DateTimeFormat(targetLocale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: timezoneId }).format(new Date(deadline))
+      await expect(card.locator('[data-countdown-deadline] time')).toHaveText(switchedDeadline)
+      await expect(card.locator('[data-countdown-title]')).toContainText('34')
+      await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+      await expect(matches).toContainText('CHE')
+      await expect(matches).toContainText('EVE')
+     }
+     expect(hydrationErrors).toEqual([])
+     await testInfo.attach('home-deadline-localized', { body: JSON.stringify({ timezoneId, locale, deadline, expected, requestedEvents, hydrationErrors, ssrUtcText: 'NOT_OBSERVED' }), contentType: 'application/json' })
+    } finally {
+     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    }
+   })
+  }
+ })
+}
+
+})
