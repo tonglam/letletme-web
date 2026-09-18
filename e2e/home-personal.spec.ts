@@ -2596,4 +2596,38 @@ for (const locale of ['en', 'zh-CN']) {
  }
 }
 
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation HOME01 unbound identity preserves public regions ${locale} ${width}px`, async ({ page }, testInfo) => {
+   const zh = locale === 'zh-CN'
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession()
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+    const response = await page.goto(zh ? '/zh-CN' : '/')
+    expect(response?.headers()['cache-control']).toContain('private')
+    const main = page.locator('#main-content')
+    await expect(main.getByText(zh ? '绑定你的 FPL 球队' : 'Link your FPL team', { exact: true })).toBeVisible()
+    const bind = main.getByRole('link', { name: zh ? '绑定 FPL 球队' : 'Link FPL entry', exact: true })
+    await expect(bind).toHaveAttribute('href', zh ? '/zh-CN/onboarding/bind-entry' : '/onboarding/bind-entry')
+    await expect(main.locator('[data-home-personal-ready]')).toHaveCount(0)
+    await expect(main.getByRole('region', { name: zh ? '本轮表现' : 'Matchday performance', exact: true })).toContainText('101')
+    await expect(main.getByRole('region', { name: zh ? '市场看板' : 'Market desk', exact: true })).toContainText('Saka')
+    const matches = main.locator('[data-home-matches]')
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(matches).toContainText('ARS')
+    await matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true }).click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const requests = (await (await fetch(fixture)).json()).requests
+    expect(requests.filter((row: { operation: string }) => row.operation === 'GetHomePersonalDesk')).toHaveLength(0)
+    await testInfo.attach('home-unbound-request-timeline', { body: JSON.stringify(requests), contentType: 'application/json' })
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
+
 })
