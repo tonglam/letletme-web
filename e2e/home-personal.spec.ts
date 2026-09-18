@@ -4,7 +4,7 @@ import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
-import { managerReview, managerGameweek } from './fixtures/manager-review'
+import { managerReview, managerGameweek, managerSnapshot } from './fixtures/manager-review'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
@@ -3273,3 +3273,169 @@ for (const timezoneId of ['UTC', 'Australia/Perth']) {
 }
 
 })
+
+test.describe('SSR remediation TR03 planned bound dark UTC mobile', () => {
+	test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+	for (const state of ['stale', 'unpublished'] as const) {
+		test(`${state} preserves its distinct public state`, async ({ page }, testInfo) => {
+			test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture database')
+			test.skip(state === 'unpublished' && process.env.E2E_TRENDS_UNPUBLISHED !== '1', 'Requires isolated catalog cache')
+			const session = await createSession({ entryId: 15702 })
+			const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+			try {
+				await addSessionCookie(page, session.cookie)
+				await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+				if (state === 'unpublished') {
+					const response = await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'TrendCohorts', variables: { access: 'PUBLIC' }, data: { trendCohorts: { season: '2627', revision: 'unpublished-fixture', state: 'NOT_PUBLISHED', sourceCheckedAt: null, cohorts: [] } } }] }) })
+					expect(response.ok).toBe(true)
+				}
+				await page.goto(`/zh-CN/explore/selections?scope=public${state === 'stale' ? '&cohort=competition:777&gw=33' : ''}`)
+				await expect(page.locator('html')).toHaveClass(/dark/)
+				expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+				expect(page.viewportSize()?.width).toBe(390)
+				const auth = await page.request.get('/api/auth/get-session')
+				expect(auth.ok()).toBe(true)
+				expect((await auth.json()).user.id).toBe(session.userId)
+				expect(session.entryId).toBeGreaterThan(0)
+				await expect(page.getByRole('button', { name: /^我的联赛/ })).toBeEnabled()
+				if (state === 'unpublished') {
+					await expect(page.getByRole('heading', { name: '本赛季公共趋势尚未发布。', exact: true })).toBeVisible()
+					const ledger = await (await fetch(fixture)).json()
+					expect(ledger.requests.some((row: { operation: string; variables: { access?: string }; finishedAt: number | null }) => row.operation === 'TrendCohorts' && row.variables.access === 'PUBLIC' && row.finishedAt !== null)).toBe(true)
+					await expect(page.getByRole('tabpanel')).toHaveCount(0)
+					await expect(page.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+				} else {
+					await expect(page.getByRole('tabpanel')).toContainText('Saka')
+					await page.route('**/api/trends/public-desk?**', async route => {
+						const response = await route.fetch()
+						const payload = await response.json()
+						for (const section of payload.trendCohortSnapshot.sections) {
+							section.state = 'STALE'
+							section.evidenceContext.availabilityState = 'STALE'
+						}
+						await route.fulfill({ response, json: payload })
+					})
+					const cohort = page.getByRole('combobox', { name: '当前联赛', exact: true })
+					await cohort.selectOption('competition:779')
+					await expect(cohort).toHaveAttribute('aria-busy', 'false')
+					for (const name of ['持有率', '队长选择', '转会']) {
+						await page.getByRole('tab', { name, exact: true }).click()
+						const panel = page.getByRole('tabpanel')
+						await expect(panel.getByText('数据较旧', { exact: true }).first()).toBeVisible()
+						await expect(panel.getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+						await expect(panel).not.toContainText('Saka')
+						await expect(panel.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+					}
+					await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:779' && url.searchParams.get('gw') === '33' && url.searchParams.get('scope') === 'public')
+				}
+				await testInfo.attach('planned-variant-context', { body: JSON.stringify({ variantId: `TR03.state.0${state === 'unpublished' ? 2 : 3}`, identity: 'bound', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario: state }), contentType: 'application/json' })
+			} finally {
+				if (state === 'unpublished') await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+				await session.cleanup()
+			}
+		})
+	}
+})
+
+test.describe('LP01 signed-in known entry input journey', () => {
+	test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+	for (const locale of ['en', 'zh-CN']) {
+		for (const width of [1440, 390]) {
+			test(`${locale} ${width}px submits the visible form and renders the requested team`, async ({ page }, testInfo) => {
+				test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Known fixture entry only; lookup can trigger synchronization')
+				const requestedPath = `${locale === 'zh-CN' ? '/zh-CN' : ''}/live/points`
+				await page.goto(requestedPath)
+				await expect(page).toHaveURL(url => url.pathname.endsWith('/auth/login') && url.searchParams.get('next') === requestedPath)
+				await expect(page.locator('#live-points-entry-id')).toHaveCount(0)
+				const session = await createSession({ entryId: 15702 })
+				try {
+				await addSessionCookie(page, session.cookie)
+				const zh = locale === 'zh-CN'
+				await page.setViewportSize({ width, height: 900 })
+				const liveRequests: Record<string, unknown>[] = []
+				page.on('request', request => {
+					if (!request.url().endsWith('/api/graphql') || request.method() !== 'POST') return
+					const payload = request.postDataJSON()
+					if (payload.query?.includes('calcLivePointsByEntry')) liveRequests.push(payload.variables)
+				})
+				await page.goto(`${zh ? '/zh-CN' : ''}/live/points`)
+				const input = page.getByLabel(zh ? 'FPL 参赛 ID' : 'FPL entry ID', { exact: true })
+				await expect(input).toBeEnabled()
+				await input.fill('123')
+				await page.getByRole('button', { name: zh ? '查看实时积分' : 'View Live Points', exact: true }).click()
+				await expect.poll(() => liveRequests.some(row => row.entryId === 123 && row.eventId === 33)).toBe(true)
+				const pitch = page.getByRole('region', { name: /^E2E United/ })
+				await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
+				await expect(pitch.getByRole('button', { name: /Player \d+/ })).toHaveCount(15)
+				await expect(input).toHaveValue('123')
+				await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/points`)
+				await testInfo.attach('entry-input-requests', { body: JSON.stringify({ caseId: 'LP01', stepId: 'LP01.01', locale, width, liveRequests }), contentType: 'application/json' })
+				} finally { await session.cleanup() }
+			})
+		}
+	}
+})
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation TEAM03 transfer filters and progressive reveal ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated manager fixture')
+   const zh = locale === 'zh-CN'
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const timeline = Array.from({ length: 25 }, (_, index) => ({
+    ...managerReview.timeline[0], eventId: index + 1, eventChip: 'NONE',
+    eventTransfers: index === 24 ? 0 : 1, overallPoints: (index + 1) * 60
+   }))
+   const review = {
+    ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! },
+    throughEventId: 25, timeline, snapshotMeta: managerSnapshot(25),
+    summary: { ...managerReview.summary!, gameweeksReviewed: 25, totalNetPoints: 1500, chips: [] },
+    currentGameweek: { ...managerGameweek(3), eventId: 25, entry: { ...managerReview.entry!, id: session.entryId! }, snapshotMeta: managerSnapshot(25), result: { ...managerGameweek(3).result!, ...timeline[24] } },
+    context: { ...managerReview.context, currentEventId: 25, nextEventId: 26, latestFinalizedEventId: 25, latestPublishedEventId: 25 },
+    transfers: timeline.map(row => ({
+     ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers,
+     transfers: row.eventTransfers ? [{ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}`, elementOutWebName: `Transfer Out GW${row.eventId}`, evaluatedThroughEventId: row.eventId }] : []
+    }))
+   }
+   const readCount = async () => {
+    const observed = await (await fetch(fixture)).json() as { requests: { operation: string }[] }
+    return observed.requests.filter(row => row.operation.startsWith('GetMyFplManager')).length
+   }
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`${zh ? '/zh-CN' : ''}/my-fpl/team?view=season`)
+    await page.getByRole('tab', { name: zh ? '赛季复盘' : 'Season Review', exact: true }).click()
+    const section = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: zh ? '转会历史' : 'Transfer History', exact: true }) })
+    await expect(section).toHaveCount(1)
+    await expect(section.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+    const rows = section.getByRole('button', { name: zh ? /^打开第 \d+ 轮$/ : /^Open gameweek \d+$/ })
+    const expectWeeks = async (weeks: number[]) => {
+     await expect(rows).toHaveCount(weeks.length)
+     await expect(rows).toHaveText(weeks.map(gw => `GW${gw}`))
+    }
+    const descending = (first: number, count: number) => Array.from({ length: count }, (_, index) => first - index)
+    await expectWeeks(descending(24, 6))
+    const before = await readCount()
+    expect(before).toBeGreaterThan(0)
+    await section.getByRole('button', { name: zh ? '再显示 8 条' : 'Show 8 more', exact: true }).click()
+    await expectWeeks(descending(24, 14))
+    await section.getByRole('button', { name: zh ? '显示全部剩余（10）' : 'Show all remaining (10)', exact: true }).click()
+    await expectWeeks(descending(24, 24))
+    await section.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true }).click()
+    await expectWeeks(descending(24, 6))
+    await section.getByRole('button', { name: zh ? '全赛季' : 'Full season', exact: true }).click()
+    await expectWeeks(descending(25, 6))
+    await expect(section.getByText(zh ? '无转会' : 'No transfer', { exact: true })).toBeVisible()
+    await section.getByRole('button', { name: zh ? '有转会' : 'Active weeks', exact: true }).click()
+    await expectWeeks(descending(24, 6))
+    expect(await readCount()).toBe(before)
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+}
