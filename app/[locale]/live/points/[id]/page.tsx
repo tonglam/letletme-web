@@ -40,7 +40,10 @@ type PageProps = {
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
 	const entryId = Number(id)
-	if (!Number.isSafeInteger(entryId) || entryId <= 0) notFound()
+	// Both entry queries use GraphQL Int, a signed 32-bit integer.
+	if (!Number.isInteger(entryId) || entryId <= 0 || entryId > 2_147_483_647) {
+		notFound()
+	}
 	const { from, gw, tournamentId } = await searchParams
 	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
 	const speculativeEventId =
