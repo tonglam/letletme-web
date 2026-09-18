@@ -1,5 +1,6 @@
 'use client'
 
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -164,9 +165,23 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	const seedGw =
 		initialSelectedGameweek > 0 ? initialSelectedGameweek : maxGw || 1
 
+	const readySnapshot = view === 'gameweek' ? teamStats?.reviewSnapshot : managerReview?.snapshotMeta
+	const readyEvent = view === 'gameweek' ? selectedGameweek : managerReview?.throughEventId
+	const managerReady = Boolean(!isLoading && !error && readySnapshot?.revision &&
+		readySnapshot.eventId === readyEvent && managerReview?.entry?.id === props.entryId &&
+		(view === 'gameweek'
+			? gameweekState === 'READY' && teamStats?.eventId === selectedGameweek && teamStats.reviewSnapshot?.entryId === props.entryId
+			: reviewState === 'READY' && (pastSeasonsState === 'READY' || pastSeasonsState === 'EMPTY') && seasonOverall && seasonLogs && !isTransfersLoading))
+
 	return (
 		<PageShell>
-			<div className="container mx-auto max-w-4xl px-4 py-8">
+			<div className="container mx-auto max-w-4xl px-4 py-8"
+				data-manager-ready={managerReady} data-manager-entry={props.entryId}
+				data-manager-view={view} data-manager-gw={readyEvent ?? undefined}
+				data-manager-revision={readySnapshot?.revision}>
+				<RouteReadyMarker name="MANAGER_REVIEW_READY" ready={managerReady}
+					readyKey={`${props.entryId}:${view}:${readyEvent ?? ""}:${readySnapshot?.revision ?? ""}`}
+					audienceHint="session-hint" />
 				<StatsPageHeader title={t('title')} />
 				<p className="-mt-5 mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:-mt-7 sm:mb-8">
 					{t('subtitle')}
