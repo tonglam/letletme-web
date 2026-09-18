@@ -2256,3 +2256,40 @@ for (const width of [1440, 390]) {
 }
 })
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`J12 large browse list expands collapses and resets ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Serial isolated list fixture')
+   const zh = locale === 'zh-CN'
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const entries = Array.from({ length: 45 }, (_, index) => ({ ...managedTournament, id: 1000 + index, name: `Bulk ${String(index).padStart(3, '0')}`, updatedAt: new Date(Date.UTC(2026, 8, 1, 0, index)).toISOString() }))
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: entries } }] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${zh ? '/zh-CN' : ''}/competitions/browse`)
+    const names = page.locator('tbody tr td:first-child > .font-medium')
+    const ordered = [...entries].reverse().map(row => row.name)
+    await expect(names).toHaveText(ordered.slice(0, 20))
+    await page.getByRole('button', { name: zh ? '再显示 20 个赛事' : 'Show 20 more tournaments', exact: true }).click()
+    await expect(names).toHaveText(ordered.slice(0, 40))
+    await page.getByRole('button', { name: zh ? '再显示 5 个赛事' : 'Show 5 more tournaments', exact: true }).click()
+    await expect(names).toHaveText(ordered)
+    await page.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true }).click()
+    await expect(names).toHaveText(ordered.slice(0, 20))
+    await page.getByRole('button', { name: zh ? '显示全部 45 个赛事' : 'Show all 45 tournaments', exact: true }).click()
+    await expect(names).toHaveText(ordered)
+    const search = page.getByRole('textbox', { name: zh ? '搜索赛事' : 'Search tournaments', exact: true })
+    await search.fill('Bulk 04')
+    await expect(names).toHaveText(['Bulk 044', 'Bulk 043', 'Bulk 042', 'Bulk 041', 'Bulk 040'])
+    await expect(page.getByRole('button', { name: zh ? '收起' : 'Show less', exact: true })).toHaveCount(0)
+    await search.fill('')
+    await expect(names).toHaveText(ordered.slice(0, 20))
+   } finally {
+    try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+   }
+  })
+ }
+}
