@@ -794,7 +794,7 @@
 		"ownBandLe5": "≤5%",
 		"ownBand5_15": "5–15%",
 		"ownBand15_40": "15–40%",
-		"ownBandGe40": "≥40%",
+		"ownBandGe40": ">40%",
 		"sortLabel": "Sort",
 		"sortName": "Name",
 		"sortTotalDesc": "Total pts",
