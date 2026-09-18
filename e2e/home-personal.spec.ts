@@ -2512,6 +2512,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
+})
+
+test.describe('Home coverage fixture scenarios', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated single-worker fixture suite')
+ test.describe.configure({ mode: 'serial' })
 
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
@@ -2689,6 +2695,50 @@ for (const locale of ['en', 'zh-CN']) {
    }
   })
  }
+}
+
+for (const timezoneId of ['UTC', 'Australia/Perth']) {
+ test.describe(`HOME05 ${timezoneId}`, () => {
+  test.use({ timezoneId })
+  for (const locale of ['en', 'zh-CN']) {
+   test(`SSR remediation HOME05 finished current event uses next deadline ${locale}`, async ({ page }, testInfo) => {
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+    const deadline = '2030-01-01T18:30:00.000Z'
+    const hydrationErrors: string[] = []
+    page.on('pageerror', error => hydrationErrors.push(error.message))
+    page.on('console', message => { if (message.type() === 'error' && /hydrat|server rendered/i.test(message.text())) hydrationErrors.push(message.text()) })
+    try {
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePublicBootstrap', data: { homePublicBootstrap: { context: { season: '2627', revision: 'home05', sourceCheckedAt: '2026-09-18T00:00:00.000Z', currentEventId: 33, latestFinishedEventId: 33, nextEventId: 34, nextDeadlineTime: deadline }, fixtures: [] } } }] }) })).ok).toBe(true)
+     // The shared standalone server keeps the real five-second bootstrap cache.
+     // Establish this scenario before observing the tested navigation.
+     await expect.poll(async () => {
+      await (await page.request.get('/')).body()
+      const requests = (await (await fetch(fixture)).json()).requests
+      return requests.some((row: { operation: string; finishedAt: number | null }) => row.operation === 'GetHomePublicBootstrap' && row.finishedAt !== null)
+     }, { timeout: 12_000, intervals: [100, 250, 500] }).toBe(true)
+     const setupRequests = (await (await fetch(fixture)).json()).requests.length
+     await page.goto(locale === 'zh-CN' ? '/zh-CN' : '/')
+     const card = page.locator('#main-content [data-countdown-card]')
+     await expect(card.locator('[data-countdown-title]')).toContainText('34')
+     const expected = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: timezoneId }).format(new Date(deadline))
+     await expect(card.locator('[data-countdown-deadline] time')).toHaveText(expected)
+     const matches = page.locator('#main-content [data-home-matches]')
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+     await expect(matches).toContainText('CHE')
+     await expect(matches).toContainText('EVE')
+     const observations = (await (await fetch(fixture)).json()).requests.slice(setupRequests)
+     const requestedEvents = observations.filter((row: { operation: string }) => row.operation === 'GetHomeEventFixtures').map((row: { variables: { eventId: number } }) => row.variables.eventId)
+     await testInfo.attach('home05-all-requests', { body: JSON.stringify(observations), contentType: 'application/json' })
+     expect(requestedEvents).toContain(34)
+     expect(requestedEvents).not.toContain(33)
+     expect(hydrationErrors).toEqual([])
+     await testInfo.attach('home-deadline-localized', { body: JSON.stringify({ timezoneId, locale, deadline, expected, requestedEvents, hydrationErrors, ssrUtcText: 'NOT_OBSERVED' }), contentType: 'application/json' })
+    } finally {
+     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    }
+   })
+  }
+ })
 }
 
 })
