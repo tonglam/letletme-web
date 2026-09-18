@@ -80,6 +80,7 @@ export function RouteReadyMarker({
 }) {
 	const pathname = usePathname()
 	const reportedIdentity = useRef<string | null>(null)
+	const reportedNavigationStart = useRef<number | null>(null)
 	const readyIdentity = `${pathname}\u0000${readyKey ?? ''}`
 
 	useEffect(() => {
@@ -99,6 +100,19 @@ export function RouteReadyMarker({
 			readyKey,
 			readyKeyKind
 		)
+		// A new snapshot is not a new navigation. Reuse a navigation clock only
+		// across sibling markers, never across revisions of this marker.
+		if (
+			(measurementKind === 'initial_navigation' ||
+				measurementKind === 'in_page_navigation') &&
+			reportedNavigationStart.current === routeStartedAt
+		) return
+		if (
+			measurementKind === 'initial_navigation' ||
+			measurementKind === 'in_page_navigation'
+		) {
+			reportedNavigationStart.current = routeStartedAt
+		}
 		const claimedBackgroundResumeStart =
 			measurementKind === 'background_resume' ? routeStartedAt : undefined
 		void (async () => {

@@ -1332,8 +1332,13 @@ test('match head requests are cancelled when actual navigation unmounts the page
  }
 })
 
-test('identical match HEAD revisions do not trigger FULL reads', async ({ page }) => {
+test('identical match HEAD revisions do not trigger FULL reads', async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fixture reads')
+ const metricSamples: { metricName: string; measurementKind: string; result: string }[] = []
+ await page.route('**/api/vitals', async route => {
+  metricSamples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
  let headCount = 0
  let fullCount = 0
@@ -1404,8 +1409,30 @@ test('identical match HEAD revisions do not trigger FULL reads', async ({ page }
  await expect.poll(() => headCount).toBeGreaterThan(beforeChangedHidden)
  await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
  expect(fullCount).toBe(1)
+ await page.clock.fastForward(2_000)
+ await testInfo.attach('simulated-resume-metrics', { body: JSON.stringify(metricSamples), contentType: 'application/json' })
+ if (firstRefreshWindowMs < 60_000) {
+  await expect.poll(() => metricSamples.some(sample => sample.metricName === 'LIVE_MATCHDAY_READY' && sample.measurementKind === 'background_resume' && sample.result === 'ok')).toBe(true)
+ } else {
+  // The simulated conserve interval outlives the resume clock; expired
+  // starts must not produce a valid latency sample.
+  await expect.poll(() => metricSamples.filter(sample => sample.metricName === 'LIVE_MATCHDAY_READY').length).toBeGreaterThan(1)
+  expect(metricSamples.filter(sample => sample.metricName === 'LIVE_MATCHDAY_READY' && sample.result === 'ok')).toEqual([])
+ }
  await page.clock.fastForward(firstRefreshWindowMs)
  expect(fullCount).toBe(1)
+ const reportedBeforePolling = metricSamples.length
+ changed.liveMatchday.snapshot.revisions.deskGeneration += 1
+ changed.liveMatchday.snapshot.revisions.deskPublicationId = 'e2e-match-ordinary-poll'
+ changed.liveMatchday.snapshot.revisions.scoreState = 'c'.repeat(24)
+ changed.liveMatchday.snapshot.matches[0].homeScore = 2
+ Object.assign(revisions, changed.liveMatchday.snapshot.revisions)
+ for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete revisions[key]
+ await page.clock.fastForward(firstRefreshWindowMs)
+ await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
+ expect(fullCount).toBe(2)
+ await page.clock.fastForward(2_000)
+ expect(metricSamples.slice(reportedBeforePolling).filter(sample => sample.metricName === 'LIVE_MATCHDAY_READY' && sample.result === 'ok')).toEqual([])
 })
 
 test('unavailable match publication remains explicit and recovers on refresh', async ({ page }) => {
@@ -1433,3 +1460,42 @@ test('unavailable match publication remains explicit and recovers on refresh', a
   await fetch(controls, { method: 'POST', body: JSON.stringify({ rules: [] }) })
  }
 })
+
+for (const navigation of ['initial_navigation', 'in_page_navigation']) {
+ test(`readiness does not reuse ${navigation} clock for a new match snapshot`, async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture only')
+  const samples: { metricName: string; measurementKind: string; result: string }[] = []
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.route('**/api/vitals', async route => {
+   samples.push(...(route.request().postDataJSON().samples ?? []))
+   await route.fulfill({ status: 204, body: '' })
+  })
+  if (navigation === 'initial_navigation') await page.goto('/live/matches')
+  else {
+   await page.goto('/explore/market')
+   await expect.poll(() => samples.some(s => s.metricName === 'MARKET_CONTENT_READY' && s.result === 'ok')).toBe(true)
+   await page.getByRole('navigation', { name: 'Footer', exact: true }).getByRole('link', { name: 'Live Matches', exact: true }).click()
+  }
+  await expect(page).toHaveURL(url => url.pathname === '/live/matches')
+  await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+  try {
+   await expect.poll(() => samples.some(s => s.metricName === 'LIVE_MATCHDAY_READY' && s.measurementKind === navigation && s.result === 'ok')).toBe(true)
+  } finally {
+   await testInfo.attach('navigation-classification', { body: JSON.stringify(samples), contentType: 'application/json' })
+  }
+  const response = await fetch(graphqlFixtureUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  seed.data.liveMatchday.snapshot.revisions.deskGeneration += 1
+  seed.data.liveMatchday.snapshot.revisions.deskPublicationId = 'e2e-new-visible-snapshot'
+  seed.data.liveMatchday.snapshot.revisions.scoreState = 'd'.repeat(24)
+  seed.data.liveMatchday.snapshot.matches[0].homeScore = 3
+  await page.route('**/api/live/matches{,?*}', route => route.fulfill({ status: 200, json: seed.data }))
+  const before = samples.length
+  await page.getByRole('button', { name: 'Refresh matches', exact: true }).click()
+  await expect(page.getByText(/3\s*[–-]\s*0/)).toBeVisible()
+  // Allow the existing metrics batch timer to flush a wrongly emitted sample.
+  await page.waitForTimeout(1500)
+  expect(samples.slice(before).filter(s => s.metricName === 'LIVE_MATCHDAY_READY' && s.result === 'ok')).toEqual([])
+  await testInfo.attach('real-clock-samples', { body: JSON.stringify(samples), contentType: 'application/json' })
+ })
+}
