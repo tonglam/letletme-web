@@ -199,3 +199,46 @@ test('the configured script entrypoint prints a decision and uses Vercel exit se
 	assert.equal(result.status, 1)
 	assert.match(result.stdout, /\[vercel-ignore\] BUILD: environment is preview/)
 })
+
+test('verification-only commits skip while mixed runtime changes still deploy', async () => {
+	const { decideVercelBuild, isVerificationOnlyPath } = await loadModule()
+	const verification = ['test/auth/session.test.ts', 'e2e/home-personal.spec.ts', 'playwright.config.ts']
+	for (const file of verification) assert.equal(isVerificationOnlyPath(file), true)
+	assert.equal(decideVercelBuild(productionEnv(), () => [...verification, 'README.md']).skip, true)
+	for (const file of ['app/page.tsx', 'lib/example.test.ts', 'package-lock.json', 'next.config.js', '.github/workflows/ci.yml', '.github/workflows/release-web.yml', 'scripts/vercel-ignore-build.mjs', 'test/../app/page.tsx', 'test/./helper.ts', '/e2e/example.ts', 'e2e\\example.ts']) {
+		assert.equal(isVerificationOnlyPath(file), false, file)
+		assert.equal(decideVercelBuild(productionEnv(), () => [...verification, file]).skip, false, file)
+	}
+})
+
+test('the real Git diff includes unpublished runtime changes before a test-only tip', async () => {
+	const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs')
+	const { tmpdir } = require('node:os')
+	const { execFileSync } = require('node:child_process')
+	const { decideVercelBuild, listGitChangedFiles } = await loadModule()
+	const root = mkdtempSync(path.join(tmpdir(), 'web-release-diff-'))
+	const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+	try {
+		git(['init'])
+		git(['config', 'user.name', 'Fixture'])
+		git(['config', 'user.email', 'fixture@example.invalid'])
+		const commit = () => {
+			git(['add', '.'])
+			git(['-c', 'commit.gpgsign=false', 'commit', '-m', 'fixture'])
+			return git(['rev-parse', 'HEAD']).trim()
+		}
+		writeFileSync(path.join(root, 'README.md'), 'base')
+		const base = commit()
+		mkdirSync(path.join(root, 'app'))
+		writeFileSync(path.join(root, 'app/page.tsx'), 'runtime change')
+		const runtime = commit()
+		mkdirSync(path.join(root, 'e2e'))
+		writeFileSync(path.join(root, 'e2e/page.spec.ts'), 'test change')
+		const tip = commit()
+		const diff = (before, after) => listGitChangedFiles(before, after, (command, args) => git(args))
+		assert.equal(decideVercelBuild(productionEnv({ VERCEL_GIT_PREVIOUS_SHA: base, VERCEL_GIT_COMMIT_SHA: tip }), diff).skip, false)
+		assert.equal(decideVercelBuild(productionEnv({ VERCEL_GIT_PREVIOUS_SHA: runtime, VERCEL_GIT_COMMIT_SHA: tip }), diff).skip, true)
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})

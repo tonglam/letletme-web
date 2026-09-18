@@ -113,9 +113,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$WEB_MAINTENANCE_MODE" == true ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch || "$WEB_MAINTENANCE_MODE" == true ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Maintenance mode requires a fresh Web deployment even when the SHA is otherwise documentation-only."
+            echo "Explicit releases and maintenance changes rebuild even without application changes."
             exit 0
           fi
           previous_headers=''
@@ -130,6 +130,11 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [[ "$previous_sha" == "$RELEASE_SHA" ]]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "This SHA is already serving production; automatic duplicate release skipped."
+            exit 0
+          fi
           set +e
           VERCEL_ENV=production \
           VERCEL_GIT_COMMIT_REF=main \
@@ -140,7 +145,7 @@ jobs:
           set -e
           if [[ $decision -eq 0 ]]; then
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Documentation-only SHA; Web release skipped."
+            echo "Only documentation or verification changed since production; Web release skipped."
           elif [[ $decision -eq 1 ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else

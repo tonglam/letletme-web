@@ -200,3 +200,33 @@ test('Tencent build key is validated before route preflight and mutation', () =>
  assert.ok(start >= 0 && validation > start && validation < routeCheck)
  assert.match(workflow.slice(start, validation), /TENCENT_RELEASE_SIGNING_KEY NEXT_SERVER_ACTIONS_ENCRYPTION_KEY/)
 })
+
+test('release gate skips automatic duplicate SHAs but preserves explicit configuration releases', () => {
+	const { spawnSync } = require('node:child_process')
+	const { mkdtempSync, readFileSync, rmSync } = require('node:fs')
+	const { tmpdir } = require('node:os')
+	const start = workflow.indexOf('      - name: Decide whether this SHA needs a Web release')
+	const end = workflow.indexOf('\n      - name:', start + 1)
+	const step = workflow.slice(start, end)
+	const script = step.slice(step.indexOf('        run: |\n') + '        run: |\n'.length).split('\n').map(line => line.replace(/^          /, '')).join('\n')
+	const root = mkdtempSync(path.join(tmpdir(), 'web-release-gate-'))
+	try {
+		for (const [event, previous, decision, expected] of [
+			['workflow_run', 'a'.repeat(40), 1, 'false'],
+			['workflow_dispatch', 'a'.repeat(40), 0, 'true'],
+			['workflow_run', 'b'.repeat(40), 0, 'false'],
+			['workflow_run', 'b'.repeat(40), 1, 'true'],
+			['workflow_run', 'invalid', 0, 'true']
+		]) {
+			const output = path.join(root, `${event}-${previous}-${decision}`)
+			const result = spawnSync('bash', ['-c', 'curl() { printf "HTTP/2 200\\nx-letletme-release: %s\\r\\n" "$FIXTURE_PREVIOUS"; }; node() { return "$FIXTURE_DECISION"; };\n' + script], {
+				encoding: 'utf8',
+				env: { ...process.env, GITHUB_EVENT_NAME: event, WEB_MAINTENANCE_MODE: 'false', RELEASE_SHA: 'a'.repeat(40), GITHUB_OUTPUT: output, FIXTURE_PREVIOUS: previous, FIXTURE_DECISION: String(decision) }
+			})
+			assert.equal(result.status, 0, result.stderr)
+			assert.equal(readFileSync(output, 'utf8').trim(), `deploy=${expected}`)
+		}
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})
