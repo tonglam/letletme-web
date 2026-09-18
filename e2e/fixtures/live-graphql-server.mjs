@@ -933,6 +933,15 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetTournamentSelectionIndex')) {
+			json(response, 200, { data: { tournamentSelectionIndex: {
+				tournamentId: Number(variables.tournamentId),
+				eventId: Number(variables.ref?.eventId),
+				scoreCoreRevision: variables.ref?.scoreCoreRevision,
+				rows: [{ playerId: 1, playerName: 'Saka', teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position: 'MID', count: 1, captainCount: 1, percentage: 100 }]
+			} } })
+			return
+		}
 		if (query.includes('GetEntryLiveCompetitionBoard')) {
 			const eventId = Number(variables.eventId) || 33
 			const tournamentId = Number(variables.tournamentId) || 6
@@ -970,6 +979,10 @@ const server = createServer((request, response) => {
 				captainPoints: 12,
 				score
 			}
+			const captains = variables.input?.captainPlayerIds ?? []
+			const chips = variables.input?.chips ?? []
+			const visibleRows = (captains.length === 0 || captains.includes(row.captainId)) &&
+				(chips.length === 0 || chips.includes(row.chip)) ? [row] : []
 			json(response, 200, {
 				data: {
 					entryLiveCompetitionBoard: {
@@ -995,12 +1008,12 @@ const server = createServer((request, response) => {
 							delivery: { state: 'FRESH' }
 						},
 						totalEntries: 1,
-						filteredEntries: 1,
+						filteredEntries: visibleRows.length,
 						pageInfo: { hasNextPage: false, endCursor: null },
 						highestEventPoints: 52,
 						averageEventPoints: 52,
-						rows: [row],
-						viewerRow: row
+						rows: visibleRows,
+						viewerRow: Number(variables.entryId) === row.entry ? row : null
 					}
 				}
 			})

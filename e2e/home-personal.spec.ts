@@ -797,8 +797,8 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned') ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -815,7 +815,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
 	}
 	const pageInfo = { hasNextPage: false, endCursor: null }
-	const reviewTournamentId = (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned') ? 6 : 77
+	const reviewTournamentId = recoveryMode.startsWith('live-journey') ? 6 : 77
 	const scope = { ...phase, tournamentId: reviewTournamentId, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
 	const rules = [
 		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: recoveryMode === 'search-empty', pageInfo, edges: [{ cursor: '77', node: { tournamentId: reviewTournamentId, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
@@ -827,11 +827,18 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
 	let viewNavigationRequests = 0
+	const comparisonBodies = new Map<number, { errors?: unknown; data: { calcLivePointsByEntry: { entry: number; event: number; availability: string; pickList: unknown[] } } }>()
 	try {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
+			if (recoveryMode === 'live-journey-pinned' && payload.query?.includes('GetLiveCalcPoints')) {
+				const response = await route.fetch()
+				comparisonBodies.set(payload.variables.entryId, await response.json())
+				await route.fulfill({ response })
+				return
+			}
 			if (!payload.query?.includes('GetMyTournamentSeasonReviewSection')) return route.continue()
 			sectionRequests += 1
 			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
@@ -842,8 +849,21 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
-		if ((recoveryMode === 'live-journey' || recoveryMode === 'live-journey-pinned')) {
+		if (recoveryMode.startsWith('live-journey')) {
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+			if (recoveryMode === 'live-journey-sort') {
+				await page.route('**/api/live/competitions/6/board', async route => {
+					const response = await route.fetch()
+					const body = await response.json()
+					const board = body.entryLiveCompetitionBoard
+					const low = { ...board.rows[0], entry: 201, entryName: 'Low Sort Team', teamValue: 900, overallRank: 10, transferCost: 0, score: { ...board.rows[0].score, eventPoints: 10, netEventPoints: 10, totalPoints: 100 } }
+					const high = { ...low, entry: 202, entryName: 'High Sort Team', teamValue: 1000, overallRank: 20, transferCost: 4, score: { ...low.score, eventPoints: 20, netEventPoints: 16, totalPoints: 200 } }
+					board.rows = route.request().postDataJSON().input.direction === 'ASC' ? [low, high] : [high, low]
+					board.viewerRow = null
+					board.totalEntries = board.filteredEntries = 2
+					await route.fulfill({ response, json: body })
+				})
+			}
 			if (recoveryMode === 'live-journey-pinned') {
 				await page.route('**/api/live/competitions/6/board', async route => {
 					const response = await route.fetch()
@@ -866,19 +886,116 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(live).toBeVisible()
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
 			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			let indexRequests = 0
+			if (recoveryMode === 'live-journey-index-retry') {
+				await page.route('**/api/live/competitions/6/selection-index?*', async route => {
+					indexRequests += 1
+					if (indexRequests === 1) await route.fulfill({ status: 503, json: { error: 'DEPENDENCY_UNAVAILABLE' } })
+					else await route.continue()
+				})
+			}
+			const selectionResponse = page.waitForResponse(response =>
+				response.url().includes('/api/live/competitions/6/selection-index?') && response.status() === 200)
 			await live.click()
+			if (recoveryMode === 'live-journey-index-retry') {
+				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
+				if (locale === 'zh-CN') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
+				const warning = page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })
+				await expect(warning).toBeVisible()
+				expect(indexRequests).toBe(1)
+				await warning.locator('..').getByRole('button', { name: locale === 'zh-CN' ? '刷新' : 'Refresh', exact: true }).click()
+				await expect(warning).toHaveCount(0)
+				await expect.poll(() => indexRequests).toBe(2)
+			}
+			const selection = await (await selectionResponse).json()
+			expect(selection.tournamentSelectionIndex).toMatchObject({
+				tournamentId: 6, eventId: 4, scoreCoreRevision: 'e2e-competition-score-v1',
+				rows: [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
+			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			if (recoveryMode === 'live-journey-sort') {
+				const columns = [
+					['TOTAL_POINTS', 'Total Pts', '总积分'], ['OVERALL_RANK', 'OR', '总排名'],
+					['TEAM_VALUE', 'TV', '阵容身价'], ['TRANSFER_COST', 'Cost', '扣分'], ['EVENT_POINTS', 'GW Pts', '本轮积分']
+				]
+				for (const [sort, en, zh] of columns) {
+					const responseFor = (direction?: string) => page.waitForResponse(response => {
+						if (!response.url().endsWith('/api/live/competitions/6/board')) return false
+						const input = response.request().postDataJSON()?.input
+						return input?.sort === sort && (!direction || input.direction === direction)
+					})
+					const changed = responseFor()
+					await page.getByRole('combobox', { name: locale === 'zh-CN' ? '积分榜排序方式' : 'Sort competition standings', exact: true }).click()
+					await page.getByRole('option', { name: locale === 'zh-CN' ? zh : en, exact: true }).click()
+					const first = await changed
+					expect(first.status()).toBe(200)
+					const direction = first.request().postDataJSON().input.direction
+					const links = page.getByRole('link', { name: /(?:Low|High) Sort Team/ }).filter({ visible: true })
+					await expect(links).toHaveText(direction === 'ASC' ? [/Low Sort Team/, /High Sort Team/] : [/High Sort Team/, /Low Sort Team/])
+					const flipped = responseFor(direction === 'ASC' ? 'DESC' : 'ASC')
+					await page.getByRole('button', { name: locale === 'zh-CN' ? (direction === 'ASC' ? '升序' : '降序') : (direction === 'ASC' ? 'Asc' : 'Desc'), exact: true }).click()
+					expect((await flipped).status()).toBe(200)
+					await expect(links).toHaveText(direction === 'ASC' ? [/High Sort Team/, /Low Sort Team/] : [/Low Sort Team/, /High Sort Team/])
+				}
+				return
+			}
 			const team = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
 			await expect(team).toHaveCount(1)
 			await expect(team).toBeVisible()
+			if (recoveryMode === 'live-journey' || recoveryMode === 'live-journey-index-retry') {
+				if (locale === 'zh-CN' && recoveryMode !== 'live-journey-index-retry') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
+				const captain = page.getByRole('combobox', { name: locale === 'zh-CN' ? '按队长筛选积分榜' : 'Filter standings by captain', exact: true })
+				await expect(captain).toBeEnabled()
+				await captain.click()
+				const filtered = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.includes(1))
+				await page.getByRole('option', { name: 'Saka · MID · ARS', exact: true }).click()
+				const filteredResponse = await filtered
+				expect(filteredResponse.status()).toBe(200)
+				expect((await filteredResponse.json()).entryLiveCompetitionBoard).toMatchObject({ filteredEntries: 1, rows: [{ entry: 15702, captainId: 1 }] })
+				const cleared = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.length === 0)
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '移除队长 Saka' : 'Remove captain Saka', exact: true }).click()
+				expect((await cleared).status()).toBe(200)
+				const chip = page.getByRole('button', { name: locale === 'zh-CN' ? 'BB' : 'Bench Boost', exact: true })
+				const empty = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.chips?.includes('BENCH_BOOST'))
+				await chip.click()
+				const emptyResponse = await empty
+				expect(emptyResponse.status()).toBe(200)
+				expect((await emptyResponse.json()).entryLiveCompetitionBoard).toMatchObject({ filteredEntries: 0, rows: [] })
+				await expect(page.getByText(locale === 'zh-CN' ? '匹配 0/1（0%）' : 'Matched 0 / 1 (0%)', { exact: true }).filter({ visible: true })).toHaveCount(2)
+				await expect(page.getByText(locale === 'zh-CN' ? '没有球队符合搜索条件。' : 'No teams match your search criteria.', { exact: true }).filter({ visible: true })).toBeVisible()
+				const restored = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.chips?.length === 0)
+				await chip.click()
+				expect((await restored).status()).toBe(200)
+				if (locale === 'zh-CN') await page.keyboard.press('Escape')
+				await expect(team).toBeVisible()
+			}
 			if (recoveryMode === 'live-journey-pinned') {
 				await expect(page.getByRole('link', { name: /Pinned Viewer United/ }).filter({ visible: true })).toHaveCount(1)
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true }).click()
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 E2E United 进行对比' : 'Select E2E United for comparison', exact: true }).filter({ visible: true }).check()
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 Pinned Viewer United 进行对比' : 'Select Pinned Viewer United for comparison', exact: true }).filter({ visible: true }).check()
 				const compareOpener = page.getByRole('button', { name: locale === 'zh-CN' ? '对比（2）' : 'Compare (2)', exact: true })
+				const detailResponses = [15702, 123].map(entryId => page.waitForResponse(response => {
+					if (!response.url().endsWith('/api/graphql')) return false
+					const payload = response.request().postDataJSON()
+					return payload?.query?.includes('GetLiveCalcPoints') && payload.variables.entryId === entryId && payload.variables.eventId === 4
+				}))
 				await compareOpener.click()
-				await expect(page.getByRole('dialog')).toBeVisible()
+				for (const [index, response] of Array.from((await Promise.all(detailResponses)).entries())) {
+					expect(response.status()).toBe(200)
+					const body = comparisonBodies.get([15702, 123][index])!
+					expect(body).toBeDefined()
+					expect(body.errors).toBeUndefined()
+					expect(body.data.calcLivePointsByEntry).toMatchObject({ entry: [15702, 123][index], event: 4, availability: 'READY' })
+					expect(body.data.calcLivePointsByEntry.pickList).toHaveLength(15)
+				}
+				const comparison = page.getByRole('dialog')
+				await expect(comparison.getByRole('heading')).toContainText('E2E United')
+				await expect(comparison.getByRole('heading')).toContainText('Pinned Viewer United')
+				for (let playerId = 1; playerId <= 15; playerId += 1) {
+					await expect(comparison.getByText(new RegExp(`^(?:\\([CV]\\) )?Player ${playerId}(?: \\([CV]\\))?$`))).toHaveCount(2)
+				}
+				await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
 				await page.getByRole('dialog').press('Escape')
 				await expect(page.getByRole('dialog')).toHaveCount(0)
 				await expect(compareOpener).toBeFocused()
@@ -1225,10 +1342,13 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const width of [1440, 390]) {
- test(`canonical competition board sort and pagination preserve request scope at ${width}px`, async ({ page }) => {
+ for (const failure of [false, true]) {
+ test(`canonical competition board sort and pagination preserve request scope at ${width}px${failure ? ' with next-page failure recovery' : ''}`, async ({ page }) => {
   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated board fixtures')
   const session = await createSession({ entryId: 123 })
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
+  let failedNextPage = 0
+  let lastFailureAt = 0
   try {
    await page.setViewportSize({ width, height: 900 })
    await addSessionCookie(page, session.cookie)
@@ -1237,6 +1357,12 @@ for (const width of [1440, 390]) {
     expect(payload.eventId).toBe(4)
     const input = payload.input ?? {}
     inputs.push(input)
+    if (failure && input.after && failedNextPage < 2) {
+     failedNextPage += 1
+     lastFailureAt = Date.now()
+     await route.fulfill({ status: 503, headers: { 'retry-after': '1' }, json: { error: 'DEPENDENCY_UNAVAILABLE' } })
+     return
+    }
     const response = await route.fetch()
     expect(response.ok()).toBe(true)
     const body = await response.json()
@@ -1262,6 +1388,17 @@ for (const width of [1440, 390]) {
    await expect(teams).toHaveCount(2)
    await expect(teams.nth(0)).toContainText('Alpha Coverage')
    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+   if (failure) {
+    const warning = page.getByText('Refresh failed. The last available standings are still shown.', { exact: true })
+    await expect(warning).toBeVisible()
+    await expect(teams).toHaveText([/Alpha Coverage/, /Beta Coverage/])
+    expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(2)
+    // Respect the fixture's real one-second Retry-After before explicit recovery.
+    await expect.poll(() => Date.now() - lastFailureAt).toBeGreaterThan(1_100)
+    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+    await expect(warning).toHaveCount(0)
+    expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(3)
+   }
    await expect(teams).toHaveCount(3)
    await expect(teams.nth(2)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ after: 'coverage-page-2' })
@@ -1281,6 +1418,7 @@ for (const width of [1440, 390]) {
    await session.cleanup()
   }
  })
+}
 }
 
 for (const locale of ['en', 'zh-CN']) {
