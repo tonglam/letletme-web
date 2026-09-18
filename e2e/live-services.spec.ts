@@ -1234,6 +1234,19 @@ test('match requests are cancelled when actual navigation unmounts the page', as
   expect(failed[0]).toMatch(/abort|cancel/i)
   releaseResponse?.()
   await expect(page).toHaveURL(/\/explore\/market$/)
+  await page.unroute('**/api/live/matches?*')
+  await page.goBack()
+  await expect(page).toHaveURL(/\/live\/matches$/)
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  const response = await refreshed
+  expect(response.status()).toBe(200)
+  const snapshot = (await response.json()).liveMatchday.snapshot
+  expect(snapshot.eventId).toBe(33)
+  await expect(page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true })).toBeEnabled()
+  await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+
  } finally {
   releaseResponse?.()
  }
@@ -1266,6 +1279,19 @@ test('match head requests are cancelled when actual navigation unmounts the page
   expect(failed[0]).toMatch(/abort|cancel/i)
   releaseResponse?.()
   await expect(page).toHaveURL(/\/explore\/market$/)
+  await page.unroute('**/api/graphql')
+  await page.goBack()
+  await expect(page).toHaveURL(/\/live\/matches$/)
+  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  const response = await refreshed
+  expect(response.status()).toBe(200)
+  const snapshot = (await response.json()).liveMatchday.snapshot
+  expect(snapshot.eventId).toBe(33)
+  await expect(page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true })).toBeEnabled()
+  await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+
  } finally {
   releaseResponse?.()
  }
