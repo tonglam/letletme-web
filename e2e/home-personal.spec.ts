@@ -1732,7 +1732,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   { ...managedTournament, id: 79, name: 'J12 Paused Classic', state: 'INACTIVE' },
   { ...managedTournament, id: 80, name: 'J12 Active H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES' },
   { ...managedTournament, id: 81, name: 'J12 Finished H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'FINISHED' },
-  { ...managedTournament, id: 82, name: 'J12 Paused H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'INACTIVE' }
+  { ...managedTournament, id: 82, adminEntryId: 808080, name: 'J12 Paused H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', state: 'INACTIVE' }
  ].map((row, index) => ({ ...row, updatedAt: `2026-09-0${index + 1}T00:00:00.000Z`, totalTeamNum: [2, 8, 4, 12, 6, 10][index] }))
  const mutations: string[] = []
  await page.route('**/api/tournaments/**', async route => {
@@ -1746,6 +1746,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament } },
    { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: browseRows } },
+   { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: browseRows.filter(row => row.adminEntryId === 909090) } },
    { operation: 'GetEntryTournaments', data: { entryTournaments: browseRows } }
   ] }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
@@ -1802,6 +1803,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
    await page.getByRole('menuitem', { name: order.label, exact: true }).click()
    await expect(renderedNames).toHaveText(order.indices.map(index => browseRows[index].name))
   }
+  const mine = page.getByRole('button', { name: zh ? '我管理的' : 'I manage', exact: true })
+  await mine.click()
+  await expect(mine).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL(url => url.searchParams.get('mine') === 'true')
+  await expect.poll(async () => (await renderedNames.allTextContents()).sort()).toEqual(browseRows.filter(row => row.adminEntryId === 909090).map(row => row.name).sort())
+  await mine.click()
+  await expect(mine).toHaveAttribute('aria-pressed', 'false')
+  await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
+  await expect.poll(async () => (await renderedNames.allTextContents()).sort()).toEqual(browseRows.map(row => row.name).sort())
   await actions.click()
   const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
   await expect(manage).toHaveAttribute('href', `${prefix}/competitions/77/manage`)
