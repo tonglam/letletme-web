@@ -980,7 +980,9 @@ const server = createServer((request, response) => {
 				score
 			}
 			const captains = variables.input?.captainPlayerIds ?? []
-			const visibleRows = captains.length === 0 || captains.includes(row.captainId) ? [row] : []
+			const chips = variables.input?.chips ?? []
+			const visibleRows = (captains.length === 0 || captains.includes(row.captainId)) &&
+				(chips.length === 0 || chips.includes(row.chip)) ? [row] : []
 			json(response, 200, {
 				data: {
 					entryLiveCompetitionBoard: {
@@ -1011,7 +1013,7 @@ const server = createServer((request, response) => {
 						highestEventPoints: 52,
 						averageEventPoints: 52,
 						rows: visibleRows,
-						viewerRow: row
+						viewerRow: Number(variables.entryId) === row.entry ? row : null
 					}
 				}
 			})

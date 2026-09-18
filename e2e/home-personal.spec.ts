@@ -909,6 +909,17 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const cleared = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.length === 0)
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '移除队长 Saka' : 'Remove captain Saka', exact: true }).click()
 				expect((await cleared).status()).toBe(200)
+				const chip = page.getByRole('button', { name: locale === 'zh-CN' ? 'BB' : 'Bench Boost', exact: true })
+				const empty = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.chips?.includes('BENCH_BOOST'))
+				await chip.click()
+				const emptyResponse = await empty
+				expect(emptyResponse.status()).toBe(200)
+				expect((await emptyResponse.json()).entryLiveCompetitionBoard).toMatchObject({ filteredEntries: 0, rows: [] })
+				await expect(page.getByText(locale === 'zh-CN' ? '匹配 0/1（0%）' : 'Matched 0 / 1 (0%)', { exact: true }).filter({ visible: true })).toHaveCount(2)
+				await expect(page.getByText(locale === 'zh-CN' ? '没有球队符合搜索条件。' : 'No teams match your search criteria.', { exact: true }).filter({ visible: true })).toBeVisible()
+				const restored = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.chips?.length === 0)
+				await chip.click()
+				expect((await restored).status()).toBe(200)
 				if (locale === 'zh-CN') await page.keyboard.press('Escape')
 				await expect(team).toBeVisible()
 			}
