@@ -1,8 +1,18 @@
 import type {
 	PlayerDataSectionAvailability,
 	PlayerDataState,
-	PlayerDetailDataAvailability
+	PlayerDetailDataAvailability,
+	PlayerStatsSnapshotStatus
 } from '@/lib/graphql/operations/players'
+
+export function resolvePlayerSeasonStatsAvailability(
+	player: { statsContext: { status: PlayerStatsSnapshotStatus } } | null,
+	initial: { available: boolean; status: PlayerStatsSnapshotStatus }
+) {
+	if (!player) return initial
+	const status = player.statsContext.status
+	return { available: status === 'AVAILABLE' || status === 'STALE', status }
+}
 
 export type PlayerDataSection =
 	| 'seasonStats'
