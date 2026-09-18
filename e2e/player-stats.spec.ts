@@ -478,3 +478,42 @@ test.describe('process evidence availability', () => {
   }
  }
 })
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`PS05 failed selection reselection and cached return ${locale} ${width}`, async ({ page }) => {
+   const zh = locale === 'zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   let requests = 0
+   await page.route('**/api/player-stats/desk?**', async route => {
+    const query = new URL(route.request().url()).searchParams
+    if (query.get('playerIds') !== '2' || query.get('section') !== 'overview') return route.continue()
+    requests++
+    if (requests === 1) return route.fulfill({ status: 503, body: '{}' })
+    return route.continue()
+   })
+   await page.goto(`${zh ? '/zh-CN' : ''}/explore/player-stats?p1=1`)
+   const overall = page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })
+   const players = page.getByRole('region', { name: zh ? '球员' : 'Players', exact: true })
+   const choose = async (name: string) => {
+    await players.getByRole('button', { name: zh ? '编辑' : 'Edit', exact: true }).click()
+    await players.getByRole('button', { name: new RegExp(`^${name} MID`) }).click()
+   }
+   await expect(overall).toContainText('Saka')
+   await choose('Palmer')
+   await expect(page.getByRole('alert').filter({ hasText: zh ? '球员数据加载失败' : 'Failed to load player data.' })).toBeVisible()
+   await expect(overall).toContainText('Saka')
+   expect(requests).toBe(1)
+   await choose('Palmer')
+   await expect(overall).toContainText('Palmer')
+   expect(requests).toBe(2)
+   await choose('Saka')
+   await expect(overall).toContainText('Saka')
+   await expect(overall).not.toContainText('Palmer')
+   await choose('Palmer')
+   await expect(overall).toContainText('Palmer')
+   await expect(overall).not.toContainText('Saka')
+   expect(requests).toBe(2)
+  })
+ }
+}
