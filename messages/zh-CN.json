@@ -745,6 +745,7 @@
 		"shareImageCopyFailed": "阵容图片复制失败，请重试。",
 		"shareImageCopyUnsupported": "当前浏览器不支持复制图片。",
 		"breakdownProvisional": "估算",
+		"breakdownSnapshotHint": "积分来自所选轮次的历史快照；该快照未包含逐项计分明细。",
 		"breakdownProvisionalHint": "官方计分明细仍在同步。以下根据实时阵容数据估算，接口就绪后会替换为正式明细。",
 		"breakdownSum": "总计",
 		"liveTotalShort": "实时",

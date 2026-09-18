@@ -16,7 +16,7 @@ import type {
 } from '../_lib/team-stats-model'
 import type { PlayerDetail } from '@/types/player-detail'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const POSITION_ORDER: Record<SquadPitchPlayer['position'], number> = {
 	GKP: 0,
@@ -128,7 +128,7 @@ function buildPlayerDetail(pick: EventPickViewModel): PlayerDetail {
 		bps: pick.bps,
 		bonusPoints: pick.bonus,
 		playingStatus: pick.isPlayed ? 'FINISHED' : 'NOT_STARTED',
-		breakdownSource: 'provisional',
+		breakdownSource: 'snapshot',
 		stats: {
 			minutes: pick.minutes,
 			goals: pick.goalsScored,
@@ -154,7 +154,15 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
 	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const shareRef = useRef<HTMLDivElement | null>(null)
-	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
+	const [selection, setSelection] = useState<{ playerId: string; snapshotKey: string } | null>(null)
+	const snapshotKey = JSON.stringify([stats.eventId, stats.reviewSnapshot ?? null, stats.teamName, stats.playerName])
+	const selectedPick = selection?.snapshotKey === snapshotKey
+		? stats.eventPicks.find(pick => pickElementId(pick) === selection.playerId)
+		: undefined
+	const selectedPlayer = selectedPick ? buildPlayerDetail(selectedPick) : null
+	useEffect(() => {
+		if (selection && (selection.snapshotKey !== snapshotKey || !selectedPick)) setSelection(null)
+	}, [selection, snapshotKey, selectedPick])
 	const formatOverallRank = useCallback(
 		(value: number | null) =>
 			value == null || value <= 0
@@ -203,7 +211,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		const pick = stats.eventPicks.find(
 			item => pickElementId(item) === elementId
 		)
-		if (pick) setSelectedPlayer(buildPlayerDetail(pick))
+		if (pick) setSelection({ playerId: elementId, snapshotKey })
 	}
 	const squadPitchLabels = {
 		formation: t('squadFormation', { title: stats.teamName }),
@@ -318,7 +326,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				openerRef={playerOpenerRef}
 				player={selectedPlayer}
 				isOpen={selectedPlayer !== null}
-				onClose={() => setSelectedPlayer(null)}
+				onClose={() => setSelection(null)}
 			/>
 		</section>
 	)
