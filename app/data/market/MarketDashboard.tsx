@@ -290,10 +290,12 @@ function OwnershipPeriodNav({
 
 function OwnershipCoverageMeta({
 	ownership,
+	historicalSnapshot,
 	locale,
 	t
 }: {
 	ownership: OwnershipResult
+	historicalSnapshot: boolean
 	locale: string
 	t: MarketT
 }) {
@@ -344,7 +346,7 @@ function OwnershipCoverageMeta({
 					{t(`ownershipStatus.${coverage.status}`)}
 				</p>
 			) : null}
-			{coverage.stale ? (
+			{coverage.stale && !historicalSnapshot ? (
 				<p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
 					{t('staleWarning')}
 				</p>
@@ -751,6 +753,7 @@ export async function MarketDashboard({
 						{ownership ? (
 							<OwnershipCoverageMeta
 								ownership={ownership}
+								historicalSnapshot={Boolean(requestedPeriod === 'DAILY' && requestedDate && dailyDates.at(-1) && requestedDate < dailyDates.at(-1)!)}
 								locale={locale}
 								t={t}
 							/>
