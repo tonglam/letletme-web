@@ -201,7 +201,7 @@ test('Tencent build key is validated before route preflight and mutation', () =>
  assert.match(workflow.slice(start, validation), /TENCENT_RELEASE_SIGNING_KEY NEXT_SERVER_ACTIONS_ENCRYPTION_KEY/)
 })
 
-test('release gate skips automatic duplicate SHAs but preserves explicit configuration releases', () => {
+test('release gate preserves same-SHA recovery and explicit configuration releases', () => {
 	const { spawnSync } = require('node:child_process')
 	const { mkdtempSync, readFileSync, rmSync } = require('node:fs')
 	const { tmpdir } = require('node:os')
@@ -212,7 +212,7 @@ test('release gate skips automatic duplicate SHAs but preserves explicit configu
 	const root = mkdtempSync(path.join(tmpdir(), 'web-release-gate-'))
 	try {
 		for (const [event, previous, decision, expected] of [
-			['workflow_run', 'a'.repeat(40), 1, 'false'],
+			['workflow_run', 'a'.repeat(40), 1, 'true'],
 			['workflow_dispatch', 'a'.repeat(40), 0, 'true'],
 			['workflow_run', 'b'.repeat(40), 0, 'false'],
 			['workflow_run', 'b'.repeat(40), 1, 'true'],

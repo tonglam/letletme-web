@@ -130,11 +130,6 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [[ "$previous_sha" == "$RELEASE_SHA" ]]; then
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "This SHA is already serving production; automatic duplicate release skipped."
-            exit 0
-          fi
           set +e
           VERCEL_ENV=production \
           VERCEL_GIT_COMMIT_REF=main \
