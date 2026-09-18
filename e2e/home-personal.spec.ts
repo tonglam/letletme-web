@@ -237,10 +237,11 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 		const pitch = page.locator('[data-schedule-pitch="true"]:visible')
 		await expect(pitch).toBeVisible()
 		const initialRequestCount = fixtureWindowRequests.length
-		await pitch.getByRole('button').first().click()
+		await pitch.getByRole('button', { name: /^View Player 1's fixture details;/ }).click()
 
 		const dialog = page.getByRole('dialog')
 		await expect(dialog).toBeVisible()
+		await expect(dialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
 		await expect(dialog.locator('#my-squad-fixture-range-from')).toBeVisible()
 		await expect(dialog.locator('#my-squad-fixture-range-to')).toBeVisible()
 		await dialog.locator('#my-squad-fixture-range-from').selectOption('1')
