@@ -40,15 +40,31 @@ for (const locale of ['en', 'zh-CN']) {
     await page.getByRole('searchbox', { name: zh ? '按姓名搜索球员' : 'Search players by name', exact: true }).fill('Sa')
     const results = page.getByRole('list', { name: zh ? '球员搜索结果' : 'Player search results', exact: true })
     const saka = results.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Saka', exact: true }) })
-    await saka.getByRole('button', { name: zh ? '历史' : 'History', exact: true }).click()
+    const historyButton = saka.getByRole('button', { name: zh ? '历史' : 'History', exact: true })
+    if (attempt === 0) await historyButton.click()
+    else await historyButton.press('Enter')
     await expect(page.getByRole('heading', { level: 3, name: 'Saka', exact: true })).toBeVisible()
     await expect(page.getByText('£9.9m → £10.0m')).toBeVisible()
+    const historyList = page.getByRole('list', { name: zh ? 'Saka 的身价历史' : 'Price history for Saka', exact: true })
+    await expect(historyList.getByRole('listitem')).toHaveCount(1)
+    await expect(historyList).toContainText('+£0.1m')
+    await expect(historyList).toContainText('2026')
+    await expect(historyList).toContainText(zh ? '8月3日' : 'Aug 3')
     await page.getByRole('button', { name: zh ? '选择其他球员' : 'Choose another player', exact: true }).click()
     await expect(page.getByRole('heading', { level: 3, name: 'Saka', exact: true })).toHaveCount(0)
     await expect(page.getByText('£9.9m → £10.0m')).toHaveCount(0)
    }
-
-
+   await page.route('**/api/market/price-history?**', async route => {
+    if (new URL(route.request().url()).searchParams.get('playerId') === '2') return route.fulfill({ json: { items: [] } })
+    return route.continue()
+   })
+   await page.getByRole('searchbox', { name: zh ? '按姓名搜索球员' : 'Search players by name', exact: true }).fill('Pa')
+   const palmer = page.getByRole('list', { name: zh ? '球员搜索结果' : 'Player search results', exact: true }).getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Palmer', exact: true }) })
+   await palmer.getByRole('button', { name: zh ? '历史' : 'History', exact: true }).press('Enter')
+   await expect(page.getByRole('heading', { level: 3, name: 'Palmer', exact: true })).toBeVisible()
+   await expect(page.getByText(zh ? 'Palmer 尚无真实身价变化记录。' : 'No genuine price changes have been recorded for Palmer.', { exact: true })).toBeVisible()
+   await expect(page.getByText('£9.9m → £10.0m')).toHaveCount(0)
+   await expect(page.getByRole('list', { name: zh ? 'Palmer 的身价历史' : 'Price history for Palmer', exact: true })).toHaveCount(0)
   })
  }
 }
