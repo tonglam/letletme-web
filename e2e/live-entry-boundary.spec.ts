@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+test.describe.configure({ mode: 'serial' })
+
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated local GraphQL fixture')
 test.skip(process.env.E2E_LIVE_ENTRY_BOUNDARY !== '1', 'Run in the dedicated entry-boundary fixture process')
 
@@ -7,7 +9,7 @@ for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
-for (const id of ['abc', '0', '-1', '2147483648']) {
+for (const id of ['abc', '0', '-1', '2147483648', '1e3', '0x7b', '0123', '+123']) {
  test(`invalid live entry ${id} ${locale} ${width}px returns not-found without browser business reads`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 })
   const businessReads: string[] = []
@@ -29,7 +31,7 @@ for (const id of ['abc', '0', '-1', '2147483648']) {
   const entryReads = after.requests.slice(before.requests.length).filter(
    (r: { operation: string; variables: { id?: number | null; entryId?: number | null } }) =>
     /^(GetEntry|GetLiveCalcPoints)$/.test(r.operation) &&
-    [null, 0, -1, 2147483648].includes(r.variables.entryId ?? r.variables.id ?? null)
+    (r.variables.entryId ?? r.variables.id ?? null) === (Number.isNaN(Number(id)) ? null : Number(id))
   )
   expect(entryReads).toEqual([])
   expect(businessReads).toEqual([])

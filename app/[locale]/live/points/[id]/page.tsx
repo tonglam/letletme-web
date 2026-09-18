@@ -41,7 +41,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
 	const entryId = Number(id)
 	// Both entry queries use GraphQL Int, a signed 32-bit integer.
-	if (!Number.isInteger(entryId) || entryId <= 0 || entryId > 2_147_483_647) {
+	if (!/^[1-9]\d*$/.test(id) || !Number.isInteger(entryId) || entryId > 2_147_483_647) {
 		notFound()
 	}
 	const { from, gw, tournamentId } = await searchParams
