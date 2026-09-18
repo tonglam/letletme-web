@@ -2784,8 +2784,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
-test('J13 prepared preview exposes every group and knockout format without creation', async ({ page }) => {
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+test.describe(`J13 prepared matrix ${locale} ${width}`, () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const scenario of ['formats', 'gameweeks', 'participants'] as const) {
+test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated preview substitute only')
+ const zh = locale === 'zh-CN'
+ const groupLabels = zh ? ['无小组赛', '积分赛'] : ['No Group', 'Points Race']
+ const knockoutLabels = zh ? ['无淘汰赛', '单败淘汰', '双败淘汰'] : ['No Knockout', 'Single Elimination', 'Double Elimination']
  const session = await createSession({ entryId: 15702 })
  const writes: string[] = []
  let previews = 0
@@ -2801,26 +2809,56 @@ test('J13 prepared preview exposes every group and knockout format without creat
  })
  try {
   await addSessionCookie(page, session.cookie)
-  await page.goto('/competitions/create')
+  await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto(`${zh ? '/zh-CN' : ''}/competitions/create`)
   await expect(page.locator('#tournament-create-form')).toHaveAttribute('aria-busy', 'false')
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
   await page.locator('label[for="creation-mode-custom"]').click()
   await page.locator('#league-url').fill('https://fantasy.premierleague.com/leagues/123/standings/c')
-  await page.getByRole('button', { name: 'Fetch league', exact: true }).click()
+  await page.getByRole('button', { name: zh ? '加载联赛' : 'Fetch league', exact: true }).click()
   await expect(page.locator('#group-format')).toBeVisible()
-  for (const format of ['No Group', 'Points Race', 'No Group']) {
+  if (scenario === 'formats') for (const group of groupLabels) {
    await page.locator('#group-format').click()
-   await page.getByRole('option', { name: format, exact: true }).click()
-   await expect(page.locator('#group-format')).toHaveText(format)
+   await page.getByRole('option', { name: group, exact: true }).click()
+   await expect(page.locator('#group-format')).toHaveText(group)
+   for (const knockout of knockoutLabels) {
+    await page.locator('#knockout-format').click()
+    await page.getByRole('option', { name: knockout, exact: true }).click()
+    await expect(page.locator('#knockout-format')).toHaveText(knockout)
+    await expect(page.locator('#group-num')).toHaveCount(group === groupLabels[1] ? 1 : 0)
+    await expect(page.locator('#qualifiers-per-group')).toHaveCount(group === groupLabels[1] && knockout !== knockoutLabels[0] ? 1 : 0)
+   }
   }
-  for (const format of ['Single Elimination', 'Double Elimination', 'No Knockout']) {
-   await page.locator('#knockout-format').click()
-   await page.getByRole('option', { name: format, exact: true }).click()
-   await expect(page.locator('#knockout-format')).toHaveText(format)
+  if (scenario === 'gameweeks') for (const field of ['start-gameweek', 'end-gameweek']) {
+   for (const gw of [1, 38]) {
+    await page.locator(`#${field}`).click()
+    await page.getByRole('option', { name: zh ? `第 ${gw} 轮` : `Gameweek ${gw}`, exact: true }).click()
+    await expect(page.locator(`#${field}`)).toHaveText(zh ? `第 ${gw} 轮` : `Gameweek ${gw}`)
+   }
+  }
+  if (scenario === 'participants') for (const source of ['custom', 'official', 'custom']) {
+   await page.locator(`label[for="source-${source}"]`).click()
+   await expect(page.locator(`#source-${source}`)).toHaveAttribute('aria-checked', 'true')
+   const include = page.getByRole('checkbox', { name: zh ? '包含 J13 Team 1' : 'Include J13 Team 1', exact: true })
+   if (source === 'official') await expect(include).toBeDisabled()
+   else {
+    await expect(include).toBeEnabled()
+    await include.uncheck()
+    await expect(include).not.toBeChecked()
+    await include.check()
+    await expect(include).toBeChecked()
+   }
   }
   expect(previews).toBe(1)
   expect(writes).toEqual([])
  } finally { await session.cleanup() }
 })
+ }
+})
+ }
+}
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
