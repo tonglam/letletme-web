@@ -362,7 +362,14 @@ for (const recovery of ['retry', 'remove'] as const) {
 				return route.continue()
 			}
 			requests++
-			if (requests > 1) return route.continue()
+			if (requests > 1) {
+				const response = await route.fetch()
+				const body = await response.json()
+				for (const entry of body.entries ?? []) {
+					if (entry.playerId === 2 && entry.overview) entry.overview.selectedByPercent = 61.2
+				}
+				return route.fulfill({ response, json: body })
+			}
 			if (recovery === 'retry') return route.fulfill({ status: 503, body: '{}' })
 			await held
 			try { await route.continue() } catch { /* Removed selection cancels the request. */ }
@@ -377,6 +384,7 @@ for (const recovery of ['retry', 'remove'] as const) {
 				await page.getByRole('button', { name: 'Retry', exact: true }).click()
 				await expect(overall).toContainText('Palmer')
 				await expect(overall).toContainText('Saka')
+				await expect(overall).toContainText('61.2%')
 				expect(requests).toBe(2)
 			} else {
 				await page.getByRole('button', { name: 'Remove', exact: true }).click()
