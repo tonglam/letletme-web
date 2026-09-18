@@ -71,8 +71,9 @@ export default async function SelectionsPage({
 			}
 		})
 	const sessionContext = await getVerifiedEntryContext()
+	const deferMyCohorts = query.scope === 'public' && Boolean(sessionContext.session && sessionContext.entryId)
 	const myCohortsPromise =
-		sessionContext.session && sessionContext.entryId
+		!deferMyCohorts && sessionContext.session && sessionContext.entryId
 			? loadTrendCohorts('MINE', sessionContext.session)
 					.then(catalog => ({ cohorts: catalog.cohorts, loadFailed: false }))
 					.catch(error => {
@@ -126,6 +127,7 @@ export default async function SelectionsPage({
 			publicCohorts={publicCatalog.cohorts}
 			publicCatalogState={publicCatalog.state}
 			myCohorts={myCohorts}
+			deferMyCohorts={deferMyCohorts}
 			canLoadMine={Boolean(sessionContext.session && sessionContext.entryId)}
 			myCohortsLoadFailed={myCohortsResult.loadFailed}
 			publicCohortsLoadFailed={publicCatalogResult.loadFailed}
