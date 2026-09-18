@@ -679,6 +679,108 @@ test.describe('SSR remediation', () => {
 		} finally { unlock(); await transaction; await sql.end(); await session.cleanup() }
 	})
 
+	test('PUBLIC Trends is usable while its private catalog is pending', async ({ page }, testInfo) => {
+		const session = await createSession({ entryId: 15702 })
+		await control([{ operation: 'TrendCohorts', variables: { access: 'MINE' }, delayMs: 4000 }])
+		try {
+			await addSessionCookie(page, session.cookie)
+			await page.goto('/explore/selections?scope=public&cohort=competition:777&gw=33', { waitUntil: 'commit' })
+			const cohort = page.getByRole('combobox', { name: 'Active league', exact: true })
+			await expect(cohort).toHaveValue('competition:777', { timeout: 1500 })
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
+			await expect.poll(async () => (await observations()).some(row => row.operation === 'TrendCohorts' && row.variables.access === 'MINE' && row.finishedAt === null)).toBe(true)
+			await cohort.selectOption('competition:779')
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+			await expect.poll(async () => (await observations()).some(row => row.operation === 'TrendCohorts' && row.variables.access === 'MINE' && row.finishedAt !== null), { timeout: 6000 }).toBe(true)
+			await expect(cohort).toHaveValue('competition:779')
+			await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public' && url.searchParams.get('cohort') === 'competition:779')
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
+		} finally {
+			await testInfo.attach('private-catalog-timeline', { body: JSON.stringify(await observations()), contentType: 'application/json' })
+			await session.cleanup()
+		}
+	})
+
+	test('PUBLIC Trends recovers private catalog failure and preserves scope history', async ({ page }) => {
+		const session = await createSession({ entryId: 15702 })
+		let attempts = 0
+		await page.route('**/api/trends/my-cohorts', async route => {
+			attempts++
+			if (attempts === 1) return route.fulfill({ status: 503, json: { error: 'isolated catalog failure' } })
+			await route.continue()
+		})
+		try {
+			await addSessionCookie(page, session.cookie)
+			await page.goto('/explore/selections?scope=public&cohort=competition:777&gw=33')
+			const cohort = page.getByRole('combobox', { name: 'Active league', exact: true })
+			await expect(cohort).toHaveValue('competition:777')
+			await expect(page.getByText('My Leagues could not be loaded. Public League data is unaffected.', { exact: true })).toBeVisible()
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
+			await page.getByRole('button', { name: 'Retry', exact: true }).click()
+			await expect(page.getByRole('button', { name: /^My Leagues/ })).toBeEnabled()
+			await expect(cohort).toHaveValue('competition:777')
+			await page.getByRole('button', { name: /^My Leagues/ }).click()
+			await expect(cohort).toHaveValue('competition:778')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'mine')
+			await page.getByRole('button', { name: /^Public Leagues/ }).click()
+			await expect(cohort).toHaveValue('competition:777')
+			await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public')
+			await page.goBack()
+			await expect(cohort).toHaveValue('competition:778')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			await page.goForward()
+			await expect(cohort).toHaveValue('competition:777')
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
+			expect(attempts).toBe(2)
+		} finally { await session.cleanup() }
+	})
+
+	for (const locale of ['en', 'zh-CN']) {
+		for (const width of [1440, 390]) {
+			test(`late private catalog preserves overlapping PUBLIC identity ${locale} ${width}`, async ({ page }) => {
+				const zh = locale === 'zh-CN'
+				const session = await createSession({ entryId: 15702 })
+				let release!: () => void
+				const gate = new Promise<void>(resolve => { release = resolve })
+				let catalogStarted = false
+				await page.route('**/api/trends/my-cohorts', async route => {
+					const response = await route.fetch()
+					const catalog = await response.json()
+					catalog.cohorts[0].id = 'competition:777'
+					catalogStarted = true
+					await gate
+					await route.fulfill({ response, json: catalog })
+				})
+				try {
+					await page.setViewportSize({ width, height: 900 })
+					await addSessionCookie(page, session.cookie)
+					await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&cohort=competition:777&gw=33`)
+					const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
+					await expect(cohort).toHaveValue('competition:777')
+					await expect.poll(() => catalogStarted).toBe(true)
+					release()
+					const mine = page.getByRole('button', { name: zh ? /^我的联赛/ : /^My Leagues/ })
+					const publicScope = page.getByRole('button', { name: zh ? /^公共联赛/ : /^Public Leagues/ })
+					await expect(mine).toBeEnabled()
+					await expect(publicScope).toHaveAttribute('aria-pressed', 'true')
+					await expect(cohort).toHaveValue('competition:777')
+					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public')
+					const privateRead = page.waitForResponse(response => response.url().includes('/api/trends/my-desk?') && response.url().includes('eventId=33'))
+					await mine.click()
+					expect((await privateRead).status()).toBe(200)
+					await expect(cohort).toHaveAttribute('aria-busy', 'false')
+					await expect(mine).toHaveAttribute('aria-pressed', 'true')
+					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'mine' && url.searchParams.get('cohort') === 'competition:777')
+					await publicScope.click()
+					await expect(publicScope).toHaveAttribute('aria-pressed', 'true')
+					await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
+					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public')
+				} finally { release(); await session.cleanup() }
+			})
+		}
+	}
+
 	test('MINE Trends never shares cache entries between two verified users', async ({ request }) => {
 		const sessions = await Promise.all([createSession({ entryId: 15702 }), createSession({ entryId: 31056 })])
 		await control()
