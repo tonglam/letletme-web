@@ -827,11 +827,18 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
 	let viewNavigationRequests = 0
+	const comparisonBodies = new Map<number, { errors?: unknown; data: { calcLivePointsByEntry: { entry: number; event: number; availability: string; pickList: unknown[] } } }>()
 	try {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
+			if (recoveryMode === 'live-journey-pinned' && payload.query?.includes('GetLiveCalcPoints')) {
+				const response = await route.fetch()
+				comparisonBodies.set(payload.variables.entryId, await response.json())
+				await route.fulfill({ response })
+				return
+			}
 			if (!payload.query?.includes('GetMyTournamentSeasonReviewSection')) return route.continue()
 			sectionRequests += 1
 			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
@@ -976,7 +983,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await compareOpener.click()
 				for (const [index, response] of Array.from((await Promise.all(detailResponses)).entries())) {
 					expect(response.status()).toBe(200)
-					const body = await response.json()
+					const body = comparisonBodies.get([15702, 123][index])!
+					expect(body).toBeDefined()
 					expect(body.errors).toBeUndefined()
 					expect(body.data.calcLivePointsByEntry).toMatchObject({ entry: [15702, 123][index], event: 4, availability: 'READY' })
 					expect(body.data.calcLivePointsByEntry.pickList).toHaveLength(15)
