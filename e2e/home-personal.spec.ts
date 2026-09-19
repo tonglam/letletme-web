@@ -631,6 +631,42 @@ test.describe('SSR remediation', () => {
 		})
 	}
 
+	for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+	 test(`prediction squad isolates A B A session reads ${locale} ${width}px`, async ({ page }, testInfo) => {
+	  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session switching only')
+	  const a = await createSession({ entryId: 15702 })
+	  const b = await createSession({ entryId: 15702 })
+	  const accounts = [a, b]
+	  const rules = accounts.map((account, index) => ({ operation: 'GetEntryEventResult', variables: { entryId: account.entryId }, data: { entryEventResult: { eventPicks: Array.from({ length: 15 }, (_, player) => ({ element: 1001 + index * 100 + player, webName: `Account${index} Player${player + 1}`, teamShortName: 'ARS', elementTypeName: player < 2 ? 'GOALKEEPER' : player < 7 ? 'DEFENDER' : player < 12 ? 'MIDFIELDER' : 'FORWARD', position: player + 1, multiplier: 1, isCaptain: player === 0, isViceCaptain: player === 1 })) } } }))
+	  try {
+	   await control(rules)
+	   await page.setViewportSize({ width, height: 900 })
+	   const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/explore/price-predictions#my-squad`
+	   let navigationCount = 0
+	   for (const index of [0, 1, 0]) {
+	    await page.context().clearCookies()
+	    await addSessionCookie(page, accounts[index].cookie)
+	    const documentResponse = navigationCount++ === 0 ? await page.goto(path) : await page.reload()
+	    expect(documentResponse?.status()).toBe(200)
+	    const squad = page.locator('#my-squad')
+	    await expect(squad).toHaveAttribute('open', '')
+	    await expect(squad.locator('li:visible')).toHaveCount(15)
+	    for (let player = 1; player <= 15; player++) await expect(squad.getByText(`Account${index} Player${player}`, { exact: true })).toBeVisible()
+	    await expect(squad).not.toContainText(`Account${1 - index} Player`)
+	   }
+	   const reads = (await observations()).filter(row => row.operation === 'GetEntryEventResult').map(row => row.variables.entryId)
+	   expect(reads).toEqual([a.entryId, b.entryId, a.entryId])
+	   await control(rules)
+	   await page.context().clearCookies()
+	   expect((await page.reload())?.status()).toBe(200)
+	   await expect(page.locator('#my-squad')).not.toContainText('Account0 Player')
+	   await expect(page.locator('#my-squad')).not.toContainText('Account1 Player')
+	   expect((await observations()).filter(row => ['GetEntryHistory', 'GetEntryEventResult'].includes(row.operation))).toEqual([])
+	   await testInfo.attach('prediction-account-isolation', { body: JSON.stringify({ locale, width, entrySequence: reads, anonymousPrivateReads: 0, readyMs: null, environment: 'isolated fixture' }), contentType: 'application/json' })
+	  } finally { await a.cleanup(); await b.cleanup() }
+	 })
+	}
+
 	test('anonymous, unbound and invalid sessions do not issue squad history queries', async ({ page }) => {
 		const session = await createSession()
 		try {
