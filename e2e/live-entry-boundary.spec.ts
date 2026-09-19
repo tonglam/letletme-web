@@ -173,3 +173,46 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`S10 entry return and revision replacement ${locale} ${width}px`, async ({ page }, testInfo) => {
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const control = async (rules: unknown[]) => {
+    const response = await fetch(`${fixture}/__performance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rules }) })
+    expect(response.ok).toBe(true)
+   }
+   await control([])
+   const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-LetLetMe-Contract': 'live-points-v2' }, body: JSON.stringify({ query: 'query GetLiveCalcPoints { fixture }', variables: { entryId: 123, eventId: 3 } }) })).json()
+   expect(seed.data.calcLivePointsByEntry.entry).toBe(123)
+   const changed = JSON.parse(JSON.stringify(seed.data).replaceAll('a'.repeat(64), 'b'.repeat(64)))
+   changed.calcLivePointsByEntry.entryName = 'Updated United'
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   const target = (entry: number) => `${prefix}/live/points/${entry}?gw=3&tournamentId=6`
+   const assertEntry = async (entry: number, revision: string, name: string) => {
+    await expect(page).toHaveURL(new URL(target(entry), testInfo.project.use.baseURL).href)
+    const ready = page.locator(`[data-live-points-ready="true"][data-live-entry="${entry}"][data-live-gw="3"][data-selected-gw="3"]`)
+    await expect(ready).toHaveAttribute('data-live-revision', revision)
+    const pitch = page.getByRole('region', { name: `${name} ${locale === 'en' ? 'formation' : '阵型'}`, exact: true })
+    await expect(pitch).toBeVisible()
+    await expect(pitch.getByRole('button')).toHaveCount(15)
+   }
+   try {
+    await page.goto(target(123))
+    await assertEntry(123, 'a'.repeat(64), 'E2E United')
+    await page.goto(target(456))
+    await assertEntry(456, 'a'.repeat(64), 'E2E United')
+    await page.goBack()
+    await assertEntry(123, 'a'.repeat(64), 'E2E United')
+    await control([{ operation: 'GetLiveCalcPoints', variables: { entryId: 123, eventId: 3 }, data: changed }])
+    await page.reload()
+    await assertEntry(123, 'b'.repeat(64), 'Updated United')
+    await expect(page.getByRole('region', { name: `${'E2E United'} ${locale === 'en' ? 'formation' : '阵型'}`, exact: true })).toHaveCount(0)
+    await testInfo.attach('S10-entry-revision', { contentType: 'application/json', body: JSON.stringify({ locale, width, entries: [123, 456, 123], gw: 3, revisions: ['a'.repeat(64), 'b'.repeat(64)], navigation: 'direct A/B, actual browser Back, reload after fixture revision update', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null }) })
+   } finally {
+    await control([])
+   }
+  })
+ }
+}
