@@ -4002,3 +4002,40 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
   })
  }
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation manager chart integer ticks ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager chart fixture')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    for (const counts of [[0, 1, 3], [0, 0, 0], [1]]) {
+     const timeline = managerReview.timeline.slice(0, counts.length).map((row, index) => ({ ...row, eventTransfers: counts[index], eventNetPoints: index === 0 ? -1 : index }))
+     const review = { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, timeline, transfers: timeline.map(row => ({ ...managerReview.transfers[row.eventId - 1], eventTransfers: row.eventTransfers })) }
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+     await page.goto(`${prefix}/my-fpl/team`)
+     await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+     const chart = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: locale === 'zh-CN' ? '赛季走势' : 'Season charts', exact: true }) })
+     await expect(chart).toHaveCount(1)
+     for (const mode of [locale === 'zh-CN' ? '转会' : 'Transfers', locale === 'zh-CN' ? '净积分' : 'Net points']) {
+      await chart.getByRole('button', { name: mode, exact: true }).click()
+      const ticks = chart.locator('.recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value')
+      await expect(ticks.first()).toBeVisible()
+      const labels = await ticks.allTextContents()
+      expect(labels.length).toBeGreaterThan(1)
+      expect(new Set(labels).size, `${mode} labels for ${counts}`).toBe(labels.length)
+      expect(labels.every(label => /^-?\d+$/.test(label))).toBe(true)
+      if (mode === (locale === 'zh-CN' ? '净积分' : 'Net points')) expect(labels.some(label => Number(label) < 0)).toBe(true)
+     }
+    }
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+}

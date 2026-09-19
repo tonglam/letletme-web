@@ -180,6 +180,7 @@ export function BarChart({
 					minTickGap={12}
 				/>
 				<YAxis
+					allowDecimals={false}
 					domain={['auto', 'auto']}
 					stroke="hsl(var(--muted-foreground))"
 					tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
