@@ -18,6 +18,10 @@ case "${1:-}" in
       E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 board states $status " --workers=1 --trace=on --output="test-results/prediction-$status"
     done
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 cached board" --workers=1 --trace=on --output=test-results/prediction-cache
+    PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh governance
+    ;;
+  governance)
+    E2E_GOVERNANCE=1 LETLETME_DATA_URL="http://127.0.0.1:${E2E_GRAPHQL_PORT:-4100}" LETLETME_DATA_API_KEY=isolated-governance-test-key PLATFORM_ADMIN_USER_IDS=e2e-governance-admin PLATFORM_ADMIN_FPL_ENTRY_IDS=909090 npx playwright test e2e/home-personal.spec.ts --grep "GOV REST sections" --workers=1 --trace=on --output=test-results/governance
     ;;
   horizon)
     E2E_NONTERMINAL_HORIZON=1 npx playwright test e2e/nonterminal-horizon.spec.ts --workers=1 --trace=on --output=test-results/horizon
@@ -34,7 +38,7 @@ case "${1:-}" in
     E2E_BRIEFING_ADMIN=1 BRIEFING_ADMIN_ENABLED=true BRIEFING_PUBLISHER_EMAILS=publisher@briefing.e2e.test npx playwright test e2e/briefing-authorization.spec.ts --workers=1 --trace=on --output=test-results/briefing-authorization
     ;;
   *)
-    echo 'Usage: bash e2e/run-fixture-suite.sh {ssr|horizon|trends-unpublished|briefing}' >&2
+    echo 'Usage: bash e2e/run-fixture-suite.sh {ssr|governance|horizon|trends-unpublished|briefing}' >&2
     exit 2
     ;;
 esac

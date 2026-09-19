@@ -4693,3 +4693,65 @@ for (const width of [1440, 390]) {
   }
  }
 })
+
+
+test.describe('GOV isolated admin REST evidence', () => {
+ test.describe.configure({ mode: 'serial' })
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_GOVERNANCE !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-governance-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Dedicated isolated governance runtime only')
+ for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+  for (const failed of ['none', 'overview', 'windows', 'cases']) {
+   test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
+    const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+    const paths = { overview: '/ops/data-governance/overview?window=1h', windows: '/ops/data-governance/windows?limit=100&window=1h', cases: '/ops/data-governance/cases?limit=100' }
+    const seeds = {
+     overview: { success: true, generatedAt: '2026-09-19T00:00:00Z', registry: [{ contractKey: 'fixture-contract', queueName: 'fixture-queue', criticality: 'MET', cadence: 'every minute' }], freshness: { pending: 3, breached: 2, invalid: 1, notApplicable: 4 }, queues: [{ name: 'fixture-queue', counts: { waiting: 7 }, health: { backlogClass: 'HEALTHY', oldestRunnableAgeMs: 3000, drainEtaMs: 4000 } }], queueHealthWindows: [], runtime: { fixtureProducer: { healthy: true, heartbeat: { releaseSha: 'fixture-release-gov' } } }, publicationConsistency: { fixtureRevisionAgreement: true }, errorBudgetBurn: { burnRate: 0.25, breached: 2, eligible: 8 } },
+     windows: { success: true, windows: [{ contractKey: 'fixture-window', scopeKey: 'GW5-fixture', status: 'BREACHED', breachCode: 'FIXTURE_LATE', dueAt: '2026-09-19T00:00:00Z' }] },
+     cases: { success: true, cases: [{ caseId: 'fixture-case-1746', contractKey: 'fixture-contract', lane: 'fixture', status: 'OPEN', errorCode: 'FIXTURE_CASE', updatedAt: '2026-09-19T00:00:00Z' }], openCount: 1, total: 1 }
+    }
+    try {
+     const rules = Object.entries(paths).map(([key, path]) => ({ path, status: key === failed ? 503 : 200, data: key === failed ? { success: false } : seeds[key as keyof typeof seeds] }))
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+     await page.setViewportSize({ width, height: 900 })
+     await addSessionCookie(page, session.cookie)
+     const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/admin/data-governance`
+     const response = await page.goto(path)
+     expect(response?.status()).toBe(200)
+     expect(response?.request().redirectedFrom()).toBeNull()
+     await expect(page).toHaveURL(url => url.pathname === path)
+     await expect(page.getByRole('heading', { name: 'GW governance', exact: true })).toBeVisible()
+     if (failed === 'overview') {
+      await expect(page.getByRole('heading', { name: 'Data governance API did not answer', exact: true })).toBeVisible()
+      await expect(page.getByText('fixture-release-gov', { exact: true })).toHaveCount(0)
+     } else {
+      await expect(page.getByText('fixture-release-gov', { exact: true })).toBeVisible()
+      await expect(page.getByText('fixtureRevisionAgreement', { exact: true })).toBeVisible()
+      await expect(page.getByRole('row').filter({ hasText: 'every minute' })).toContainText('fixture-contract')
+      if (failed === 'windows') await expect(page.getByText('freshness window evidence unavailable', { exact: true })).toBeVisible()
+      else await expect(page.getByRole('row').filter({ hasText: 'GW5-fixture' })).toContainText('FIXTURE_LATE')
+      if (failed === 'cases') await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toBeVisible()
+      else await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
+     }
+     const requests = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'DataGovernance')
+     expect(requests.map((row: { path: string }) => row.path).sort()).toEqual(Object.values(paths).sort())
+     if (failed !== 'none') {
+      const restored = Object.entries(paths).map(([key, path]) => ({ path, status: 200, data: seeds[key as keyof typeof seeds] }))
+      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: restored }) })).ok).toBe(true)
+      await page.reload()
+      await expect(page).toHaveURL(url => url.pathname === path)
+      await expect(page.getByText('fixture-release-gov', { exact: true })).toBeVisible()
+      await expect(page.getByRole('row').filter({ hasText: 'GW5-fixture' })).toContainText('FIXTURE_LATE')
+      await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
+      await expect(page.getByText('evidence unavailable', { exact: true })).toHaveCount(0)
+      await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toHaveCount(0)
+      await expect(page.getByText('freshness window evidence unavailable', { exact: true })).toHaveCount(0)
+     }
+     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ locale, width, failed, reloadRecovery: failed !== 'none', paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
+    } finally {
+     try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
+    }
+   })
+  }
+ }
+})
