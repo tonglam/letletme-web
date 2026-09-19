@@ -17,6 +17,7 @@ case "${1:-}" in
     for status in READY PARTIAL STALE UNAVAILABLE; do
       E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 board states $status " --workers=1 --trace=on --output="test-results/prediction-$status"
     done
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 cached board" --workers=1 --trace=on --output=test-results/prediction-cache
     ;;
   horizon)
     E2E_NONTERMINAL_HORIZON=1 npx playwright test e2e/nonterminal-horizon.spec.ts --workers=1 --trace=on --output=test-results/horizon

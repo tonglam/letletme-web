@@ -365,3 +365,42 @@ test.describe('SSR remediation PRED03 board states', () => {
   }
  }
 })
+
+test.describe('SSR remediation PRED03 cached board', () => {
+ test.describe.configure({ mode: 'serial' })
+ for (const cacheState of ['valid', 'expired', 'malformed'] as const) {
+  for (const locale of ['en', 'zh-CN']) {
+   for (const width of [1440, 390]) {
+    test(`${cacheState} ${locale} ${width}`, async ({ page }, testInfo) => {
+     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated standalone price cache')
+     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+     const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+     const cached = { ...seed.data.priceChangeBoard, revision: 'cached-price-proof', fetchedAt: new Date().toISOString() }
+     const unavailable = { ...seed.data.priceChangeBoard, status: 'UNAVAILABLE', revision: 'offline-price-proof', players: [], observedPlayerCount: 0 }
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(({ cached, cacheState }) => {
+      const savedAt = Date.now() - (cacheState === 'expired' ? 3_601_000 : 30_000)
+      localStorage.setItem('letletme:price-change-board:v2', cacheState === 'malformed' ? '{broken' : JSON.stringify({ savedAt, board: cached }))
+     }, { cached, cacheState })
+     try {
+      expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: { priceChangeBoard: unavailable } }] }) })).ok).toBe(true)
+      await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`)
+      const board = page.locator('[data-price-predictions-board]')
+      const valid = cacheState === 'valid'
+      const t = (locale === 'en' ? enMessages : zhMessages).PriceChanges
+      await expect(board).toHaveAttribute('data-price-change-status', valid ? 'STALE' : 'UNAVAILABLE')
+      await expect(board).toHaveAttribute('data-price-change-revision', valid ? 'cached-price-proof' : 'offline-price-proof')
+      await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+      await expect(board.getByText(valid ? t.statusStale : t.statusUnavailable, { exact: true })).toBeVisible()
+      if (valid) await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+      else await expect(board.getByText('Saka', { exact: true })).toHaveCount(0)
+      if (cacheState === 'expired') expect(await page.evaluate(() => localStorage.getItem('letletme:price-change-board:v2'))).toBeNull()
+      await testInfo.attach('PRED03-cache', { contentType: 'application/json', body: JSON.stringify({ cacheState, locale, width, status: valid ? 'STALE' : 'UNAVAILABLE', readyMs: null, performanceStatus: 'NOT_RUN' }) })
+     } finally {
+      await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+     }
+    })
+   }
+  }
+ }
+})
