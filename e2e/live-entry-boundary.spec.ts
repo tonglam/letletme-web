@@ -42,11 +42,31 @@ for (const id of ['abc', '0', '-1', '2147483648', '1e3', '0x7b', '0123', '+123']
 
  test(`valid live entry preserves GW and return ${locale} ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 })
-  await page.goto(`${prefix}/live/points/123?gw=3&tournamentId=6`)
+  const target = `${prefix}/live/points/123?gw=3&tournamentId=6`
+  const response = await page.goto(target)
+  expect(response?.status()).toBe(200)
+  expect(response?.request().redirectedFrom()).toBeNull()
   const pitch = page.getByRole('region', { name: zh ? 'E2E United 阵型' : 'E2E United formation', exact: true })
   await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
   await expect(pitch.getByRole('button')).toHaveCount(15)
-  await expect(page.getByRole('link', { name: zh ? '返回赛事' : 'Back to competition', exact: true })).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=3`)
+  const assertContext = async () => {
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/123` && url.searchParams.get('gw') === '3' && url.searchParams.get('tournamentId') === '6')
+   await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
+   await expect(pitch.getByRole('button')).toHaveCount(15)
+   await expect(page.getByRole('link', { name: zh ? '返回赛事' : 'Back to competition', exact: true })).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=3`)
+  }
+  await assertContext()
+  expect((await page.reload())?.status()).toBe(200)
+  await assertContext()
+  // A neutral history entry exercises browser restoration without implying a
+  // site-link journey or requiring access to the protected tournament route.
+  await page.goto('about:blank')
+  await page.goBack()
+  await assertContext()
+  await page.goForward()
+  await expect(page).toHaveURL('about:blank')
+  await page.goBack()
+  await assertContext()
  })
  }
 }
