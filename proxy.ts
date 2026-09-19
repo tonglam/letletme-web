@@ -185,6 +185,7 @@ export async function proxy(req: NextRequest) {
 		} finally {
 			if (authTiming) console.info('[proxy-auth]', {
 				scope: 'live-competition-api',
+				region: process.env.VERCEL_REGION ?? null,
 				durationMs: Number(authTiming.elapsedMs().toFixed(2)),
 				stages: authTiming.snapshot()
 			})
@@ -292,6 +293,7 @@ export async function proxy(req: NextRequest) {
 	} finally {
 		if (authTiming) console.info('[proxy-auth]', {
 			scope: 'live-competition-page',
+			region: process.env.VERCEL_REGION ?? null,
 			durationMs: Number(authTiming.elapsedMs().toFixed(2)),
 			stages: authTiming.snapshot()
 		})
