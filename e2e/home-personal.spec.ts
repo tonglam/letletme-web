@@ -3114,7 +3114,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
 test.describe(`J13 prepared matrix ${locale} ${width}`, () => {
  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
- for (const scenario of ['formats', 'gameweeks', 'participants'] as const) {
+ for (const scenario of ['formats', 'gameweeks', 'participants', 'recovery'] as const) {
 test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated preview substitute only')
  const zh = locale === 'zh-CN'
@@ -3123,12 +3123,16 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
  const session = await createSession({ entryId: 15702 })
  const writes: string[] = []
  let previews = 0
+ let releasePreview = () => {}
+ const previewGate = new Promise<void>(resolve => { releasePreview = resolve })
+ const createMessages = (zh ? zhMessages : enMessages).TournamentCreate
  await page.route('**/api/tournaments{,/**}', async route => {
   const path = new URL(route.request().url()).pathname
   if (path === '/api/tournaments/preview') {
    previews += 1
    expect(route.request().method()).toBe('POST')
    expect(route.request().postDataJSON()).toEqual({ leagueUrl: 'https://fantasy.premierleague.com/leagues/123/standings/c' })
+   if (scenario === 'recovery' && previews === 1) { await previewGate; await route.fulfill({ status: 503, json: { error: 'fixture unavailable' } }); return }
    await route.fulfill({ json: { previewToken: 'isolated-j13-preview', expiresAt: new Date(Date.now() + 600000).toISOString(), leagueId: 123, leagueType: 'classic', leagueName: 'J13 fixture league', startEvent: 1, participants: Array.from({ length: 8 }, (_, i) => ({ id: String(i + 1), team: `J13 Team ${i + 1}`, manager: `Fixture ${i + 1}`, overallRank: i + 1, totalPoints: 100 })) } })
   } else if (path === '/api/tournaments/check-name') await route.fulfill({ json: { available: true } })
   else { writes.push(path); await route.abort() }
@@ -3142,8 +3146,23 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
   await page.locator('label[for="creation-mode-custom"]').click()
+  if (scenario === 'recovery') {
+   await page.locator('#league-url').fill('https://example.invalid/leagues/123')
+   await expect(page.getByRole('button', { name: createMessages.fetchLeague, exact: true })).toBeDisabled()
+   expect(previews).toBe(0)
+  }
   await page.locator('#league-url').fill('https://fantasy.premierleague.com/leagues/123/standings/c')
   await page.getByRole('button', { name: zh ? '加载联赛' : 'Fetch league', exact: true }).click()
+  if (scenario === 'recovery') {
+   await expect(page.getByRole('button', { name: createMessages.loading, exact: true })).toBeDisabled()
+   expect(previews).toBe(1)
+   releasePreview()
+   await expect(page.getByText(createMessages.participantsLoadFailed, { exact: true })).toBeVisible()
+   await expect(page.locator('#group-format')).toHaveCount(0)
+   await page.getByRole('button', { name: createMessages.fetchLeague, exact: true }).click()
+   await expect(page.getByText(createMessages.participantsLoadFailed, { exact: true })).toHaveCount(0)
+   await expect(page.getByRole('checkbox', { name: zh ? '包含 J13 Team 1' : 'Include J13 Team 1', exact: true })).toBeVisible()
+  }
   await expect(page.locator('#group-format')).toBeVisible()
   if (scenario === 'formats') for (const group of groupLabels) {
    await page.locator('#group-format').click()
@@ -3177,9 +3196,9 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
     await expect(include).toBeChecked()
    }
   }
-  expect(previews).toBe(1)
+  expect(previews).toBe(scenario === 'recovery' ? 2 : 1)
   expect(writes).toEqual([])
- } finally { await session.cleanup() }
+ } finally { releasePreview(); await session.cleanup() }
 })
  }
 })
