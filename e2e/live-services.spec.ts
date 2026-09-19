@@ -1592,3 +1592,42 @@ test('switching to the current gameweek clears the previous squad before the con
 	expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(2)
 	await testInfo.attach('live-points-ready-samples', { body: JSON.stringify(readySamples), contentType: 'application/json' })
 })
+
+test('abandoned gameweek readiness does not leak into a later visit', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fixture')
+ const samples: { metricName: string; measurementKind: string; result: string }[] = []
+ await page.route('**/api/vitals', async route => {
+  samples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
+ let hold = false
+ let waiting = false
+ let release!: () => void
+ const gate = new Promise<void>(resolve => { release = resolve })
+ await page.route('**/api/graphql', async route => {
+  if (hold && route.request().postDataJSON()?.query?.includes('GetLiveContext')) {
+   waiting = true
+   await gate
+  }
+  await continueToGraphqlFixture(route)
+ })
+ await page.goto('/live/points/123?gw=33&tournamentId=3')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+ await page.getByRole('button', { name: 'Previous gameweek', exact: true }).click()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '32')
+ hold = true
+ try {
+  await page.getByRole('button', { name: 'Next gameweek', exact: true }).click()
+  await expect.poll(() => waiting).toBe(true)
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Live Matches', exact: true }).click()
+  await expect(page).toHaveURL(url => url.pathname === '/live/matches')
+ } finally {
+  hold = false
+  release()
+ }
+ const previousSamples = samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length
+ await page.goBack()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+ await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length).toBe(previousSamples + 1)
+ expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY').at(-1)).toMatchObject({ measurementKind: 'in_page_navigation', result: 'ok' })
+})
