@@ -2,7 +2,7 @@
 
 import { clearRouteReadyStart, markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { usePageActive } from '@/hooks/use-page-active'
-import { executeQuery } from '@/lib/graphql-client'
+import { executeQuery, GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_EVENT_LIVE_EXPLAINS,
 	GET_LIVE_POINTS,
@@ -177,6 +177,8 @@ export function useLivePoints({
 	const fetchLivePointsForGameweekRef = useRef<
 		((eventId: number) => Promise<void>) | null
 	>(null)
+	// This fence belongs only to the live-points operation in this mounted view.
+	const rateLimitUntilRef = useRef(0)
 	const lastExplainAttemptAtRef = useRef(0)
 	const breakdownCacheRef = useRef<CachedBreakdownLookup | null>(null)
 	const currentRequestKeyRef = useRef<string | null>(
@@ -384,6 +386,14 @@ export function useLivePoints({
 				setError(undefined)
 
 				try {
+					const remainingMs = rateLimitUntilRef.current - Date.now()
+					if (remainingMs > 0) {
+						throw new GraphQLRequestError('Rate limit waiting period is active', {
+							status: 429,
+							code: 'CLIENT_RATE_LIMIT_WAIT',
+							retryAfterSeconds: Math.ceil(remainingMs / 1000)
+						})
+					}
 					const liveResponse = await executeQuery<LiveCalcDataResponse>(
 						GET_LIVE_POINTS,
 						{ eventId, entryId: activeEntryId },
@@ -504,6 +514,19 @@ export function useLivePoints({
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
 				} catch (fetchError) {
+					if (
+						fetchError instanceof GraphQLRequestError &&
+						fetchError.status === 429 &&
+						fetchError.code !== 'CLIENT_RATE_LIMIT_WAIT' &&
+						fetchError.retryAfterSeconds !== null &&
+						Number.isFinite(fetchError.retryAfterSeconds) &&
+						fetchError.retryAfterSeconds > 0
+					) {
+						rateLimitUntilRef.current = Math.max(
+							rateLimitUntilRef.current,
+							Date.now() + fetchError.retryAfterSeconds * 1000
+						)
+					}
 					if (requestId !== requestIdRef.current) return
 					clearPendingReadyClock()
 					setReadyMeasurementMode('recovery')
