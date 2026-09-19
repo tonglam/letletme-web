@@ -44,7 +44,7 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.equal(result.calls[3].existingBuild, '1')
 	assert.equal(result.calls[3].fixture, '1')
 	assert.equal(result.calls[3].cwd, root)
-	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', 'e2e/player-stats.spec.ts', 'e2e/match-fallback.spec.ts', '--grep', 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12', '--workers=1', '--trace=on'])
+	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', 'e2e/player-stats.spec.ts', 'e2e/match-fallback.spec.ts', '--grep', 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12|live board layout fixture', '--workers=1', '--trace=on'])
 	assert.equal(result.calls[1].fixture, '1')
 	assert.equal(result.calls[1].cwd, root)
 	assert.deepEqual(result.calls[4].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])

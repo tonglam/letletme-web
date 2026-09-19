@@ -14,6 +14,7 @@ import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { usePageActive } from '@/hooks/use-page-active'
 import { Link, useRouter } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
@@ -1477,19 +1478,18 @@ export default function TournamentClient({
 										: t('refresh')}
 								</Button>
 							</div>
-							<p className="mt-2 text-right text-xs text-muted-foreground">
+							<p className="mt-2 min-h-8 text-right text-xs text-muted-foreground sm:min-h-4">
 								{liveStatus}
 								{updatedAt ? ` · ${t('lastUpdated', { time: updatedAt })}` : ''}
 							</p>
-							{boardCoverageSummary ? (
-								<p className="mt-1 text-right text-xs text-muted-foreground">
-									{boardCoverageSummary}
-								</p>
-							) : null}
+							<p className="mt-1 min-h-4 text-right text-xs text-muted-foreground">
+								{boardCoverageSummary}
+							</p>
 						</>
 					) : null}
 				</Card>
 
+				<div className="min-h-[100svh]">
 				{isLoadingTournaments ? (
 					<Card className="p-6 text-sm text-muted-foreground">
 						{t('loadingCompetitions')}
@@ -1528,7 +1528,7 @@ export default function TournamentClient({
 									size="sm"
 									variant="outline"
 									onClick={() => void refresh()}
-									disabled={rateLimitSeconds > 0}
+									disabled={isLoadingInitial || rateLimitSeconds > 0}
 								>
 									{t('errorCtaRetry')}
 								</Button>
@@ -1567,12 +1567,17 @@ export default function TournamentClient({
 								}
 							/>
 
-							{isLoadingInitial && !hasContent ? (
+							{!hasBoard && (isLoadingInitial || !resultsError) ? (
 								<Card
-									className="p-6 text-sm text-muted-foreground"
+									className="space-y-4 p-6 text-sm text-muted-foreground"
 									aria-busy="true"
 								>
-									{t('loadingStandings')}
+									<p>{t('loadingStandings')}</p>
+									<div aria-hidden="true" className="space-y-4">
+										<Skeleton className="h-10 w-full" />
+										<Skeleton className="hidden h-64 w-full md:block" />
+										{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}
+									</div>
 								</Card>
 							) : hasBoard && boardPage ? (
 								<>
@@ -1633,6 +1638,7 @@ export default function TournamentClient({
 						</div>
 					)
 				) : null}
+				</div>
 			</div>
 		</PageShell>
 	)
