@@ -1489,6 +1489,7 @@ export default function TournamentClient({
 					) : null}
 				</Card>
 
+				<div className="min-h-[100svh]">
 				{isLoadingTournaments ? (
 					<Card className="p-6 text-sm text-muted-foreground">
 						{t('loadingCompetitions')}
@@ -1527,7 +1528,7 @@ export default function TournamentClient({
 									size="sm"
 									variant="outline"
 									onClick={() => void refresh()}
-									disabled={rateLimitSeconds > 0}
+									disabled={isLoadingInitial || rateLimitSeconds > 0}
 								>
 									{t('errorCtaRetry')}
 								</Button>
@@ -1548,7 +1549,6 @@ export default function TournamentClient({
 							onReadyChange={handleOfficialH2HReadyChange}
 						/>
 					) : (
-						<div className="min-h-[100svh]">
 						<div
 							ref={shareRef}
 							data-share-preserve-width="true"
@@ -1567,7 +1567,7 @@ export default function TournamentClient({
 								}
 							/>
 
-							{!hasBoard && !resultsError ? (
+							{!hasBoard && (isLoadingInitial || !resultsError) ? (
 								<Card
 									className="space-y-4 p-6 text-sm text-muted-foreground"
 									aria-busy="true"
@@ -1636,9 +1636,9 @@ export default function TournamentClient({
 								</>
 							) : null}
 						</div>
-						</div>
 					)
 				) : null}
+				</div>
 			</div>
 		</PageShell>
 	)
