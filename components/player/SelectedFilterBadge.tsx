@@ -1,18 +1,21 @@
 import { Badge } from '@/components/ui/badge'
 import { X } from 'lucide-react'
+import type { Ref } from 'react'
 
 interface SelectedFilterBadgeProps {
 	name: string
 	details: string
 	removeLabel: string
 	onRemove: () => void
+	removeButtonRef?: Ref<HTMLButtonElement>
 }
 
 export function SelectedFilterBadge({
 	name,
 	details,
 	removeLabel,
-	onRemove
+	onRemove,
+	removeButtonRef
 }: SelectedFilterBadgeProps) {
 	return (
 		<Badge
@@ -24,6 +27,7 @@ export function SelectedFilterBadge({
 				{details}
 			</span>
 			<button
+				ref={removeButtonRef}
 				type="button"
 				aria-label={removeLabel}
 				className="shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
