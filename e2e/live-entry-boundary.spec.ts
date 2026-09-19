@@ -123,3 +123,53 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`R26 browser cache ready samples ${locale} ${width}px`, async ({ page, context }, testInfo) => {
+   test.setTimeout(90_000)
+   await page.setViewportSize({ width, height: 900 })
+   const cdp = await context.newCDPSession(page)
+   const observations: Array<{ loaderId: string; sample: { metricName: string; measurementKind?: string; result?: string; value?: number } }> = []
+   cdp.on('Network.requestWillBeSent', async event => {
+    if (new URL(event.request.url).pathname !== '/api/vitals') return
+    const postData = event.request.postData ?? (await cdp.send('Network.getRequestPostData', { requestId: event.requestId })).postData
+    const body = JSON.parse(postData)
+    for (const sample of body.samples ?? []) observations.push({ loaderId: event.loaderId, sample })
+   })
+   const rows: Array<Record<string, unknown>> = []
+   await cdp.send('Network.enable')
+   try {
+    for (const cacheMode of ['cold', 'warm']) {
+     await cdp.send('Network.setCacheDisabled', { cacheDisabled: cacheMode === 'cold' })
+     for (let sampleIndex = 1; sampleIndex <= 5; sampleIndex++) {
+      const driverStart = performance.now()
+      const target = `${locale === 'en' ? '' : '/zh-CN'}/live/points/123?gw=3&tournamentId=6`
+      await page.goto(target)
+      await expect(page).toHaveURL(new URL(target, testInfo.project.use.baseURL).href)
+      const { frameTree } = await cdp.send('Page.getFrameTree')
+      const loaderId = frameTree.frame.loaderId
+      const ready = page.locator('[data-live-points-ready="true"][data-live-entry="123"][data-live-gw="3"][data-selected-gw="3"]')
+      await expect(ready).toBeAttached()
+      const pitch = page.getByRole('region', { name: locale === 'en' ? 'E2E United formation' : 'E2E United 阵型', exact: true })
+      await expect(pitch).toBeVisible()
+      await expect(pitch.locator('ol[aria-label]').getByRole('button')).toHaveCount(11)
+      await expect(pitch.locator('ol:not([aria-label])').getByRole('button')).toHaveCount(4)
+      await expect.poll(() => observations.filter(o => o.loaderId === loaderId && o.sample.metricName === 'LIVE_POINTS_READY').length).toBe(1)
+      const metric = observations.find(o => o.loaderId === loaderId && o.sample.metricName === 'LIVE_POINTS_READY')!.sample
+      expect(metric.result).toBe('ok')
+      expect(metric.measurementKind).toBe('initial_navigation')
+      expect(Number.isFinite(metric.value)).toBe(true)
+      expect(metric.value).toBeGreaterThanOrEqual(0)
+      rows.push({ caseId: 'R26', locale, width, cacheMode, sampleIndex, loaderId, url: page.url(), entry: 123, gw: 3, revision: await ready.getAttribute('data-live-revision'), readyMs: metric.value, eventToPaintMs: null, toolElapsedMs: performance.now() - driverStart, budgetMs: 2500, functionalStatus: 'PASS', performanceStatus: metric.value! <= 2500 ? 'PASS' : 'FAIL', scope: 'isolated fixture; existing ready marker observes commit, not paint; browser cache only' })
+     }
+    }
+   } finally {
+    await cdp.send('Network.setCacheDisabled', { cacheDisabled: false })
+    await cdp.detach()
+    await testInfo.attach('R26-cache-samples', { contentType: 'application/json', body: JSON.stringify(rows) })
+    await testInfo.attach('R26-metric-observations', { contentType: 'application/json', body: JSON.stringify(observations) })
+   }
+  })
+ }
+}
