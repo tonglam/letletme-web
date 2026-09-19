@@ -2884,6 +2884,21 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/77/manage`)
   await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
   for (const title of (zh ? ['赛事设置', '赛事信息', '生命周期控制', '危险操作'] : ['Tournament settings', 'Tournament information', 'Lifecycle controls', 'Danger zone'])) await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
+  const manageMessages = (zh ? zhMessages : enMessages).TournamentManage
+  const details = page.locator('dl > div')
+  for (const [label, value] of [[manageMessages.administrator, 'Fixture Owner'], [manageMessages.sourceLeague, 'Fixture League'], [manageMessages.participants, '2'], [manageMessages.status, manageMessages.active], [manageMessages.leagueType, manageMessages.classic]]) {
+   const detail = details.filter({ has: page.getByText(label, { exact: true }) })
+   await expect(detail).toHaveCount(1)
+   await expect(detail.locator('dd')).toHaveText(value)
+  }
+  const nameInput = page.locator('#tournament-name')
+  const saveName = page.getByRole('button', { name: manageMessages.saveName, exact: true })
+  await expect(nameInput).toHaveValue('J12 Owned Cup')
+  await expect(saveName).toBeDisabled()
+  await nameInput.fill('Unsaved fixture draft')
+  await expect(saveName).toBeEnabled()
+  await nameInput.fill('J12 Owned Cup')
+  await expect(saveName).toBeDisabled()
   const opener = page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })
   await opener.click()
   const dialog = page.getByRole('alertdialog')
