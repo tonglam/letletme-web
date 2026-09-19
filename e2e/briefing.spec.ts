@@ -26,6 +26,23 @@ for (const locale of ['en', 'zh-CN'] as const) {
     ])
     const externalRequests: string[] = []
     await page.route('https://example.invalid/**', async route => { externalRequests.push(route.request().url()); await route.abort() })
+    const directResponse = await page.goto(`${prefix}/briefing/story/j17-old-slug`)
+    expect(directResponse).not.toBeNull()
+    const directChain: Array<{ url: string; status: number; location: string | null }> = []
+    for (let request = directResponse!.request(); ; ) {
+     const response = await request.response()
+     expect(response).not.toBeNull()
+     const url = new URL(request.url())
+     directChain.unshift({ url: url.pathname + url.search, status: response!.status(), location: await response!.headerValue('location') })
+     const previous = request.redirectedFrom()
+     if (!previous) break
+     request = previous
+    }
+    await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/story/j17-canonical$`))
+    await expect(page.getByRole('heading', { level: 1, name: story.title, exact: true })).toBeVisible()
+    await expect(page.getByText(story.summary, { exact: true })).toBeVisible()
+    await expect(page.locator(`article a[href="${story.sourceUrl}"]`)).toBeVisible()
+    await testInfo.attach('R10-direct-canonical', { contentType: 'application/json', body: JSON.stringify({ locale, width, directChain, finalUrl: page.url(), canonicalSlug: canonical.slug, storyRevision: canonical.storyRevision, title: story.title, sourceUrl: story.sourceUrl, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null }) })
     await page.goto(`${prefix}/briefing`)
     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/week$`))
     await expect(page.getByText('J17 GW4', { exact: true })).toBeVisible()

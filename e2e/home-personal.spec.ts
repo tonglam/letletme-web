@@ -5,6 +5,8 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
 import { managerReview, managerGameweek, managerSnapshot } from './fixtures/manager-review'
+import enMessages from '../messages/en.json'
+import zhMessages from '../messages/zh-CN.json'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
@@ -629,6 +631,42 @@ test.describe('SSR remediation', () => {
 		})
 	}
 
+	for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+	 test(`prediction squad isolates A B A session reads ${locale} ${width}px`, async ({ page }, testInfo) => {
+	  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session switching only')
+	  const a = await createSession({ entryId: 15702 })
+	  const b = await createSession({ entryId: 15702 })
+	  const accounts = [a, b]
+	  const rules = accounts.map((account, index) => ({ operation: 'GetEntryEventResult', variables: { entryId: account.entryId }, data: { entryEventResult: { eventPicks: Array.from({ length: 15 }, (_, player) => ({ element: 1001 + index * 100 + player, webName: `Account${index} Player${player + 1}`, teamShortName: 'ARS', elementTypeName: player < 2 ? 'GOALKEEPER' : player < 7 ? 'DEFENDER' : player < 12 ? 'MIDFIELDER' : 'FORWARD', position: player + 1, multiplier: 1, isCaptain: player === 0, isViceCaptain: player === 1 })) } } }))
+	  try {
+	   await control(rules)
+	   await page.setViewportSize({ width, height: 900 })
+	   const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/explore/price-predictions#my-squad`
+	   let navigationCount = 0
+	   for (const index of [0, 1, 0]) {
+	    await page.context().clearCookies()
+	    await addSessionCookie(page, accounts[index].cookie)
+	    const documentResponse = navigationCount++ === 0 ? await page.goto(path) : await page.reload()
+	    expect(documentResponse?.status()).toBe(200)
+	    const squad = page.locator('#my-squad')
+	    await expect(squad).toHaveAttribute('open', '')
+	    await expect(squad.locator('li:visible')).toHaveCount(15)
+	    for (let player = 1; player <= 15; player++) await expect(squad.getByText(`Account${index} Player${player}`, { exact: true })).toBeVisible()
+	    await expect(squad).not.toContainText(`Account${1 - index} Player`)
+	   }
+	   const reads = (await observations()).filter(row => row.operation === 'GetEntryEventResult').map(row => row.variables.entryId)
+	   expect(reads).toEqual([a.entryId, b.entryId, a.entryId])
+	   await control(rules)
+	   await page.context().clearCookies()
+	   expect((await page.reload())?.status()).toBe(200)
+	   await expect(page.locator('#my-squad')).not.toContainText('Account0 Player')
+	   await expect(page.locator('#my-squad')).not.toContainText('Account1 Player')
+	   expect((await observations()).filter(row => ['GetEntryHistory', 'GetEntryEventResult'].includes(row.operation))).toEqual([])
+	   await testInfo.attach('prediction-account-isolation', { body: JSON.stringify({ locale, width, entrySequence: reads, anonymousPrivateReads: 0, readyMs: null, environment: 'isolated fixture' }), contentType: 'application/json' })
+	  } finally { await a.cleanup(); await b.cleanup() }
+	 })
+	}
+
 	test('anonymous, unbound and invalid sessions do not issue squad history queries', async ({ page }) => {
 		const session = await createSession()
 		try {
@@ -914,30 +952,51 @@ test.describe('SSR remediation', () => {
 	})
 })
 
-test('canonical competition board and compatibility redirect preserve the committed selection', async ({ page }) => {
-	test.skip(
-		process.env.E2E_LIVE_HYDRATION !== '1',
-		'Uses the deterministic live competition fixture'
-	)
-	const session = await createSession({ entryId: 15702 })
-	try {
-		await addSessionCookie(page, session.cookie)
-		// Next can deliver this redirect in a streamed HTML response (HTTP 200).
-		// Verify the browser destination and committed board, not just the status.
-		await page.goto('/live/competitions/6?gw=1&created=1')
-		await expect(page).toHaveURL(/\/live\/competitions\?/)
-		const target = new URL(page.url())
-		expect(target.pathname).toBe('/live/competitions')
-		expect(target.searchParams.get('tournamentId')).toBe('6')
-		expect(target.searchParams.get('gw')).toBe('1')
-		expect(target.searchParams.get('created')).toBe('1')
-		const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
-		await expect(board).toBeVisible()
-		await expect(board.getByRole('list')).toBeVisible()
-		await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).first()).toBeVisible()
-		await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
-	} finally { await session.cleanup() }
-})
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`canonical competition board and compatibility redirect preserve the committed selection ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(process.env.E2E_LIVE_HYDRATION !== '1', 'Uses the deterministic live competition fixture')
+   const session = await createSession({ entryId: 15702 })
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const chain: Array<{ url: string; status: number; location: string | null }> = []
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    const response = await page.goto(`${prefix}/competitions/6?gw=1&created=1`)
+    expect(response).not.toBeNull()
+    for (let request = response!.request(); ; ) {
+     const hop = await request.response()
+     expect(hop).not.toBeNull()
+     const url = new URL(request.url())
+     chain.unshift({ url: url.pathname + url.search, status: hop!.status(), location: await hop!.headerValue('location') })
+     const previous = request.redirectedFrom()
+     if (!previous) break
+     request = previous
+    }
+    expect(chain[0].status).toBe(308)
+    expect(new URL(chain[0].location!, testInfo.project.use.baseURL).searchParams.get('gw')).toBe('1')
+    const assertBoard = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '1' && url.searchParams.get('created') === '1')
+     const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+     await expect(board).toBeVisible()
+     await expect(board.getByRole('list')).toBeVisible()
+     await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).filter({ visible: true })).toHaveCount(1)
+    }
+    await assertBoard()
+    await page.reload()
+    await assertBoard()
+    await page.goto('about:blank')
+    await page.goBack()
+    await assertBoard()
+    await page.goForward()
+    await expect(page).toHaveURL('about:blank')
+    await page.goBack()
+    await assertBoard()
+    await testInfo.attach('R13-alias-history', { contentType: 'application/json', body: JSON.stringify({ locale, width, chain, url: page.url(), tournament: 6, gw: 1, created: '1', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, note: 'HTTP chain only; streamed redirects verified by final URL and board; blank history entry is not an internal click journey' }) })
+   } finally { await session.cleanup() }
+  })
+ }
+}
 
 test('live points reloads a repeated entry without stranding the loading state', async ({ page }) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the deterministic local GraphQL fixture')
@@ -994,15 +1053,15 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
+for (const recoveryMode of ['none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
 const failFirstSections = (recoveryMode === 'retry-button' || recoveryMode === 'tab-reentry')
 test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }) => {
-	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
+	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
@@ -1024,6 +1083,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	let releaseSections!: () => void
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
+	let secondSectionRequests = 0
 	let viewNavigationRequests = 0
 	let readyReports = 0
 	await page.route('**/api/vitals', async route => {
@@ -1041,6 +1101,11 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
 			if (!payload.query?.includes('GetMyTournamentSeasonReviewSection')) return route.continue()
+			if (recoveryMode === 'tournament-race' && payload.variables.tournamentId === 78) {
+				secondSectionRequests += 1
+				expect(payload.variables).toMatchObject({ tournamentId: 78, throughEventId: 4, phaseId: 'points-2', revision: '2', semanticSha256: 'b'.repeat(64) })
+				return route.continue()
+			}
 			sectionRequests += 1
 			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
 			await gate
@@ -1050,6 +1115,49 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
+		if (recoveryMode === 'tournament-race') {
+			const catalogData = rules[0].data
+			if (!('myTournamentReviewCatalog' in catalogData) || !catalogData.myTournamentReviewCatalog) throw new Error('Missing catalog fixture')
+			const original = catalogData.myTournamentReviewCatalog
+			const second = JSON.parse(JSON.stringify(original.edges[0]).replaceAll('"tournamentId":77', '"tournamentId":78').replaceAll('points-1', 'points-2').replaceAll('"revision":"1"', '"revision":"2"').replaceAll('a'.repeat(64), 'b'.repeat(64)).replaceAll('Fixture Review Cup', 'Second Review Cup'))
+			second.cursor = '78'
+			const scoped = rules.slice(1).flatMap(rule => [77, 78].map(id => ({ ...rule, variables: { ...('variables' in rule ? rule.variables : {}), tournamentId: id }, data: id === 77 ? rule.data : JSON.parse(JSON.stringify(rule.data).replaceAll('"tournamentId":77', '"tournamentId":78').replaceAll('points-1', 'points-2').replaceAll('"revision":"1"', '"revision":"2"').replaceAll('a'.repeat(64), 'b'.repeat(64)).replaceAll('Season Fixture United', 'Second Fixture United')) })))
+			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ ...rules[0], data: { myTournamentReviewCatalog: { ...original, edges: [original.edges[0], second] } } }, ...scoped] }) })).ok).toBe(true)
+			await page.setViewportSize({ width: catalogWidth, height: 900 })
+			await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
+			const ready = page.locator('[data-review-ready]')
+			await expect(ready).toHaveAttribute('data-review-ready', 'true')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? '赛季' : 'Season', exact: true }).click()
+			await expect.poll(() => sectionRequests).toBe(2)
+			await expect(ready).toHaveAttribute('data-review-ready', 'false')
+			const selector = page.getByRole('complementary').getByRole('combobox').filter({ has: page.locator('option[value="78"]') })
+			await expect(selector).toHaveCount(1)
+			await selector.selectOption('78')
+			await expect(ready).toHaveAttribute('data-review-tournament', '78')
+			await expect(ready).toHaveAttribute('data-review-phase', 'points-2')
+			await expect(ready).toHaveAttribute('data-review-revision', '2')
+			await expect(ready).toHaveAttribute('data-review-ready', 'true')
+			await expect(page.getByRole('cell', { name: /Second Fixture United/ })).toBeVisible()
+			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '78' && url.searchParams.get('gw') === '4')
+			expect(secondSectionRequests).toBe(2)
+			const lateResponses = Promise.all([page.waitForResponse(response => response.url().includes('/api/graphql') && response.request().postDataJSON()?.variables?.tournamentId === 77 && response.request().postDataJSON()?.variables?.section === 'POINTS_STANDINGS'), page.waitForResponse(response => response.url().includes('/api/graphql') && response.request().postDataJSON()?.variables?.tournamentId === 77 && response.request().postDataJSON()?.variables?.section === 'POINTS_TRAJECTORIES')])
+			releaseSections()
+			await lateResponses
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			await expect(ready).toHaveAttribute('data-review-tournament', '78')
+			await expect(ready).toHaveAttribute('data-review-phase', 'points-2')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toHaveCount(0)
+			await selector.selectOption('77')
+			await expect(ready).toHaveAttribute('data-review-ready', 'true')
+			await expect(ready).toHaveAttribute('data-review-tournament', '77')
+			await expect(ready).toHaveAttribute('data-review-phase', 'points-1')
+			await expect(ready).toHaveAttribute('data-review-revision', '1')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await expect(page.getByRole('cell', { name: /Second Fixture United/ })).toHaveCount(0)
+			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '77' && url.searchParams.get('gw') === '4')
+			return
+		}
 		if (recoveryMode.startsWith('live-journey')) {
 			let comparisonBoardRevision = 'e2e-competition-score-v1'
 			await page.setViewportSize(catalogWidth ? { width: catalogWidth, height: 900 } : locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
@@ -2861,6 +2969,21 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/77/manage`)
   await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
   for (const title of (zh ? ['赛事设置', '赛事信息', '生命周期控制', '危险操作'] : ['Tournament settings', 'Tournament information', 'Lifecycle controls', 'Danger zone'])) await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
+  const manageMessages = (zh ? zhMessages : enMessages).TournamentManage
+  const details = page.locator('dl > div')
+  for (const [label, value] of [[manageMessages.administrator, 'Fixture Owner'], [manageMessages.sourceLeague, 'Fixture League'], [manageMessages.participants, '2'], [manageMessages.status, manageMessages.active], [manageMessages.leagueType, manageMessages.classic]]) {
+   const detail = details.filter({ has: page.getByText(label, { exact: true }) })
+   await expect(detail).toHaveCount(1)
+   await expect(detail.locator('dd')).toHaveText(value)
+  }
+  const nameInput = page.locator('#tournament-name')
+  const saveName = page.getByRole('button', { name: manageMessages.saveName, exact: true })
+  await expect(nameInput).toHaveValue('J12 Owned Cup')
+  await expect(saveName).toBeDisabled()
+  await nameInput.fill('Unsaved fixture draft')
+  await expect(saveName).toBeEnabled()
+  await nameInput.fill('J12 Owned Cup')
+  await expect(saveName).toBeDisabled()
   const opener = page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })
   await opener.click()
   const dialog = page.getByRole('alertdialog')
@@ -3076,7 +3199,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
 test.describe(`J13 prepared matrix ${locale} ${width}`, () => {
  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
- for (const scenario of ['formats', 'gameweeks', 'participants'] as const) {
+ for (const scenario of ['formats', 'gameweeks', 'participants', 'recovery'] as const) {
 test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated preview substitute only')
  const zh = locale === 'zh-CN'
@@ -3085,12 +3208,16 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
  const session = await createSession({ entryId: 15702 })
  const writes: string[] = []
  let previews = 0
+ let releasePreview = () => {}
+ const previewGate = new Promise<void>(resolve => { releasePreview = resolve })
+ const createMessages = (zh ? zhMessages : enMessages).TournamentCreate
  await page.route('**/api/tournaments{,/**}', async route => {
   const path = new URL(route.request().url()).pathname
   if (path === '/api/tournaments/preview') {
    previews += 1
    expect(route.request().method()).toBe('POST')
    expect(route.request().postDataJSON()).toEqual({ leagueUrl: 'https://fantasy.premierleague.com/leagues/123/standings/c' })
+   if (scenario === 'recovery' && previews === 1) { await previewGate; await route.fulfill({ status: 503, json: { error: 'fixture unavailable' } }); return }
    await route.fulfill({ json: { previewToken: 'isolated-j13-preview', expiresAt: new Date(Date.now() + 600000).toISOString(), leagueId: 123, leagueType: 'classic', leagueName: 'J13 fixture league', startEvent: 1, participants: Array.from({ length: 8 }, (_, i) => ({ id: String(i + 1), team: `J13 Team ${i + 1}`, manager: `Fixture ${i + 1}`, overallRank: i + 1, totalPoints: 100 })) } })
   } else if (path === '/api/tournaments/check-name') await route.fulfill({ json: { available: true } })
   else { writes.push(path); await route.abort() }
@@ -3104,8 +3231,23 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
   await page.locator('label[for="creation-mode-custom"]').click()
+  if (scenario === 'recovery') {
+   await page.locator('#league-url').fill('https://example.invalid/leagues/123')
+   await expect(page.getByRole('button', { name: createMessages.fetchLeague, exact: true })).toBeDisabled()
+   expect(previews).toBe(0)
+  }
   await page.locator('#league-url').fill('https://fantasy.premierleague.com/leagues/123/standings/c')
   await page.getByRole('button', { name: zh ? '加载联赛' : 'Fetch league', exact: true }).click()
+  if (scenario === 'recovery') {
+   await expect(page.getByRole('button', { name: createMessages.loading, exact: true })).toBeDisabled()
+   expect(previews).toBe(1)
+   releasePreview()
+   await expect(page.getByText(createMessages.participantsLoadFailed, { exact: true })).toBeVisible()
+   await expect(page.locator('#group-format')).toHaveCount(0)
+   await page.getByRole('button', { name: createMessages.fetchLeague, exact: true }).click()
+   await expect(page.getByText(createMessages.participantsLoadFailed, { exact: true })).toHaveCount(0)
+   await expect(page.getByRole('checkbox', { name: zh ? '包含 J13 Team 1' : 'Include J13 Team 1', exact: true })).toBeVisible()
+  }
   await expect(page.locator('#group-format')).toBeVisible()
   if (scenario === 'formats') for (const group of groupLabels) {
    await page.locator('#group-format').click()
@@ -3139,9 +3281,9 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
     await expect(include).toBeChecked()
    }
   }
-  expect(previews).toBe(1)
+  expect(previews).toBe(scenario === 'recovery' ? 2 : 1)
   expect(writes).toEqual([])
- } finally { await session.cleanup() }
+ } finally { releasePreview(); await session.cleanup() }
 })
  }
 })
@@ -4258,6 +4400,247 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
+// PROFILE01.03 and PROFILE03.01: isolated accounts and intercepted uploads only.
+test.describe('profile history and avatar fixture coverage', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`PROFILE01 long name history and PROFILE03 avatar recovery ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated database and FPL fixture')
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).Profile
+    const session = await createSession({ entryId: 15702 })
+    const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+    const names = Array.from({ length: 40 }, (_, i) => `History ${String(i).padStart(2, '0')} 中文 United`)
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6R1sAAAAASUVORK5CYII=', 'base64')
+    const avatarSrc = `data:image/png;base64,${png.toString('base64')}`
+    try {
+     for (const [i, name] of Array.from(names.entries())) {
+      await sql`INSERT INTO bauth.fpl_entry_name_history (id,user_id,entry_id,team_name,last_seen_at)
+       VALUES (${randomUUID()},${session.userId},${session.entryId},${name},${new Date(Date.UTC(2025,0,1,0,i))})`
+     }
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+     await page.goto(`${prefix}/profile`)
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+     await expect(page.locator('html')).toHaveClass(/light/)
+     const main = page.locator('#main-content')
+     await expect(main).toContainText('E2E Synced United')
+     const history = main.locator('li').filter({ hasText: /^· History / })
+     await expect(history).toHaveCount(40)
+     expect(await history.allTextContents()).toEqual([...names].reverse().map(name => `· ${name}`))
+     const upload = main.getByTitle(t.changeAvatar, { exact: true })
+     await expect(upload).toBeEnabled()
+     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+     const statuses = [
+      { code: 'fileTooLarge', status: 413, file: { name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024 + 1) } },
+      { code: 'invalidFile', status: 400, file: { name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') } },
+      { code: 'uploadFailed', status: 502, file: { name: 'valid.png', mimeType: 'image/png', buffer: png } },
+      { code: 'network', status: 0, file: { name: 'valid.png', mimeType: 'image/png', buffer: png } },
+      { code: 'success', status: 200, file: { name: 'valid.png', mimeType: 'image/png', buffer: png } }
+     ] as const
+     const observations: Array<{ scenario: string; requestCount: number; requestBytes: number }> = []
+     for (const scenario of statuses) {
+      let release!: () => void
+      const held = new Promise<void>(resolve => { release = resolve })
+      let requests = 0
+      let bytes = 0
+      await page.route('**/api/profile/avatar', async route => {
+       requests++
+       expect(route.request().method()).toBe('POST')
+       bytes = route.request().postDataBuffer()?.length ?? 0
+       expect(bytes).toBeGreaterThan(scenario.file.buffer.length)
+       await held
+       if (scenario.code === 'network') await route.abort('failed')
+       else await route.fulfill({ status: scenario.status, json: scenario.code === 'success'
+        ? { success: true, imageUrl: avatarSrc } : { success: false, errorCode: scenario.code } })
+      })
+      const chooser = page.waitForEvent('filechooser')
+      await upload.click()
+      await (await chooser).setFiles(scenario.file)
+      await expect.poll(() => requests).toBe(1)
+      await expect(upload).toBeDisabled()
+      release()
+      await expect(upload).toBeEnabled()
+      const message = scenario.code === 'success' ? t.avatarUpdated : scenario.code === 'network' ? t.avatarFailed : t.errors[scenario.code]
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: message }).last()).toBeVisible()
+      if (scenario.code === 'success') {
+       await expect(upload.locator('img')).toHaveAttribute('src', avatarSrc)
+       await expect.poll(() => upload.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+      } else await expect(upload.locator('img')).toHaveCount(0)
+      expect(requests).toBe(1)
+      observations.push({ scenario: scenario.code, requestCount: requests, requestBytes: bytes })
+      await page.unroute('**/api/profile/avatar')
+     }
+     const [user] = await sql`SELECT image FROM bauth."user" WHERE id=${session.userId}`
+     expect(user.image).toBeNull()
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
+     await expect(history).toHaveCount(40)
+     await testInfo.attach('profile-state-evidence', { contentType: 'application/json', body: JSON.stringify({
+      stepIds: ['PROFILE01.03', 'PROFILE03.01'], locale, width, identity: 'B isolated bound account',
+      history: { count: 40, order: 'last_seen_at descending', preservedAfterUpload: true }, uploads: observations,
+      validationScope: 'UI upload response handling; server file validation and storage not exercised',
+      readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_OBSERVED', databaseImageUnchanged: true
+     }) })
+    } finally {
+     await sql.end()
+     await session.cleanup()
+    }
+   })
+  }
+ }
+})
+
+for (const mode of ['delayed', 'failed'] as const) {
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`PROFILE01 identity refresh ${mode} ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated database and server FPL fixture required')
+    const session = await createSession({ entryId: 15702 })
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).Profile
+    let release!: () => void
+    const held = new Promise<void>(resolve => { release = resolve })
+    let requests = 0
+    let completed = 0
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    try {
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     await page.route('**/api/auth/get-session?*', async route => {
+      if (!new URL(route.request().url()).searchParams.has('disableCookieCache')) return route.continue()
+      requests++
+      await held
+      if (mode === 'failed') await route.fulfill({ status: 503, json: { code: 'INTERNAL_SERVER_ERROR', message: 'Isolated session dependency unavailable' } })
+      else await route.continue()
+      completed++
+     })
+     await page.goto(`${prefix}/profile`)
+     await expect.poll(() => requests).toBeGreaterThan(0)
+     const main = page.locator('#main-content')
+     await expect(main.getByRole('heading', { name: t.title, exact: true })).toBeVisible()
+     await expect(main).toContainText('E2E Synced United')
+     await expect(main.getByTitle(t.changeAvatar, { exact: true })).toBeEnabled()
+     expect(completed).toBe(0)
+     const before = requests
+     release()
+     await expect.poll(() => completed).toBeGreaterThanOrEqual(before)
+     await expect(main).toContainText('E2E Synced United')
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
+     // Bounded observation for an accidental refresh/re-fetch loop after settlement.
+     await page.waitForTimeout(1200)
+     expect(requests).toBe(before)
+     expect(errors).toEqual([])
+     await testInfo.attach('profile-refresh-evidence', { contentType: 'application/json', body: JSON.stringify({
+      stepId: 'PROFILE01.02', locale, width, mode, requests, completed,
+      asserted: ['authorized SSR content visible while client fresh-session request held', 'avatar control enabled', 'same profile after settlement', 'no additional fresh-session requests in 1200ms observation', 'no pageerror'],
+      scope: 'Client identity-session refresh only; server FPL identity sync timeout is not injected',
+      readyMs: null, performanceStatus: 'NOT_OBSERVED'
+     }) })
+    } finally {
+     release()
+     await session.cleanup()
+    }
+   })
+  }
+ }
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`PROFILE04 session list retry recovery ${locale} ${width}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
+   const session = await createSession({ entryId: 15702 })
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const t = (locale === 'en' ? enMessages : zhMessages).Sessions
+   let reads = 0
+   let writes = 0
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    page.on('request', request => {
+     if (new URL(request.url()).pathname.startsWith('/api/auth/') && !['GET', 'HEAD'].includes(request.method())) writes++
+    })
+    await page.route('**/api/auth/list-sessions', async route => {
+     reads++
+     if (reads === 1) await route.fulfill({ status: 500, json: { code: 'INTERNAL_SERVER_ERROR', message: 'Isolated session read failure' } })
+     else await route.continue()
+    })
+    await page.goto(`${prefix}/profile/sessions`)
+    const main = page.locator('#main-content')
+    await expect(main.getByText(t.loadFailed, { exact: true })).toBeVisible()
+    await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(0)
+    expect(reads).toBe(1)
+    await main.getByRole('button', { name: t.retry, exact: true }).click()
+    await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(1)
+    await expect(main.getByText(t.loadFailed, { exact: true })).toHaveCount(0)
+    await expect(main.getByRole('button', { name: t.retry, exact: true })).toHaveCount(0)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile/sessions`)
+    expect(reads).toBe(2)
+    expect(writes).toBe(0)
+    await testInfo.attach('session-retry-evidence', { contentType: 'application/json', body: JSON.stringify({
+     stepIds: ['PROFILE04.02', 'PROFILE04.03'], locale, width, reads, writes,
+     identity: 'isolated bound current session', environment: 'isolated-fixture',
+     assertions: ['failed read shown without a false current-session row', 'actual retry click issues one further read', 'real current session restored exactly once', 'error and retry removed', 'no auth writes'],
+     readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_RUN', wholeCaseComplete: false
+    }) })
+   } finally {
+    await session.cleanup()
+   }
+  })
+ }
+}
+
+for (const mode of ['empty', 'unauthorized', 'stale'] as const) {
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`PROFILE04 session list terminal ${mode} ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
+    const session = await createSession({ entryId: 15702 })
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).Sessions
+    let reads = 0
+    let writes = 0
+    try {
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     page.on('request', request => {
+      if (new URL(request.url()).pathname.startsWith('/api/auth/') && !['GET', 'HEAD'].includes(request.method())) writes++
+     })
+     await page.route('**/api/auth/list-sessions', async route => {
+      reads++
+      await route.fulfill(mode === 'empty'
+       ? { status: 200, json: [] }
+       : { status: mode === 'unauthorized' ? 401 : 403, json: { code: mode === 'unauthorized' ? 'UNAUTHORIZED' : 'SESSION_NOT_FRESH', message: 'Isolated session state' } })
+     })
+     await page.goto(`${prefix}/profile/sessions`)
+     const main = page.locator('#main-content')
+     const expected = mode === 'empty' ? t.empty : mode === 'unauthorized' ? t.loadFailed : t.reauthTitle
+     await expect(main.getByText(expected, { exact: true })).toBeVisible()
+     for (const other of [t.empty, t.loadFailed, t.reauthTitle].filter(text => text !== expected)) {
+      await expect(main.getByText(other, { exact: true })).toHaveCount(0)
+     }
+     await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(0)
+     if (mode === 'unauthorized') await expect(main.getByRole('button', { name: t.retry, exact: true })).toBeEnabled()
+     if (mode === 'stale') await expect(main.getByRole('link', { name: t.reauthAction, exact: true })).toHaveAttribute('href', `${prefix}/auth/login?next=/profile/sessions&reason=reauth`)
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile/sessions`)
+     expect(reads).toBe(1)
+     expect(writes).toBe(0)
+     await testInfo.attach('session-terminal-evidence', { contentType: 'application/json', body: JSON.stringify({
+      stepId: 'PROFILE04.03', locale, width, mode, reads, writes, expected,
+      scope: 'Authenticated route with isolated list response; expired route authorization remains separate',
+      readyMs: null, performanceStatus: 'NOT_RUN', wholeCaseComplete: false
+     }) })
+    } finally {
+     await session.cleanup()
+    }
+   })
+  }
+ }
+}
+
 test.describe('live board layout fixture', () => {
  test.describe.configure({ mode: 'serial' })
 for (const width of [1440, 390]) {
@@ -4424,6 +4807,112 @@ for (const width of [1440, 390]) {
      release()
      await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
      await session.cleanup()
+    }
+   })
+  }
+ }
+})
+
+
+test.describe('GOV isolated admin REST evidence', () => {
+ test.describe.configure({ mode: 'serial' })
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_GOVERNANCE !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-governance-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Dedicated isolated governance runtime only')
+ for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+  for (const identity of ['ordinary', 'entry-only', 'user-only']) {
+   test(`GOV REST sections denied ${identity} ${locale} ${width}px`, async ({ page }, testInfo) => {
+    const session = await createSession({ entryId: identity === 'entry-only' ? 909090 : undefined, userId: identity === 'user-only' ? 'e2e-governance-admin' : undefined })
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+    try {
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+     await page.setViewportSize({ width, height: 900 })
+     await addSessionCookie(page, session.cookie)
+     const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/admin/data-governance`
+     for (const navigate of [() => page.goto(path), () => page.reload()]) {
+      const response = await navigate()
+      expect(response?.status()).toBe(404)
+      await expect(page).toHaveURL(url => url.pathname === path)
+      await expect(page.getByRole('heading', { name: locale === 'zh-CN' ? '找不到页面' : 'Page not found', exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'GW governance', exact: true })).toHaveCount(0)
+     }
+     const requests = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'DataGovernance')
+     expect(requests).toEqual([])
+     await testInfo.attach('GOV-denied-identity', { body: JSON.stringify({ identity, locale, width, status: 404, dataRequests: 0, reload: true, readyMs: null }), contentType: 'application/json' })
+    } finally { await session.cleanup() }
+   })
+  }
+  for (const failed of ['none', 'overview', 'windows', 'cases', 'large']) {
+   test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
+    const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+    const paths = { overview: '/ops/data-governance/overview?window=1h', windows: '/ops/data-governance/windows?limit=100&window=1h', cases: '/ops/data-governance/cases?limit=100' }
+    const seeds = {
+     overview: { success: true, generatedAt: '2026-09-19T00:00:00Z', registry: [{ contractKey: 'fixture-contract', queueName: 'fixture-queue', criticality: 'MET', cadence: 'every minute' }], freshness: { pending: 3, breached: 2, invalid: 1, notApplicable: 4 }, queues: [{ name: 'fixture-queue', counts: { waiting: 7 }, health: { backlogClass: 'HEALTHY', oldestRunnableAgeMs: 3000, drainEtaMs: 4000 } }], queueHealthWindows: [], runtime: { fixtureProducer: { healthy: true, heartbeat: { releaseSha: 'fixture-release-gov' } } }, publicationConsistency: { fixtureRevisionAgreement: true }, errorBudgetBurn: { burnRate: 0.25, breached: 2, eligible: 8 } },
+     windows: { success: true, windows: [{ contractKey: 'fixture-window', scopeKey: 'GW5-fixture', status: 'BREACHED', breachCode: 'FIXTURE_LATE', dueAt: '2026-09-19T00:00:00Z' }] },
+     cases: { success: true, cases: [{ caseId: 'fixture-case-1746', contractKey: 'fixture-contract', lane: 'fixture', status: 'OPEN', errorCode: 'FIXTURE_CASE', updatedAt: '2026-09-19T00:00:00Z' }], openCount: 1, total: 1 }
+    }
+    const largeQueues = Array.from({ length: 40 }, (_, index) => ({ name: `fixture-long-queue-${String(index).padStart(2, '0')}-${'segment-'.repeat(12)}`, counts: { waiting: index }, health: { backlogClass: 'HEALTHY', oldestRunnableAgeMs: 3000, drainEtaMs: 4000 } }))
+    const queueHistory = largeQueues.flatMap(queue => Array.from({ length: 30 }, (_, index) => ({ queueName: queue.name, windowStart: new Date(Date.UTC(2026, 8, 19, 0, index)).toISOString(), backlogClass: index % 2 ? 'HEALTHY' : 'BURST' }))).reverse()
+    if (failed === 'large') {
+     seeds.overview.queues = largeQueues
+     Object.assign(seeds.overview, { queueHealthWindows: queueHistory })
+    }
+    try {
+     const rules = Object.entries(paths).map(([key, path]) => ({ path, status: key === failed ? 503 : 200, data: key === failed ? { success: false } : seeds[key as keyof typeof seeds] }))
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+     await page.setViewportSize({ width, height: 900 })
+     await addSessionCookie(page, session.cookie)
+     const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/admin/data-governance`
+     const response = await page.goto(path)
+     expect(response?.status()).toBe(200)
+     expect(response?.request().redirectedFrom()).toBeNull()
+     await expect(page).toHaveURL(url => url.pathname === path)
+     await expect(page.getByRole('heading', { name: 'GW governance', exact: true })).toBeVisible()
+     if (failed === 'overview') {
+      await expect(page.getByRole('heading', { name: 'Data governance API did not answer', exact: true })).toBeVisible()
+      await expect(page.getByText('fixture-release-gov', { exact: true })).toHaveCount(0)
+     } else {
+      await expect(page.getByText('fixture-release-gov', { exact: true })).toBeVisible()
+      await expect(page.getByText('fixtureRevisionAgreement', { exact: true })).toBeVisible()
+      await expect(page.getByRole('row').filter({ hasText: 'every minute' })).toContainText('fixture-contract')
+      if (failed === 'windows') await expect(page.getByText('freshness window evidence unavailable', { exact: true })).toBeVisible()
+      else await expect(page.getByRole('row').filter({ hasText: 'GW5-fixture' })).toContainText('FIXTURE_LATE')
+      if (failed === 'cases') await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toBeVisible()
+      else await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
+     }
+     if (failed === 'large') {
+      const rows = page.getByRole('row').filter({ hasText: 'fixture-long-queue-' })
+      await expect(rows).toHaveCount(40)
+      for (const queue of largeQueues) {
+       const history = page.locator(`[aria-label="${queue.name} queue health history"]`)
+       await expect(history.locator('span')).toHaveCount(24)
+       const titles = await history.locator('span').evaluateAll(nodes => nodes.map(node => node.getAttribute('title')))
+       expect(titles[0]).toContain('BURST')
+       expect(titles[0]).toContain('08:06:00')
+       expect(titles[23]).toContain('HEALTHY')
+       expect(titles[23]).toContain('08:29:00')
+      }
+      const layout = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth }))
+      await testInfo.attach('GOV-large-layout', { body: JSON.stringify(layout), contentType: 'application/json' })
+      expect(layout.documentWidth, 'Long queue names must not overflow the entire page').toBeLessThanOrEqual(layout.viewport + 1)
+     }
+     const requests = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'DataGovernance')
+     expect(requests.map((row: { path: string }) => row.path).sort()).toEqual(Object.values(paths).sort())
+     if (['overview', 'windows', 'cases'].includes(failed)) {
+      const restored = Object.entries(paths).map(([key, path]) => ({ path, status: 200, data: seeds[key as keyof typeof seeds] }))
+      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: restored }) })).ok).toBe(true)
+      await page.reload()
+      await expect(page).toHaveURL(url => url.pathname === path)
+      await expect(page.getByText('fixture-release-gov', { exact: true })).toBeVisible()
+      await expect(page.getByRole('row').filter({ hasText: 'GW5-fixture' })).toContainText('FIXTURE_LATE')
+      await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
+      await expect(page.getByText('evidence unavailable', { exact: true })).toHaveCount(0)
+      await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toHaveCount(0)
+      await expect(page.getByText('freshness window evidence unavailable', { exact: true })).toHaveCount(0)
+     }
+     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ locale, width, failed, reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
+    } finally {
+     try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
     }
    })
   }

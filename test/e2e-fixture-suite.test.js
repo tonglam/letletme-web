@@ -12,7 +12,7 @@ function invoke(suite, fail = false) {
 	const log = path.join(temporary, 'calls.jsonl')
 	const stub = path.join(temporary, 'npx')
 	writeFileSync(stub, `#!${process.execPath}
-require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, adminFixture:process.env.E2E_BRIEFING_ADMIN, admin:process.env.BRIEFING_ADMIN_ENABLED, editors:process.env.BRIEFING_EDITOR_EMAILS, publishers:process.env.BRIEFING_PUBLISHER_EMAILS, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
+require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), governance:process.env.E2E_GOVERNANCE, dataUrl:process.env.LETLETME_DATA_URL, adminUsers:process.env.PLATFORM_ADMIN_USER_IDS, adminEntries:process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS, briefing:process.env.BRIEFING_PUBLIC_ENABLED, adminFixture:process.env.E2E_BRIEFING_ADMIN, admin:process.env.BRIEFING_ADMIN_ENABLED, editors:process.env.BRIEFING_EDITOR_EMAILS, publishers:process.env.BRIEFING_PUBLISHER_EMAILS, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
 process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 `)
 	chmodSync(stub, 0o755)
@@ -32,8 +32,18 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 8)
+	assert.equal(result.calls.length, 14)
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
+	for (const [index, status] of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'].entries()) {
+		const call = result.calls[8 + index]
+		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', `PRED03 board states ${status} `, '--workers=1', '--trace=on', `--output=test-results/prediction-${status}`])
+		assert.equal(call.market, '1')
+		assert.equal(call.existingBuild, '1')
+		assert.equal(call.fixture, '1')
+	}
+	assert.deepEqual(result.calls[12].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'PRED03 cached board', '--workers=1', '--trace=on', '--output=test-results/prediction-cache'])
+	assert.equal(result.calls[12].market, '1')
+	assert.equal(result.calls[12].existingBuild, '1')
 	assert.equal(result.calls[0].fixture, '1')
 	assert.equal(result.calls[0].cwd, root)
 	assert.deepEqual(result.calls[2].args, ['playwright', 'test', 'e2e/market-readiness.spec.ts', '--workers=1', '--trace=on', '--output=test-results/market-readiness'])
@@ -98,7 +108,7 @@ test('Briefing admin uses explicit isolated allowlists in both feature states', 
 })
 
 test('failed suites keep their exit code and do not continue after a failure', () => {
-	for (const suite of ['ssr', 'briefing', 'horizon', 'trends-unpublished']) {
+	for (const suite of ['ssr', 'briefing', 'horizon', 'trends-unpublished', 'governance']) {
 		const result = invoke(suite, true)
 		assert.equal(result.status, 17)
 		assert.equal(result.calls.length, 1)
@@ -116,4 +126,20 @@ test('CI calls the isolated suites and suite edits use the verification-only rel
 	const env = { VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main', VERCEL_GIT_PREVIOUS_SHA: '1'.repeat(40), VERCEL_GIT_COMMIT_SHA: '2'.repeat(40) }
 	assert.equal(decideVercelBuild(env, () => ['e2e/run-fixture-suite.sh', 'e2e/briefing.spec.ts']).skip, true)
 	assert.equal(decideVercelBuild(env, () => ['e2e/run-fixture-suite.sh', '.github/workflows/ci.yml']).skip, false)
+})
+
+
+test('governance uses the isolated REST fixture and serial admin session', () => {
+ const result = invoke('governance')
+ assert.equal(result.status, 0, result.stderr)
+ assert.equal(result.calls.length, 1)
+ const call = result.calls[0]
+ assert.equal(call.governance, '1')
+ assert.equal(call.dataUrl, `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`)
+ assert.equal(call.adminUsers, 'e2e-governance-admin')
+ assert.equal(call.adminEntries, '909090')
+ assert.deepEqual(call.args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'GOV REST sections', '--workers=1', '--trace=on', '--output=test-results/governance'])
+ const nested = invoke('ssr').calls[13]
+ assert.equal(nested.governance, '1')
+ assert.equal(nested.existingBuild, '1')
 })

@@ -582,6 +582,15 @@ const server = createServer((request, response) => {
 		})
 		return
 	}
+	if (process.env.E2E_GOVERNANCE === '1' && request.method === 'GET' && request.url?.startsWith('/ops/data-governance/')) {
+		if (request.headers['x-api-key'] !== 'isolated-governance-test-key') {
+			json(response, 401, { success: false }); return
+		}
+		const rule = performanceRules.find(rule => rule.path === request.url)
+		performanceRequests.push({ operation: 'DataGovernance', path: request.url, startedAt: Date.now(), finishedAt: Date.now() })
+		json(response, rule?.status ?? 503, rule?.data ?? { success: false })
+		return
+	}
 	if (request.method === 'GET' && request.url === '/health') {
 		json(response, 200, { ok: true })
 		return

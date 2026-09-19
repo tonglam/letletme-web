@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import enMessages from '../messages/en.json'
+import zhMessages from '../messages/zh-CN.json'
 import type { PriceChangeObservedEvent } from '../lib/graphql/operations/price-changes'
 
 for (const locale of ['en', 'zh-CN']) {
@@ -144,6 +146,15 @@ for (const locale of ['en', 'zh-CN']) {
    try {
    await page.goto(`${zh ? '/zh-CN' : ''}/explore/market`)
    const region = page.locator('#market-prices-share')
+   await expect(region.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+   await expect(region).toContainText('£9.9m → £10.0m')
+   await expect(region).toContainText('+£0.1m')
+   const assertObservedPriceText = (text: string | undefined) => {
+    expect(text).toContain('Saka')
+    expect(text).toContain('£9.9m')
+    expect(text).toContain('£10.0m')
+    expect(text).toContain('03/08/2026')
+   }
    const share = region.getByRole('button', { name: zh ? '文字' : 'Text', exact: true })
    await expect(share).toHaveCount(1)
    await expect(share).toBeVisible()
@@ -170,6 +181,7 @@ for (const locale of ['en', 'zh-CN']) {
      await expect(share).toContainText(zh ? '已分享' : 'Done')
      await expect(fallback).toHaveCount(0)
      await expect.poll(() => page.evaluate(kind => kind === 'copied' ? document.documentElement.dataset.fixtureCopiedText : document.documentElement.dataset.fixtureSharedText, outcome)).toContain('/explore/market')
+     assertObservedPriceText(await page.evaluate(kind => kind === 'copied' ? document.documentElement.dataset.fixtureCopiedText : document.documentElement.dataset.fixtureSharedText, outcome))
      if (outcome === 'shared') expect(await page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toBeUndefined()
     } else {
      await expect(fallback).toBeVisible()
@@ -179,6 +191,7 @@ for (const locale of ['en', 'zh-CN']) {
      }
      await expect(fallback).toHaveValue(/\/explore\/market/)
      await expect(fallback).toHaveAttribute('readonly', '')
+     assertObservedPriceText(await fallback.inputValue())
      await region.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
      await expect(fallback).toHaveCount(0)
     }
@@ -309,3 +322,116 @@ for (const locale of ['en', 'zh-CN']) {
   await expect(board).toHaveAttribute('data-price-change-status', 'READY')
  })
 }
+
+test.describe('SSR remediation PRED03 board states', () => {
+ test.describe.configure({ mode: 'serial' })
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const status of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'] as const) {
+  for (const locale of ['en', 'zh-CN']) {
+   for (const width of [1440, 390]) {
+    test(`${status} ${locale} ${width}`, async ({ page }, testInfo) => {
+     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_MARKET_READINESS !== '1', 'Run each PRED03 status in a separate isolated standalone clone')
+     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+     const t = (locale === 'en' ? enMessages : zhMessages).PriceChanges
+     const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+     seed.data.priceChangeBoard.status = status
+     seed.data.priceChangeBoard.revision = `state-${status}`
+     if (status === 'UNAVAILABLE') {
+      seed.data.priceChangeBoard.players = []
+      seed.data.priceChangeBoard.observedPlayerCount = 0
+     }
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+     try {
+      expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+      await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`)
+      const board = page.locator('[data-price-predictions-board]')
+      await expect(board).toHaveAttribute('data-price-change-status', status)
+      await expect(board).toHaveAttribute('data-price-change-revision', `state-${status}`)
+      await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+      const expected = status === 'PARTIAL' ? t.statusPartial : status === 'STALE' ? t.statusStale : status === 'UNAVAILABLE' ? t.statusUnavailable : null
+      for (const text of [t.statusPartial, t.statusStale, t.statusUnavailable]) {
+       if (text === expected) await expect(board.getByText(text, { exact: true })).toBeVisible()
+       else await expect(board.getByText(text, { exact: true })).toHaveCount(0)
+      }
+      if (status === 'UNAVAILABLE') await expect(board.getByText('Saka', { exact: true })).toHaveCount(0)
+      else await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+      await testInfo.attach('PRED03-state', { contentType: 'application/json', body: JSON.stringify({ locale, width, status, revision: `state-${status}`, expected, performanceStatus: 'NOT_RUN', readyMs: null }) })
+     } finally {
+      await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+     }
+    })
+   }
+  }
+ }
+})
+
+test.describe('SSR remediation PRED03 cached board', () => {
+ test.describe.configure({ mode: 'serial' })
+ for (const cacheState of ['valid', 'expired', 'malformed'] as const) {
+  for (const locale of ['en', 'zh-CN']) {
+   for (const width of [1440, 390]) {
+    test(`${cacheState} ${locale} ${width}`, async ({ page }, testInfo) => {
+     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated standalone price cache')
+     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+     const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+     const cached = { ...seed.data.priceChangeBoard, revision: 'cached-price-proof', fetchedAt: new Date().toISOString() }
+     const unavailable = { ...seed.data.priceChangeBoard, status: 'UNAVAILABLE', revision: 'offline-price-proof', players: [], observedPlayerCount: 0 }
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(({ cached, cacheState }) => {
+      const savedAt = Date.now() - (cacheState === 'expired' ? 3_601_000 : 30_000)
+      localStorage.setItem('letletme:price-change-board:v2', cacheState === 'malformed' ? '{broken' : JSON.stringify({ savedAt, board: cached }))
+     }, { cached, cacheState })
+     try {
+      expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: { priceChangeBoard: unavailable } }] }) })).ok).toBe(true)
+      await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`)
+      const board = page.locator('[data-price-predictions-board]')
+      const valid = cacheState === 'valid'
+      const t = (locale === 'en' ? enMessages : zhMessages).PriceChanges
+      await expect(board).toHaveAttribute('data-price-change-status', valid ? 'STALE' : 'UNAVAILABLE')
+      await expect(board).toHaveAttribute('data-price-change-revision', valid ? 'cached-price-proof' : 'offline-price-proof')
+      await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+      await expect(board.getByText(valid ? t.statusStale : t.statusUnavailable, { exact: true })).toBeVisible()
+      if (valid) await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+      else await expect(board.getByText('Saka', { exact: true })).toHaveCount(0)
+      if (cacheState === 'expired') expect(await page.evaluate(() => localStorage.getItem('letletme:price-change-board:v2'))).toBeNull()
+      if (valid) {
+       const recovered = { ...cached, status: 'READY', revision: 'recovered-price-proof', players: cached.players.map((player: { webName: string }) => ({ ...player, webName: player.webName === 'Saka' ? 'Recovered Saka' : player.webName })) }
+       const pathname = `${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`
+       let release!: () => void
+       const gate = new Promise<void>(resolve => { release = resolve })
+       let waiting = false
+       await page.route(`**${pathname}?_rsc=*`, async route => {
+        waiting = true
+        await gate
+        const response = await route.fetch()
+        const body = await response.text()
+        const serialized = JSON.stringify(unavailable)
+        if (!body.includes(serialized)) await testInfo.attach('recovery-seed-shape', { contentType: 'text/plain', body: body.slice(Math.max(0, body.indexOf('offline-price-proof') - 350), body.indexOf('offline-price-proof') + 600) })
+        expect(body).toContain(serialized)
+        await route.fulfill({ response, body: body.replaceAll(serialized, JSON.stringify(recovered)) })
+       })
+       try {
+        await page.getByRole('button', { name: locale === 'en' ? 'Refresh' : '刷新', exact: true }).click()
+        await expect.poll(() => waiting).toBe(true)
+        await expect(board).toHaveAttribute('data-price-change-refreshing', 'true')
+        await expect(board).toHaveAttribute('data-price-change-revision', 'cached-price-proof')
+        await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+       } finally { release() }
+       await expect(board).toHaveAttribute('data-price-change-status', 'READY')
+       await expect(board).toHaveAttribute('data-price-change-revision', 'recovered-price-proof')
+       await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+       await expect(board.getByRole('link', { name: 'Recovered Saka', exact: true })).toBeVisible()
+       await expect(board.getByRole('link', { name: 'Saka', exact: true })).toHaveCount(0)
+       await expect(board.getByText(t.statusStale, { exact: true })).toHaveCount(0)
+       await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('letletme:price-change-board:v2') ?? '{}').board?.revision)).toBe('recovered-price-proof')
+      }
+      await testInfo.attach('PRED03-cache', { contentType: 'application/json', body: JSON.stringify({ cacheState, locale, width, initialStatus: valid ? 'STALE' : 'UNAVAILABLE', finalStatus: valid ? 'READY' : 'UNAVAILABLE', recoveredBy: valid ? 'controlled RSC seed after actual refresh click' : null, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+     } finally {
+      await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+     }
+    })
+   }
+  }
+ }
+})
