@@ -32,7 +32,7 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 7)
+	assert.equal(result.calls.length, 8)
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
 	assert.equal(result.calls[0].fixture, '1')
 	assert.equal(result.calls[0].cwd, root)
@@ -58,6 +58,9 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.equal(result.calls[6].marketHistory, '1')
 	assert.equal(result.calls[6].existingBuild, '1')
 	assert.ok(result.calls[6].args.includes('e2e/market-historical-freshness.spec.ts'))
+	assert.equal(result.calls[7].market, '1')
+	assert.equal(result.calls[7].existingBuild, '1')
+	assert.deepEqual(result.calls[7].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'C09 text share', '--workers=1', '--trace=on', '--output=test-results/market-share'])
 })
 
 test('standalone horizon keeps build enabled and separates its artifacts', () => {

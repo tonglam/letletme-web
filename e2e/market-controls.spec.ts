@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { PriceChangeObservedEvent } from '../lib/graphql/operations/price-changes'
 
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
@@ -123,6 +124,125 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(page.locator('a[aria-current="date"][href*="2099"]')).toHaveCount(0)
    await expect(page.locator('a[href*="date=2026-08-03"]')).toBeVisible()
    await expect(page.locator('a[aria-current="date"]')).toHaveAttribute('href', /date=2026-08-03/)
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`C09 text share outcomes and manual fallback ${locale} ${width}`, async ({ page }) => {
+   test.skip(process.env.E2E_MARKET_READINESS !== '1', 'Requires standalone clone with isolated price-board cache')
+   const zh = locale === 'zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+   seed.data.priceChangeBoard.latestEvent = {
+    outcome: 'CHANGED', observedAt: '2026-08-03T09:40:00.000Z', deadline: '2026-08-03T09:00:00.000Z', changeDate: '2026-08-03', changedPlayerCount: 1,
+    changes: [{ player: { playerId: 1, playerCode: 1, webName: 'Saka', teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position: 'MIDFIELDER', price: 100, selectedByPercent: 20 }, changeDate: '2026-08-03', oldPrice: 99, newPrice: 100, change: 1, direction: 'RISE' }]
+   } satisfies PriceChangeObservedEvent
+   expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+   try {
+   await page.goto(`${zh ? '/zh-CN' : ''}/explore/market`)
+   const region = page.locator('#market-prices-share')
+   const share = region.getByRole('button', { name: zh ? '文字' : 'Text', exact: true })
+   await expect(share).toHaveCount(1)
+   await expect(share).toBeVisible()
+   const fallback = region.getByRole('textbox', { name: zh ? '文字' : 'Text', exact: true })
+   for (const outcome of ['unsupported', 'failed', 'cancelled', 'shared', 'copied'] as const) {
+    await page.evaluate(outcome => {
+     const native = outcome === 'shared' || outcome === 'cancelled'
+     delete document.documentElement.dataset.fixtureCopiedText
+     delete document.documentElement.dataset.fixtureSharedText
+     Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { mobile: native } })
+     Object.defineProperty(navigator, 'share', { configurable: true, value: native ? async (payload: ShareData) => {
+      document.documentElement.dataset.fixtureSharedText = payload.text
+      if (outcome === 'cancelled') throw new DOMException('Fixture user cancelled', 'AbortError')
+     } : undefined })
+     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: outcome === 'unsupported' ? undefined : {
+      writeText: async (text: string) => {
+       if (outcome === 'failed') throw new Error('fixture clipboard rejected')
+       document.documentElement.dataset.fixtureCopiedText = text
+      }
+     } })
+    }, outcome)
+    await share.click()
+    if (outcome === 'copied' || outcome === 'shared') {
+     await expect(share).toContainText(zh ? '已分享' : 'Done')
+     await expect(fallback).toHaveCount(0)
+     await expect.poll(() => page.evaluate(kind => kind === 'copied' ? document.documentElement.dataset.fixtureCopiedText : document.documentElement.dataset.fixtureSharedText, outcome)).toContain('/explore/market')
+     if (outcome === 'shared') expect(await page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toBeUndefined()
+    } else {
+     await expect(fallback).toBeVisible()
+     if (outcome === 'cancelled') {
+      expect(await page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toBeUndefined()
+      await expect(share).not.toContainText(zh ? '已分享' : 'Done')
+     }
+     await expect(fallback).toHaveValue(/\/explore\/market/)
+     await expect(fallback).toHaveAttribute('readonly', '')
+     await region.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+     await expect(fallback).toHaveCount(0)
+    }
+   }
+   await page.evaluate(() => {
+    Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { mobile: false } })
+    Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+     write: async (items: ClipboardItem[]) => {
+      const blob = await items[0].getType('image/png')
+      const bitmap = await createImageBitmap(blob)
+      document.documentElement.dataset.fixturePng = JSON.stringify({ type: blob.type, size: blob.size, width: bitmap.width, height: bitmap.height })
+      bitmap.close()
+     }
+    } })
+   })
+   const imageShare = region.getByRole('button', { name: zh ? '图片' : 'Image', exact: true })
+   await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob
+    HTMLCanvasElement.prototype.toBlob = function () {
+     HTMLCanvasElement.prototype.toBlob = original
+     document.documentElement.dataset.fixtureEncoderFailed = 'true'
+     throw new Error('Fixture encoder failed once')
+    }
+   })
+   await imageShare.click()
+   await expect(page.getByText(zh ? '分享失败' : 'Share failed', { exact: true })).toBeVisible()
+   expect(await page.evaluate(() => document.documentElement.dataset.fixtureEncoderFailed)).toBe('true')
+   expect(await page.evaluate(() => document.documentElement.dataset.fixturePng)).toBeUndefined()
+   await expect(region).not.toHaveAttribute('data-share-rendering', 'true')
+   await expect(imageShare).not.toContainText(zh ? '已分享' : 'Done')
+   await imageShare.click()
+   await expect(imageShare).toContainText(zh ? '已分享' : 'Done', { timeout: 15000 })
+   const png = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixturePng ?? '{}'))
+   expect(png.type).toBe('image/png')
+   expect(png.size).toBeGreaterThan(0)
+   expect(png.width).toBeGreaterThan(0)
+   expect(png.height).toBeGreaterThan(0)
+   for (const outcome of ['cancelled', 'unsupported', 'shared'] as const) {
+    await page.evaluate(outcome => {
+     delete document.documentElement.dataset.fixtureNativePng
+     Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { mobile: true } })
+     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => outcome !== 'unsupported' })
+     Object.defineProperty(navigator, 'share', { configurable: true, value: async (data: ShareData) => {
+      const file = data.files?.[0]
+      document.documentElement.dataset.fixtureNativePng = JSON.stringify({ name: file?.name, type: file?.type, size: file?.size })
+      if (outcome === 'cancelled') throw new DOMException('Fixture cancellation', 'AbortError')
+     } })
+    }, outcome)
+    await imageShare.click()
+    await expect(page.getByText(zh ? (outcome === 'shared' ? '图片已分享' : outcome === 'unsupported' ? '请手动复制' : '分享失败') : (outcome === 'shared' ? 'Image shared' : outcome === 'unsupported' ? 'Copy manually' : 'Share failed'), { exact: true })).toBeVisible()
+    const file = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixtureNativePng ?? 'null'))
+    if (outcome === 'unsupported') expect(file).toBeNull()
+    else {
+     expect(file.name).toBe('letletme-share.png')
+     expect(file.type).toBe('image/png')
+     expect(file.size).toBeGreaterThan(0)
+    }
+    await expect(region).not.toHaveAttribute('data-share-rendering', 'true')
+   }
+   } finally {
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
   })
  }
 }
