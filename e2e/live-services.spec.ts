@@ -1516,3 +1516,38 @@ for (const navigation of ['initial_navigation', 'in_page_navigation']) {
   await testInfo.attach('real-clock-samples', { body: JSON.stringify(samples), contentType: 'application/json' })
  })
 }
+
+test('switching to the current gameweek clears the previous squad before the context probe completes', async ({ page }) => {
+	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the isolated GraphQL fixture')
+	let holdContext = false
+	let contextWaiting = false
+	let releaseContext!: () => void
+	const contextGate = new Promise<void>(resolve => { releaseContext = resolve })
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (holdContext && payload.query?.includes('GetLiveContext')) {
+			contextWaiting = true
+			await contextGate
+		}
+		await continueToGraphqlFixture(route)
+	})
+	await page.goto('/live/points/123?gw=32&tournamentId=3')
+	const pitch = page.getByRole('region', { name: /formation/ })
+	await expect(pitch).toBeVisible()
+	await expect(page.getByRole('combobox').first()).toContainText('Gameweek 32')
+	holdContext = true
+	try {
+		await page.getByRole('button', { name: 'Next gameweek', exact: true }).click()
+		await expect.poll(() => contextWaiting).toBe(true)
+		// The old squad must not remain actionable under the new GW selector,
+		// even while the prerequisite lifecycle read has not returned.
+		await expect(pitch).toHaveCount(0)
+		await expect(page.getByRole('button', { name: 'View details for Player 1', exact: true })).toHaveCount(0)
+	} finally {
+		holdContext = false
+		releaseContext()
+	}
+	await expect(pitch).toBeVisible()
+	await expect(page.getByRole('combobox').first()).toContainText('Gameweek 33')
+	await expect(page.getByRole('link', { name: 'Back to competition', exact: true })).toHaveAttribute('href', /tournamentId=3&gw=33/)
+})
