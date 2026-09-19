@@ -19,6 +19,7 @@ import {
 } from '@/lib/graphql/operations/live'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getCurrentEntryId } from '@/lib/session'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,9 +36,16 @@ export async function generateMetadata({ params }: PageProps) {
 }
 
 export default async function LivePointsPage({ params }: PageProps) {
-	await getPageLocale(params)
+	const timing = new RouteLoaderTiming('/live/points')
+	await timing.measure('locale', () => getPageLocale(params)).catch(error => {
+		timing.finish('unavailable')
+		throw error
+	})
 
-	const { presentation, liveContext } = await getLivePageContext()
+	const { presentation, liveContext } = await timing.measure('context', () => getLivePageContext()).catch(error => {
+		timing.finish('unavailable')
+		throw error
+	})
 	const isOfficialUpdating = isOfficialLiveUpdatingContext(liveContext)
 	if (
 		presentation.phase === 'PRESEASON' ||
@@ -47,6 +55,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
+		timing.finish('unavailable')
 		return (
 			<SeasonPhaseState
 				feature="points"
@@ -58,6 +67,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 	const currentEventId =
 		liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
+		timing.finish('unavailable')
 		return (
 			<SeasonPhaseState
 				feature="points"
@@ -67,7 +77,10 @@ export default async function LivePointsPage({ params }: PageProps) {
 	}
 
 	// Only then session-scoped seed.
-	const entryId = await getCurrentEntryId()
+	const entryId = await timing.measure('session', () => getCurrentEntryId()).catch(error => {
+		timing.finish('unavailable')
+		throw error
+	})
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null
 	let initialOverall: EntryOverallSnapshot | undefined
@@ -76,19 +89,19 @@ export default async function LivePointsPage({ params }: PageProps) {
 
 	if (entryId) {
 		const [liveResult, overallResult] = await Promise.allSettled([
-				executeServerQuery<LiveCalcDataResponse>(
+				timing.measure('live', () => executeServerQuery<LiveCalcDataResponse>(
 					GET_LIVE_POINTS,
 					{ eventId: currentEventId, entryId },
 					{
 						cache: 'no-store',
 						suppressErrorLog: isOfficialUpdating
 					}
-				),
-			executeServerQuery<EntrySummaryResponse>(
+				)),
+			timing.measure('overall', () => executeServerQuery<EntrySummaryResponse>(
 				GET_ENTRY,
 				{ id: entryId },
 				{ cache: 'no-store' }
-			)
+			))
 		])
 		if (liveResult.status === 'fulfilled') {
 			const liveData = liveResult.value.calcLivePointsByEntry
@@ -130,6 +143,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 		}
 	}
 
+	timing.finish(!entryId || (initialLiveData && initialOverall) ? 'ready' : 'partial')
 	return (
 		<LivePointsClient
 			initialEntryId={entryId ?? 0}
