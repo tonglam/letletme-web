@@ -218,3 +218,68 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 	}
 }
+
+test.describe('R22 planned baseline context', () => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture and controlled browser context')
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`R22 direct trends response and desk readiness ${locale} ${width}px`, async ({ page, context }, testInfo) => {
+   test.setTimeout(90_000)
+   const samples: Array<Record<string, unknown>> = []
+   const cdp = await context.newCDPSession(page)
+   const observations: Array<{ loaderId: string; sample: { metricName: string; result?: string; value?: number; measurementKind?: string } }> = []
+   cdp.on('Network.requestWillBeSent', async event => {
+    if (new URL(event.request.url).pathname !== '/api/vitals') return
+    const body = JSON.parse(event.request.postData ?? (await cdp.send('Network.getRequestPostData', { requestId: event.requestId })).postData)
+    for (const sample of body.samples ?? []) observations.push({ loaderId: event.loaderId, sample })
+   })
+   await cdp.send('Network.enable')
+   await page.setViewportSize({ width, height: 900 })
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+   const target = `${locale === 'en' ? '' : '/zh-CN'}/explore/selections?scope=public&cohort=competition%3A777&gw=33`
+   try {
+    for (const cacheMode of ['cold', 'warm']) {
+     await cdp.send('Network.setCacheDisabled', { cacheDisabled: cacheMode === 'cold' })
+     for (let sampleIndex = 1; sampleIndex <= 5; sampleIndex++) {
+    const toolStart = performance.now()
+    const response = await page.goto(target)
+    expect(response?.status()).toBe(200)
+    expect(response?.request().redirectedFrom()).toBeNull()
+    await expect(page).toHaveURL(new URL(target, testInfo.project.use.baseURL).href)
+    const preflight = await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), width: innerWidth, dark: document.documentElement.classList.contains('dark') }))
+    expect(preflight).toEqual({ timezone: 'Australia/Perth', theme: 'system', width, dark: false })
+    const hasSession = (await context.cookies()).some(cookie => /session_token/.test(cookie.name))
+    expect(hasSession).toBe(false)
+    await testInfo.attach('R22-preflight', { contentType: 'application/json', body: JSON.stringify({ ...preflight, locale, hasSession }) })
+    const { frameTree } = await cdp.send('Page.getFrameTree')
+    const loaderId = frameTree.frame.loaderId
+    const cohort = page.getByRole('combobox', { name: locale === 'en' ? 'Active league' : '当前联赛', exact: true })
+    await expect(cohort).toHaveValue('competition:777')
+    await expect(cohort).toHaveAttribute('aria-busy', 'false')
+    await expect(page.getByRole('combobox', { name: locale === 'en' ? 'Gameweek' : '观察轮次', exact: true })).toHaveValue('33')
+    const rows = page.getByRole('tabpanel').getByRole('listitem')
+    await expect(rows).toHaveCount(2)
+    for (const row of await rows.all()) {
+     await expect(row.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+     await expect(row.getByText('72%', { exact: true })).toBeVisible()
+    }
+    await expect.poll(() => observations.filter(o => o.loaderId === loaderId && o.sample.metricName === 'TRENDS_DESK_READY').length).toBe(1)
+    const metric = observations.find(o => o.loaderId === loaderId && o.sample.metricName === 'TRENDS_DESK_READY')!.sample
+    expect(metric.result).toBe('ok')
+    expect(metric.measurementKind).toBe('initial_navigation')
+    expect(Number.isFinite(metric.value)).toBe(true)
+    expect(metric.value).toBeGreaterThanOrEqual(0)
+    samples.push({ locale, width, cacheMode, sampleIndex, toolElapsedMs: performance.now() - toolStart, eventToPaintMs: null, preflight, hasSession, url: page.url(), httpStatus: response!.status(), redirects: [], loaderId, cohort: 'competition:777', gw: 33, metric, readyMs: metric.value, budgetMs: 2500, functionalStatus: 'PASS', performanceStatus: metric.value! <= 2500 ? 'PASS' : 'FAIL', scope: 'isolated initial navigation; content commit, not paint; browser cache only' })
+     }
+    }
+   } finally {
+    await cdp.send('Network.setCacheDisabled', { cacheDisabled: false })
+    await cdp.detach()
+    await testInfo.attach('R22-cache-samples', { contentType: 'application/json', body: JSON.stringify(samples) })
+   }
+  })
+ }
+}
+
+})

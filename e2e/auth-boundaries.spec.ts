@@ -183,7 +183,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
      await expect(page.getByLabel(route.targetField, { exact: true })).toBeEnabled()
      visited.push(page.url())
     }
-    await page.goto(`${prefix}${route.path}`)
+    const response = await page.goto(`${prefix}${route.path}`)
+    expect(response?.status()).toBe(200)
+    expect(response?.request().redirectedFrom()).toBeNull()
+    await testInfo.attach('auth-direct-response', { contentType: 'application/json', body: JSON.stringify({ caseId: route.caseId, locale, width, requested: `${prefix}${route.path}`, finalUrl: page.url(), httpStatus: response!.status(), redirects: [], functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null }) })
     await assertSource()
     await page.reload()
     await assertSource()

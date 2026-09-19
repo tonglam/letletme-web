@@ -1733,3 +1733,58 @@ test('automatic gameweek rollover does not emit another navigation readiness sam
  await page.clock.runFor(50)
  expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(1)
 })
+
+// Original coverage matrix: S18.directed.01/.02. Fault injection stays local.
+test.describe('S18 refresh admission in the planned mobile environment', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ test('zh-CN refresh is single-flight and recovers after a 429 response', async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture fault injection only')
+  await page.clock.install()
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  let inject = false
+  let requests = 0
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/graphql', async route => {
+   if (inject && route.request().postDataJSON()?.query?.includes('GetLiveCalcPoints')) {
+    requests += 1
+    await gate
+    await route.fulfill({ status: 429, headers: { 'Retry-After': '37' }, json: { errors: [{ message: 'Controlled rate limit', extensions: { code: 'RATE_LIMITED' } }] } })
+    return
+   }
+   await continueToGraphqlFixture(route)
+  })
+  await page.goto('/zh-CN/live/points/123?gw=32&tournamentId=3')
+  const ready = page.locator('[data-live-points-ready="true"]')
+  await expect(ready).toHaveAttribute('data-live-entry', '123')
+  await expect(ready).toHaveAttribute('data-live-gw', '32')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', language: 'zh-CN' })
+  const refresh = page.getByRole('button', { name: '刷新', exact: true }).filter({ visible: true })
+  await expect(refresh).toHaveCount(1)
+  inject = true
+  try {
+   await refresh.click()
+   await expect.poll(() => requests).toBe(1)
+   await expect(refresh).toBeDisabled()
+   await expect(ready).toHaveCount(0)
+   // A real mouse double click on the disabled control must admit no request.
+   const box = await refresh.boundingBox()
+   expect(box).not.toBeNull()
+   await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2)
+   await page.clock.runFor(100)
+   expect(requests).toBe(1)
+  } finally { release() }
+  await expect(page.getByRole('alert').filter({ hasText: '实时积分加载失败，请重试。' })).toBeVisible()
+  await expect(ready).toHaveCount(0)
+  inject = false
+  // Recovery is intentionally after Retry-After; this does not prove early retry suppression.
+  await page.clock.fastForward(38_000)
+  await expect(refresh).toBeEnabled()
+  await refresh.click()
+  await expect(ready).toHaveAttribute('data-live-entry', '123')
+  await expect(ready).toHaveAttribute('data-live-gw', '32')
+  await expect(page.getByRole('alert').filter({ hasText: '实时积分加载失败，请重试。' })).toHaveCount(0)
+  await testInfo.attach('scope', { body: JSON.stringify({ locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', requestsDuringHeldRefresh: requests, early429RetrySuppression: 'NOT_RUN', performance: 'NOT_RUN' }), contentType: 'application/json' })
+ })
+})
