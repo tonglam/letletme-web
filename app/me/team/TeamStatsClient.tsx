@@ -1,5 +1,6 @@
 'use client'
 
+import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
@@ -7,7 +8,7 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Link, usePathname, useRouter } from '@/i18n/navigation'
+import { Link } from '@/i18n/navigation'
 import type {
 	EntryEventResult,
 	EntryGameweekTransfers
@@ -73,8 +74,6 @@ interface TeamStatsClientProps {
  */
 export default function TeamStatsClient(props: TeamStatsClientProps) {
 	const t = useTranslations('TeamStats')
-	const router = useRouter()
-	const pathname = usePathname()
 	const searchParams = useSearchParams()
 
 	const initialSelectedGameweek =
@@ -124,10 +123,13 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 				view: next.view,
 				gw: next.gw != null && next.gw > 0 ? next.gw : null
 			})
-			const href = qs ? `${pathname}?${qs}` : pathname
-			router.replace(href, { scroll: false })
+			// The authenticated client read owns view/GW changes. Updating the
+			// deep link must not repeat the server seed before that read starts.
+			const pathname = window.location.pathname
+			markRouteReadyStart(pathname)
+			window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname)
 		},
-		[pathname, router]
+		[]
 	)
 
 	const handleActiveGameweekChange = useCallback(

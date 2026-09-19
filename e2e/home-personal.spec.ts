@@ -4077,3 +4077,68 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`SSR remediation manager selection uses one read path ${locale} ${width}px`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   const path = `${prefix}/my-fpl/team`
+   const identity = { ...managerReview.entry!, id: session.entryId! }
+   const rules = [
+    { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: identity, currentGameweek: { ...managerGameweek(3), entry: identity } } } },
+    ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...managerGameweek(eventId), entry: identity } } }))
+   ]
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(path)
+    const ready = page.locator('[data-manager-ready]')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    const navigations: string[] = []
+    const reads: number[] = []
+    page.on('request', request => {
+     if (new URL(request.url()).pathname === path && request.headers().rsc === '1') navigations.push(request.url())
+     if (new URL(request.url()).pathname === '/api/graphql' && request.postData()?.includes('GetMyFplManagerGameweek')) reads.push(request.postDataJSON().variables.eventId)
+    })
+    const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: locale === 'zh-CN' ? '队长历史' : 'Captain History', exact: true }) })
+    await expect(history).toHaveCount(1)
+    const open = history.getByRole('button', { name: locale === 'zh-CN' ? '打开第 1 轮' : 'Open gameweek 1', exact: true })
+    await expect(open).toHaveCount(1)
+    await open.click()
+    await expect(page).toHaveURL(url => url.pathname === path && url.searchParams.get('gw') === '1' && url.searchParams.get('view') === 'gameweek')
+    await expect(ready).toHaveAttribute('data-manager-gw', '1')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await expect(ready).toHaveAttribute('data-manager-revision', '101')
+    expect(navigations, 'client-owned view changes must not repeat the server loader').toEqual([])
+    expect(reads).toEqual([1])
+    await page.getByRole('tab', { name: locale === 'zh-CN' ? '赛季复盘' : 'Season Review', exact: true }).click()
+    await expect(ready).toHaveAttribute('data-manager-view', 'season')
+    await open.click()
+    await expect(ready).toHaveAttribute('data-manager-view', 'gameweek')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    expect(reads, 'completed historical data is reused').toEqual([1])
+    expect(navigations).toEqual([])
+    await page.goto(prefix || '/')
+    await page.goBack()
+    await expect(page).toHaveURL(url => url.pathname === path && url.searchParams.get('gw') === '1')
+    await expect(ready).toHaveAttribute('data-manager-revision', '101')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await page.goForward()
+    await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+    // Direct entry must retain its server seed and not re-fetch on mount.
+    reads.length = 0
+    await page.goto(`${path}?view=gameweek&gw=2`)
+    await expect(ready).toHaveAttribute('data-manager-revision', '102')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    expect(reads).toEqual([])
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+}
