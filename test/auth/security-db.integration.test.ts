@@ -62,6 +62,9 @@ test(
 				1
 			)
 
+			// Every concurrent write must target the same bucket, even across a minute boundary.
+			const [bucket] = await sql<{ start: Date }[]>`SELECT date_trunc('minute', now()) AS start`
+			assert.ok(bucket)
 			await Promise.all(
 				Array.from(
 					{ length: 10 },
@@ -69,17 +72,18 @@ test(
 			INSERT INTO bauth.request_rate_limits
 				(scope, subject, bucket_start, window_seconds, count, expires_at)
 			VALUES
-				(${scope}, 'subject', date_trunc('minute', now()), 60, 1,
-				 date_trunc('minute', now()) + interval '1 minute')
+				(${scope}, 'subject', ${bucket.start}, 60, 1,
+				 ${bucket.start}::timestamptz + interval '1 minute')
 			ON CONFLICT (scope, subject, bucket_start)
 			DO UPDATE SET count = bauth.request_rate_limits.count + 1
 		`
 				)
 			)
-			const [counter] = await sql<{ count: number }[]>`
+			const counters = await sql<{ count: number }[]>`
 			SELECT count FROM bauth.request_rate_limits WHERE scope = ${scope}
 		`
-			assert.equal(counter?.count, 10)
+			assert.equal(counters.length, 1)
+			assert.equal(counters[0].count, 10)
 
 			const [exposure] = await sql<
 				{

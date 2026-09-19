@@ -12,7 +12,7 @@ function invoke(suite, fail = false) {
 	const log = path.join(temporary, 'calls.jsonl')
 	const stub = path.join(temporary, 'npx')
 	writeFileSync(stub, `#!${process.execPath}
-require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
+require('node:fs').appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args:process.argv.slice(2), briefing:process.env.BRIEFING_PUBLIC_ENABLED, adminFixture:process.env.E2E_BRIEFING_ADMIN, admin:process.env.BRIEFING_ADMIN_ENABLED, editors:process.env.BRIEFING_EDITOR_EMAILS, publishers:process.env.BRIEFING_PUBLISHER_EMAILS, fixture:process.env.E2E_LIVE_HYDRATION, market:process.env.E2E_MARKET_READINESS, marketHistory:process.env.E2E_MARKET_HISTORY, horizon:process.env.E2E_NONTERMINAL_HORIZON, unpublished:process.env.E2E_TRENDS_UNPUBLISHED, ssr:process.env.E2E_SSR_REMEDIATION, existingBuild:process.env.PLAYWRIGHT_USE_EXISTING_BUILD, cwd:process.cwd()})+'\\n')
 process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 `)
 	chmodSync(stub, 0o755)
@@ -32,29 +32,35 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 6)
-	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/market-readiness.spec.ts', '--workers=1', '--trace=on', '--output=test-results/market-readiness'])
-	assert.equal(result.calls[1].market, '1')
-	assert.equal(result.calls[1].existingBuild, '1')
-	assert.deepEqual(result.calls[2].args, ['playwright', 'test', 'e2e/nonterminal-horizon.spec.ts', '--workers=1', '--trace=on', '--output=test-results/horizon'])
-	assert.equal(result.calls[2].horizon, '1')
-	assert.equal(result.calls[2].existingBuild, '1')
-	assert.equal(result.calls[2].fixture, '1')
-	assert.equal(result.calls[2].cwd, root)
-	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', 'e2e/player-stats.spec.ts', '--grep', 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12', '--workers=1', '--trace=on'])
+	assert.equal(result.calls.length, 8)
+	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
 	assert.equal(result.calls[0].fixture, '1')
 	assert.equal(result.calls[0].cwd, root)
-	assert.deepEqual(result.calls[3].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])
-	assert.deepEqual(result.calls[4].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'TR03 planned.*unpublished', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished-bound'])
-	for (const call of result.calls.slice(3, 5)) {
+	assert.deepEqual(result.calls[2].args, ['playwright', 'test', 'e2e/market-readiness.spec.ts', '--workers=1', '--trace=on', '--output=test-results/market-readiness'])
+	assert.equal(result.calls[2].market, '1')
+	assert.equal(result.calls[2].existingBuild, '1')
+	assert.deepEqual(result.calls[3].args, ['playwright', 'test', 'e2e/nonterminal-horizon.spec.ts', '--workers=1', '--trace=on', '--output=test-results/horizon'])
+	assert.equal(result.calls[3].horizon, '1')
+	assert.equal(result.calls[3].existingBuild, '1')
+	assert.equal(result.calls[3].fixture, '1')
+	assert.equal(result.calls[3].cwd, root)
+	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', 'e2e/player-stats.spec.ts', '--grep', 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12', '--workers=1', '--trace=on'])
+	assert.equal(result.calls[1].fixture, '1')
+	assert.equal(result.calls[1].cwd, root)
+	assert.deepEqual(result.calls[4].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])
+	assert.deepEqual(result.calls[5].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'TR03 planned.*unpublished', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished-bound'])
+	for (const call of result.calls.slice(4, 6)) {
 		assert.equal(call.unpublished, '1')
 		assert.equal(call.existingBuild, '1')
 		assert.equal(call.cwd, root)
 	}
-	assert.equal(result.calls[4].ssr, '1')
-	assert.equal(result.calls[5].marketHistory, '1')
-	assert.equal(result.calls[5].existingBuild, '1')
-	assert.ok(result.calls[5].args.includes('e2e/market-historical-freshness.spec.ts'))
+	assert.equal(result.calls[5].ssr, '1')
+	assert.equal(result.calls[6].marketHistory, '1')
+	assert.equal(result.calls[6].existingBuild, '1')
+	assert.ok(result.calls[6].args.includes('e2e/market-historical-freshness.spec.ts'))
+	assert.equal(result.calls[7].market, '1')
+	assert.equal(result.calls[7].existingBuild, '1')
+	assert.deepEqual(result.calls[7].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'C09 text share', '--workers=1', '--trace=on', '--output=test-results/market-share'])
 })
 
 test('standalone horizon keeps build enabled and separates its artifacts', () => {
@@ -70,10 +76,25 @@ test('Briefing runs both feature states and keeps their outputs separate', () =>
 	assert.equal(result.status, 0, result.stderr)
 	assert.deepEqual(result.calls.slice(0, 2).map(c => c.briefing), ['true', 'false'])
 	assert.deepEqual(result.calls.map(c => c.args), [
-		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
+		['playwright', 'test', 'e2e/briefing.spec.ts', 'e2e/briefing-state-metrics.spec.ts', '--grep-invert', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-enabled'],
 		['playwright', 'test', 'e2e/briefing.spec.ts', '--grep', 'feature-disabled', '--workers=1', '--trace=on', '--output=test-results/briefing-disabled'],
+		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin'],
+		['playwright', 'test', 'e2e/briefing-admin.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-admin-disabled'],
 		['playwright', 'test', 'e2e/briefing-authorization.spec.ts', '--workers=1', '--trace=on', '--output=test-results/briefing-authorization']
 	])
+})
+
+test('Briefing admin uses explicit isolated allowlists in both feature states', () => {
+ const result = invoke('briefing')
+ assert.equal(result.calls[4].adminFixture, '1')
+ assert.equal(result.calls[4].admin, 'true')
+ assert.equal(result.calls[4].publishers, 'publisher@briefing.e2e.test')
+ assert.deepEqual(result.calls.slice(2, 4).map(c => c.admin), ['true', 'false'])
+ for (const call of result.calls.slice(2, 4)) {
+  assert.equal(call.adminFixture, '1')
+  assert.equal(call.editors, 'editor@briefing.e2e.test,both@briefing.e2e.test')
+  assert.equal(call.publishers, 'publisher@briefing.e2e.test,both@briefing.e2e.test')
+ }
 })
 
 test('failed suites keep their exit code and do not continue after a failure', () => {

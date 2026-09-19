@@ -7,11 +7,13 @@ cd "$(dirname "$0")/.."
 
 case "${1:-}" in
   ssr)
+    npx playwright test e2e/navigation-metrics.spec.ts --workers=1 --trace=on --output=test-results/navigation-metrics
     npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts --grep 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12' --workers=1 --trace=on
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-readiness.spec.ts --workers=1 --trace=on --output=test-results/market-readiness
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh horizon
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh trends-unpublished
     E2E_MARKET_HISTORY=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-historical-freshness.spec.ts --workers=1 --trace=on --output=test-results/market-history
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'C09 text share' --workers=1 --trace=on --output=test-results/market-share
     ;;
   horizon)
     E2E_NONTERMINAL_HORIZON=1 npx playwright test e2e/nonterminal-horizon.spec.ts --workers=1 --trace=on --output=test-results/horizon
@@ -21,8 +23,10 @@ case "${1:-}" in
     E2E_TRENDS_UNPUBLISHED=1 E2E_SSR_REMEDIATION=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/home-personal.spec.ts --grep 'TR03 planned.*unpublished' --workers=1 --trace=on --output=test-results/trends-unpublished-bound
     ;;
   briefing)
-    BRIEFING_PUBLIC_ENABLED=true npx playwright test e2e/briefing.spec.ts --grep-invert 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-enabled
+    BRIEFING_PUBLIC_ENABLED=true npx playwright test e2e/briefing.spec.ts e2e/briefing-state-metrics.spec.ts --grep-invert 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-enabled
     BRIEFING_PUBLIC_ENABLED=false npx playwright test e2e/briefing.spec.ts --grep 'feature-disabled' --workers=1 --trace=on --output=test-results/briefing-disabled
+    E2E_BRIEFING_ADMIN=1 BRIEFING_ADMIN_ENABLED=true BRIEFING_EDITOR_EMAILS=editor@briefing.e2e.test,both@briefing.e2e.test BRIEFING_PUBLISHER_EMAILS=publisher@briefing.e2e.test,both@briefing.e2e.test npx playwright test e2e/briefing-admin.spec.ts --workers=1 --trace=on --output=test-results/briefing-admin
+    E2E_BRIEFING_ADMIN=1 BRIEFING_ADMIN_ENABLED=false BRIEFING_EDITOR_EMAILS=editor@briefing.e2e.test,both@briefing.e2e.test BRIEFING_PUBLISHER_EMAILS=publisher@briefing.e2e.test,both@briefing.e2e.test npx playwright test e2e/briefing-admin.spec.ts --workers=1 --trace=on --output=test-results/briefing-admin-disabled
     E2E_BRIEFING_ADMIN=1 BRIEFING_ADMIN_ENABLED=true BRIEFING_PUBLISHER_EMAILS=publisher@briefing.e2e.test npx playwright test e2e/briefing-authorization.spec.ts --workers=1 --trace=on --output=test-results/briefing-authorization
     ;;
   *)
