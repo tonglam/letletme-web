@@ -4015,7 +4015,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await page.setViewportSize({ width, height: 900 })
     for (const counts of [[0, 1, 3], [0, 0, 0], [1]]) {
      const timeline = managerReview.timeline.slice(0, counts.length).map((row, index) => ({ ...row, eventTransfers: counts[index], eventNetPoints: index === 0 ? -1 : index }))
-     const review = { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, timeline, transfers: timeline.map(row => ({ ...managerReview.transfers[row.eventId - 1], eventTransfers: row.eventTransfers })) }
+     const review = { ...managerReview, pastSeasons: [{ season: '2024/25', totalPoints: 2100, overallRank: 18000 }, { season: '2025/26', totalPoints: 2400, overallRank: 12000 }], entry: { ...managerReview.entry!, id: session.entryId! }, timeline, transfers: timeline.map(row => ({ ...managerReview.transfers[row.eventId - 1], eventTransfers: row.eventTransfers })) }
      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
      await page.goto(`${prefix}/my-fpl/team`)
      await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
@@ -4040,6 +4040,25 @@ for (const locale of ['en', 'zh-CN'] as const) {
       if (mode === (locale === 'zh-CN' ? '净积分' : 'Net points')) expect(labels.some(label => Number(label) < 0)).toBe(true)
      }
      if (counts[2] === 3) {
+      const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: locale === 'zh-CN' ? '往年赛季' : 'Past Seasons', exact: true }) })
+      await expect(history).toHaveCount(1)
+      const firstDot = history.locator('.recharts-line-dot').first()
+      await firstDot.scrollIntoViewIfNeeded()
+      const dotBox = await firstDot.boundingBox()
+      expect(dotBox).not.toBeNull()
+      const plotBox = await history.locator('.recharts-cartesian-grid').boundingBox()
+      expect(plotBox).not.toBeNull()
+      const center = { x: dotBox!.x + dotBox!.width / 2, y: dotBox!.y + dotBox!.height / 2 }
+      const inside = { x: Math.max(plotBox!.x + 1, Math.min(plotBox!.x + plotBox!.width - 1, center.x)), y: Math.max(plotBox!.y + 1, Math.min(plotBox!.y + plotBox!.height - 1, center.y)) }
+      // Keep the pointer inside the plot at fractional endpoint coordinates.
+      await page.mouse.move(inside.x, inside.y)
+      await expect(history.locator('[aria-live="polite"]')).toContainText(/202[456]\//)
+      await page.mouse.move(0, 0)
+      await expect(history.locator('[aria-live="polite"]')).toHaveCount(0)
+      await history.locator('.recharts-line-dot').nth(1).hover()
+      await expect(history.locator('[aria-live="polite"]')).toContainText(/202[456]\//)
+      await page.mouse.move(0, 0)
+      await expect(history.locator('[aria-live="polite"]')).toHaveCount(0)
       for (const mode of (locale === 'zh-CN' ? ['总排名', '总得分', '队长', '板凳'] : ['Overall rank', 'Total points', 'Captain', 'Bench'])) {
        await chart.getByRole('button', { name: mode, exact: true }).click()
        const summary = chart.locator('[aria-live="polite"]')
