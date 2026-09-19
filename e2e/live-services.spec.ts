@@ -1517,14 +1517,27 @@ for (const navigation of ['initial_navigation', 'in_page_navigation']) {
  })
 }
 
-test('switching to the current gameweek clears the previous squad before the context probe completes', async ({ page }) => {
+test('switching to the current gameweek clears the previous squad before the context probe completes', async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the isolated GraphQL fixture')
+	const readySamples: { metricName: string; measurementKind: string; result: string; value: number }[] = []
+	await page.route('**/api/vitals', async route => {
+		readySamples.push(...(route.request().postDataJSON().samples ?? []))
+		await route.fulfill({ status: 204, body: '' })
+	})
 	let holdContext = false
 	let contextWaiting = false
 	let releaseContext!: () => void
 	const contextGate = new Promise<void>(resolve => { releaseContext = resolve })
+	let holdRefresh = false
+	let refreshWaiting = false
+	let releaseRefresh!: () => void
+	const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve })
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as { query?: string }
+		if (holdRefresh && payload.query?.includes('GetLiveCalcPoints')) {
+			refreshWaiting = true
+			await refreshGate
+		}
 		if (holdContext && payload.query?.includes('GetLiveContext')) {
 			contextWaiting = true
 			await contextGate
@@ -1535,6 +1548,11 @@ test('switching to the current gameweek clears the previous squad before the con
 	const pitch = page.getByRole('region', { name: /formation/ })
 	await expect(pitch).toBeVisible()
 	await expect(page.getByRole('combobox').first()).toContainText('Gameweek 32')
+	const readyMarker = page.locator('[data-live-points-ready="true"]')
+	await expect(readyMarker).toHaveAttribute('data-live-entry', '123')
+	await expect(readyMarker).toHaveAttribute('data-live-gw', '32')
+	await expect.poll(() => readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.result === 'ok').length).toBe(1)
+	expect(readySamples.find(s => s.metricName === 'LIVE_POINTS_READY')?.measurementKind).toBe('initial_navigation')
 	holdContext = true
 	try {
 		await page.getByRole('button', { name: 'Next gameweek', exact: true }).click()
@@ -1542,6 +1560,8 @@ test('switching to the current gameweek clears the previous squad before the con
 		// The old squad must not remain actionable under the new GW selector,
 		// even while the prerequisite lifecycle read has not returned.
 		await expect(pitch).toHaveCount(0)
+		await expect(readyMarker).toHaveCount(0)
+		expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.result === 'ok')).toHaveLength(1)
 		await expect(page.getByRole('button', { name: 'View details for Player 1', exact: true })).toHaveCount(0)
 	} finally {
 		holdContext = false
@@ -1550,4 +1570,166 @@ test('switching to the current gameweek clears the previous squad before the con
 	await expect(pitch).toBeVisible()
 	await expect(page.getByRole('combobox').first()).toContainText('Gameweek 33')
 	await expect(page.getByRole('link', { name: 'Back to competition', exact: true })).toHaveAttribute('href', /tournamentId=3&gw=33/)
+	await expect(readyMarker).toHaveAttribute('data-live-gw', '33')
+	await expect(readyMarker).toHaveAttribute('data-live-entry', '123')
+	await expect.poll(() => readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.result === 'ok').length).toBe(2)
+	expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY').map(s => s.measurementKind)).toEqual(['initial_navigation', 'interaction'])
+	// A refresh has its own pending state, but is not another navigation.
+	holdRefresh = true
+	try {
+		await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+		await expect.poll(() => refreshWaiting).toBe(true)
+		await expect(readyMarker).toHaveCount(0)
+		await expect(pitch).toBeVisible()
+	} finally {
+		holdRefresh = false
+		releaseRefresh()
+	}
+	await expect(readyMarker).toHaveAttribute('data-live-gw', '33')
+	await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
+	// Allow the refreshed render and its effects to settle before checking duplicates.
+	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+	expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(2)
+	await testInfo.attach('live-points-ready-samples', { body: JSON.stringify(readySamples), contentType: 'application/json' })
+})
+
+test('abandoned gameweek readiness does not leak into a later visit', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fixture')
+ const samples: { metricName: string; measurementKind: string; result: string }[] = []
+ await page.route('**/api/vitals', async route => {
+  samples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
+ let hold = false
+ let waiting = false
+ let release!: () => void
+ const gate = new Promise<void>(resolve => { release = resolve })
+ await page.route('**/api/graphql', async route => {
+  if (hold && route.request().postDataJSON()?.query?.includes('GetLiveContext')) {
+   waiting = true
+   await gate
+  }
+  await continueToGraphqlFixture(route)
+ })
+ await page.goto('/live/points/123?gw=33&tournamentId=3')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+ await page.getByRole('button', { name: 'Previous gameweek', exact: true }).click()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '32')
+ hold = true
+ try {
+  await page.getByRole('button', { name: 'Next gameweek', exact: true }).click()
+  await expect.poll(() => waiting).toBe(true)
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Live Matches', exact: true }).click()
+  await expect(page).toHaveURL(url => url.pathname === '/live/matches')
+ } finally {
+  hold = false
+  release()
+ }
+ const previousSamples = samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length
+ await page.goBack()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+ await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length).toBe(previousSamples + 1)
+ expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY').at(-1)).toMatchObject({ measurementKind: 'in_page_navigation', result: 'ok' })
+})
+
+for (const failureMode of ['request-error', 'no-picks', 'pending-exhausted', 'refresh-error'] as const) {
+test(`manual recovery after failed gameweek starts a fresh readiness clock (${failureMode})`, async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fault injection')
+ await page.clock.install()
+ const samples: { metricName: string; measurementKind: string; result: string; value: number }[] = []
+ await page.route('**/api/vitals', async route => {
+  samples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
+ let fail = false
+ let failedReads = 0
+ await page.route('**/api/graphql', async route => {
+  const payload = route.request().postDataJSON()
+  if (fail && payload.query?.includes('GetLiveCalcPoints')) {
+   failedReads += 1
+   if ((failureMode === 'request-error' || failureMode === 'refresh-error')) {
+    await route.fulfill({ status: 200, json: { errors: [{ message: 'Controlled load failure' }] } })
+   } else {
+    const response = await route.fetch({ url: graphqlFixtureUrl })
+    const body = await response.json()
+    body.data.calcLivePointsByEntry.pickList = []
+    body.data.calcLivePointsByEntry.availability = failureMode === 'no-picks' ? 'NO_PICKS' : 'PENDING'
+    await route.fulfill({ response, json: body })
+   }
+   return
+  }
+  await continueToGraphqlFixture(route)
+ })
+ await page.goto('/live/points/123?gw=32&tournamentId=3')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '32')
+ fail = true
+ await page.getByRole('button', { name: failureMode === 'refresh-error' ? 'Refresh' : 'Previous gameweek', exact: true }).click()
+ if (failureMode === 'pending-exhausted') {
+  for (let elapsed = 0; failedReads < 5 && elapsed < 35_000; elapsed += 500) await page.clock.runFor(500)
+  await expect.poll(() => failedReads).toBe(5)
+ }
+ if ((failureMode === 'request-error' || failureMode === 'refresh-error')) {
+  await expect(page.getByRole('alert').filter({ hasText: 'Live points could not be loaded. Please try again.' })).toBeVisible()
+ } else {
+  await expect(page.getByRole('status').filter({ hasText: 'No live data is available for this team.' })).toBeVisible()
+ }
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveCount(0)
+ // Simulate user dwell on the terminal error; this is not a latency benchmark.
+ await page.clock.fastForward(60_000)
+ fail = false
+ await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', failureMode === 'refresh-error' ? '32' : '31')
+ await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length).toBe(1)
+ const recovery = samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction')[0]
+ expect(recovery.result).toBe('ok')
+ expect(recovery.value).toBeLessThan(60_000)
+})
+}
+
+test('automatic gameweek rollover does not emit another navigation readiness sample', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated lifecycle fixture')
+ await page.clock.install()
+ const samples: { metricName: string; measurementKind: string; result: string }[] = []
+ await page.route('**/api/vitals', async route => {
+  samples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
+ let rollover = false
+ let probes = 0
+ await page.route('**/api/graphql', async route => {
+  const payload = route.request().postDataJSON()
+  if (rollover && payload.query?.includes('GetLiveContext')) {
+   probes += 1
+   const response = await route.fetch({ url: graphqlFixtureUrl })
+   const body = await response.json()
+   Object.assign(body.data.liveContext, { anchorEventId: 34, latestFinalizedEventId: 33, state: 'LIVE_ACTIVE', windowState: 'LIVE_ACTIVE', producerState: 'LIVE_ACTIVE', dataAvailability: 'FRESH', delivery: liveDelivery('FRESH') })
+   await route.fulfill({ response, json: body })
+   return
+  }
+  await continueToGraphqlFixture(route)
+ })
+ await page.goto('/live/points/123')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+ await expect.poll(async () => {
+  await page.clock.runFor(50)
+  return samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length
+ }).toBe(1)
+ rollover = true
+ for (let elapsed = 0; probes === 0 && elapsed < firstRefreshWindowMs; elapsed += 1000) await page.clock.runFor(1000)
+ await expect.poll(() => probes).toBeGreaterThan(0)
+ await expect.poll(async () => {
+  await page.clock.runFor(50)
+  return page.locator('[data-live-points-ready="true"]').getAttribute('data-live-gw')
+ }).toBe('34')
+ await page.clock.runFor(50)
+ expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(1)
+ const refreshed = page.waitForResponse(response => response.request().method() === 'POST' && response.request().postDataJSON()?.query?.includes('GetLiveCalcPoints'))
+ await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+ await refreshed
+ await expect.poll(async () => {
+  await page.clock.runFor(50)
+  return page.locator('[data-live-points-ready="true"]').getAttribute('data-live-gw')
+ }).toBe('34')
+ await page.clock.runFor(50)
+ expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(1)
 })

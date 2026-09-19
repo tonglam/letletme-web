@@ -8,6 +8,7 @@ import type { ClientSignalMeasurementKind } from '@/lib/client-signal-contract'
 
 export const ROUTE_READY_METRIC_NAMES = new Set([
 	'FIXTURES_WINDOW_READY',
+	'LIVE_POINTS_READY',
 	'LIVE_MATCHDAY_READY',
 	'LIVE_MATCH_PLAYERS_READY',
 	'LIVE_COMPETITIONS_LIST_READY',

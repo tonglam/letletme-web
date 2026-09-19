@@ -1,5 +1,6 @@
 'use client'
 
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
 import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
@@ -45,6 +46,9 @@ import { LivePointsTransfers } from './LivePointsTransfers'
 import { useLivePlayerDetail } from '../_hooks/useLivePlayerDetail'
 
 export function LivePointsDashboard({
+	readyRecoveryAttempt,
+	readyMeasurementEnabled,
+	activeEntryId,
 	entrySearch,
 	currentGameweek,
 	selectedGameweek,
@@ -66,6 +70,9 @@ export function LivePointsDashboard({
 	onEntryLookupRetry,
 	nextRefreshAt
 }: {
+	readyRecoveryAttempt: number
+	readyMeasurementEnabled: boolean
+	activeEntryId: number
 	entrySearch?: ReactNode
 	currentGameweek: number
 	selectedGameweek?: number
@@ -144,6 +151,14 @@ export function LivePointsDashboard({
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
 	const officialScore = traceableLiveScore(liveData?.score)
+	const renderedPlayers = [...startingPlayers, ...benchPlayers]
+	const pointsReady = Boolean(
+		!isLoading && !isRefreshing && !error && officialScore &&
+		liveData?.entry === activeEntryId && liveData?.event === gameweek &&
+		liveData.pickList.length === 15 && renderedPlayers.length === 15 &&
+		new Set(renderedPlayers.map(player => player.id)).size === 15 &&
+		liveData.pickList.every(pick => renderedPlayers.some(player => player.id === String(pick.element)))
+	)
 	const officialEventPoints = officialScore?.eventPoints ?? null
 	const officialTotalPoints =
 		officialScore?.totalScope === 'OVERALL' ? officialScore.totalPoints : null
@@ -289,6 +304,12 @@ export function LivePointsDashboard({
 
 	return (
 		<>
+			<div data-live-points-ready={pointsReady} data-live-entry={activeEntryId}
+				data-live-gw={liveData?.event} data-selected-gw={gameweek}
+				data-live-revision={officialScore?.revisions.input ?? officialScore?.revisions.scoreCore}>
+				<RouteReadyMarker key={readyRecoveryAttempt} name="LIVE_POINTS_READY" ready={pointsReady && readyMeasurementEnabled}
+					readyKey={`live-points:${activeEntryId}:${gameweek}`} audienceHint="session-hint" />
+			</div>
 			<div className="mb-6">
 				{entrySearch ? <Card className="mb-4 p-4">{entrySearch}</Card> : null}
 				<GameweekSelector

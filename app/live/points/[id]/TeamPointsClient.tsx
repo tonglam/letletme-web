@@ -99,6 +99,9 @@ export default function TeamPointsClient({
 	} else {
 		content = (
 			<LivePointsDashboard
+				readyRecoveryAttempt={livePoints.readyRecoveryAttempt}
+				readyMeasurementEnabled={livePoints.readyMeasurementEnabled}
+				activeEntryId={entryId}
 				currentGameweek={livePoints.currentGameweek}
 				selectedGameweek={livePoints.selectedGameweek}
 				isLoading={livePoints.isLoading}

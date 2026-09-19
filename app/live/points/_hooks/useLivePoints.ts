@@ -1,5 +1,6 @@
 'use client'
 
+import { clearRouteReadyStart, markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
@@ -91,6 +92,24 @@ export function useLivePoints({
 }: UseLivePointsOptions) {
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
+	const [readyMeasurementMode, setReadyMeasurementMode] = useState<'enabled' | 'suppressed' | 'recovery'>('enabled')
+	const readyMeasurementEnabled = readyMeasurementMode === 'enabled'
+	const [readyRecoveryAttempt, setReadyRecoveryAttempt] = useState(0)
+	const pendingReadyClock = useRef<{ pathname: string; key: string } | null>(null)
+	const clearPendingReadyClock = useCallback(() => {
+		const pending = pendingReadyClock.current
+		if (pending) clearRouteReadyStart(pending.pathname, pending.key)
+		pendingReadyClock.current = null
+	}, [])
+	const startReadyClock = useCallback((entryId: number, gameweek: number) => {
+		clearPendingReadyClock()
+		setReadyMeasurementMode('enabled')
+		const pathname = window.location.pathname
+		const key = `live-points:${entryId}:${gameweek}`
+		pendingReadyClock.current = { pathname, key }
+		markRouteReadyStart(pathname, performance.now(), key)
+	}, [clearPendingReadyClock])
+	useEffect(() => clearPendingReadyClock, [clearPendingReadyClock])
 	const seededEventId = initialLiveData?.event ?? initialEventId
 	const initialSelectedEventId = initialSelectedGameweek ?? seededEventId
 	const initialOfficialUpdatingForSelectedEvent =
@@ -436,6 +455,8 @@ export function useLivePoints({
 
 						// Do not paint an empty pitch after the bounded sync window.
 						// Keep the page in its explicit no-data state instead.
+						clearPendingReadyClock()
+						setReadyMeasurementMode('recovery')
 						liveDataRetryRef.current = null
 						latestLiveDataRef.current = null
 						hasLoadedLiveDataRef.current = false
@@ -469,6 +490,7 @@ export function useLivePoints({
 						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
 					)
 					hasLoadedLiveDataRef.current = true
+					setReadyMeasurementMode(mode => mode === 'recovery' ? 'suppressed' : mode)
 					if (eventId === currentGameweekRef.current) {
 						officialSyncPendingRef.current = false
 						officialUpdatingRef.current = false
@@ -483,6 +505,8 @@ export function useLivePoints({
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
 				} catch (fetchError) {
 					if (requestId !== requestIdRef.current) return
+					clearPendingReadyClock()
+					setReadyMeasurementMode('recovery')
 					if (!shouldSuppressOfficialErrorsForEvent(eventId)) {
 						console.error('Failed to fetch live points:', fetchError)
 						setError(t('loadFailed'))
@@ -516,6 +540,7 @@ export function useLivePoints({
 		[
 			acceptSnapshot,
 			activeEntryId,
+			clearPendingReadyClock,
 			enrichLivePointBreakdowns,
 			shouldSuppressOfficialErrorsForEvent,
 			t
@@ -544,6 +569,9 @@ export function useLivePoints({
 			return true
 		}
 
+		if (selectedGameweek !== undefined) {
+			startReadyClock(nextEntryId, selectedGameweek)
+		}
 		gameweekSelectionRef.current += 1
 		requestIdRef.current += 1
 		resetLiveDataRetry()
@@ -567,6 +595,7 @@ export function useLivePoints({
 		fetchLivePointsForGameweek,
 		resetLiveDataRetry,
 		selectedGameweek,
+		startReadyClock,
 		t
 	])
 
@@ -575,6 +604,7 @@ export function useLivePoints({
 			const selectionId = ++gameweekSelectionRef.current
 			resetLiveDataRetry()
 			if (gameweek !== selectedGameweek) {
+				startReadyClock(activeEntryId, gameweek)
 				// Selection changes identity before the lifecycle probe can await.
 				// Neither old points nor late responses belong to the new GW.
 				requestIdRef.current += 1
@@ -615,19 +645,25 @@ export function useLivePoints({
 		},
 		[
 			acceptSnapshot,
+			activeEntryId,
 			fetchLivePointsForGameweek,
 			refreshOfficialSyncStateForCurrentEvent,
 			resetLiveDataRetry,
-			selectedGameweek
+			selectedGameweek,
+			startReadyClock
 		]
 	)
 
 	const refresh = useCallback(async () => {
 		if (selectedGameweek !== undefined) {
+			if (readyMeasurementMode === 'recovery') {
+				setReadyRecoveryAttempt(attempt => attempt + 1)
+				startReadyClock(activeEntryId, selectedGameweek)
+			}
 			resetLiveDataRetry()
 			await fetchLivePointsForGameweek(selectedGameweek)
 		}
-	}, [fetchLivePointsForGameweek, resetLiveDataRetry, selectedGameweek])
+	}, [activeEntryId, fetchLivePointsForGameweek, readyMeasurementMode, resetLiveDataRetry, selectedGameweek, startReadyClock])
 
 	useEffect(() => resetLiveDataRetry, [resetLiveDataRetry])
 
@@ -674,6 +710,8 @@ export function useLivePoints({
 			)
 			if (observedAnchorEventId && observedAnchorEventId !== currentGameweek) {
 				if (followsAnchorRef.current) {
+					clearPendingReadyClock()
+					setReadyMeasurementMode('suppressed')
 					setSelectedGameweek(observedAnchorEventId)
 					await fetchLivePointsForGameweek(observedAnchorEventId)
 				}
@@ -707,6 +745,7 @@ export function useLivePoints({
 		}
 	}, [
 		acceptSnapshot,
+		clearPendingReadyClock,
 		enrichLivePointBreakdowns,
 		fetchLivePointsForGameweek,
 		currentGameweek,
@@ -903,6 +942,8 @@ export function useLivePoints({
 	})
 
 	return {
+		readyRecoveryAttempt,
+		readyMeasurementEnabled,
 		activeEntryId,
 		autoRefresh,
 		benchPlayers,
