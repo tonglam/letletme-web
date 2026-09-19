@@ -12,6 +12,7 @@ import {
 	Tooltip,
 	XAxis,
 	YAxis,
+	type MouseHandlerDataParam,
 } from 'recharts'
 import type { ReactNode } from 'react'
 
@@ -42,11 +43,10 @@ type SharedChartProps = {
 	invertY?: boolean
 }
 
-function activePoint(state: unknown): ChartDatum | null {
-	if (!state || typeof state !== 'object') return null
-	const payload = (state as { activePayload?: Array<{ payload?: unknown }> }).activePayload
-	const point = payload?.[0]?.payload
-	return point && typeof point === 'object' ? (point as ChartDatum) : null
+function activePoint(state: MouseHandlerDataParam, data: ChartDatum[]): ChartDatum | null {
+	if (!state.isTooltipActive || state.activeTooltipIndex == null) return null
+	const index = Number(state.activeTooltipIndex)
+	return Number.isInteger(index) && index >= 0 ? data[index] ?? null : null
 }
 
 function ChartShell({
@@ -84,10 +84,10 @@ export function LineChart({
 				data={data}
 				margin={{ top: 12, right: 12, bottom: 4, left: 8 }}
 				accessibilityLayer
-				onMouseMove={state => onActivePointChange?.(activePoint(state))}
+				onMouseMove={state => onActivePointChange?.(activePoint(state, data))}
 				onMouseLeave={() => onActivePointChange?.(null)}
 				onClick={state => {
-					const point = activePoint(state)
+					const point = activePoint(state, data)
 					if (point) onPointClick?.(point)
 				}}
 			>
@@ -162,10 +162,10 @@ export function BarChart({
 				data={data}
 				margin={{ top: 12, right: 12, bottom: 4, left: 8 }}
 				accessibilityLayer
-				onMouseMove={state => onActivePointChange?.(activePoint(state))}
+				onMouseMove={state => onActivePointChange?.(activePoint(state, data))}
 				onMouseLeave={() => onActivePointChange?.(null)}
 				onClick={state => {
-					const point = activePoint(state)
+					const point = activePoint(state, data)
 					if (point) onPointClick?.(point)
 				}}
 			>
@@ -180,6 +180,7 @@ export function BarChart({
 					minTickGap={12}
 				/>
 				<YAxis
+					allowDecimals={false}
 					domain={['auto', 'auto']}
 					stroke="hsl(var(--muted-foreground))"
 					tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
@@ -234,10 +235,10 @@ export function ComboChart({
 				data={data}
 				margin={{ top: 12, right: 12, bottom: 4, left: 8 }}
 				accessibilityLayer
-				onMouseMove={state => onActivePointChange?.(activePoint(state))}
+				onMouseMove={state => onActivePointChange?.(activePoint(state, data))}
 				onMouseLeave={() => onActivePointChange?.(null)}
 				onClick={state => {
-					const point = activePoint(state)
+					const point = activePoint(state, data)
 					if (point) onPointClick?.(point)
 				}}
 			>
