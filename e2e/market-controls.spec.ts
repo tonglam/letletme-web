@@ -196,6 +196,20 @@ for (const locale of ['en', 'zh-CN']) {
     } })
    })
    const imageShare = region.getByRole('button', { name: zh ? '图片' : 'Image', exact: true })
+   await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob
+    HTMLCanvasElement.prototype.toBlob = function () {
+     HTMLCanvasElement.prototype.toBlob = original
+     document.documentElement.dataset.fixtureEncoderFailed = 'true'
+     throw new Error('Fixture encoder failed once')
+    }
+   })
+   await imageShare.click()
+   await expect(page.getByText(zh ? '分享失败' : 'Share failed', { exact: true })).toBeVisible()
+   expect(await page.evaluate(() => document.documentElement.dataset.fixtureEncoderFailed)).toBe('true')
+   expect(await page.evaluate(() => document.documentElement.dataset.fixturePng)).toBeUndefined()
+   await expect(region).not.toHaveAttribute('data-share-rendering', 'true')
+   await expect(imageShare).not.toContainText(zh ? '已分享' : 'Done')
    await imageShare.click()
    await expect(imageShare).toContainText(zh ? '已分享' : 'Done', { timeout: 15000 })
    const png = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixturePng ?? '{}'))
@@ -203,6 +217,29 @@ for (const locale of ['en', 'zh-CN']) {
    expect(png.size).toBeGreaterThan(0)
    expect(png.width).toBeGreaterThan(0)
    expect(png.height).toBeGreaterThan(0)
+   for (const outcome of ['cancelled', 'unsupported', 'shared'] as const) {
+    await page.evaluate(outcome => {
+     delete document.documentElement.dataset.fixtureNativePng
+     Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { mobile: true } })
+     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => outcome !== 'unsupported' })
+     Object.defineProperty(navigator, 'share', { configurable: true, value: async (data: ShareData) => {
+      const file = data.files?.[0]
+      document.documentElement.dataset.fixtureNativePng = JSON.stringify({ name: file?.name, type: file?.type, size: file?.size })
+      if (outcome === 'cancelled') throw new DOMException('Fixture cancellation', 'AbortError')
+     } })
+    }, outcome)
+    await imageShare.click()
+    await expect(page.getByText(zh ? (outcome === 'shared' ? '图片已分享' : outcome === 'unsupported' ? '请手动复制' : '分享失败') : (outcome === 'shared' ? 'Image shared' : outcome === 'unsupported' ? 'Copy manually' : 'Share failed'), { exact: true })).toBeVisible()
+    const file = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixtureNativePng ?? 'null'))
+    if (outcome === 'unsupported') expect(file).toBeNull()
+    else {
+     expect(file.name).toBe('letletme-share.png')
+     expect(file.type).toBe('image/png')
+     expect(file.size).toBeGreaterThan(0)
+    }
+    await expect(region).not.toHaveAttribute('data-share-rendering', 'true')
+   }
    } finally {
     await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    }
