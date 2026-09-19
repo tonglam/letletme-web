@@ -2453,7 +2453,7 @@
 		"lastUpdated": "Official scores checked {time}",
 		"refreshFailedRetained": "Refresh failed. The last available standings are still shown.",
 		"partialResults": "Partial results: {failed}/{total} entries failed to calculate. Failed rows may be missing or shown as stale until the next successful refresh.",
-		"staleRowHint": "Previous score retained — this entry failed to recalculate on the last refresh.",
+		"staleRowHint": "This entry’s data is delayed, incomplete, or temporarily unavailable.",
 		"nextRefresh": "Next refresh in {seconds}s",
 		"lastUpdated": "Updated {time}",
 		"refresh": "Refresh",
