@@ -148,9 +148,16 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(share).toHaveCount(1)
    await expect(share).toBeVisible()
    const fallback = region.getByRole('textbox', { name: zh ? '文字' : 'Text', exact: true })
-   for (const outcome of ['unsupported', 'failed', 'copied'] as const) {
+   for (const outcome of ['unsupported', 'failed', 'cancelled', 'shared', 'copied'] as const) {
     await page.evaluate(outcome => {
-     Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+     const native = outcome === 'shared' || outcome === 'cancelled'
+     delete document.documentElement.dataset.fixtureCopiedText
+     delete document.documentElement.dataset.fixtureSharedText
+     Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { mobile: native } })
+     Object.defineProperty(navigator, 'share', { configurable: true, value: native ? async (payload: ShareData) => {
+      document.documentElement.dataset.fixtureSharedText = payload.text
+      if (outcome === 'cancelled') throw new DOMException('Fixture user cancelled', 'AbortError')
+     } : undefined })
      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: outcome === 'unsupported' ? undefined : {
       writeText: async (text: string) => {
        if (outcome === 'failed') throw new Error('fixture clipboard rejected')
@@ -159,18 +166,43 @@ for (const locale of ['en', 'zh-CN']) {
      } })
     }, outcome)
     await share.click()
-    if (outcome === 'copied') {
+    if (outcome === 'copied' || outcome === 'shared') {
      await expect(share).toContainText(zh ? '已分享' : 'Done')
      await expect(fallback).toHaveCount(0)
-     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toContain('/explore/market')
+     await expect.poll(() => page.evaluate(kind => kind === 'copied' ? document.documentElement.dataset.fixtureCopiedText : document.documentElement.dataset.fixtureSharedText, outcome)).toContain('/explore/market')
+     if (outcome === 'shared') expect(await page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toBeUndefined()
     } else {
      await expect(fallback).toBeVisible()
+     if (outcome === 'cancelled') {
+      expect(await page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toBeUndefined()
+      await expect(share).not.toContainText(zh ? '已分享' : 'Done')
+     }
      await expect(fallback).toHaveValue(/\/explore\/market/)
      await expect(fallback).toHaveAttribute('readonly', '')
      await region.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
      await expect(fallback).toHaveCount(0)
     }
    }
+   await page.evaluate(() => {
+    Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { mobile: false } })
+    Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+     write: async (items: ClipboardItem[]) => {
+      const blob = await items[0].getType('image/png')
+      const bitmap = await createImageBitmap(blob)
+      document.documentElement.dataset.fixturePng = JSON.stringify({ type: blob.type, size: blob.size, width: bitmap.width, height: bitmap.height })
+      bitmap.close()
+     }
+    } })
+   })
+   const imageShare = region.getByRole('button', { name: zh ? '图片' : 'Image', exact: true })
+   await imageShare.click()
+   await expect(imageShare).toContainText(zh ? '已分享' : 'Done', { timeout: 15000 })
+   const png = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fixturePng ?? '{}'))
+   expect(png.type).toBe('image/png')
+   expect(png.size).toBeGreaterThan(0)
+   expect(png.width).toBeGreaterThan(0)
+   expect(png.height).toBeGreaterThan(0)
    } finally {
     await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    }
