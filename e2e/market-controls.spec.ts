@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import enMessages from '../messages/en.json'
+import zhMessages from '../messages/zh-CN.json'
 import type { PriceChangeObservedEvent } from '../lib/graphql/operations/price-changes'
 
 for (const locale of ['en', 'zh-CN']) {
@@ -309,3 +311,46 @@ for (const locale of ['en', 'zh-CN']) {
   await expect(board).toHaveAttribute('data-price-change-status', 'READY')
  })
 }
+
+test.describe('SSR remediation PRED03 board states', () => {
+ test.describe.configure({ mode: 'serial' })
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const status of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'] as const) {
+  for (const locale of ['en', 'zh-CN']) {
+   for (const width of [1440, 390]) {
+    test(`${status} ${locale} ${width}`, async ({ page }, testInfo) => {
+     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_MARKET_READINESS !== '1', 'Run each PRED03 status in a separate isolated standalone clone')
+     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+     const t = (locale === 'en' ? enMessages : zhMessages).PriceChanges
+     const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+     seed.data.priceChangeBoard.status = status
+     seed.data.priceChangeBoard.revision = `state-${status}`
+     if (status === 'UNAVAILABLE') {
+      seed.data.priceChangeBoard.players = []
+      seed.data.priceChangeBoard.observedPlayerCount = 0
+     }
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+     try {
+      expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+      await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`)
+      const board = page.locator('[data-price-predictions-board]')
+      await expect(board).toHaveAttribute('data-price-change-status', status)
+      await expect(board).toHaveAttribute('data-price-change-revision', `state-${status}`)
+      await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+      const expected = status === 'PARTIAL' ? t.statusPartial : status === 'STALE' ? t.statusStale : status === 'UNAVAILABLE' ? t.statusUnavailable : null
+      for (const text of [t.statusPartial, t.statusStale, t.statusUnavailable]) {
+       if (text === expected) await expect(board.getByText(text, { exact: true })).toBeVisible()
+       else await expect(board.getByText(text, { exact: true })).toHaveCount(0)
+      }
+      if (status === 'UNAVAILABLE') await expect(board.getByText('Saka', { exact: true })).toHaveCount(0)
+      else await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+      await testInfo.attach('PRED03-state', { contentType: 'application/json', body: JSON.stringify({ locale, width, status, revision: `state-${status}`, expected, performanceStatus: 'NOT_RUN', readyMs: null }) })
+     } finally {
+      await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+     }
+    })
+   }
+  }
+ }
+})
