@@ -574,6 +574,23 @@ export function useLivePoints({
 		(gameweek: number) => {
 			const selectionId = ++gameweekSelectionRef.current
 			resetLiveDataRetry()
+			if (gameweek !== selectedGameweek) {
+				// Selection changes identity before the lifecycle probe can await.
+				// Neither old points nor late responses belong to the new GW.
+				requestIdRef.current += 1
+				inFlightRequestRef.current = null
+				currentRequestKeyRef.current = null
+				latestLiveDataRef.current = null
+				hasLoadedLiveDataRef.current = false
+				breakdownCacheRef.current = null
+				setLiveData(undefined)
+				setStartingPlayers([])
+				setBenchPlayers([])
+				acceptSnapshot(null)
+				setError(undefined)
+				setIsRefreshing(false)
+				setIsLoading(true)
+			}
 			followsAnchorRef.current = false
 			lastExplainAttemptAtRef.current = 0
 			const selectingCurrentGameweek =
@@ -597,9 +614,11 @@ export function useLivePoints({
 			})()
 		},
 		[
+			acceptSnapshot,
 			fetchLivePointsForGameweek,
 			refreshOfficialSyncStateForCurrentEvent,
-			resetLiveDataRetry
+			resetLiveDataRetry,
+			selectedGameweek
 		]
 	)
 
