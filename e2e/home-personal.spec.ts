@@ -4700,7 +4700,7 @@ test.describe('GOV isolated admin REST evidence', () => {
  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_GOVERNANCE !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-governance-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Dedicated isolated governance runtime only')
  for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
-  for (const failed of ['none', 'overview', 'windows', 'cases']) {
+  for (const failed of ['none', 'overview', 'windows', 'cases', 'large']) {
    test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
     const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -4709,6 +4709,12 @@ test.describe('GOV isolated admin REST evidence', () => {
      overview: { success: true, generatedAt: '2026-09-19T00:00:00Z', registry: [{ contractKey: 'fixture-contract', queueName: 'fixture-queue', criticality: 'MET', cadence: 'every minute' }], freshness: { pending: 3, breached: 2, invalid: 1, notApplicable: 4 }, queues: [{ name: 'fixture-queue', counts: { waiting: 7 }, health: { backlogClass: 'HEALTHY', oldestRunnableAgeMs: 3000, drainEtaMs: 4000 } }], queueHealthWindows: [], runtime: { fixtureProducer: { healthy: true, heartbeat: { releaseSha: 'fixture-release-gov' } } }, publicationConsistency: { fixtureRevisionAgreement: true }, errorBudgetBurn: { burnRate: 0.25, breached: 2, eligible: 8 } },
      windows: { success: true, windows: [{ contractKey: 'fixture-window', scopeKey: 'GW5-fixture', status: 'BREACHED', breachCode: 'FIXTURE_LATE', dueAt: '2026-09-19T00:00:00Z' }] },
      cases: { success: true, cases: [{ caseId: 'fixture-case-1746', contractKey: 'fixture-contract', lane: 'fixture', status: 'OPEN', errorCode: 'FIXTURE_CASE', updatedAt: '2026-09-19T00:00:00Z' }], openCount: 1, total: 1 }
+    }
+    const largeQueues = Array.from({ length: 40 }, (_, index) => ({ name: `fixture-long-queue-${String(index).padStart(2, '0')}-${'segment-'.repeat(12)}`, counts: { waiting: index }, health: { backlogClass: 'HEALTHY', oldestRunnableAgeMs: 3000, drainEtaMs: 4000 } }))
+    const queueHistory = largeQueues.flatMap(queue => Array.from({ length: 30 }, (_, index) => ({ queueName: queue.name, windowStart: new Date(Date.UTC(2026, 8, 19, 0, index)).toISOString(), backlogClass: index % 2 ? 'HEALTHY' : 'BURST' }))).reverse()
+    if (failed === 'large') {
+     seeds.overview.queues = largeQueues
+     Object.assign(seeds.overview, { queueHealthWindows: queueHistory })
     }
     try {
      const rules = Object.entries(paths).map(([key, path]) => ({ path, status: key === failed ? 503 : 200, data: key === failed ? { success: false } : seeds[key as keyof typeof seeds] }))
@@ -4733,9 +4739,25 @@ test.describe('GOV isolated admin REST evidence', () => {
       if (failed === 'cases') await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toBeVisible()
       else await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
      }
+     if (failed === 'large') {
+      const rows = page.getByRole('row').filter({ hasText: 'fixture-long-queue-' })
+      await expect(rows).toHaveCount(40)
+      for (const queue of largeQueues) {
+       const history = page.locator(`[aria-label="${queue.name} queue health history"]`)
+       await expect(history.locator('span')).toHaveCount(24)
+       const titles = await history.locator('span').evaluateAll(nodes => nodes.map(node => node.getAttribute('title')))
+       expect(titles[0]).toContain('BURST')
+       expect(titles[0]).toContain('08:06:00')
+       expect(titles[23]).toContain('HEALTHY')
+       expect(titles[23]).toContain('08:29:00')
+      }
+      const layout = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth }))
+      await testInfo.attach('GOV-large-layout', { body: JSON.stringify(layout), contentType: 'application/json' })
+      expect(layout.documentWidth, 'Long queue names must not overflow the entire page').toBeLessThanOrEqual(layout.viewport + 1)
+     }
      const requests = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'DataGovernance')
      expect(requests.map((row: { path: string }) => row.path).sort()).toEqual(Object.values(paths).sort())
-     if (failed !== 'none') {
+     if (['overview', 'windows', 'cases'].includes(failed)) {
       const restored = Object.entries(paths).map(([key, path]) => ({ path, status: 200, data: seeds[key as keyof typeof seeds] }))
       expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: restored }) })).ok).toBe(true)
       await page.reload()
@@ -4747,7 +4769,7 @@ test.describe('GOV isolated admin REST evidence', () => {
       await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toHaveCount(0)
       await expect(page.getByText('freshness window evidence unavailable', { exact: true })).toHaveCount(0)
      }
-     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ locale, width, failed, reloadRecovery: failed !== 'none', paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
+     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ locale, width, failed, reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
     } finally {
      try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
     }
