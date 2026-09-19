@@ -395,7 +395,38 @@ test.describe('SSR remediation PRED03 cached board', () => {
       if (valid) await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
       else await expect(board.getByText('Saka', { exact: true })).toHaveCount(0)
       if (cacheState === 'expired') expect(await page.evaluate(() => localStorage.getItem('letletme:price-change-board:v2'))).toBeNull()
-      await testInfo.attach('PRED03-cache', { contentType: 'application/json', body: JSON.stringify({ cacheState, locale, width, status: valid ? 'STALE' : 'UNAVAILABLE', readyMs: null, performanceStatus: 'NOT_RUN' }) })
+      if (valid) {
+       const recovered = { ...cached, status: 'READY', revision: 'recovered-price-proof', players: cached.players.map((player: { webName: string }) => ({ ...player, webName: player.webName === 'Saka' ? 'Recovered Saka' : player.webName })) }
+       const pathname = `${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`
+       let release!: () => void
+       const gate = new Promise<void>(resolve => { release = resolve })
+       let waiting = false
+       await page.route(`**${pathname}?_rsc=*`, async route => {
+        waiting = true
+        await gate
+        const response = await route.fetch()
+        const body = await response.text()
+        const serialized = JSON.stringify(unavailable)
+        if (!body.includes(serialized)) await testInfo.attach('recovery-seed-shape', { contentType: 'text/plain', body: body.slice(Math.max(0, body.indexOf('offline-price-proof') - 350), body.indexOf('offline-price-proof') + 600) })
+        expect(body).toContain(serialized)
+        await route.fulfill({ response, body: body.replaceAll(serialized, JSON.stringify(recovered)) })
+       })
+       try {
+        await page.getByRole('button', { name: locale === 'en' ? 'Refresh' : '刷新', exact: true }).click()
+        await expect.poll(() => waiting).toBe(true)
+        await expect(board).toHaveAttribute('data-price-change-refreshing', 'true')
+        await expect(board).toHaveAttribute('data-price-change-revision', 'cached-price-proof')
+        await expect(board.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+       } finally { release() }
+       await expect(board).toHaveAttribute('data-price-change-status', 'READY')
+       await expect(board).toHaveAttribute('data-price-change-revision', 'recovered-price-proof')
+       await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+       await expect(board.getByRole('link', { name: 'Recovered Saka', exact: true })).toBeVisible()
+       await expect(board.getByRole('link', { name: 'Saka', exact: true })).toHaveCount(0)
+       await expect(board.getByText(t.statusStale, { exact: true })).toHaveCount(0)
+       await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('letletme:price-change-board:v2') ?? '{}').board?.revision)).toBe('recovered-price-proof')
+      }
+      await testInfo.attach('PRED03-cache', { contentType: 'application/json', body: JSON.stringify({ cacheState, locale, width, initialStatus: valid ? 'STALE' : 'UNAVAILABLE', finalStatus: valid ? 'READY' : 'UNAVAILABLE', recoveredBy: valid ? 'controlled RSC seed after actual refresh click' : null, readyMs: null, performanceStatus: 'NOT_RUN' }) })
      } finally {
       await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
      }
