@@ -4006,7 +4006,7 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
-  test(`manager selection uses one read path ${locale} ${width}px`, async ({ page }) => {
+  test(`SSR remediation manager selection uses one read path ${locale} ${width}px`, async ({ page }) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
    const session = await createSession({ entryId: 15702 })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
