@@ -103,6 +103,7 @@ export default function LivePointsClient({
 	} else {
 		content = (
 			<LivePointsDashboard
+				activeEntryId={livePoints.activeEntryId}
 				entrySearch={entrySearch}
 				currentGameweek={livePoints.currentGameweek}
 				selectedGameweek={livePoints.selectedGameweek}

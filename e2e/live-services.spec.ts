@@ -1517,14 +1517,27 @@ for (const navigation of ['initial_navigation', 'in_page_navigation']) {
  })
 }
 
-test('switching to the current gameweek clears the previous squad before the context probe completes', async ({ page }) => {
+test('switching to the current gameweek clears the previous squad before the context probe completes', async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the isolated GraphQL fixture')
+	const readySamples: { metricName: string; measurementKind: string; result: string; value: number }[] = []
+	await page.route('**/api/vitals', async route => {
+		readySamples.push(...(route.request().postDataJSON().samples ?? []))
+		await route.fulfill({ status: 204, body: '' })
+	})
 	let holdContext = false
 	let contextWaiting = false
 	let releaseContext!: () => void
 	const contextGate = new Promise<void>(resolve => { releaseContext = resolve })
+	let holdRefresh = false
+	let refreshWaiting = false
+	let releaseRefresh!: () => void
+	const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve })
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as { query?: string }
+		if (holdRefresh && payload.query?.includes('GetLiveCalcPoints')) {
+			refreshWaiting = true
+			await refreshGate
+		}
 		if (holdContext && payload.query?.includes('GetLiveContext')) {
 			contextWaiting = true
 			await contextGate
@@ -1535,6 +1548,11 @@ test('switching to the current gameweek clears the previous squad before the con
 	const pitch = page.getByRole('region', { name: /formation/ })
 	await expect(pitch).toBeVisible()
 	await expect(page.getByRole('combobox').first()).toContainText('Gameweek 32')
+	const readyMarker = page.locator('[data-live-points-ready="true"]')
+	await expect(readyMarker).toHaveAttribute('data-live-entry', '123')
+	await expect(readyMarker).toHaveAttribute('data-live-gw', '32')
+	await expect.poll(() => readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.result === 'ok').length).toBe(1)
+	expect(readySamples.find(s => s.metricName === 'LIVE_POINTS_READY')?.measurementKind).toBe('initial_navigation')
 	holdContext = true
 	try {
 		await page.getByRole('button', { name: 'Next gameweek', exact: true }).click()
@@ -1542,6 +1560,8 @@ test('switching to the current gameweek clears the previous squad before the con
 		// The old squad must not remain actionable under the new GW selector,
 		// even while the prerequisite lifecycle read has not returned.
 		await expect(pitch).toHaveCount(0)
+		await expect(readyMarker).toHaveCount(0)
+		expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.result === 'ok')).toHaveLength(1)
 		await expect(page.getByRole('button', { name: 'View details for Player 1', exact: true })).toHaveCount(0)
 	} finally {
 		holdContext = false
@@ -1550,4 +1570,25 @@ test('switching to the current gameweek clears the previous squad before the con
 	await expect(pitch).toBeVisible()
 	await expect(page.getByRole('combobox').first()).toContainText('Gameweek 33')
 	await expect(page.getByRole('link', { name: 'Back to competition', exact: true })).toHaveAttribute('href', /tournamentId=3&gw=33/)
+	await expect(readyMarker).toHaveAttribute('data-live-gw', '33')
+	await expect(readyMarker).toHaveAttribute('data-live-entry', '123')
+	await expect.poll(() => readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.result === 'ok').length).toBe(2)
+	expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY').map(s => s.measurementKind)).toEqual(['initial_navigation', 'interaction'])
+	// A refresh has its own pending state, but is not another navigation.
+	holdRefresh = true
+	try {
+		await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+		await expect.poll(() => refreshWaiting).toBe(true)
+		await expect(readyMarker).toHaveCount(0)
+		await expect(pitch).toBeVisible()
+	} finally {
+		holdRefresh = false
+		releaseRefresh()
+	}
+	await expect(readyMarker).toHaveAttribute('data-live-gw', '33')
+	await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
+	// Allow the refreshed render and its effects to settle before checking duplicates.
+	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+	expect(readySamples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(2)
+	await testInfo.attach('live-points-ready-samples', { body: JSON.stringify(readySamples), contentType: 'application/json' })
 })

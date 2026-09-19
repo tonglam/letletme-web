@@ -99,6 +99,7 @@ export default function TeamPointsClient({
 	} else {
 		content = (
 			<LivePointsDashboard
+				activeEntryId={entryId}
 				currentGameweek={livePoints.currentGameweek}
 				selectedGameweek={livePoints.selectedGameweek}
 				isLoading={livePoints.isLoading}

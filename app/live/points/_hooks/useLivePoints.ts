@@ -1,5 +1,6 @@
 'use client'
 
+import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
@@ -544,6 +545,9 @@ export function useLivePoints({
 			return true
 		}
 
+		if (selectedGameweek !== undefined) {
+			markRouteReadyStart(window.location.pathname, performance.now(), `live-points:${nextEntryId}:${selectedGameweek}`)
+		}
 		gameweekSelectionRef.current += 1
 		requestIdRef.current += 1
 		resetLiveDataRetry()
@@ -575,6 +579,7 @@ export function useLivePoints({
 			const selectionId = ++gameweekSelectionRef.current
 			resetLiveDataRetry()
 			if (gameweek !== selectedGameweek) {
+				markRouteReadyStart(window.location.pathname, performance.now(), `live-points:${activeEntryId}:${gameweek}`)
 				// Selection changes identity before the lifecycle probe can await.
 				// Neither old points nor late responses belong to the new GW.
 				requestIdRef.current += 1
@@ -615,6 +620,7 @@ export function useLivePoints({
 		},
 		[
 			acceptSnapshot,
+			activeEntryId,
 			fetchLivePointsForGameweek,
 			refreshOfficialSyncStateForCurrentEvent,
 			resetLiveDataRetry,
