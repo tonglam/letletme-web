@@ -994,7 +994,7 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
 for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
@@ -1096,18 +1096,39 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(live).toBeVisible()
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
 			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			let recoveryBoardRequests = 0
+			if (recoveryMode === 'live-journey-index-gone-new-revision') {
+				await page.route('**/api/live/competitions/6/board', async route => {
+					recoveryBoardRequests += 1
+					const response = await route.fetch()
+					const body = await response.json()
+					if (recoveryBoardRequests > 1) {
+						const board = body.entryLiveCompetitionBoard
+						board.head.contentRevision = 'recovered-content-v2'
+						board.head.publication.revisions.scoreCore = 'e2e-competition-score-v2'
+						for (const row of board.rows) row.score.revisions.scoreCore = 'e2e-competition-score-v2'
+					}
+					await route.fulfill({ response, json: body })
+				})
+			}
 			let indexRequests = 0
-			if (recoveryMode === 'live-journey-index-retry') {
+			if (recoveryMode === 'live-journey-index-retry' || recoveryMode.startsWith('live-journey-index-gone')) {
 				await page.route('**/api/live/competitions/6/selection-index?*', async route => {
 					indexRequests += 1
-					if (indexRequests === 1) await route.fulfill({ status: 503, json: { error: 'DEPENDENCY_UNAVAILABLE' } })
-					else await route.continue()
+					if (indexRequests === 1) await route.fulfill({ status: recoveryMode.startsWith('live-journey-index-gone') ? 409 : 503, json: { error: recoveryMode.startsWith('live-journey-index-gone') ? 'LIVE_SCORE_REVISION_GONE' : 'DEPENDENCY_UNAVAILABLE' } })
+					else if (recoveryMode === 'live-journey-index-gone-new-revision') {
+						expect(new URL(route.request().url()).searchParams.get('scoreCoreRevision')).toBe('e2e-competition-score-v2')
+						const response = await route.fetch()
+						const body = await response.json()
+						body.tournamentSelectionIndex.scoreCoreRevision = 'e2e-competition-score-v2'
+						await route.fulfill({ response, json: body })
+					} else await route.continue()
 				})
 			}
 			const selectionResponse = page.waitForResponse(response =>
 				response.url().includes('/api/live/competitions/6/selection-index?') && response.status() === 200)
 			await live.click()
-			if (recoveryMode === 'live-journey-index-retry') {
+			if (recoveryMode === 'live-journey-index-retry' || recoveryMode === 'live-journey-index-gone') {
 				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
 				if (locale === 'zh-CN') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
 				const warning = page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })
@@ -1119,10 +1140,16 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			const selection = await (await selectionResponse).json()
 			expect(selection.tournamentSelectionIndex).toMatchObject({
-				tournamentId: 6, eventId: 4, scoreCoreRevision: 'e2e-competition-score-v1',
+				tournamentId: 6, eventId: 4, scoreCoreRevision: recoveryMode === 'live-journey-index-gone-new-revision' ? 'e2e-competition-score-v2' : 'e2e-competition-score-v1',
 				rows: [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
 			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			if (recoveryMode === 'live-journey-index-gone-new-revision') {
+				expect(recoveryBoardRequests).toBe(2)
+				expect(indexRequests).toBe(2)
+				await expect(page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })).toHaveCount(0)
+				await expect(page.locator('[data-competition-perf-ready="detail"]')).toBeVisible()
+			}
 			if (recoveryMode === 'live-journey-focus') {
 				const zh = locale === 'zh-CN'
 				if (catalogWidth === 390) await page.getByRole('button', { name: zh ? '更多筛选' : 'More filters', exact: true }).click()
