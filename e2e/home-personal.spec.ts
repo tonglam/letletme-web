@@ -2731,8 +2731,15 @@ test.describe('J12 planned UTC dark mobile management states', () => {
     await page.getByRole('button', { name: '删除赛事', exact: true }).click()
     const dialog = page.getByRole('alertdialog')
     await expect(dialog).toBeVisible()
+    // C03: bind focus containment to this management AlertDialog instance.
+    for (const key of ['Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
+     await page.keyboard.press(key)
+     expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+    }
+
     await dialog.getByRole('button', { name: '取消', exact: true }).click()
     await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '删除赛事', exact: true })).toBeFocused()
     await expect(lifecycle).toBeEnabled()
     expect(mutations).toEqual([])
     await testInfo.attach('J12-state-scope', { body: JSON.stringify({ variantId: `J12.state.0${['active', 'paused', 'setup-failed'].indexOf(scenario) + 1}`, scenario, locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', scope: 'Management state and cancellation only; full state journey and performance remain unverified' }), contentType: 'application/json' })
@@ -3786,5 +3793,57 @@ test('J12 MANAGE03 pause pending failure and retry recovery', async ({ page }) =
   release()
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
+ }
+})
+
+test.describe('J12 MANAGE02 unavailable management scope', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const scenario of ['owner-revoked', 'not-found'] as const) {
+  test(`J12 MANAGE02 ${scenario} clears sensitive management content`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated management boundary fixture')
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const id = scenario === 'owner-revoked' ? 77 : 987654321
+   const configure = async (available: boolean) => {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetManagedTournament', variables: { tournamentId: id, entryId: 909090 }, data: { managedTournament: available ? managedTournament : null } }
+    ] }) })).ok).toBe(true)
+   }
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await configure(scenario === 'owner-revoked')
+    await page.goto(`/zh-CN/competitions/${id}/manage`)
+    if (scenario === 'owner-revoked') {
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+     await expect(page.getByRole('button', { name: '删除赛事', exact: true })).toBeVisible()
+     await configure(false)
+     await page.reload()
+    }
+    await expect(page).toHaveURL(new RegExp(`/zh-CN/competitions/${id}/manage$`))
+    await expect(page.getByRole('heading', { name: '需要管理员权限', exact: true })).toBeVisible()
+    await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+    for (const name of ['删除赛事', '暂停', '恢复并补齐数据', '修复赛事设置']) {
+     await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+    }
+    await expect(page.locator('#tournament-name')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: /J12 Owned Cup/ })).toHaveCount(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.some((r: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => r.operation === 'GetManagedTournament' && r.variables.tournamentId === id && r.variables.entryId === 909090)).toBe(true)
+    expect(mutations).toEqual([])
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
  }
 })
