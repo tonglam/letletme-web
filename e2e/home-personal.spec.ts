@@ -916,30 +916,51 @@ test.describe('SSR remediation', () => {
 	})
 })
 
-test('canonical competition board and compatibility redirect preserve the committed selection', async ({ page }) => {
-	test.skip(
-		process.env.E2E_LIVE_HYDRATION !== '1',
-		'Uses the deterministic live competition fixture'
-	)
-	const session = await createSession({ entryId: 15702 })
-	try {
-		await addSessionCookie(page, session.cookie)
-		// Next can deliver this redirect in a streamed HTML response (HTTP 200).
-		// Verify the browser destination and committed board, not just the status.
-		await page.goto('/competitions/6?gw=1&created=1')
-		await expect(page).toHaveURL(/\/live\/competitions\?/)
-		const target = new URL(page.url())
-		expect(target.pathname).toBe('/live/competitions')
-		expect(target.searchParams.get('tournamentId')).toBe('6')
-		expect(target.searchParams.get('gw')).toBe('1')
-		expect(target.searchParams.get('created')).toBe('1')
-		const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
-		await expect(board).toBeVisible()
-		await expect(board.getByRole('list')).toBeVisible()
-		await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).first()).toBeVisible()
-		await expect(page.getByRole('heading', { name: /Sign in/ })).toHaveCount(0)
-	} finally { await session.cleanup() }
-})
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`canonical competition board and compatibility redirect preserve the committed selection ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(process.env.E2E_LIVE_HYDRATION !== '1', 'Uses the deterministic live competition fixture')
+   const session = await createSession({ entryId: 15702 })
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const chain: Array<{ url: string; status: number; location: string | null }> = []
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    const response = await page.goto(`${prefix}/competitions/6?gw=1&created=1`)
+    expect(response).not.toBeNull()
+    for (let request = response!.request(); ; ) {
+     const hop = await request.response()
+     expect(hop).not.toBeNull()
+     const url = new URL(request.url())
+     chain.unshift({ url: url.pathname + url.search, status: hop!.status(), location: await hop!.headerValue('location') })
+     const previous = request.redirectedFrom()
+     if (!previous) break
+     request = previous
+    }
+    expect(chain[0].status).toBe(308)
+    expect(new URL(chain[0].location!, testInfo.project.use.baseURL).searchParams.get('gw')).toBe('1')
+    const assertBoard = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '1' && url.searchParams.get('created') === '1')
+     const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+     await expect(board).toBeVisible()
+     await expect(board.getByRole('list')).toBeVisible()
+     await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).filter({ visible: true })).toHaveCount(1)
+    }
+    await assertBoard()
+    await page.reload()
+    await assertBoard()
+    await page.goto('about:blank')
+    await page.goBack()
+    await assertBoard()
+    await page.goForward()
+    await expect(page).toHaveURL('about:blank')
+    await page.goBack()
+    await assertBoard()
+    await testInfo.attach('R13-alias-history', { contentType: 'application/json', body: JSON.stringify({ locale, width, chain, url: page.url(), tournament: 6, gw: 1, created: '1', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, note: 'HTTP chain only; streamed redirects verified by final URL and board; blank history entry is not an internal click journey' }) })
+   } finally { await session.cleanup() }
+  })
+ }
+}
 
 test('live points reloads a repeated entry without stranding the loading state', async ({ page }) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the deterministic local GraphQL fixture')
