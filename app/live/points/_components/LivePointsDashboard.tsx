@@ -46,6 +46,7 @@ import { LivePointsTransfers } from './LivePointsTransfers'
 import { useLivePlayerDetail } from '../_hooks/useLivePlayerDetail'
 
 export function LivePointsDashboard({
+	readyMeasurementEnabled,
 	activeEntryId,
 	entrySearch,
 	currentGameweek,
@@ -68,6 +69,7 @@ export function LivePointsDashboard({
 	onEntryLookupRetry,
 	nextRefreshAt
 }: {
+	readyMeasurementEnabled: boolean
 	activeEntryId: number
 	entrySearch?: ReactNode
 	currentGameweek: number
@@ -303,7 +305,7 @@ export function LivePointsDashboard({
 			<div data-live-points-ready={pointsReady} data-live-entry={activeEntryId}
 				data-live-gw={liveData?.event} data-selected-gw={gameweek}
 				data-live-revision={officialScore?.revisions.input ?? officialScore?.revisions.scoreCore}>
-				<RouteReadyMarker name="LIVE_POINTS_READY" ready={pointsReady}
+				<RouteReadyMarker name="LIVE_POINTS_READY" ready={pointsReady && readyMeasurementEnabled}
 					readyKey={`live-points:${activeEntryId}:${gameweek}`} audienceHint="session-hint" />
 			</div>
 			<div className="mb-6">

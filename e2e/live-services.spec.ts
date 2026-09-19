@@ -1631,3 +1631,76 @@ test('abandoned gameweek readiness does not leak into a later visit', async ({ p
  await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length).toBe(previousSamples + 1)
  expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY').at(-1)).toMatchObject({ measurementKind: 'in_page_navigation', result: 'ok' })
 })
+
+test('manual recovery after failed gameweek starts a fresh readiness clock', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fault injection')
+ await page.clock.install()
+ const samples: { metricName: string; measurementKind: string; result: string; value: number }[] = []
+ await page.route('**/api/vitals', async route => {
+  samples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
+ let fail = false
+ await page.route('**/api/graphql', async route => {
+  const payload = route.request().postDataJSON()
+  if (fail && payload.query?.includes('GetLiveCalcPoints')) {
+   await route.fulfill({ status: 200, json: { errors: [{ message: 'Controlled load failure' }] } })
+   return
+  }
+  await continueToGraphqlFixture(route)
+ })
+ await page.goto('/live/points/123?gw=32&tournamentId=3')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '32')
+ fail = true
+ await page.getByRole('button', { name: 'Previous gameweek', exact: true }).click()
+ await expect(page.getByRole('alert').filter({ hasText: 'Live points could not be loaded. Please try again.' })).toBeVisible()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveCount(0)
+ // Simulate user dwell on the terminal error; this is not a latency benchmark.
+ await page.clock.fastForward(60_000)
+ fail = false
+ await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '31')
+ await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length).toBe(1)
+ const recovery = samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction')[0]
+ expect(recovery.result).toBe('ok')
+ expect(recovery.value).toBeLessThan(60_000)
+})
+
+test('automatic gameweek rollover does not emit another navigation readiness sample', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated lifecycle fixture')
+ await page.clock.install()
+ const samples: { metricName: string; measurementKind: string; result: string }[] = []
+ await page.route('**/api/vitals', async route => {
+  samples.push(...(route.request().postDataJSON().samples ?? []))
+  await route.fulfill({ status: 204, body: '' })
+ })
+ let rollover = false
+ let probes = 0
+ await page.route('**/api/graphql', async route => {
+  const payload = route.request().postDataJSON()
+  if (rollover && payload.query?.includes('GetLiveContext')) {
+   probes += 1
+   const response = await route.fetch({ url: graphqlFixtureUrl })
+   const body = await response.json()
+   Object.assign(body.data.liveContext, { anchorEventId: 34, latestFinalizedEventId: 33, state: 'LIVE_ACTIVE', windowState: 'LIVE_ACTIVE', producerState: 'LIVE_ACTIVE', dataAvailability: 'FRESH', delivery: liveDelivery('FRESH') })
+   await route.fulfill({ response, json: body })
+   return
+  }
+  await continueToGraphqlFixture(route)
+ })
+ await page.goto('/live/points/123')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+ await expect.poll(async () => {
+  await page.clock.runFor(50)
+  return samples.filter(s => s.metricName === 'LIVE_POINTS_READY').length
+ }).toBe(1)
+ rollover = true
+ for (let elapsed = 0; probes === 0 && elapsed < firstRefreshWindowMs; elapsed += 1000) await page.clock.runFor(1000)
+ await expect.poll(() => probes).toBeGreaterThan(0)
+ await expect.poll(async () => {
+  await page.clock.runFor(50)
+  return page.locator('[data-live-points-ready="true"]').getAttribute('data-live-gw')
+ }).toBe('34')
+ await page.clock.runFor(50)
+ expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(1)
+})

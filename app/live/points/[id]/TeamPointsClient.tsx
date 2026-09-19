@@ -99,6 +99,7 @@ export default function TeamPointsClient({
 	} else {
 		content = (
 			<LivePointsDashboard
+				readyMeasurementEnabled={livePoints.readyMeasurementEnabled}
 				activeEntryId={entryId}
 				currentGameweek={livePoints.currentGameweek}
 				selectedGameweek={livePoints.selectedGameweek}

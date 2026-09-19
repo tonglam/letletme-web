@@ -92,6 +92,7 @@ export function useLivePoints({
 }: UseLivePointsOptions) {
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
+	const [readyMeasurementEnabled, setReadyMeasurementEnabled] = useState(true)
 	const pendingReadyClock = useRef<{ pathname: string; key: string } | null>(null)
 	const clearPendingReadyClock = useCallback(() => {
 		const pending = pendingReadyClock.current
@@ -100,6 +101,7 @@ export function useLivePoints({
 	}, [])
 	const startReadyClock = useCallback((entryId: number, gameweek: number) => {
 		clearPendingReadyClock()
+		setReadyMeasurementEnabled(true)
 		const pathname = window.location.pathname
 		const key = `live-points:${entryId}:${gameweek}`
 		pendingReadyClock.current = { pathname, key }
@@ -498,6 +500,8 @@ export function useLivePoints({
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
 				} catch (fetchError) {
 					if (requestId !== requestIdRef.current) return
+					clearPendingReadyClock()
+					setReadyMeasurementEnabled(false)
 					if (!shouldSuppressOfficialErrorsForEvent(eventId)) {
 						console.error('Failed to fetch live points:', fetchError)
 						setError(t('loadFailed'))
@@ -531,6 +535,7 @@ export function useLivePoints({
 		[
 			acceptSnapshot,
 			activeEntryId,
+			clearPendingReadyClock,
 			enrichLivePointBreakdowns,
 			shouldSuppressOfficialErrorsForEvent,
 			t
@@ -646,10 +651,11 @@ export function useLivePoints({
 
 	const refresh = useCallback(async () => {
 		if (selectedGameweek !== undefined) {
+			if (!readyMeasurementEnabled) startReadyClock(activeEntryId, selectedGameweek)
 			resetLiveDataRetry()
 			await fetchLivePointsForGameweek(selectedGameweek)
 		}
-	}, [fetchLivePointsForGameweek, resetLiveDataRetry, selectedGameweek])
+	}, [activeEntryId, fetchLivePointsForGameweek, readyMeasurementEnabled, resetLiveDataRetry, selectedGameweek, startReadyClock])
 
 	useEffect(() => resetLiveDataRetry, [resetLiveDataRetry])
 
@@ -696,6 +702,8 @@ export function useLivePoints({
 			)
 			if (observedAnchorEventId && observedAnchorEventId !== currentGameweek) {
 				if (followsAnchorRef.current) {
+					clearPendingReadyClock()
+					setReadyMeasurementEnabled(false)
 					setSelectedGameweek(observedAnchorEventId)
 					await fetchLivePointsForGameweek(observedAnchorEventId)
 				}
@@ -729,6 +737,7 @@ export function useLivePoints({
 		}
 	}, [
 		acceptSnapshot,
+		clearPendingReadyClock,
 		enrichLivePointBreakdowns,
 		fetchLivePointsForGameweek,
 		currentGameweek,
@@ -925,6 +934,7 @@ export function useLivePoints({
 	})
 
 	return {
+		readyMeasurementEnabled,
 		activeEntryId,
 		autoRefresh,
 		benchPlayers,
