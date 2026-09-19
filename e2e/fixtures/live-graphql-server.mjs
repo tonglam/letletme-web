@@ -631,7 +631,7 @@ const server = createServer((request, response) => {
 			return
 		}
 		if (rule?.error) {
-			json(response, 200, { errors: [{ message: 'Injected fixture failure' }] })
+			json(response, rule.httpStatus ?? 200, { errors: [{ message: 'Injected fixture failure', ...(rule.errorCode ? { extensions: { code: rule.errorCode } } : {}) }] })
 			return
 		}
 
