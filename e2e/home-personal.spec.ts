@@ -1987,6 +1987,36 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(main).toContainText('E2E Synced United')
 				await expect(main).toContainText('Fixture Manager')
 				await expect(main).toContainText('E2E United')
+				const bindingWrites: string[] = []
+				await page.route('**/*', route => {
+					if (!['GET', 'HEAD'].includes(route.request().method())) {
+						const pathname = new URL(route.request().url()).pathname
+						// Vitals are telemetry, not a binding mutation; still abort them here.
+						if (pathname !== '/api/vitals' || route.request().headers()['next-action']) bindingWrites.push(pathname)
+						return route.abort()
+					}
+					return route.continue()
+				})
+				await main.getByRole('button', { name: zh ? '更改' : 'Change', exact: true }).click()
+				const entryInput = main.getByLabel(zh ? 'FPL 参赛 ID / 球队名 / 经理名' : 'FPL entry ID / team or manager name', { exact: true })
+				await expect(entryInput).toHaveValue(String(session.entryId))
+				await entryInput.fill('999999')
+				await main.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click({ timeout: 2000 })
+				await expect(entryInput).toHaveCount(0)
+				await main.getByRole('button', { name: zh ? '更改' : 'Change', exact: true }).click()
+				await expect(entryInput).toHaveValue(String(session.entryId))
+				await main.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click()
+				const unlink = main.getByRole('button', { name: zh ? '解除关联' : 'Unlink', exact: true })
+				await unlink.click()
+				const confirmation = page.getByRole('alertdialog')
+				await expect(confirmation).toContainText(String(session.entryId))
+				await confirmation.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click()
+				await expect(confirmation).toHaveCount(0)
+				await expect(unlink).toBeFocused()
+				const [unchangedBinding] = await sql`SELECT fpl_entry_id FROM bauth."user" WHERE id=${session.userId}`
+				expect(unchangedBinding.fpl_entry_id).toBe(session.entryId)
+				expect(bindingWrites).toEqual([])
+				await page.unroute('**/*')
 				const [identity] = await sql`SELECT fpl_team_name, fpl_manager_name FROM bauth."user" WHERE id=${session.userId}`
 				expect(identity).toEqual({ fpl_team_name: 'E2E Synced United', fpl_manager_name: 'Fixture Manager' })
 				await main.locator(`a[href="${prefix}/profile/sessions"]`).click()
