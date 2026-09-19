@@ -451,6 +451,7 @@ export function PriceChangesBoard({
 	const [teamId, setTeamId] = useState('all')
 	const [page, setPage] = useState(1)
 	const [displayBoard, setDisplayBoard] = useState(board)
+	const [appliedBoardSeed, setAppliedBoardSeed] = useState(board)
 	const [liveState, setLiveState] = useState<
 		'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
 	>('DURABLE')
@@ -467,6 +468,7 @@ export function PriceChangesBoard({
 	}, [])
 
 	useEffect(() => {
+		setAppliedBoardSeed(board)
 		if (isPersistableBoard(board)) {
 			setDisplayBoard(board)
 			setLiveState('DURABLE')
@@ -686,6 +688,10 @@ export function PriceChangesBoard({
 	return (
 		<div
 			className="space-y-5"
+			data-price-predictions-board=""
+			data-price-change-revision={displayBoard.revision ?? undefined}
+			data-price-change-status={displayBoard.status}
+			data-price-change-refreshing={isRefreshing || appliedBoardSeed !== board}
 			{...{ elementtiming: 'price-changes-board' }}
 		>
 			<CountdownCard
