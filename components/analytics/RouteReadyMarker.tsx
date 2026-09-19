@@ -20,6 +20,7 @@ import { useEffect, useRef } from 'react'
 
 type ReadyMetricName =
 	| 'FIXTURES_WINDOW_READY'
+	| 'LIVE_POINTS_READY'
 	| 'LIVE_MATCHDAY_READY'
 	| 'LIVE_MATCH_PLAYERS_READY'
 	| 'LIVE_COMPETITIONS_LIST_READY'
