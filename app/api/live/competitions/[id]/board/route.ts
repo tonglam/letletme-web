@@ -8,16 +8,25 @@ import {
 	type EntryLiveCompetitionBoardVariables
 } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { RequestTiming } from '@/lib/request-timing'
+import { appendServerTiming } from '@/lib/server-timing'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 15_000
 
-const noStoreHeaders = (requestId?: string): Record<string, string> => ({
-	'Cache-Control': 'private, no-store',
-	...(requestId ? { 'X-Request-Id': requestId } : {})
-})
+const noStoreHeaders = (requestId: string, timing: RequestTiming): Record<string, string> => {
+	const headers = new Headers({
+		'Cache-Control': 'private, no-store',
+		'X-Request-Id': requestId
+	})
+	for (const [stage, duration] of Object.entries(timing.snapshot())) {
+		appendServerTiming(headers, stage, duration)
+	}
+	appendServerTiming(headers, 'total', timing.elapsedMs())
+	return Object.fromEntries(headers.entries())
+}
 
 const positiveInteger = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value > 0
@@ -150,15 +159,16 @@ export async function POST(
 	request: Request,
 	context: { params: Promise<{ id: string }> }
 ) {
+	const timing = new RequestTiming()
 	const requestId = randomUUID()
 	let entryId: number | null
 	let session: Awaited<ReturnType<typeof getVerifiedEntryContext>>['session']
 	try {
-		const context = await getVerifiedEntryContext()
+		const context = await timing.measure('auth', () => getVerifiedEntryContext())
 		entryId = context.entryId
 		session = context.session
 	} catch {
-		const headers = noStoreHeaders(requestId)
+		const headers = noStoreHeaders(requestId, timing)
 		headers['Retry-After'] = '30'
 		return NextResponse.json(
 			{ error: 'DEPENDENCY_UNAVAILABLE' },
@@ -168,22 +178,22 @@ export async function POST(
 	if (!entryId)
 		return NextResponse.json(
 			{ error: 'UNAUTHENTICATED' },
-			{ status: 401, headers: noStoreHeaders(requestId) }
+			{ status: 401, headers: noStoreHeaders(requestId, timing) }
 		)
 	const tournamentId = Number((await context.params).id)
 	if (!positiveInteger(tournamentId))
 		return NextResponse.json(
 			{ error: 'BAD_USER_INPUT' },
-			{ status: 400, headers: noStoreHeaders(requestId) }
+			{ status: 400, headers: noStoreHeaders(requestId, timing) }
 		)
 	const variables = parsePostVariables(await request.json().catch(() => null), entryId, tournamentId)
 	if (!variables)
 		return NextResponse.json(
 			{ error: 'BAD_USER_INPUT' },
-			{ status: 400, headers: noStoreHeaders(requestId) }
+			{ status: 400, headers: noStoreHeaders(requestId, timing) }
 		)
 	try {
-		const data = await executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
+		const data = await timing.measure('graphql', () => executeServerQueryWithSession<EntryLiveCompetitionBoardResponse>(
 			session,
 			GET_ENTRY_LIVE_COMPETITION_BOARD,
 			variables as unknown as Record<string, unknown>,
@@ -193,11 +203,11 @@ export async function POST(
 				timeoutMs: LIVE_COMPETITION_BOARD_TIMEOUT_MS,
 				contract: 'live-points-v2'
 			}
-		)
-		return NextResponse.json(data, { headers: noStoreHeaders(requestId) })
+		))
+		return NextResponse.json(data, { headers: noStoreHeaders(requestId, timing) })
 	} catch (error) {
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
-			const headers = noStoreHeaders(requestId)
+			const headers = noStoreHeaders(requestId, timing)
 			headers['Retry-After'] = '30'
 			return NextResponse.json(
 				{ error: 'Competition request timed out' },
@@ -207,7 +217,7 @@ export async function POST(
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED') {
 			return NextResponse.json(
 				{ error: 'Competition request was cancelled' },
-				{ status: 499, headers: noStoreHeaders(requestId) }
+				{ status: 499, headers: noStoreHeaders(requestId, timing) }
 			)
 		}
 		const code = error instanceof GraphQLRequestError ? error.code : null
@@ -230,7 +240,7 @@ export async function POST(
 							: code === 'FORBIDDEN'
 								? 403
 								: 502
-		const headers = noStoreHeaders(requestId)
+		const headers = noStoreHeaders(requestId, timing)
 		if ((status === 429 || status === 503) && error instanceof GraphQLRequestError)
 			headers['Retry-After'] = String(Math.max(1, error.retryAfterSeconds ?? 30))
 		return NextResponse.json(
