@@ -3803,10 +3803,10 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated management boundary fixture')
    const session = await createSession({ entryId: 909090 })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
-   const id = scenario === 'owner-revoked' ? 77 : 987654321
+   const id = scenario === 'owner-revoked' || scenario === 'upstream-unavailable' ? 77 : 987654321
    const configure = async (available: boolean) => {
     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
-     { operation: 'GetManagedTournament', variables: { tournamentId: id, entryId: 909090 }, ...(scenario === 'forbidden-code' ? { error: true, errorCode: 'FORBIDDEN' } : scenario === 'http-forbidden' || scenario === 'upstream-unavailable' ? { error: true, httpStatus: scenario === 'http-forbidden' ? 403 : 503 } : { data: { managedTournament: available ? managedTournament : null } }) }
+     { operation: 'GetManagedTournament', variables: { tournamentId: id, entryId: 909090 }, ...(scenario === 'forbidden-code' ? { error: true, errorCode: 'FORBIDDEN' } : scenario === 'http-forbidden' || (scenario === 'upstream-unavailable' && !available) ? { error: true, httpStatus: scenario === 'http-forbidden' ? 403 : 503 } : { data: { managedTournament: available ? managedTournament : null } }) }
     ] }) })).ok).toBe(true)
    }
    const mutations: string[] = []
@@ -3842,6 +3842,13 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
     const observations = await (await fetch(fixture)).json()
     expect(observations.requests.some((r: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => r.operation === 'GetManagedTournament' && r.variables.tournamentId === id && r.variables.entryId === 909090)).toBe(true)
+    if (unavailable) {
+     await configure(true)
+     await page.getByRole('link', { name: '重试', exact: true }).click()
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+     await expect(page.getByRole('button', { name: '删除赛事', exact: true })).toBeVisible()
+     await expect(page.getByRole('heading', { name: '赛事管理暂时无法使用', exact: true })).toHaveCount(0)
+    }
     expect(mutations).toEqual([])
    } finally {
     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
