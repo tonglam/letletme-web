@@ -5,6 +5,8 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
 import { managerReview, managerGameweek, managerSnapshot } from './fixtures/manager-review'
+import enMessages from '../messages/en.json'
+import zhMessages from '../messages/zh-CN.json'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
@@ -4191,3 +4193,95 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+// PROFILE01.03 and PROFILE03.01: isolated accounts and intercepted uploads only.
+test.describe('profile history and avatar fixture coverage', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`PROFILE01 long name history and PROFILE03 avatar recovery ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated database and FPL fixture')
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).Profile
+    const session = await createSession({ entryId: 15702 })
+    const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+    const names = Array.from({ length: 40 }, (_, i) => `History ${String(i).padStart(2, '0')} 中文 United`)
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6R1sAAAAASUVORK5CYII=', 'base64')
+    const avatarSrc = `data:image/png;base64,${png.toString('base64')}`
+    try {
+     for (const [i, name] of Array.from(names.entries())) {
+      await sql`INSERT INTO bauth.fpl_entry_name_history (id,user_id,entry_id,team_name,last_seen_at)
+       VALUES (${randomUUID()},${session.userId},${session.entryId},${name},${new Date(Date.UTC(2025,0,1,0,i))})`
+     }
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+     await page.goto(`${prefix}/profile`)
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+     await expect(page.locator('html')).toHaveClass(/light/)
+     const main = page.locator('#main-content')
+     await expect(main).toContainText('E2E Synced United')
+     const history = main.locator('li').filter({ hasText: /^· History / })
+     await expect(history).toHaveCount(40)
+     expect(await history.allTextContents()).toEqual([...names].reverse().map(name => `· ${name}`))
+     const upload = main.getByTitle(t.changeAvatar, { exact: true })
+     await expect(upload).toBeEnabled()
+     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+     const statuses = [
+      { code: 'fileTooLarge', status: 413, file: { name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024 + 1) } },
+      { code: 'invalidFile', status: 400, file: { name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') } },
+      { code: 'uploadFailed', status: 502, file: { name: 'valid.png', mimeType: 'image/png', buffer: png } },
+      { code: 'network', status: 0, file: { name: 'valid.png', mimeType: 'image/png', buffer: png } },
+      { code: 'success', status: 200, file: { name: 'valid.png', mimeType: 'image/png', buffer: png } }
+     ] as const
+     const observations: Array<{ scenario: string; requestCount: number; requestBytes: number }> = []
+     for (const scenario of statuses) {
+      let release!: () => void
+      const held = new Promise<void>(resolve => { release = resolve })
+      let requests = 0
+      let bytes = 0
+      await page.route('**/api/profile/avatar', async route => {
+       requests++
+       expect(route.request().method()).toBe('POST')
+       bytes = route.request().postDataBuffer()?.length ?? 0
+       expect(bytes).toBeGreaterThan(scenario.file.buffer.length)
+       await held
+       if (scenario.code === 'network') await route.abort('failed')
+       else await route.fulfill({ status: scenario.status, json: scenario.code === 'success'
+        ? { success: true, imageUrl: avatarSrc } : { success: false, errorCode: scenario.code } })
+      })
+      const chooser = page.waitForEvent('filechooser')
+      await upload.click()
+      await (await chooser).setFiles(scenario.file)
+      await expect.poll(() => requests).toBe(1)
+      await expect(upload).toBeDisabled()
+      release()
+      await expect(upload).toBeEnabled()
+      const message = scenario.code === 'success' ? t.avatarUpdated : scenario.code === 'network' ? t.avatarFailed : t.errors[scenario.code]
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: message }).last()).toBeVisible()
+      if (scenario.code === 'success') {
+       await expect(upload.locator('img')).toHaveAttribute('src', avatarSrc)
+       await expect.poll(() => upload.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+      } else await expect(upload.locator('img')).toHaveCount(0)
+      expect(requests).toBe(1)
+      observations.push({ scenario: scenario.code, requestCount: requests, requestBytes: bytes })
+      await page.unroute('**/api/profile/avatar')
+     }
+     const [user] = await sql`SELECT image FROM bauth."user" WHERE id=${session.userId}`
+     expect(user.image).toBeNull()
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
+     await expect(history).toHaveCount(40)
+     await testInfo.attach('profile-state-evidence', { contentType: 'application/json', body: JSON.stringify({
+      stepIds: ['PROFILE01.03', 'PROFILE03.01'], locale, width, identity: 'B isolated bound account',
+      history: { count: 40, order: 'last_seen_at descending', preservedAfterUpload: true }, uploads: observations,
+      validationScope: 'UI upload response handling; server file validation and storage not exercised',
+      readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_OBSERVED', databaseImageUnchanged: true
+     }) })
+    } finally {
+     await sql.end()
+     await session.cleanup()
+    }
+   })
+  }
+ }
+})
