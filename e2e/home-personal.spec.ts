@@ -1017,15 +1017,15 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
+for (const recoveryMode of ['none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
 const failFirstSections = (recoveryMode === 'retry-button' || recoveryMode === 'tab-reentry')
 test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }) => {
-	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
+	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
@@ -1047,6 +1047,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	let releaseSections!: () => void
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
+	let secondSectionRequests = 0
 	let viewNavigationRequests = 0
 	let readyReports = 0
 	await page.route('**/api/vitals', async route => {
@@ -1064,6 +1065,11 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
 			if (!payload.query?.includes('GetMyTournamentSeasonReviewSection')) return route.continue()
+			if (recoveryMode === 'tournament-race' && payload.variables.tournamentId === 78) {
+				secondSectionRequests += 1
+				expect(payload.variables).toMatchObject({ tournamentId: 78, throughEventId: 4, phaseId: 'points-2', revision: '2', semanticSha256: 'b'.repeat(64) })
+				return route.continue()
+			}
 			sectionRequests += 1
 			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
 			await gate
@@ -1073,6 +1079,49 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
+		if (recoveryMode === 'tournament-race') {
+			const catalogData = rules[0].data
+			if (!('myTournamentReviewCatalog' in catalogData) || !catalogData.myTournamentReviewCatalog) throw new Error('Missing catalog fixture')
+			const original = catalogData.myTournamentReviewCatalog
+			const second = JSON.parse(JSON.stringify(original.edges[0]).replaceAll('"tournamentId":77', '"tournamentId":78').replaceAll('points-1', 'points-2').replaceAll('"revision":"1"', '"revision":"2"').replaceAll('a'.repeat(64), 'b'.repeat(64)).replaceAll('Fixture Review Cup', 'Second Review Cup'))
+			second.cursor = '78'
+			const scoped = rules.slice(1).flatMap(rule => [77, 78].map(id => ({ ...rule, variables: { ...('variables' in rule ? rule.variables : {}), tournamentId: id }, data: id === 77 ? rule.data : JSON.parse(JSON.stringify(rule.data).replaceAll('"tournamentId":77', '"tournamentId":78').replaceAll('points-1', 'points-2').replaceAll('"revision":"1"', '"revision":"2"').replaceAll('a'.repeat(64), 'b'.repeat(64)).replaceAll('Season Fixture United', 'Second Fixture United')) })))
+			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ ...rules[0], data: { myTournamentReviewCatalog: { ...original, edges: [original.edges[0], second] } } }, ...scoped] }) })).ok).toBe(true)
+			await page.setViewportSize({ width: catalogWidth, height: 900 })
+			await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
+			const ready = page.locator('[data-review-ready]')
+			await expect(ready).toHaveAttribute('data-review-ready', 'true')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? '赛季' : 'Season', exact: true }).click()
+			await expect.poll(() => sectionRequests).toBe(2)
+			await expect(ready).toHaveAttribute('data-review-ready', 'false')
+			const selector = page.getByRole('complementary').getByRole('combobox').filter({ has: page.locator('option[value="78"]') })
+			await expect(selector).toHaveCount(1)
+			await selector.selectOption('78')
+			await expect(ready).toHaveAttribute('data-review-tournament', '78')
+			await expect(ready).toHaveAttribute('data-review-phase', 'points-2')
+			await expect(ready).toHaveAttribute('data-review-revision', '2')
+			await expect(ready).toHaveAttribute('data-review-ready', 'true')
+			await expect(page.getByRole('cell', { name: /Second Fixture United/ })).toBeVisible()
+			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '78' && url.searchParams.get('gw') === '4')
+			expect(secondSectionRequests).toBe(2)
+			const lateResponses = Promise.all([page.waitForResponse(response => response.url().includes('/api/graphql') && response.request().postDataJSON()?.variables?.tournamentId === 77 && response.request().postDataJSON()?.variables?.section === 'POINTS_STANDINGS'), page.waitForResponse(response => response.url().includes('/api/graphql') && response.request().postDataJSON()?.variables?.tournamentId === 77 && response.request().postDataJSON()?.variables?.section === 'POINTS_TRAJECTORIES')])
+			releaseSections()
+			await lateResponses
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			await expect(ready).toHaveAttribute('data-review-tournament', '78')
+			await expect(ready).toHaveAttribute('data-review-phase', 'points-2')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toHaveCount(0)
+			await selector.selectOption('77')
+			await expect(ready).toHaveAttribute('data-review-ready', 'true')
+			await expect(ready).toHaveAttribute('data-review-tournament', '77')
+			await expect(ready).toHaveAttribute('data-review-phase', 'points-1')
+			await expect(ready).toHaveAttribute('data-review-revision', '1')
+			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+			await expect(page.getByRole('cell', { name: /Second Fixture United/ })).toHaveCount(0)
+			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '77' && url.searchParams.get('gw') === '4')
+			return
+		}
 		if (recoveryMode.startsWith('live-journey')) {
 			let comparisonBoardRevision = 'e2e-competition-score-v1'
 			await page.setViewportSize(catalogWidth ? { width: catalogWidth, height: 900 } : locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
