@@ -3798,7 +3798,7 @@ test('J12 MANAGE03 pause pending failure and retry recovery', async ({ page }) =
 
 test.describe('J12 MANAGE02 unavailable management scope', () => {
  test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
- for (const scenario of ['owner-revoked', 'not-found'] as const) {
+ for (const scenario of ['owner-revoked', 'not-found', 'forbidden-code'] as const) {
   test(`J12 MANAGE02 ${scenario} clears sensitive management content`, async ({ page }) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated management boundary fixture')
    const session = await createSession({ entryId: 909090 })
@@ -3806,7 +3806,7 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
    const id = scenario === 'owner-revoked' ? 77 : 987654321
    const configure = async (available: boolean) => {
     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
-     { operation: 'GetManagedTournament', variables: { tournamentId: id, entryId: 909090 }, data: { managedTournament: available ? managedTournament : null } }
+     { operation: 'GetManagedTournament', variables: { tournamentId: id, entryId: 909090 }, ...(scenario === 'forbidden-code' ? { error: true, errorCode: 'FORBIDDEN' } : { data: { managedTournament: available ? managedTournament : null } }) }
     ] }) })).ok).toBe(true)
    }
    const mutations: string[] = []
@@ -3829,6 +3829,7 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
     }
     await expect(page).toHaveURL(new RegExp(`/zh-CN/competitions/${id}/manage$`))
     await expect(page.getByRole('heading', { name: '需要管理员权限', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '赛事管理暂时无法使用', exact: true })).toHaveCount(0)
     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
     for (const name of ['删除赛事', '暂停', '恢复并补齐数据', '修复赛事设置']) {
      await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
