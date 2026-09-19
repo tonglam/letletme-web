@@ -686,6 +686,10 @@ export function PriceChangesBoard({
 	return (
 		<div
 			className="space-y-5"
+			data-price-predictions-board=""
+			data-price-change-revision={displayBoard.revision ?? undefined}
+			data-price-change-status={displayBoard.status}
+			data-price-change-refreshing={isRefreshing}
 			{...{ elementtiming: 'price-changes-board' }}
 		>
 			<CountdownCard

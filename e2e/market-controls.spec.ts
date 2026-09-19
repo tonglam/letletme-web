@@ -246,3 +246,36 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ test(`prediction observation tracks rendered revision during refresh ${locale}`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture')
+  const zh = locale === 'zh-CN'
+  const pathname = `${zh ? '/zh-CN' : ''}/explore/price-predictions`
+  await page.goto(pathname)
+  const board = page.locator('[data-price-predictions-board]')
+  await expect(board).toHaveAttribute('data-price-change-revision', 'price-changes-7')
+  await expect(board).toHaveAttribute('data-price-change-status', 'READY')
+  await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  let waiting = false
+  await page.route(`**${pathname}?_rsc=*`, async route => {
+   waiting = true
+   await gate
+   await route.continue()
+  })
+  try {
+   await page.getByRole('button', { name: zh ? '刷新' : 'Refresh', exact: true }).click()
+   await expect.poll(() => waiting).toBe(true)
+   await expect(board).toHaveAttribute('data-price-change-refreshing', 'true')
+   await expect(board).toHaveAttribute('data-price-change-revision', 'price-changes-7')
+   await expect(board.getByRole('table')).toBeVisible()
+  } finally {
+   release()
+  }
+  await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+  await expect(board).toHaveAttribute('data-price-change-revision', 'price-changes-7')
+  await expect(board).toHaveAttribute('data-price-change-status', 'READY')
+ })
+}
