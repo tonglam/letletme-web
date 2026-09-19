@@ -3742,3 +3742,49 @@ test('manager snapshot status survives a late historical read and failed selecti
   await session.cleanup()
  }
 })
+
+
+test('J12 MANAGE03 pause pending failure and retry recovery', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated management mutation fixture')
+ const session = await createSession({ entryId: 909090 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const requests: unknown[] = []
+ let release!: () => void
+ const held = new Promise<void>(resolve => { release = resolve })
+ const setState = async (paused: boolean) => {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: { ...managedTournament, state: paused ? 'INACTIVE' : 'ACTIVE' } } }] }) })).ok).toBe(true)
+ }
+ await page.route('**/api/tournaments/77', async route => {
+  expect(route.request().method()).toBe('POST')
+  requests.push(route.request().postDataJSON())
+  if (requests.length === 1) {
+   await held
+   await route.fulfill({ status: 503, json: { error: 'Fixture unavailable' } })
+  } else {
+   await setState(true)
+   await route.fulfill({ status: 200, json: { success: true } })
+  }
+ })
+ try {
+  await setState(false)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/zh-CN/competitions/77/manage')
+  const pause = page.getByRole('button', { name: '暂停', exact: true })
+  await pause.click()
+  await expect(pause).toBeDisabled()
+  expect(requests).toEqual([{ action: 'pause' }])
+  release()
+  await expect(page.locator('[data-competition-perf-ready="manage"] > [role="alert"]').filter({ hasText: '无法暂停赛事。' })).toBeVisible()
+  await expect(pause).toBeEnabled()
+  await expect(page.getByRole('button', { name: '恢复并补齐数据', exact: true })).toHaveCount(0)
+  await pause.click()
+  await expect(page.getByRole('button', { name: '恢复并补齐数据', exact: true })).toBeEnabled()
+  await expect(pause).toHaveCount(0)
+  await expect(page.locator('[data-competition-perf-ready="manage"] > [role="alert"]').filter({ hasText: '无法暂停赛事。' })).toHaveCount(0)
+  expect(requests).toEqual([{ action: 'pause' }, { action: 'pause' }])
+ } finally {
+  release()
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
