@@ -220,6 +220,7 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 test.describe('R22 planned baseline context', () => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture and controlled browser context')
  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
