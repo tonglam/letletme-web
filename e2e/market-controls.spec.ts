@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { PriceChangeObservedEvent } from '../lib/graphql/operations/price-changes'
 
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
@@ -123,6 +124,56 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(page.locator('a[aria-current="date"][href*="2099"]')).toHaveCount(0)
    await expect(page.locator('a[href*="date=2026-08-03"]')).toBeVisible()
    await expect(page.locator('a[aria-current="date"]')).toHaveAttribute('href', /date=2026-08-03/)
+  })
+ }
+}
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`C09 text share outcomes and manual fallback ${locale} ${width}`, async ({ page }) => {
+   test.skip(process.env.E2E_MARKET_READINESS !== '1', 'Requires standalone clone with isolated price-board cache')
+   const zh = locale === 'zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+   seed.data.priceChangeBoard.latestEvent = {
+    outcome: 'CHANGED', observedAt: '2026-08-03T09:40:00.000Z', deadline: '2026-08-03T09:00:00.000Z', changeDate: '2026-08-03', changedPlayerCount: 1,
+    changes: [{ player: { playerId: 1, playerCode: 1, webName: 'Saka', teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position: 'MIDFIELDER', price: 100, selectedByPercent: 20 }, changeDate: '2026-08-03', oldPrice: 99, newPrice: 100, change: 1, direction: 'RISE' }]
+   } satisfies PriceChangeObservedEvent
+   expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+   try {
+   await page.goto(`${zh ? '/zh-CN' : ''}/explore/market`)
+   const region = page.locator('#market-prices-share')
+   const share = region.getByRole('button', { name: zh ? '文字' : 'Text', exact: true })
+   await expect(share).toHaveCount(1)
+   await expect(share).toBeVisible()
+   const fallback = region.getByRole('textbox', { name: zh ? '文字' : 'Text', exact: true })
+   for (const outcome of ['unsupported', 'failed', 'copied'] as const) {
+    await page.evaluate(outcome => {
+     Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: outcome === 'unsupported' ? undefined : {
+      writeText: async (text: string) => {
+       if (outcome === 'failed') throw new Error('fixture clipboard rejected')
+       document.documentElement.dataset.fixtureCopiedText = text
+      }
+     } })
+    }, outcome)
+    await share.click()
+    if (outcome === 'copied') {
+     await expect(share).toContainText(zh ? '已分享' : 'Done')
+     await expect(fallback).toHaveCount(0)
+     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toContain('/explore/market')
+    } else {
+     await expect(fallback).toBeVisible()
+     await expect(fallback).toHaveValue(/\/explore\/market/)
+     await expect(fallback).toHaveAttribute('readonly', '')
+     await region.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+     await expect(fallback).toHaveCount(0)
+    }
+   }
+   } finally {
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
   })
  }
 }
