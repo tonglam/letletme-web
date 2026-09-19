@@ -4452,3 +4452,51 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+for (const mode of ['empty', 'unauthorized', 'stale'] as const) {
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`PROFILE04 session list terminal ${mode} ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
+    const session = await createSession({ entryId: 15702 })
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).Sessions
+    let reads = 0
+    let writes = 0
+    try {
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     page.on('request', request => {
+      if (new URL(request.url()).pathname.startsWith('/api/auth/') && !['GET', 'HEAD'].includes(request.method())) writes++
+     })
+     await page.route('**/api/auth/list-sessions', async route => {
+      reads++
+      await route.fulfill(mode === 'empty'
+       ? { status: 200, json: [] }
+       : { status: mode === 'unauthorized' ? 401 : 403, json: { code: mode === 'unauthorized' ? 'UNAUTHORIZED' : 'SESSION_NOT_FRESH', message: 'Isolated session state' } })
+     })
+     await page.goto(`${prefix}/profile/sessions`)
+     const main = page.locator('#main-content')
+     const expected = mode === 'empty' ? t.empty : mode === 'unauthorized' ? t.loadFailed : t.reauthTitle
+     await expect(main.getByText(expected, { exact: true })).toBeVisible()
+     for (const other of [t.empty, t.loadFailed, t.reauthTitle].filter(text => text !== expected)) {
+      await expect(main.getByText(other, { exact: true })).toHaveCount(0)
+     }
+     await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(0)
+     if (mode === 'unauthorized') await expect(main.getByRole('button', { name: t.retry, exact: true })).toBeEnabled()
+     if (mode === 'stale') await expect(main.getByRole('link', { name: t.reauthAction, exact: true })).toHaveAttribute('href', `${prefix}/auth/login?next=/profile/sessions&reason=reauth`)
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile/sessions`)
+     expect(reads).toBe(1)
+     expect(writes).toBe(0)
+     await testInfo.attach('session-terminal-evidence', { contentType: 'application/json', body: JSON.stringify({
+      stepId: 'PROFILE04.03', locale, width, mode, reads, writes, expected,
+      scope: 'Authenticated route with isolated list response; expired route authorization remains separate',
+      readyMs: null, performanceStatus: 'NOT_RUN', wholeCaseComplete: false
+     }) })
+    } finally {
+     await session.cleanup()
+    }
+   })
+  }
+ }
+}
