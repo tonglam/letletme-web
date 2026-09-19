@@ -4029,7 +4029,26 @@ for (const locale of ['en', 'zh-CN'] as const) {
       expect(labels.length).toBeGreaterThan(1)
       expect(new Set(labels).size, `${mode} labels for ${counts}`).toBe(labels.length)
       expect(labels.every(label => /^-?\d+$/.test(label))).toBe(true)
+      if (counts[2] === 3) {
+       const summary = chart.locator('[aria-live=\"polite\"]')
+       await chart.locator('.recharts-bar-rectangle path').last().hover()
+       await expect(summary).toContainText('GW3')
+       await expect(summary).toContainText('Saka')
+       await page.mouse.move(0, 0)
+       await expect(summary).not.toContainText('GW3')
+      }
       if (mode === (locale === 'zh-CN' ? '净积分' : 'Net points')) expect(labels.some(label => Number(label) < 0)).toBe(true)
+     }
+     if (counts[2] === 3) {
+      for (const mode of (locale === 'zh-CN' ? ['总排名', '总得分', '队长', '板凳'] : ['Overall rank', 'Total points', 'Captain', 'Bench'])) {
+       await chart.getByRole('button', { name: mode, exact: true }).click()
+       const summary = chart.locator('[aria-live="polite"]')
+       await chart.locator('.recharts-bar-rectangle path').last().hover()
+       await expect(summary).toContainText('GW3')
+       await expect(summary).toContainText('Saka')
+       await page.mouse.move(0, 0)
+       await expect(summary).not.toContainText('GW3')
+      }
      }
     }
    } finally {
