@@ -4715,6 +4715,28 @@ test.describe('GOV isolated admin REST evidence', () => {
  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_GOVERNANCE !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-governance-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Dedicated isolated governance runtime only')
  for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+  for (const identity of ['ordinary', 'entry-only', 'user-only']) {
+   test(`GOV REST sections denied ${identity} ${locale} ${width}px`, async ({ page }, testInfo) => {
+    const session = await createSession({ entryId: identity === 'entry-only' ? 909090 : undefined, userId: identity === 'user-only' ? 'e2e-governance-admin' : undefined })
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+    try {
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+     await page.setViewportSize({ width, height: 900 })
+     await addSessionCookie(page, session.cookie)
+     const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/admin/data-governance`
+     for (const navigate of [() => page.goto(path), () => page.reload()]) {
+      const response = await navigate()
+      expect(response?.status()).toBe(404)
+      await expect(page).toHaveURL(url => url.pathname === path)
+      await expect(page.getByRole('heading', { name: locale === 'zh-CN' ? '找不到页面' : 'Page not found', exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'GW governance', exact: true })).toHaveCount(0)
+     }
+     const requests = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'DataGovernance')
+     expect(requests).toEqual([])
+     await testInfo.attach('GOV-denied-identity', { body: JSON.stringify({ identity, locale, width, status: 404, dataRequests: 0, reload: true, readyMs: null }), contentType: 'application/json' })
+    } finally { await session.cleanup() }
+   })
+  }
   for (const failed of ['none', 'overview', 'windows', 'cases', 'large']) {
    test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
     const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
