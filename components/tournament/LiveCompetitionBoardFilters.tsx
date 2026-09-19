@@ -383,6 +383,22 @@ export function LiveCompetitionBoardFilters({
 	const [selectedPlayerOptions, setSelectedPlayerOptions] = useState<
 		Record<string, PlayerDirectoryOption>
 	>({})
+	const addPlayerButtonRef = useRef<HTMLButtonElement>(null)
+	const teamSelectRef = useRef<HTMLButtonElement>(null)
+	const removalButtonsRef = useRef(new Map<string, HTMLButtonElement>())
+	const pendingRemovalFocusRef = useRef<{ source: Element | null; target: 'player' | 'team'; key: string } | null>(null)
+	useEffect(() => {
+		const cancelOnFocusMove = (event: FocusEvent) => {
+			const pending = pendingRemovalFocusRef.current
+			if (pending && event.target !== pending.source && event.target !== document.body)
+				pendingRemovalFocusRef.current = null
+		}
+		document.addEventListener('focusin', cancelOnFocusMove)
+		return () => {
+			document.removeEventListener('focusin', cancelOnFocusMove)
+			pendingRemovalFocusRef.current = null
+		}
+	}, [])
 	const latestValueRef = useRef(value)
 	const queuedFiltersRef = useRef<LiveBoardFilterState | null>(null)
 	const applyPromiseRef = useRef<Promise<void> | null>(null)
@@ -637,6 +653,7 @@ export function LiveCompetitionBoardFilters({
 	}
 
 	const removeOwner = (playerId: number) => {
+		pendingRemovalFocusRef.current = { source: document.activeElement, target: 'player', key: `player:${playerId}` }
 		const remaining = selectedOwnerIds.filter(id => id !== playerId)
 		const next = cloneFilters(draft)
 		next.ownership =
@@ -689,6 +706,7 @@ export function LiveCompetitionBoardFilters({
 		teamId: number,
 		scope: EntryLiveCompetitionPickScope
 	) => {
+		pendingRemovalFocusRef.current = { source: document.activeElement, target: 'team', key: `team:${teamId}:${scope}` }
 		const next = cloneFilters(draft)
 		next.teamCountRules = next.teamCountRules.filter(
 			rule => !(rule.teamId === teamId && rule.scope === scope)
@@ -736,6 +754,16 @@ export function LiveCompetitionBoardFilters({
 		(draft.ownership ? 1 : 0) +
 		draft.teamCountRules.length
 	const controlsDisabled = Boolean(disabled || applying)
+	useEffect(() => {
+		const pending = pendingRemovalFocusRef.current
+		if (!pending || controlsDisabled) return
+		const target = pending.target === 'player' ? addPlayerButtonRef.current : teamSelectRef.current
+		const restoredSource = removalButtonsRef.current.get(pending.key)
+		const focusTarget = restoredSource ?? (target && !target.disabled ? target : null)
+		pendingRemovalFocusRef.current = null
+		if (focusTarget && (document.activeElement === document.body || document.activeElement === pending.source))
+			focusTarget.focus()
+	})
 	const matchedPercentage =
 		totalEntries > 0 ? Math.round((filteredEntries / totalEntries) * 100) : 0
 	const matchedSummary = t('matched', {
@@ -956,6 +984,7 @@ export function LiveCompetitionBoardFilters({
 						<Button
 							type="button"
 							variant="outline"
+							ref={addPlayerButtonRef}
 							disabled={controlsDisabled || selectedOwnerIds.length >= 5}
 							onClick={() => setIsPlayerPickerOpen(open => !open)}
 						>
@@ -970,6 +999,11 @@ export function LiveCompetitionBoardFilters({
 						{selectedPlayers.map(player => (
 							<SelectedFilterBadge
 								key={player.id}
+								removeButtonRef={node => {
+									const key = `player:${player.id}`
+									if (node) removalButtonsRef.current.set(key, node)
+									else removalButtonsRef.current.delete(key)
+								}}
 								name={player.name}
 								details={[
 									player.position,
@@ -1038,6 +1072,7 @@ export function LiveCompetitionBoardFilters({
 						>
 							<SelectTrigger
 								className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[160px]"
+								ref={teamSelectRef}
 								aria-label={t('selectTeamAria')}
 							>
 								<SelectValue placeholder={t('selectTeam')} />
@@ -1123,6 +1158,10 @@ export function LiveCompetitionBoardFilters({
 							return (
 								<SelectedFilterBadge
 									key={key}
+									removeButtonRef={node => {
+										if (node) removalButtonsRef.current.set(`team:${key}`, node)
+										else removalButtonsRef.current.delete(`team:${key}`)
+									}}
 									name={team?.name ?? String(rule.teamId)}
 									details={`${team?.shortName ?? rule.teamId} · ${rule.exactCount} · ${scopeLabel(rule.scope, t)}`}
 									removeLabel={t('removeTeamItem', {

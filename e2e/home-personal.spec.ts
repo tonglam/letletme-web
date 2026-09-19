@@ -994,9 +994,9 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort', 'live-journey-focus'] as const) {
 for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of recoveryMode.startsWith('catalog-') ? [1440, 390] : [0]) {
+for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1052,7 +1052,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		})
 		if (recoveryMode.startsWith('live-journey')) {
 			let comparisonBoardRevision = 'e2e-competition-score-v1'
-			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+			await page.setViewportSize(catalogWidth ? { width: catalogWidth, height: 900 } : locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
 			if (recoveryMode === 'live-journey-sort') {
 				await page.route('**/api/live/competitions/6/board', async route => {
 					const response = await route.fetch()
@@ -1123,6 +1123,55 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				rows: [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
 			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			if (recoveryMode === 'live-journey-focus') {
+				const zh = locale === 'zh-CN'
+				if (catalogWidth === 390) await page.getByRole('button', { name: zh ? '更多筛选' : 'More filters', exact: true }).click()
+				for (const filterKind of ['team', 'player']) {
+					const focusTarget = filterKind === 'team' ? page.getByRole('combobox', { name: zh ? '选择要筛选的球队' : 'Select team for exposure filter', exact: true }) : page.getByRole('button', { name: zh ? '添加球员' : 'Add player', exact: true })
+					for (const scenario of ['restore', 'preserve', 'failure-retry']) {
+						const moveFocus = scenario === 'preserve'
+						await focusTarget.click()
+						if (filterKind === 'team') {
+							await page.getByRole('option', { name: 'Arsenal', exact: true }).click()
+							await page.getByRole('button', { name: zh ? '添加球队' : 'Add team', exact: true }).click()
+						} else {
+							await page.getByRole('button', { name: /^Saka MID/ }).click()
+						}
+						const remove = page.getByRole('button', { name: `${zh ? '移除' : 'Remove'} ${filterKind === 'team' ? 'Arsenal' : 'Saka'}`, exact: true })
+						await expect(remove).toBeVisible()
+						await expect(page.getByRole('button', { name: zh ? '全部清除' : 'Clear all', exact: true }).first()).toBeEnabled()
+						let releaseRemoval!: () => void
+						const removalGate = new Promise<void>(resolve => { releaseRemoval = resolve })
+						await page.route('**/api/live/competitions/6/board', async route => {
+							await removalGate
+							if (scenario === 'failure-retry') await route.fulfill({ status: 400, json: { error: 'INVALID_FILTER_INPUT' } })
+							else await route.continue()
+						})
+						await remove.press('Enter')
+						await expect(remove).toHaveCount(0)
+						await expect(focusTarget).toBeDisabled()
+						const elsewhere = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true }).first()
+						if (moveFocus) await elsewhere.focus()
+						releaseRemoval()
+						if (scenario === 'failure-retry') {
+							await expect(remove).toBeVisible()
+							await expect(remove).toBeFocused()
+						} else {
+							await expect(focusTarget).toBeEnabled()
+							await expect(moveFocus ? elsewhere : focusTarget).toBeFocused()
+						}
+						await page.unroute('**/api/live/competitions/6/board')
+						if (scenario === 'failure-retry') {
+							await expect(remove).toBeVisible()
+							await remove.press('Enter')
+							await expect(remove).toHaveCount(0)
+							await expect(focusTarget).toBeEnabled()
+							await expect(focusTarget).toBeFocused()
+						}
+					}
+				}
+				return
+			}
 			if (recoveryMode === 'live-journey-sort') {
 				const columns = [
 					['TOTAL_POINTS', 'Total Pts', '总积分'], ['OVERALL_RANK', 'OR', '总排名'],
