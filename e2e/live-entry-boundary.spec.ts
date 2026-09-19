@@ -53,6 +53,17 @@ for (const id of ['abc', '0', '-1', '2147483648', '1e3', '0x7b', '0123', '+123']
    await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/123` && url.searchParams.get('gw') === '3' && url.searchParams.get('tournamentId') === '6')
    await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
    await expect(pitch.getByRole('button')).toHaveCount(15)
+   const starters = pitch.locator('ol[aria-label]')
+   const bench = pitch.locator('ol:not([aria-label])')
+   await expect(starters.getByRole('button')).toHaveCount(11)
+   await expect(bench.getByRole('button')).toHaveCount(4)
+   for (let player = 1; player <= 15; player += 1) {
+    await expect((player <= 11 ? starters : bench).getByRole('button', { name: new RegExp(`Player ${player}\\b`) })).toBeVisible()
+   }
+   const captain = starters.locator('li').filter({ has: page.getByRole('button', { name: /Player 1\b/ }) })
+   const vice = starters.locator('li').filter({ has: page.getByRole('button', { name: /Player 2\b/ }) })
+   await expect(captain.getByRole('img', { name: zh ? '队长' : 'Captain', exact: true })).toBeVisible()
+   await expect(vice.getByRole('img', { name: zh ? '副队长' : 'Vice-captain', exact: true })).toBeVisible()
    await expect(page.getByRole('link', { name: zh ? '返回赛事' : 'Back to competition', exact: true })).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=3`)
   }
   await assertContext()
