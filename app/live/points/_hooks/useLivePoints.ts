@@ -94,6 +94,7 @@ export function useLivePoints({
 	const isPageActive = usePageActive()
 	const [readyMeasurementMode, setReadyMeasurementMode] = useState<'enabled' | 'suppressed' | 'recovery'>('enabled')
 	const readyMeasurementEnabled = readyMeasurementMode === 'enabled'
+	const [readyRecoveryAttempt, setReadyRecoveryAttempt] = useState(0)
 	const pendingReadyClock = useRef<{ pathname: string; key: string } | null>(null)
 	const clearPendingReadyClock = useCallback(() => {
 		const pending = pendingReadyClock.current
@@ -655,7 +656,10 @@ export function useLivePoints({
 
 	const refresh = useCallback(async () => {
 		if (selectedGameweek !== undefined) {
-			if (readyMeasurementMode === 'recovery') startReadyClock(activeEntryId, selectedGameweek)
+			if (readyMeasurementMode === 'recovery') {
+				setReadyRecoveryAttempt(attempt => attempt + 1)
+				startReadyClock(activeEntryId, selectedGameweek)
+			}
 			resetLiveDataRetry()
 			await fetchLivePointsForGameweek(selectedGameweek)
 		}
@@ -938,6 +942,7 @@ export function useLivePoints({
 	})
 
 	return {
+		readyRecoveryAttempt,
 		readyMeasurementEnabled,
 		activeEntryId,
 		autoRefresh,

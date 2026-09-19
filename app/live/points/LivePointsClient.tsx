@@ -103,6 +103,7 @@ export default function LivePointsClient({
 	} else {
 		content = (
 			<LivePointsDashboard
+				readyRecoveryAttempt={livePoints.readyRecoveryAttempt}
 				readyMeasurementEnabled={livePoints.readyMeasurementEnabled}
 				activeEntryId={livePoints.activeEntryId}
 				entrySearch={entrySearch}

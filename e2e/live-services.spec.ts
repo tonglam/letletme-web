@@ -1632,7 +1632,7 @@ test('abandoned gameweek readiness does not leak into a later visit', async ({ p
  expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY').at(-1)).toMatchObject({ measurementKind: 'in_page_navigation', result: 'ok' })
 })
 
-for (const failureMode of ['request-error', 'no-picks', 'pending-exhausted'] as const) {
+for (const failureMode of ['request-error', 'no-picks', 'pending-exhausted', 'refresh-error'] as const) {
 test(`manual recovery after failed gameweek starts a fresh readiness clock (${failureMode})`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fault injection')
  await page.clock.install()
@@ -1647,7 +1647,7 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
   const payload = route.request().postDataJSON()
   if (fail && payload.query?.includes('GetLiveCalcPoints')) {
    failedReads += 1
-   if (failureMode === 'request-error') {
+   if ((failureMode === 'request-error' || failureMode === 'refresh-error')) {
     await route.fulfill({ status: 200, json: { errors: [{ message: 'Controlled load failure' }] } })
    } else {
     const response = await route.fetch({ url: graphqlFixtureUrl })
@@ -1663,12 +1663,12 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
  await page.goto('/live/points/123?gw=32&tournamentId=3')
  await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '32')
  fail = true
- await page.getByRole('button', { name: 'Previous gameweek', exact: true }).click()
+ await page.getByRole('button', { name: failureMode === 'refresh-error' ? 'Refresh' : 'Previous gameweek', exact: true }).click()
  if (failureMode === 'pending-exhausted') {
   for (let elapsed = 0; failedReads < 5 && elapsed < 35_000; elapsed += 500) await page.clock.runFor(500)
   await expect.poll(() => failedReads).toBe(5)
  }
- if (failureMode === 'request-error') {
+ if ((failureMode === 'request-error' || failureMode === 'refresh-error')) {
   await expect(page.getByRole('alert').filter({ hasText: 'Live points could not be loaded. Please try again.' })).toBeVisible()
  } else {
   await expect(page.getByRole('status').filter({ hasText: 'No live data is available for this team.' })).toBeVisible()
@@ -1678,7 +1678,7 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
  await page.clock.fastForward(60_000)
  fail = false
  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
- await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '31')
+ await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', failureMode === 'refresh-error' ? '32' : '31')
  await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length).toBe(1)
  const recovery = samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction')[0]
  expect(recovery.result).toBe('ok')
