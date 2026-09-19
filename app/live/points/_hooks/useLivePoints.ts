@@ -92,7 +92,8 @@ export function useLivePoints({
 }: UseLivePointsOptions) {
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
-	const [readyMeasurementEnabled, setReadyMeasurementEnabled] = useState(true)
+	const [readyMeasurementMode, setReadyMeasurementMode] = useState<'enabled' | 'suppressed' | 'recovery'>('enabled')
+	const readyMeasurementEnabled = readyMeasurementMode === 'enabled'
 	const pendingReadyClock = useRef<{ pathname: string; key: string } | null>(null)
 	const clearPendingReadyClock = useCallback(() => {
 		const pending = pendingReadyClock.current
@@ -101,7 +102,7 @@ export function useLivePoints({
 	}, [])
 	const startReadyClock = useCallback((entryId: number, gameweek: number) => {
 		clearPendingReadyClock()
-		setReadyMeasurementEnabled(true)
+		setReadyMeasurementMode('enabled')
 		const pathname = window.location.pathname
 		const key = `live-points:${entryId}:${gameweek}`
 		pendingReadyClock.current = { pathname, key }
@@ -454,7 +455,7 @@ export function useLivePoints({
 						// Do not paint an empty pitch after the bounded sync window.
 						// Keep the page in its explicit no-data state instead.
 						clearPendingReadyClock()
-						setReadyMeasurementEnabled(false)
+						setReadyMeasurementMode('recovery')
 						liveDataRetryRef.current = null
 						latestLiveDataRef.current = null
 						hasLoadedLiveDataRef.current = false
@@ -488,6 +489,7 @@ export function useLivePoints({
 						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
 					)
 					hasLoadedLiveDataRef.current = true
+					setReadyMeasurementMode(mode => mode === 'recovery' ? 'suppressed' : mode)
 					if (eventId === currentGameweekRef.current) {
 						officialSyncPendingRef.current = false
 						officialUpdatingRef.current = false
@@ -503,7 +505,7 @@ export function useLivePoints({
 				} catch (fetchError) {
 					if (requestId !== requestIdRef.current) return
 					clearPendingReadyClock()
-					setReadyMeasurementEnabled(false)
+					setReadyMeasurementMode('recovery')
 					if (!shouldSuppressOfficialErrorsForEvent(eventId)) {
 						console.error('Failed to fetch live points:', fetchError)
 						setError(t('loadFailed'))
@@ -653,11 +655,11 @@ export function useLivePoints({
 
 	const refresh = useCallback(async () => {
 		if (selectedGameweek !== undefined) {
-			if (!readyMeasurementEnabled) startReadyClock(activeEntryId, selectedGameweek)
+			if (readyMeasurementMode === 'recovery') startReadyClock(activeEntryId, selectedGameweek)
 			resetLiveDataRetry()
 			await fetchLivePointsForGameweek(selectedGameweek)
 		}
-	}, [activeEntryId, fetchLivePointsForGameweek, readyMeasurementEnabled, resetLiveDataRetry, selectedGameweek, startReadyClock])
+	}, [activeEntryId, fetchLivePointsForGameweek, readyMeasurementMode, resetLiveDataRetry, selectedGameweek, startReadyClock])
 
 	useEffect(() => resetLiveDataRetry, [resetLiveDataRetry])
 
@@ -705,7 +707,7 @@ export function useLivePoints({
 			if (observedAnchorEventId && observedAnchorEventId !== currentGameweek) {
 				if (followsAnchorRef.current) {
 					clearPendingReadyClock()
-					setReadyMeasurementEnabled(false)
+					setReadyMeasurementMode('suppressed')
 					setSelectedGameweek(observedAnchorEventId)
 					await fetchLivePointsForGameweek(observedAnchorEventId)
 				}

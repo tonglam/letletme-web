@@ -1723,4 +1723,13 @@ test('automatic gameweek rollover does not emit another navigation readiness sam
  }).toBe('34')
  await page.clock.runFor(50)
  expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(1)
+ const refreshed = page.waitForResponse(response => response.request().method() === 'POST' && response.request().postDataJSON()?.query?.includes('GetLiveCalcPoints'))
+ await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+ await refreshed
+ await expect.poll(async () => {
+  await page.clock.runFor(50)
+  return page.locator('[data-live-points-ready="true"]').getAttribute('data-live-gw')
+ }).toBe('34')
+ await page.clock.runFor(50)
+ expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY')).toHaveLength(1)
 })
