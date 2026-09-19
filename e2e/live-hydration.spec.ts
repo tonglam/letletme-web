@@ -78,6 +78,13 @@ test.describe('J09 match status and player navigation', () => {
 				expect(configured.ok).toBe(true)
 				await page.setViewportSize({ width, height: 900 })
 				await page.goto(prefix || '/')
+				await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+				await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
+				const homeMatches = page.locator('[data-home-matches]')
+				await expect(homeMatches).toHaveAttribute('data-home-fixtures-event', '33')
+				await expect(homeMatches.getByText('GW33', { exact: true })).toBeVisible()
+				await expect(homeMatches.locator('[aria-busy="true"]')).toHaveCount(0)
+				await expect(page.locator('[data-countdown-card="dark"]')).toContainText(zh ? '第 34 轮' : 'Gameweek 34')
 				const href = `${prefix}/live/matches`
 				const nav = page.getByRole('navigation').first()
 				if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()

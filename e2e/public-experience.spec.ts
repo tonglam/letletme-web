@@ -1108,6 +1108,13 @@ for (const width of [1440, 390]) {
   const submissions: string[] = []
   await page.route('**/api/bug-reports', async route => { submissions.push(route.request().method()); await route.abort() })
   await page.goto('/')
+  await expect(page).toHaveURL(url => url.pathname === '/')
+  await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
+  const homeMatches = page.locator('[data-home-matches]')
+  await expect(homeMatches).toHaveAttribute('data-home-fixtures-event', '33')
+  await expect(homeMatches.getByText('GW33', { exact: true })).toBeVisible()
+  await expect(homeMatches.locator('[aria-busy="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-countdown-card="dark"]')).toContainText('Gameweek 34')
   await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
   await page.getByRole('radio', { name: '简体中文', exact: true }).click()
   await expect(page).toHaveURL(/\/zh-CN$/)
