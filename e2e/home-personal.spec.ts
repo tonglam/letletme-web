@@ -4257,3 +4257,175 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+test.describe('live board layout fixture', () => {
+ test.describe.configure({ mode: 'serial' })
+for (const width of [1440, 390]) {
+ for (const remembered of [false, true]) {
+  test(`live board initial layout budget ${width} remembered=${remembered}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated fixture suite')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const session = await createSession({ entryId: 15702 })
+   let release!: () => void
+   const held = new Promise<void>(resolve => { release = resolve })
+   let boardRequests = 0
+   const targetId = remembered ? 7 : 6
+   try {
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    const response = await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetEntryTournaments { entryTournaments { id } }', variables: { entryId: session.entryId } }) })
+    const catalog = (await response.json()).data.entryTournaments
+    const second = { ...catalog[0], id: 7, name: 'Remembered Fixture League', sourceLeagueName: 'Remembered Fixture League', leagueId: 315 }
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournaments', data: { entryTournaments: [...catalog, second] } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(({ entryId, targetId, remembered }) => {
+     if (remembered) localStorage.setItem(`letletme:live-tournament-selection:v1:${entryId}`, String(targetId))
+     const state = { shifts: [] as Array<{ value: number; startTime: number; hadRecentInput: boolean }>, observer: null as PerformanceObserver | null }
+     ;(window as unknown as { __liveLayout: typeof state }).__liveLayout = state
+     state.observer = new PerformanceObserver(list => {
+      for (const item of list.getEntries()) {
+       const e = item as PerformanceEntry & { value: number; hadRecentInput: boolean; sources: Array<{ node?: Element; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }> }
+       state.shifts.push(Object.assign({ value: e.value, startTime: e.startTime, hadRecentInput: e.hadRecentInput }, { sources: e.sources.map(source => ({ tag: source.node?.tagName, className: source.node?.className, before: source.previousRect.toJSON(), after: source.currentRect.toJSON() })) }))
+      }
+     })
+     state.observer.observe({ type: 'layout-shift', buffered: true })
+    }, { entryId: session.entryId, targetId, remembered })
+    await page.route(`**/api/live/competitions/${targetId}/board`, async route => {
+     boardRequests++
+     await held
+     await route.continue()
+    })
+    await page.goto('/live/competitions')
+    await expect.poll(() => boardRequests).toBe(1)
+    await expect(page.locator('[data-competition-perf-ready]')).toHaveCount(0)
+    // Deliberately delayed fixture response: allow initial loading layout to paint.
+    await page.waitForTimeout(650)
+    const before = await page.getByRole('contentinfo').boundingBox()
+    release()
+    const ready = page.locator('[data-competition-perf-ready="detail"]')
+    await expect(ready).toHaveAttribute('data-competition-tournament-id', String(targetId))
+    await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
+    const shifts = await page.evaluate(async () => {
+     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+     const state = (window as unknown as { __liveLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__liveLayout
+     state.observer.disconnect()
+     return state.shifts.filter(e => !e.hadRecentInput)
+    })
+    let max = 0, sum = 0, start = 0, previous = -Infinity
+    for (const shift of shifts) {
+     if (shift.startTime - previous >= 1000 || shift.startTime - start >= 5000) { sum = 0; start = shift.startTime }
+     sum += shift.value
+     max = Math.max(max, sum)
+     previous = shift.startTime
+    }
+    await testInfo.attach('live-layout-evidence', { contentType: 'application/json', body: JSON.stringify({ width, remembered, targetId, before, after: await page.getByRole('contentinfo').boundingBox(), shifts, cls: max, budget: 0.1, fixtureDelayMs: 650, performanceDistributionEligible: false }) })
+    expect(max).toBeLessThanOrEqual(0.1)
+    await page.unroute(`**/api/live/competitions/${targetId}/board`)
+    let releaseReload!: () => void
+    const reloadGate = new Promise<void>(resolve => { releaseReload = resolve })
+    let reloadRequested = false
+    await page.route(`**/api/live/competitions/${targetId}/board`, async route => {
+     reloadRequested = true
+     await reloadGate
+     await route.continue()
+    })
+    await page.evaluate(() => window.scrollTo(0, 500))
+    await page.reload()
+    await expect.poll(() => reloadRequested).toBe(true)
+    await page.waitForTimeout(650)
+    const reloadBefore = await page.evaluate(() => ({ scrollY, footerTop: document.querySelector('footer')!.getBoundingClientRect().top }))
+    expect(reloadBefore.scrollY, 'reload must preserve the scrolled test precondition').toBeGreaterThanOrEqual(490)
+    expect(reloadBefore.scrollY).toBeLessThanOrEqual(510)
+    releaseReload()
+    await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveAttribute('data-competition-tournament-id', String(targetId))
+    const reloadShifts = await page.evaluate(async () => {
+     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+     const state = (window as unknown as { __liveLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__liveLayout
+     state.observer.disconnect()
+     return state.shifts.filter(e => !e.hadRecentInput)
+    })
+    await testInfo.attach('live-layout-scrolled-reload', { contentType: 'application/json', body: JSON.stringify({ width, remembered, reloadBefore, shifts: reloadShifts }) })
+    let reloadMax = 0, reloadSum = 0, reloadStart = 0, reloadPrevious = -Infinity
+    for (const shift of reloadShifts) {
+     if (shift.startTime - reloadPrevious >= 1000 || shift.startTime - reloadStart >= 5000) { reloadSum = 0; reloadStart = shift.startTime }
+     reloadSum += shift.value
+     reloadMax = Math.max(reloadMax, reloadSum)
+     reloadPrevious = shift.startTime
+    }
+    expect(reloadMax).toBeLessThanOrEqual(0.1)
+   } finally {
+    release()
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+}
+ for (const width of [1440, 390]) {
+  for (const mode of ['preparing', 'h2h', 'retry'] as const) {
+   test(`live board layout boundary ${mode} ${width}`, async ({ page }) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture')
+    const session = await createSession({ entryId: 15702 })
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+    let release = () => {}
+    try {
+     await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+     const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetEntryTournaments { entryTournaments { id } }', variables: { entryId: session.entryId } }) })).json()
+     const catalog = seed.data.entryTournaments
+     const target = { ...catalog[0], id: 7, name: 'Restored boundary league', sourceLeagueName: 'Restored boundary league', ...(mode === 'preparing' ? { standingsReadyAt: null, setupStatus: 'PENDING' } : {}), ...(mode === 'h2h' ? { leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC' } : {}) }
+     const h2h = officialH2HFixture(4, 7)
+     const rules = [
+      { operation: 'GetEntryTournaments', data: { entryTournaments: [...catalog, target] } },
+      { operation: 'GetTournamentOfficialH2H', data: { tournamentOfficialH2H: h2h.snapshot } },
+      { operation: 'GetLeagueLiveHead', data: { leagueLiveHead: h2h.head } },
+     ]
+     expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(entryId => localStorage.setItem(`letletme:live-tournament-selection:v1:${entryId}`, '7'), session.entryId)
+     if (mode === 'retry') {
+      let requests = 0
+      const held = new Promise<void>(resolve => { release = resolve })
+      await page.route('**/api/live/competitions/7/board', async route => {
+       if (++requests === 1) await route.fulfill({ status: 400, json: { error: 'INVALID_FILTER_INPUT' } })
+       else { await held; await route.continue() }
+      })
+      await page.goto('/live/competitions?gw=4')
+      const retry = page.getByRole('button', { name: 'Try again', exact: true })
+      await expect(retry).toBeVisible()
+      await expect(page.getByText('Loading competition standings…', { exact: true })).toHaveCount(0)
+      await retry.click()
+      await expect.poll(() => requests).toBe(2)
+      await expect(retry).toBeDisabled()
+      await expect(page.locator('[aria-busy="true"]').filter({ hasText: 'Loading competition standings…' })).toBeVisible()
+      release()
+      await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveAttribute('data-competition-tournament-id', '7')
+      await expect(retry).toHaveCount(0)
+      expect(requests).toBe(2)
+     } else {
+      await page.goto('/live/competitions?gw=4')
+      const terminal = mode === 'preparing' ? page.getByText('Preparing accurate standings', { exact: true }) : page.getByRole('tab', { name: /Head-to-Head table/ })
+      await expect(terminal).toBeVisible()
+      // Reservation must survive replacing the SSR classic seed with either restored branch.
+      const reservation = terminal.locator('xpath=ancestor::div[contains(@class,"min-h-[100svh]")]')
+      await expect(reservation).toHaveCount(1)
+      expect((await reservation.boundingBox())!.height).toBeGreaterThanOrEqual(900)
+      await page.evaluate(() => scrollTo(0, 500))
+      await page.reload()
+      await expect(terminal).toBeVisible()
+      await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThanOrEqual(490)
+      expect((await reservation.boundingBox())!.height).toBeGreaterThanOrEqual(900)
+      if (mode === 'preparing') await expect(page.locator('[data-competition-perf-ready]')).toHaveCount(0)
+      else await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveAttribute('data-competition-tournament-id', '7')
+     }
+    } finally {
+     release()
+     await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+     await session.cleanup()
+    }
+   })
+  }
+ }
+})
