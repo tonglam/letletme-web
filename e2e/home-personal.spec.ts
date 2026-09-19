@@ -994,13 +994,14 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
+for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of recoveryMode.startsWith('catalog-') ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
 const failFirstSections = (recoveryMode === 'retry-button' || recoveryMode === 'tab-reentry')
-test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}` : ''}`, async ({ page }) => {
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }) => {
 	test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
@@ -1548,6 +1549,104 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			return
 		}
+		if (recoveryMode === 'catalog-deep-link') {
+            const catalogRule = rules[0]
+            if (!('myTournamentReviewCatalog' in catalogRule.data)) throw new Error('Expected catalog fixture')
+            const original = catalogRule.data.myTournamentReviewCatalog!
+            const target = original.edges[0]
+            const firstCatalog = { ...original, pageInfo: { hasNextPage: true, endCursor: 'catalog-page-1' }, edges: [{ ...target, cursor: '76', node: { ...target.node, tournamentId: 76, name: 'First Page Cup', latestFinalizedScope: { ...target.node.latestFinalizedScope, tournamentId: 76 } } }] }
+            expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ reset: true, rules: [
+                { operation: 'GetMyTournamentReviewCatalog', variables: { search: '77' }, data: { myTournamentReviewCatalog: original } },
+                { operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: firstCatalog } },
+                ...rules.slice(1)
+            ] }) })).ok).toBe(true)
+            await page.setViewportSize({ width: catalogWidth, height: 900 })
+            await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
+            const ready = page.locator('[data-review-ready]')
+            await expect(ready).toHaveAttribute('data-review-ready', 'true')
+            await expect(ready).toHaveAttribute('data-review-tournament', '77')
+            await expect(ready).toHaveAttribute('data-review-gw', '4')
+            await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+            const selector = page.getByRole('complementary').getByRole('combobox').first()
+            await expect(selector).toHaveValue('77')
+            await expect(selector.locator('option[value="76"]')).toHaveCount(1)
+            await expect(selector.locator('option[value="77"]')).toHaveCount(1)
+            const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
+            const catalogRequests = observed.requests.filter(request => request.operation === 'GetMyTournamentReviewCatalog')
+            expect(catalogRequests.map(request => request.variables)).toEqual([
+                { scope: 'ACCESSIBLE', first: 50 },
+                { scope: 'ACCESSIBLE', first: 100, after: null, search: '77' }
+            ])
+            await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '77' && url.searchParams.get('gw') === '4')
+            return
+        }
+		if (recoveryMode.startsWith('catalog-')) {
+            const catalogRule = rules[0]
+            if (!('myTournamentReviewCatalog' in catalogRule.data)) throw new Error('Expected catalog fixture')
+            const original = catalogRule.data.myTournamentReviewCatalog!
+            const firstCatalog = { ...original, adminReadAll: true, pageInfo: { hasNextPage: true, endCursor: 'catalog-page-1' } }
+            expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: firstCatalog } }, ...rules.slice(1)] }) })).ok).toBe(true)
+            await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
+            await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+            let releasePage!: () => void
+            const pageGate = new Promise<void>(resolve => { releasePage = resolve })
+            const requests: unknown[] = []
+            let pageReturned = false
+            await page.route('**/api/graphql', async route => {
+                const body = route.request().postDataJSON()
+                if (!body.query?.includes('GetMyTournamentReviewCatalog')) return route.fallback()
+                requests.push(body.variables)
+                if (body.variables.scope === 'ALL') {
+                    await route.fulfill({ json: { data: { myTournamentReviewCatalog: { ...original, adminReadAll: true } } } })
+                    return
+                }
+                await pageGate
+                if (recoveryMode === 'catalog-retry' && requests.length === 1) {
+                    await route.fulfill({ json: { errors: [{ message: 'Isolated catalog page failure', extensions: { code: 'BAD_USER_INPUT' } }] } })
+                    return
+                }
+                const firstEdge = original.edges[0]
+                await route.fulfill({ json: { data: { myTournamentReviewCatalog: { ...original, edges: [firstEdge, { cursor: '78', node: { ...firstEdge.node, tournamentId: 78, name: 'Second Catalog Cup' } }] } } } })
+                pageReturned = true
+            })
+            const more = page.getByRole('button', { name: locale === 'zh-CN' ? '加载更多赛事' : 'Load more tournaments', exact: true })
+            await page.setViewportSize({ width: catalogWidth, height: 900 })
+            try {
+                await more.click()
+                await expect.poll(() => requests.length).toBe(1)
+                expect(requests[0]).toMatchObject({ first: 100, after: 'catalog-page-1', search: null })
+                expect((requests[0] as { scope: string }).scope).toBe('ACCESSIBLE')
+                await expect(page.getByRole('button', { name: locale === 'zh-CN' ? '正在加载赛事…' : 'Loading tournaments…', exact: true })).toBeDisabled()
+                if (recoveryMode === 'catalog-race') {
+                    await expect(page.getByRole('button', { name: locale === 'zh-CN' ? '搜索' : 'Search', exact: true })).toBeDisabled()
+                    await page.getByRole('button', { name: locale === 'zh-CN' ? '管理员：查看全部赛事' : 'Admin: show all tournaments', exact: true }).click({ timeout: 3000 })
+                    await expect.poll(() => requests.length).toBe(2)
+                    expect(requests[1]).toMatchObject({ first: 100, after: null, scope: 'ALL', search: null })
+                    expect(pageReturned).toBe(false)
+                    await expect(page).toHaveURL(/scope=all/)
+                }
+            } finally { releasePage() }
+            if (recoveryMode === 'catalog-retry') {
+                await expect(page.getByRole('complementary').getByRole('status')).toHaveText(locale === 'zh-CN' ? '赛事复盘暂时不可用，请重试。' : 'Tournament review is temporarily unavailable. Please try again.')
+                await expect(more).toBeEnabled()
+                await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+                await expect(page.getByRole('complementary').getByRole('combobox').first()).toHaveValue('77')
+                await more.click()
+                await expect.poll(() => requests.length).toBe(2)
+                expect(requests[1]).toEqual(requests[0])
+                await expect(page.getByRole('complementary').getByRole('status')).toHaveCount(0)
+            }
+            await expect.poll(() => pageReturned).toBe(true)
+            await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+            const selector = page.getByRole('complementary').getByRole('combobox').first()
+            await expect(selector.locator('option[value="78"]')).toHaveCount(recoveryMode === 'catalog-race' ? 0 : 1)
+            await expect(selector.locator('option[value="77"]')).toHaveCount(1)
+            await expect(selector).toHaveValue('77')
+            await expect(more).toHaveCount(0)
+            await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-tournament', '77')
+            await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-gw', '4')
+            return
+        }
 		if (recoveryMode === 'search-empty') {
 			await page.setViewportSize(locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
 			await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
@@ -1692,7 +1791,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 }
 
 }
-
+}
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`personal league carousel covers navigation pause focus and full list [${locale}]`, async ({ page }) => {
