@@ -82,3 +82,41 @@ for (const locale of ['en', 'zh-CN'] as const) {
   }
  }
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  for (const [caseId, route] of [['R01', '/acceptance-missing-route'], ['R02', '/admin/data-governance']] as const) {
+   test(`${caseId} anonymous hidden route terminal and history ${locale} ${width}`, async ({ page }, testInfo) => {
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? en : zh).Auth
+    const requested = prefix + route
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    let writes = 0
+    page.on('request', request => {
+     if (new URL(request.url()).pathname.startsWith('/api/') && !['GET', 'HEAD'].includes(request.method())) writes++
+    })
+    await page.goto(`${prefix}/auth/forgot-password`)
+    await expect(page.getByLabel(t.email, { exact: true })).toBeEnabled()
+    const chain = await redirectChain(await page.goto(requested))
+    expect(chain).toEqual([{ url: requested, status: 404, location: null }])
+    const assertHidden = async () => {
+     await expect(page).toHaveURL(url => url.pathname === requested)
+     await expect(page.getByRole('heading', { name: locale === 'en' ? 'Page not found' : '找不到页面', exact: true })).toBeVisible()
+     await expect(page.getByRole('link', { name: locale === 'en' ? 'Back to dashboard' : '返回首页', exact: true })).toBeVisible()
+     await expect(page.getByRole('main')).not.toContainText('scheduler_obligations')
+    }
+    await assertHidden()
+    expect((await page.reload())?.status()).toBe(404)
+    await assertHidden()
+    await page.goBack()
+    await expect(page.getByLabel(t.email, { exact: true })).toBeEnabled()
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/forgot-password`)
+    await page.goForward()
+    await assertHidden()
+    expect(writes).toBe(0)
+    await testInfo.attach('hidden-route-evidence', { contentType: 'application/json', body: JSON.stringify({ caseId, stepIds: [`${caseId}.01`, `${caseId}.02`, `${caseId}.04`, `${caseId}.05`], identity: 'anonymous', environment: 'isolated-fixture', locale, viewport: { width, height: 900 }, requested, chain, terminal: 'NOT_FOUND', assertions: ['single response 404 without redirect', 'localized not-found heading and recovery link', 'reload 404', 'Back to previous form', 'Forward restores not-found', 'no API writes'], readyMs: null, performanceStatus: 'NOT_RUN', wholeCaseComplete: false }) })
+   })
+  }
+ }
+}
