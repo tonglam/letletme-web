@@ -1632,7 +1632,8 @@ test('abandoned gameweek readiness does not leak into a later visit', async ({ p
  expect(samples.filter(s => s.metricName === 'LIVE_POINTS_READY').at(-1)).toMatchObject({ measurementKind: 'in_page_navigation', result: 'ok' })
 })
 
-test('manual recovery after failed gameweek starts a fresh readiness clock', async ({ page }) => {
+for (const failureMode of ['request-error', 'no-picks', 'pending-exhausted'] as const) {
+test(`manual recovery after failed gameweek starts a fresh readiness clock (${failureMode})`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fault injection')
  await page.clock.install()
  const samples: { metricName: string; measurementKind: string; result: string; value: number }[] = []
@@ -1641,10 +1642,20 @@ test('manual recovery after failed gameweek starts a fresh readiness clock', asy
   await route.fulfill({ status: 204, body: '' })
  })
  let fail = false
+ let failedReads = 0
  await page.route('**/api/graphql', async route => {
   const payload = route.request().postDataJSON()
   if (fail && payload.query?.includes('GetLiveCalcPoints')) {
-   await route.fulfill({ status: 200, json: { errors: [{ message: 'Controlled load failure' }] } })
+   failedReads += 1
+   if (failureMode === 'request-error') {
+    await route.fulfill({ status: 200, json: { errors: [{ message: 'Controlled load failure' }] } })
+   } else {
+    const response = await route.fetch({ url: graphqlFixtureUrl })
+    const body = await response.json()
+    body.data.calcLivePointsByEntry.pickList = []
+    body.data.calcLivePointsByEntry.availability = failureMode === 'no-picks' ? 'NO_PICKS' : 'PENDING'
+    await route.fulfill({ response, json: body })
+   }
    return
   }
   await continueToGraphqlFixture(route)
@@ -1653,7 +1664,15 @@ test('manual recovery after failed gameweek starts a fresh readiness clock', asy
  await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '32')
  fail = true
  await page.getByRole('button', { name: 'Previous gameweek', exact: true }).click()
- await expect(page.getByRole('alert').filter({ hasText: 'Live points could not be loaded. Please try again.' })).toBeVisible()
+ if (failureMode === 'pending-exhausted') {
+  for (let elapsed = 0; failedReads < 5 && elapsed < 35_000; elapsed += 500) await page.clock.runFor(500)
+  await expect.poll(() => failedReads).toBe(5)
+ }
+ if (failureMode === 'request-error') {
+  await expect(page.getByRole('alert').filter({ hasText: 'Live points could not be loaded. Please try again.' })).toBeVisible()
+ } else {
+  await expect(page.getByRole('status').filter({ hasText: 'No live data is available for this team.' })).toBeVisible()
+ }
  await expect(page.locator('[data-live-points-ready="true"]')).toHaveCount(0)
  // Simulate user dwell on the terminal error; this is not a latency benchmark.
  await page.clock.fastForward(60_000)
@@ -1665,6 +1684,7 @@ test('manual recovery after failed gameweek starts a fresh readiness clock', asy
  expect(recovery.result).toBe('ok')
  expect(recovery.value).toBeLessThan(60_000)
 })
+}
 
 test('automatic gameweek rollover does not emit another navigation readiness sample', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated lifecycle fixture')

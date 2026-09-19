@@ -453,6 +453,8 @@ export function useLivePoints({
 
 						// Do not paint an empty pitch after the bounded sync window.
 						// Keep the page in its explicit no-data state instead.
+						clearPendingReadyClock()
+						setReadyMeasurementEnabled(false)
 						liveDataRetryRef.current = null
 						latestLiveDataRef.current = null
 						hasLoadedLiveDataRef.current = false
