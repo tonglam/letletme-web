@@ -369,6 +369,7 @@ export function LiveCompetitionBoardFilters({
 	const [selectionIndexStatus, setSelectionIndexStatus] =
 		useState<SelectionIndexStatus>('loading')
 	const [selectionIndexRetryNonce, setSelectionIndexRetryNonce] = useState(0)
+	const selectionIndexReadyRef = useRef(false)
 	const [applying, setApplying] = useState(false)
 	const [draft, setDraft] = useState<LiveBoardFilterState>(() =>
 		cloneFilters(value)
@@ -410,6 +411,7 @@ export function LiveCompetitionBoardFilters({
 
 	useEffect(() => {
 		const controller = new AbortController()
+		selectionIndexReadyRef.current = false
 		setSelectionIndexStatus('loading')
 		setRows([])
 		const params = new URLSearchParams({
@@ -444,6 +446,7 @@ export function LiveCompetitionBoardFilters({
 					setSelectionIndexStatus('unavailable')
 					return
 				}
+				selectionIndexReadyRef.current = true
 				setSelectionIndexStatus('ready')
 				setRows(next)
 			})
@@ -757,11 +760,14 @@ export function LiveCompetitionBoardFilters({
 	useEffect(() => {
 		const pending = pendingRemovalFocusRef.current
 		if (!pending || controlsDisabled) return
+		// Index refresh clears team options before its loading state is committed.
+		if (pending.target === 'team' && !selectionIndexReadyRef.current) return
 		const target = pending.target === 'player' ? addPlayerButtonRef.current : teamSelectRef.current
 		const restoredSource = removalButtonsRef.current.get(pending.key)
 		const focusTarget = restoredSource ?? (target && !target.disabled ? target : null)
+		if (!focusTarget) return
 		pendingRemovalFocusRef.current = null
-		if (focusTarget && (document.activeElement === document.body || document.activeElement === pending.source))
+		if ( (document.activeElement === document.body || document.activeElement === pending.source))
 			focusTarget.focus()
 	})
 	const matchedPercentage =
