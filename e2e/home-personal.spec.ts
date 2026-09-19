@@ -4191,3 +4191,105 @@ for (const locale of ['en', 'zh-CN'] as const) {
   })
  }
 }
+
+for (const width of [1440, 390]) {
+ for (const remembered of [false, true]) {
+  test(`live board initial layout budget ${width} remembered=${remembered}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated fixture suite')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const session = await createSession({ entryId: 15702 })
+   let release!: () => void
+   const held = new Promise<void>(resolve => { release = resolve })
+   let boardRequests = 0
+   const targetId = remembered ? 7 : 6
+   try {
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    const response = await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetEntryTournaments { entryTournaments { id } }', variables: { entryId: session.entryId } }) })
+    const catalog = (await response.json()).data.entryTournaments
+    const second = { ...catalog[0], id: 7, name: 'Remembered Fixture League', sourceLeagueName: 'Remembered Fixture League', leagueId: 315 }
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournaments', data: { entryTournaments: [...catalog, second] } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(({ entryId, targetId, remembered }) => {
+     if (remembered) localStorage.setItem(`letletme:live-tournament-selection:v1:${entryId}`, String(targetId))
+     const state = { shifts: [] as Array<{ value: number; startTime: number; hadRecentInput: boolean }>, observer: null as PerformanceObserver | null }
+     ;(window as unknown as { __liveLayout: typeof state }).__liveLayout = state
+     state.observer = new PerformanceObserver(list => {
+      for (const item of list.getEntries()) {
+       const e = item as PerformanceEntry & { value: number; hadRecentInput: boolean; sources: Array<{ node?: Element; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }> }
+       state.shifts.push(Object.assign({ value: e.value, startTime: e.startTime, hadRecentInput: e.hadRecentInput }, { sources: e.sources.map(source => ({ tag: source.node?.tagName, className: source.node?.className, before: source.previousRect.toJSON(), after: source.currentRect.toJSON() })) }))
+      }
+     })
+     state.observer.observe({ type: 'layout-shift', buffered: true })
+    }, { entryId: session.entryId, targetId, remembered })
+    await page.route(`**/api/live/competitions/${targetId}/board`, async route => {
+     boardRequests++
+     await held
+     await route.continue()
+    })
+    await page.goto('/live/competitions')
+    await expect.poll(() => boardRequests).toBe(1)
+    await expect(page.locator('[data-competition-perf-ready]')).toHaveCount(0)
+    // Deliberately delayed fixture response: allow initial loading layout to paint.
+    await page.waitForTimeout(650)
+    const before = await page.getByRole('contentinfo').boundingBox()
+    release()
+    const ready = page.locator('[data-competition-perf-ready="detail"]')
+    await expect(ready).toHaveAttribute('data-competition-tournament-id', String(targetId))
+    await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
+    const shifts = await page.evaluate(async () => {
+     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+     const state = (window as unknown as { __liveLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__liveLayout
+     state.observer.disconnect()
+     return state.shifts.filter(e => !e.hadRecentInput)
+    })
+    let max = 0, sum = 0, start = 0, previous = -Infinity
+    for (const shift of shifts) {
+     if (shift.startTime - previous >= 1000 || shift.startTime - start >= 5000) { sum = 0; start = shift.startTime }
+     sum += shift.value
+     max = Math.max(max, sum)
+     previous = shift.startTime
+    }
+    await testInfo.attach('live-layout-evidence', { contentType: 'application/json', body: JSON.stringify({ width, remembered, targetId, before, after: await page.getByRole('contentinfo').boundingBox(), shifts, cls: max, budget: 0.1, fixtureDelayMs: 650, performanceDistributionEligible: false }) })
+    expect(max).toBeLessThanOrEqual(0.1)
+    await page.unroute(`**/api/live/competitions/${targetId}/board`)
+    let releaseReload!: () => void
+    const reloadGate = new Promise<void>(resolve => { releaseReload = resolve })
+    let reloadRequested = false
+    await page.route(`**/api/live/competitions/${targetId}/board`, async route => {
+     reloadRequested = true
+     await reloadGate
+     await route.continue()
+    })
+    await page.evaluate(() => window.scrollTo(0, 500))
+    await page.reload()
+    await expect.poll(() => reloadRequested).toBe(true)
+    await page.waitForTimeout(650)
+    const reloadBefore = await page.evaluate(() => ({ scrollY, footerTop: document.querySelector('footer')!.getBoundingClientRect().top }))
+    releaseReload()
+    await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveAttribute('data-competition-tournament-id', String(targetId))
+    const reloadShifts = await page.evaluate(async () => {
+     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+     const state = (window as unknown as { __liveLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__liveLayout
+     state.observer.disconnect()
+     return state.shifts.filter(e => !e.hadRecentInput)
+    })
+    await testInfo.attach('live-layout-scrolled-reload', { contentType: 'application/json', body: JSON.stringify({ width, remembered, reloadBefore, shifts: reloadShifts }) })
+    let reloadMax = 0, reloadSum = 0, reloadStart = 0, reloadPrevious = -Infinity
+    for (const shift of reloadShifts) {
+     if (shift.startTime - reloadPrevious >= 1000 || shift.startTime - reloadStart >= 5000) { reloadSum = 0; reloadStart = shift.startTime }
+     reloadSum += shift.value
+     reloadMax = Math.max(reloadMax, reloadSum)
+     reloadPrevious = shift.startTime
+    }
+    expect(reloadMax).toBeLessThanOrEqual(0.1)
+   } finally {
+    release()
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+}
