@@ -926,7 +926,7 @@ test('canonical competition board and compatibility redirect preserve the commit
 		await addSessionCookie(page, session.cookie)
 		// Next can deliver this redirect in a streamed HTML response (HTTP 200).
 		// Verify the browser destination and committed board, not just the status.
-		await page.goto('/live/competitions/6?gw=1&created=1')
+		await page.goto('/competitions/6?gw=1&created=1')
 		await expect(page).toHaveURL(/\/live\/competitions\?/)
 		const target = new URL(page.url())
 		expect(target.pathname).toBe('/live/competitions')
