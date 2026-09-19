@@ -450,7 +450,7 @@ export function LiveCompetitionBoardFilters({
 				setSelectionIndexStatus('ready')
 				setRows(next)
 			})
-			.catch(error => {
+			.catch(async error => {
 				if (controller.signal.aborted) return
 				const requestError = error as { code?: string; status?: number }
 				if (
@@ -459,7 +459,14 @@ export function LiveCompetitionBoardFilters({
 				) {
 					setRows([])
 					setSelectionIndexStatus('recovering')
-					void onRevisionGone?.()
+					try {
+						await onRevisionGone?.()
+					} catch {
+						// The local retry remains available when the board refresh fails.
+					}
+					// A new revision aborts this effect and starts its own index request.
+					// If no replacement arrived, end recovery instead of spinning forever.
+					if (!controller.signal.aborted) setSelectionIndexStatus('unavailable')
 					return
 				}
 				console.warn('Tournament selection index unavailable', {
