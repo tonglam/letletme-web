@@ -2,6 +2,8 @@ import { expect, test, type Response } from '@playwright/test'
 import en from '../messages/en.json'
 import zh from '../messages/zh-CN.json'
 
+test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated anonymous fixture; external origins need separate release-bound evidence')
+
 // Frozen matrix route IDs. Anonymous expectations do not stand in for owner/admin journeys.
 const targets = [
  ['R12', '/competitions/6/manage'],
@@ -53,8 +55,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
     expect(chain).toHaveLength(2)
     expect(chain[0].status).toBe(307)
     expect(chain[1].status).toBe(200)
+    const expectedLogin = new URL(`${prefix}/auth/login`, testInfo.project.use.baseURL)
+    expectedLogin.searchParams.set('next', requested)
+    expect(chain[1].url).toBe(expectedLogin.pathname + expectedLogin.search)
+    expect(new URL(chain[0].location!, testInfo.project.use.baseURL).href).toBe(expectedLogin.href)
     const assertLoginReady = async () => {
-     await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === requested)
+     await expect(page).toHaveURL(expectedLogin.href)
      await expect(page.getByLabel(t.email, { exact: true })).toBeEnabled()
      await expect(page.getByLabel(t.password, { exact: true })).toBeEnabled()
      await expect(page.getByRole('button', { name: t.signIn, exact: true })).toBeEnabled()
