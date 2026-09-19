@@ -97,3 +97,29 @@ for (const id of ['abc', '0', '-1', '2147483648', '1e3', '0x7b', '0123', '+123']
  })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`R26 anonymous home highest score click and return ${locale} ${width}px`, async ({ page }) => {
+   const zh = locale === 'zh-CN'
+   const prefix = zh ? '/zh-CN' : ''
+   await page.setViewportSize({ width, height: 900 })
+   await page.goto(prefix || '/')
+   const entryLink = page.getByRole('link', { name: zh ? '最高分: 101' : 'Highest Score: 101', exact: true })
+   await expect(entryLink).toHaveCount(1)
+   await expect(entryLink).toBeVisible()
+   await expect(entryLink).toHaveAttribute('href', `${prefix}/live/points/15702?gw=33&from=home`)
+   await entryLink.click()
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/15702` && url.searchParams.get('gw') === '33' && url.searchParams.get('from') === 'home' && !url.searchParams.has('tournamentId'))
+   const pitch = page.getByRole('region', { name: zh ? 'E2E United 阵型' : 'E2E United formation', exact: true })
+   await expect(pitch.getByRole('heading', { name: 'E2E United', exact: true })).toBeVisible()
+   await expect(pitch.locator('ol[aria-label]').getByRole('button')).toHaveCount(11)
+   await expect(pitch.locator('ol:not([aria-label])').getByRole('button')).toHaveCount(4)
+   const back = page.getByRole('link', { name: zh ? '返回首页' : 'Back to home', exact: true })
+   await expect(back).toHaveAttribute('href', prefix || '/')
+   await back.click()
+   await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+   await expect(entryLink).toBeVisible()
+  })
+ }
+}
