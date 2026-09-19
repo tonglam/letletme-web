@@ -4285,3 +4285,59 @@ test.describe('profile history and avatar fixture coverage', () => {
   }
  }
 })
+
+for (const mode of ['delayed', 'failed'] as const) {
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`PROFILE01 identity refresh ${mode} ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated database and server FPL fixture required')
+    const session = await createSession({ entryId: 15702 })
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).Profile
+    let release!: () => void
+    const held = new Promise<void>(resolve => { release = resolve })
+    let requests = 0
+    let completed = 0
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    try {
+     await addSessionCookie(page, session.cookie)
+     await page.setViewportSize({ width, height: 900 })
+     await page.route('**/api/auth/get-session?*', async route => {
+      if (!new URL(route.request().url()).searchParams.has('disableCookieCache')) return route.continue()
+      requests++
+      await held
+      if (mode === 'failed') await route.fulfill({ status: 503, json: { code: 'INTERNAL_SERVER_ERROR', message: 'Isolated session dependency unavailable' } })
+      else await route.continue()
+      completed++
+     })
+     await page.goto(`${prefix}/profile`)
+     await expect.poll(() => requests).toBeGreaterThan(0)
+     const main = page.locator('#main-content')
+     await expect(main.getByRole('heading', { name: t.title, exact: true })).toBeVisible()
+     await expect(main).toContainText('E2E Synced United')
+     await expect(main.getByTitle(t.changeAvatar, { exact: true })).toBeEnabled()
+     expect(completed).toBe(0)
+     const before = requests
+     release()
+     await expect.poll(() => completed).toBeGreaterThanOrEqual(before)
+     await expect(main).toContainText('E2E Synced United')
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
+     // Bounded observation for an accidental refresh/re-fetch loop after settlement.
+     await page.waitForTimeout(1200)
+     expect(requests).toBe(before)
+     expect(errors).toEqual([])
+     await testInfo.attach('profile-refresh-evidence', { contentType: 'application/json', body: JSON.stringify({
+      stepId: 'PROFILE01.02', locale, width, mode, requests, completed,
+      asserted: ['authorized SSR content visible while client fresh-session request held', 'avatar control enabled', 'same profile after settlement', 'no additional fresh-session requests in 1200ms observation', 'no pageerror'],
+      scope: 'Client identity-session refresh only; server FPL identity sync timeout is not injected',
+      readyMs: null, performanceStatus: 'NOT_OBSERVED'
+     }) })
+    } finally {
+     release()
+     await session.cleanup()
+    }
+   })
+  }
+ }
+}
