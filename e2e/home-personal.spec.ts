@@ -994,7 +994,7 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
+for (const recoveryMode of ['none', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-sort'] as const) {
 for (const locale of recoveryMode === 'none' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 for (const catalogWidth of recoveryMode.startsWith('catalog-') ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
@@ -1549,6 +1549,37 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			return
 		}
+		if (recoveryMode === 'catalog-deep-link') {
+            const catalogRule = rules[0]
+            if (!('myTournamentReviewCatalog' in catalogRule.data)) throw new Error('Expected catalog fixture')
+            const original = catalogRule.data.myTournamentReviewCatalog!
+            const target = original.edges[0]
+            const firstCatalog = { ...original, pageInfo: { hasNextPage: true, endCursor: 'catalog-page-1' }, edges: [{ ...target, cursor: '76', node: { ...target.node, tournamentId: 76, name: 'First Page Cup', latestFinalizedScope: { ...target.node.latestFinalizedScope, tournamentId: 76 } } }] }
+            expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ reset: true, rules: [
+                { operation: 'GetMyTournamentReviewCatalog', variables: { search: '77' }, data: { myTournamentReviewCatalog: original } },
+                { operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: firstCatalog } },
+                ...rules.slice(1)
+            ] }) })).ok).toBe(true)
+            await page.setViewportSize({ width: catalogWidth, height: 900 })
+            await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
+            const ready = page.locator('[data-review-ready]')
+            await expect(ready).toHaveAttribute('data-review-ready', 'true')
+            await expect(ready).toHaveAttribute('data-review-tournament', '77')
+            await expect(ready).toHaveAttribute('data-review-gw', '4')
+            await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+            const selector = page.getByRole('complementary').getByRole('combobox').first()
+            await expect(selector).toHaveValue('77')
+            await expect(selector.locator('option[value="76"]')).toHaveCount(1)
+            await expect(selector.locator('option[value="77"]')).toHaveCount(1)
+            const observed = await (await fetch(fixture)).json() as { requests: { operation: string; variables: Record<string, unknown> }[] }
+            const catalogRequests = observed.requests.filter(request => request.operation === 'GetMyTournamentReviewCatalog')
+            expect(catalogRequests.map(request => request.variables)).toEqual([
+                { scope: 'ACCESSIBLE', first: 50 },
+                { scope: 'ACCESSIBLE', first: 100, after: null, search: '77' }
+            ])
+            await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '77' && url.searchParams.get('gw') === '4')
+            return
+        }
 		if (recoveryMode.startsWith('catalog-')) {
             const catalogRule = rules[0]
             if (!('myTournamentReviewCatalog' in catalogRule.data)) throw new Error('Expected catalog fixture')
