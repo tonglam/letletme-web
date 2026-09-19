@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
+test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+test.beforeEach(async ({ page }) => {
+ await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+})
 
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated local GraphQL fixture')
 test.skip(process.env.E2E_LIVE_ENTRY_BOUNDARY !== '1', 'Run in the dedicated entry-boundary fixture process')
@@ -40,7 +44,7 @@ for (const id of ['abc', '0', '-1', '2147483648', '1e3', '0x7b', '0123', '+123']
  })
 }
 
- test(`valid live entry preserves GW and return ${locale} ${width}px`, async ({ page }) => {
+ test(`valid live entry preserves GW and return ${locale} ${width}px`, async ({ page, context }, testInfo) => {
   await page.setViewportSize({ width, height: 900 })
   const target = `${prefix}/live/points/123?gw=3&tournamentId=6`
   const response = await page.goto(target)
@@ -67,6 +71,18 @@ for (const id of ['abc', '0', '-1', '2147483648', '1e3', '0x7b', '0123', '+123']
    await expect(page.getByRole('link', { name: zh ? '返回赛事' : 'Back to competition', exact: true })).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=3`)
   }
   await assertContext()
+  const preflight = await page.evaluate(() => ({
+   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+   theme: localStorage.getItem('theme'),
+   systemDark: matchMedia('(prefers-color-scheme: dark)').matches,
+   renderedDark: document.documentElement.classList.contains('dark'),
+   width: innerWidth,
+   height: innerHeight
+  }))
+  expect(preflight).toEqual({ timezone: 'Australia/Perth', theme: 'system', systemDark: false, renderedDark: false, width, height: 900 })
+  const hasSession = (await context.cookies()).some(cookie => /session_token/.test(cookie.name))
+  expect(hasSession).toBe(false)
+  await testInfo.attach('R26-variant-preflight', { body: JSON.stringify({ ...preflight, hasSession, locale, entry: 123, gw: 3, tournament: 6 }), contentType: 'application/json' })
   expect((await page.reload())?.status()).toBe(200)
   await assertContext()
   // A neutral history entry exercises browser restoration without implying a
