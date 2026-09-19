@@ -4407,3 +4407,48 @@ for (const mode of ['delayed', 'failed'] as const) {
   }
  }
 }
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`PROFILE04 session list retry recovery ${locale} ${width}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
+   const session = await createSession({ entryId: 15702 })
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const t = (locale === 'en' ? enMessages : zhMessages).Sessions
+   let reads = 0
+   let writes = 0
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.setViewportSize({ width, height: 900 })
+    page.on('request', request => {
+     if (new URL(request.url()).pathname.startsWith('/api/auth/') && !['GET', 'HEAD'].includes(request.method())) writes++
+    })
+    await page.route('**/api/auth/list-sessions', async route => {
+     reads++
+     if (reads === 1) await route.fulfill({ status: 500, json: { code: 'INTERNAL_SERVER_ERROR', message: 'Isolated session read failure' } })
+     else await route.continue()
+    })
+    await page.goto(`${prefix}/profile/sessions`)
+    const main = page.locator('#main-content')
+    await expect(main.getByText(t.loadFailed, { exact: true })).toBeVisible()
+    await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(0)
+    expect(reads).toBe(1)
+    await main.getByRole('button', { name: t.retry, exact: true }).click()
+    await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(1)
+    await expect(main.getByText(t.loadFailed, { exact: true })).toHaveCount(0)
+    await expect(main.getByRole('button', { name: t.retry, exact: true })).toHaveCount(0)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile/sessions`)
+    expect(reads).toBe(2)
+    expect(writes).toBe(0)
+    await testInfo.attach('session-retry-evidence', { contentType: 'application/json', body: JSON.stringify({
+     stepIds: ['PROFILE04.02', 'PROFILE04.03'], locale, width, reads, writes,
+     identity: 'isolated bound current session', environment: 'isolated-fixture',
+     assertions: ['failed read shown without a false current-session row', 'actual retry click issues one further read', 'real current session restored exactly once', 'error and retry removed', 'no auth writes'],
+     readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_RUN', wholeCaseComplete: false
+    }) })
+   } finally {
+    await session.cleanup()
+   }
+  })
+ }
+}
