@@ -246,3 +246,66 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const locale of ['en', 'zh-CN']) {
+ test(`prediction observation tracks rendered revision during refresh ${locale}`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture')
+  const zh = locale === 'zh-CN'
+  const pathname = `${zh ? '/zh-CN' : ''}/explore/price-predictions`
+  await page.goto(pathname)
+  const board = page.locator('[data-price-predictions-board]')
+  await expect(board).toHaveAttribute('data-price-change-revision', 'price-changes-7')
+  await expect(board).toHaveAttribute('data-price-change-status', 'READY')
+  await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+  await page.evaluate(() => {
+   const board = document.querySelector('[data-price-predictions-board]')!
+   const seed = document.querySelector('[data-letletme-contract="price_changes"]')!
+   const state: Record<string, string | null> = {
+    revision: board.getAttribute('data-price-change-revision'),
+    refreshing: board.getAttribute('data-price-change-refreshing'),
+    seed: seed.getAttribute('data-revision')
+   }
+   const violations: string[] = []
+   document.documentElement.dataset.predictionSyncViolations = '[]'
+   new MutationObserver(records => {
+    records.forEach((record, index) => {
+     const key = record.target === board
+      ? record.attributeName === 'data-price-change-revision' ? 'revision' : 'refreshing'
+      : record.target === seed ? 'seed' : null
+     if (!key) return
+     // MutationObserver batches commits. Reconstruct intermediate values from
+     // the next mutation's oldValue instead of reading only the final DOM.
+     const next = records.slice(index + 1).find(item => item.target === record.target && item.attributeName === record.attributeName)
+     state[key] = next ? next.oldValue : (record.target as Element).getAttribute(record.attributeName!)
+     if (state.seed === 'price-changes-next' && state.refreshing === 'false' && state.revision !== state.seed) violations.push(JSON.stringify(state))
+    })
+    document.documentElement.dataset.predictionSyncViolations = JSON.stringify(violations)
+   }).observe(document.documentElement, { subtree: true, attributes: true, attributeOldValue: true,
+    attributeFilter: ['data-price-change-revision', 'data-price-change-refreshing', 'data-revision'] })
+  })
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  let waiting = false
+  await page.route(`**${pathname}?_rsc=*`, async route => {
+   waiting = true
+   await gate
+   const response = await route.fetch()
+   const body = await response.text()
+   expect(body).toContain('price-changes-7')
+   await route.fulfill({ response, body: body.replaceAll('price-changes-7', 'price-changes-next') })
+  })
+  try {
+   await page.getByRole('button', { name: zh ? '刷新' : 'Refresh', exact: true }).click()
+   await expect.poll(() => waiting).toBe(true)
+   await expect(board).toHaveAttribute('data-price-change-refreshing', 'true')
+   await expect(board).toHaveAttribute('data-price-change-revision', 'price-changes-7')
+   await expect(board.getByRole('table')).toBeVisible()
+  } finally {
+   release()
+  }
+  await expect(board).toHaveAttribute('data-price-change-refreshing', 'false')
+  await expect(board).toHaveAttribute('data-price-change-revision', 'price-changes-next')
+  await expect(page.locator('html')).toHaveAttribute('data-prediction-sync-violations', '[]')
+  await expect(board).toHaveAttribute('data-price-change-status', 'READY')
+ })
+}
