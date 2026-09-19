@@ -554,21 +554,28 @@ for (const locale of ['en', 'zh-CN']) {
  }
 }
 
-test('single recent section selection keeps one in-flight request', async ({ page }) => {
+for (const sectionName of ['recent', 'process'] as const) {
+test(`single ${sectionName} section selection keeps one in-flight request`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Delayed response is isolated-only')
- let recentRequests = 0
+ let sectionRequests = 0
  await page.route('**/api/player-stats/desk?**', async route => {
-  if (new URL(route.request().url()).searchParams.get('section') !== 'recent') return route.continue()
-  recentRequests++
+  if (new URL(route.request().url()).searchParams.get('section') !== sectionName) return route.continue()
+  sectionRequests++
   const response = await route.fetch()
   await new Promise(resolve => setTimeout(resolve, 300))
   await route.fulfill({ response })
  })
  await page.goto('/explore/player-stats?p1=1')
  await expect(page.getByRole('region', { name: 'Player overall', exact: true })).toContainText('Saka')
- await page.getByRole('button', { name: 'Recent GWs', exact: true }).click()
- const recent = page.locator('#ps-recent')
- await expect(recent).toBeVisible()
- await expect(recent.locator('tbody tr')).not.toHaveCount(0)
- expect(recentRequests).toBe(1)
+ await page.getByRole('button', { name: sectionName === 'recent' ? 'Recent GWs' : 'Process', exact: true }).click()
+ const section = page.locator(`#ps-${sectionName}`)
+ await expect(section).toBeVisible()
+ if (sectionName === 'recent') await expect(section.locator('tbody tr')).not.toHaveCount(0)
+ else {
+  await expect(section).toContainText('7.20')
+  await expect(section).toContainText('Verified current Understat process is unavailable; no process claim is made.')
+ }
+ expect(sectionRequests).toBe(1)
 })
+
+}
