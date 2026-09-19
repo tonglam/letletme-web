@@ -553,3 +553,22 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+test('single recent section selection keeps one in-flight request', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Delayed response is isolated-only')
+ let recentRequests = 0
+ await page.route('**/api/player-stats/desk?**', async route => {
+  if (new URL(route.request().url()).searchParams.get('section') !== 'recent') return route.continue()
+  recentRequests++
+  const response = await route.fetch()
+  await new Promise(resolve => setTimeout(resolve, 300))
+  await route.fulfill({ response })
+ })
+ await page.goto('/explore/player-stats?p1=1')
+ await expect(page.getByRole('region', { name: 'Player overall', exact: true })).toContainText('Saka')
+ await page.getByRole('button', { name: 'Recent GWs', exact: true }).click()
+ const recent = page.locator('#ps-recent')
+ await expect(recent).toBeVisible()
+ await expect(recent.locator('tbody tr')).not.toHaveCount(0)
+ expect(recentRequests).toBe(1)
+})

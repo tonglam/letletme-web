@@ -16,7 +16,7 @@ import { PlayerStatsInitialDesk } from './PlayerStatsInitialDesk'
 import { MySquadRail } from './_components/MySquadRail'
 import { PlayerSelectionPanel } from './_components/PlayerSelectionPanel'
 import { usePlayerStatsPersonalSeed } from './PlayerStatsPersonalSeedContext'
-import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
+import { usePlayerDetailSlot, type PlayerEvidenceSection } from './_hooks/usePlayerDetailSlot'
 import {
 	buildPlayerStatsQueryString,
 	parsePlayerStatsPlayerId,
@@ -457,6 +457,23 @@ export default function PlayerStatsClient({
 		[beginLocalPlayerDetailLoad, firstSelectedPlayerId, secondSelectPlayerById]
 	)
 
+	const firstLoadEvidence = firstPlayer.loadEvidence
+	const secondLoadEvidence = secondPlayer.loadEvidence
+	const evidencePlayerIds = useMemo(
+		() => [firstSelectedPlayerId, secondSelectedPlayerId]
+			.map(Number)
+			.filter(value => Number.isInteger(value) && value > 0),
+		[firstSelectedPlayerId, secondSelectedPlayerId]
+	)
+	const loadPrimaryEvidence = useCallback(
+		(section: PlayerEvidenceSection) => firstLoadEvidence(section, evidencePlayerIds),
+		[firstLoadEvidence, evidencePlayerIds]
+	)
+	const loadSecondaryEvidence = useCallback(
+		(section: PlayerEvidenceSection) => secondLoadEvidence(section, evidencePlayerIds),
+		[secondLoadEvidence, evidencePlayerIds]
+	)
+
 	const pickerStatsAvailable =
 		firstPlayer.playerDetail?.statsContext.status === 'AVAILABLE' ||
 		firstPlayer.playerDetail?.statsContext.status === 'STALE' ||
@@ -561,22 +578,8 @@ export default function PlayerStatsClient({
 							})
 						}
 					}}
-					loadEvidence={section =>
-						firstPlayer.loadEvidence(
-							section,
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
-					}
-					loadComparisonEvidence={section =>
-						secondPlayer.loadEvidence(
-							section,
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
-					}
+					loadEvidence={loadPrimaryEvidence}
+					loadComparisonEvidence={loadSecondaryEvidence}
 					loadStateContext={() =>
 						firstPlayer.loadStateContext(
 							[firstSelectedPlayerId, secondSelectedPlayerId]
