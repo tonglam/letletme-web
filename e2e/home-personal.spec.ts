@@ -1128,7 +1128,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				if (catalogWidth === 390) await page.getByRole('button', { name: zh ? '更多筛选' : 'More filters', exact: true }).click()
 				for (const filterKind of ['team', 'player']) {
 					const focusTarget = filterKind === 'team' ? page.getByRole('combobox', { name: zh ? '选择要筛选的球队' : 'Select team for exposure filter', exact: true }) : page.getByRole('button', { name: zh ? '添加球员' : 'Add player', exact: true })
-					for (const scenario of filterKind === 'team' ? ['restore', 'preserve', 'failure-retry', 'revision', 'revision-preserve'] : ['restore', 'preserve', 'failure-retry']) {
+					for (const scenario of filterKind === 'team' ? ['restore', 'preserve', 'failure-retry', 'revision', 'revision-preserve', 'revision-failure-retry'] : ['restore', 'preserve', 'failure-retry']) {
 						const moveFocus = scenario.endsWith('preserve')
 						await focusTarget.click()
 						if (filterKind === 'team') {
@@ -1137,7 +1137,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 						} else {
 							await page.getByRole('button', { name: /^Saka MID/ }).click()
 						}
-						const remove = page.getByRole('button', { name: `${zh ? '移除' : 'Remove'} ${filterKind === 'team' ? 'Arsenal' : 'Saka'}`, exact: true })
+						const remove = page.getByRole('button', { name: scenario === 'revision-failure-retry' ? new RegExp(`^${zh ? '移除' : 'Remove'} (Arsenal|1)$`) : `${zh ? '移除' : 'Remove'} ${filterKind === 'team' ? 'Arsenal' : 'Saka'}`, exact: true })
 						await expect(remove).toBeVisible()
 						await expect(page.getByRole('button', { name: zh ? '全部清除' : 'Clear all', exact: true }).first()).toBeEnabled()
 						let releaseIndex!: () => void
@@ -1148,14 +1148,28 @@ test(`SSR remediation tournament season sections load on demand without a false 
 							await indexGate
 							const response = await route.fetch()
 							const body = await response.json()
-							body.tournamentSelectionIndex.scoreCoreRevision = 'e2e-competition-score-v2'
+							body.tournamentSelectionIndex.scoreCoreRevision = new URL(route.request().url()).searchParams.get('scoreCoreRevision')
 							await route.fulfill({ response, json: body })
 						})
 						let releaseRemoval!: () => void
 						const removalGate = new Promise<void>(resolve => { releaseRemoval = resolve })
+						if (scenario === 'revision-failure-retry') {
+							await page.route('**/api/live/competitions/6/board', async route => {
+								const response = await route.fetch()
+								const body = await response.json()
+								body.entryLiveCompetitionBoard.head.contentRevision = 'focus-pending-index'
+								body.entryLiveCompetitionBoard.head.publication.revisions.scoreCore = 'e2e-competition-score-v3'
+								for (const row of body.entryLiveCompetitionBoard.rows) row.score.revisions.scoreCore = 'e2e-competition-score-v3'
+								await route.fulfill({ response, json: body })
+							})
+							await page.getByRole('button', { name: zh ? '刷新' : 'Refresh', exact: true }).click()
+							await expect.poll(() => indexStarted).toBe(true)
+							await expect(focusTarget).toBeDisabled()
+							await page.unroute('**/api/live/competitions/6/board')
+						}
 						await page.route('**/api/live/competitions/6/board', async route => {
 							await removalGate
-							if (scenario === 'failure-retry') await route.fulfill({ status: 400, json: { error: 'INVALID_FILTER_INPUT' } })
+							if (scenario.endsWith('failure-retry')) await route.fulfill({ status: 400, json: { error: 'INVALID_FILTER_INPUT' } })
 							else if (scenario.startsWith('revision')) {
 								const response = await route.fetch()
 								const body = await response.json()
@@ -1174,18 +1188,19 @@ test(`SSR remediation tournament season sections load on demand without a false 
 						if (scenario.startsWith('revision')) {
 							await expect.poll(() => indexStarted).toBe(true)
 							await expect(focusTarget).toBeDisabled()
-							releaseIndex()
+							if (scenario !== 'revision-failure-retry') releaseIndex()
 						}
-						if (scenario === 'failure-retry') {
+						if (scenario.endsWith('failure-retry')) {
 							await expect(remove).toBeVisible()
 							await expect(remove).toBeFocused()
+							if (scenario === 'revision-failure-retry') releaseIndex()
 						} else {
 							await expect(focusTarget).toBeEnabled()
 							await expect(moveFocus ? elsewhere : focusTarget).toBeFocused()
 						}
 						await page.unroute('**/api/live/competitions/6/board')
 						if (scenario.startsWith('revision')) await page.unroute('**/api/live/competitions/6/selection-index?*')
-						if (scenario === 'failure-retry') {
+						if (scenario.endsWith('failure-retry')) {
 							await expect(remove).toBeVisible()
 							await remove.press('Enter')
 							await expect(remove).toHaveCount(0)

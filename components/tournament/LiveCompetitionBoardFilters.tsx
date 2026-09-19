@@ -760,14 +760,14 @@ export function LiveCompetitionBoardFilters({
 	useEffect(() => {
 		const pending = pendingRemovalFocusRef.current
 		if (!pending || controlsDisabled) return
-		// Index refresh clears team options before its loading state is committed.
-		if (pending.target === 'team' && !selectionIndexReadyRef.current) return
-		const target = pending.target === 'player' ? addPlayerButtonRef.current : teamSelectRef.current
 		const restoredSource = removalButtonsRef.current.get(pending.key)
+		// A restored badge is usable while refreshed team options are still pending.
+		if (!restoredSource && pending.target === 'team' && !selectionIndexReadyRef.current) return
+		const target = pending.target === 'player' ? addPlayerButtonRef.current : teamSelectRef.current
 		const focusTarget = restoredSource ?? (target && !target.disabled ? target : null)
 		if (!focusTarget) return
 		pendingRemovalFocusRef.current = null
-		if ( (document.activeElement === document.body || document.activeElement === pending.source))
+		if (document.activeElement === document.body || document.activeElement === pending.source)
 			focusTarget.focus()
 	})
 	const matchedPercentage =
