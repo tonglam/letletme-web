@@ -146,6 +146,15 @@ for (const locale of ['en', 'zh-CN']) {
    try {
    await page.goto(`${zh ? '/zh-CN' : ''}/explore/market`)
    const region = page.locator('#market-prices-share')
+   await expect(region.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+   await expect(region).toContainText('£9.9m → £10.0m')
+   await expect(region).toContainText('+£0.1m')
+   const assertObservedPriceText = (text: string | undefined) => {
+    expect(text).toContain('Saka')
+    expect(text).toContain('£9.9m')
+    expect(text).toContain('£10.0m')
+    expect(text).toContain('03/08/2026')
+   }
    const share = region.getByRole('button', { name: zh ? '文字' : 'Text', exact: true })
    await expect(share).toHaveCount(1)
    await expect(share).toBeVisible()
@@ -172,6 +181,7 @@ for (const locale of ['en', 'zh-CN']) {
      await expect(share).toContainText(zh ? '已分享' : 'Done')
      await expect(fallback).toHaveCount(0)
      await expect.poll(() => page.evaluate(kind => kind === 'copied' ? document.documentElement.dataset.fixtureCopiedText : document.documentElement.dataset.fixtureSharedText, outcome)).toContain('/explore/market')
+     assertObservedPriceText(await page.evaluate(kind => kind === 'copied' ? document.documentElement.dataset.fixtureCopiedText : document.documentElement.dataset.fixtureSharedText, outcome))
      if (outcome === 'shared') expect(await page.evaluate(() => document.documentElement.dataset.fixtureCopiedText)).toBeUndefined()
     } else {
      await expect(fallback).toBeVisible()
@@ -181,6 +191,7 @@ for (const locale of ['en', 'zh-CN']) {
      }
      await expect(fallback).toHaveValue(/\/explore\/market/)
      await expect(fallback).toHaveAttribute('readonly', '')
+     assertObservedPriceText(await fallback.inputValue())
      await region.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
      await expect(fallback).toHaveCount(0)
     }
