@@ -1,5 +1,11 @@
 import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
 import {
+	FPL_CHIPS,
+	isFplChip,
+	type FplChip,
+	type LiveCompetitionChip
+} from '@/lib/fpl/chips'
+import {
 	clearDependencyCooldown,
 	noteDependencyFailure,
 	readDependencyCooldown
@@ -23,7 +29,7 @@ const TRANSIENT_STATUSES = new Set([502, 503, 504])
 const NON_TRANSIENT_DEPENDENCY_CODES = new Set(['UPSTREAM_RESPONSE_TOO_LARGE'])
 
 export type LiveBoardFilterState = {
-	chips: string[]
+	chips: LiveCompetitionChip[]
 	captainPlayerIds: number[]
 	ownership: EntryLiveCompetitionOwnershipFilter | null
 	teamCountRules: EntryLiveCompetitionTeamCountRule[]
@@ -61,6 +67,9 @@ const isNonNegativeInteger = (value: unknown): value is number =>
 
 const isNullableString = (value: unknown): value is string | null =>
 	value === null || typeof value === 'string'
+
+const isNullableFplChip = (value: unknown): value is FplChip | null =>
+	value === null || isFplChip(value)
 
 const isNullableNumber = (value: unknown): value is number | null =>
 	value === null || (typeof value === 'number' && Number.isFinite(value))
@@ -211,9 +220,8 @@ const validateRow = (
 	]) {
 		if (!isNullableNumber(value[field])) missing.push(`${path}.${field}`)
 	}
-	for (const field of ['chip', 'captainName']) {
-		if (!isNullableString(value[field])) missing.push(`${path}.${field}`)
-	}
+	if (!isNullableFplChip(value.chip)) missing.push(`${path}.chip`)
+	if (!isNullableString(value.captainName)) missing.push(`${path}.captainName`)
 	if (value.score === null) {
 		if (value.availability === 'READY') missing.push(`${path}.score`)
 	} else {
@@ -660,12 +668,12 @@ export const clearAllLiveBoardLastGood = (storage?: Storage | null): void => {
 	}
 }
 
-const chipFlags = (chip: string) => ({
-	bench: chip === 'BENCH_BOOST',
-	triple: chip === 'TRIPLE_CAPTAIN',
-	wildcard: chip === 'WILDCARD',
-	freeHit: chip === 'FREE_HIT',
-	manager: chip === 'MANAGER'
+const chipFlags = (chip: FplChip) => ({
+	bench: chip === FPL_CHIPS.BENCH_BOOST,
+	triple: chip === FPL_CHIPS.TRIPLE_CAPTAIN,
+	wildcard: chip === FPL_CHIPS.WILDCARD,
+	freeHit: chip === FPL_CHIPS.FREE_HIT,
+	manager: chip === FPL_CHIPS.MANAGER
 })
 
 export const mergeLiveBoardEntries = (
@@ -711,7 +719,7 @@ export const boardRowToTournamentEntry = (
 			playersToPlay: 0,
 			teamValue: row.teamValue ?? undefined,
 			picks: [],
-			chips: chipFlags('NONE'),
+			chips: chipFlags(FPL_CHIPS.NONE),
 			stale: true
 		}
 	}
@@ -738,7 +746,7 @@ export const boardRowToTournamentEntry = (
 		playersToPlay: row.toPlay ?? 0,
 		teamValue: row.teamValue ?? undefined,
 		picks: [],
-		chips: chipFlags(row.chip ?? 'NONE'),
+		chips: chipFlags(row.chip ?? FPL_CHIPS.NONE),
 		stale:
 			score.delivery.state === 'STALE' || score.delivery.state === 'DEGRADED'
 	}

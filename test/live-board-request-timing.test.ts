@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import ts from 'typescript'
+import { FPL_CHIP_VALUES, isFplChip } from '../lib/fpl/chips'
 import { RequestTiming } from '../lib/request-timing'
 import { appendServerTiming } from '../lib/server-timing'
 
@@ -21,6 +22,10 @@ for (const mode of ['success', 'anonymous', 'auth-failure', 'query-failure'] as 
    if (name === 'node:crypto') return { randomUUID: () => 'opaque-test-request' }
    if (name === '@/lib/request-timing') return { RequestTiming: class extends RequestTiming { constructor() { super(() => now) } } }
    if (name === '@/lib/server-timing') return { appendServerTiming }
+   if (name === '@/lib/fpl/chips') return {
+    FPL_CHIP_VALUES,
+    isFplChip
+   }
    if (name === '@/lib/graphql-client') return { GraphQLRequestError: QueryError }
    if (name === '@/lib/graphql/operations/tournaments') return { GET_ENTRY_LIVE_COMPETITION_BOARD: 'board' }
    if (name === '@/lib/session') return { getVerifiedEntryContext: async () => {

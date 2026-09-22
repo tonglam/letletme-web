@@ -7,6 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
+	FPL_CHIPS,
+	LIVE_COMPETITION_CHIP_OPTIONS,
+	type LiveCompetitionChip
+} from '@/lib/fpl/chips'
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -47,13 +52,6 @@ const captainModes: EntryLiveCompetitionCaptainMode[] = [
 	'CAPTAIN',
 	'VICE'
 ]
-const chipOptions = [
-	'TRIPLE_CAPTAIN',
-	'BENCH_BOOST',
-	'WILDCARD',
-	'FREE_HIT',
-	'MANAGER'
-] as const
 const teamCountOptions = [1, 2, 3] as const
 
 function isSelectionIndexRow(
@@ -611,7 +609,7 @@ export function LiveCompetitionBoardFilters({
 		[onApply]
 	)
 
-	const toggleChip = (chip: string) => {
+	const toggleChip = (chip: LiveCompetitionChip) => {
 		const next = cloneFilters(draft)
 		next.chips = next.chips.includes(chip)
 			? next.chips.filter(value => value !== chip)
@@ -843,15 +841,15 @@ export function LiveCompetitionBoardFilters({
 						role="group"
 						aria-label={liveT('filterChip')}
 					>
-						{chipOptions.map(chip => {
+						{LIVE_COMPETITION_CHIP_OPTIONS.map(chip => {
 							const label =
-								chip === 'TRIPLE_CAPTAIN'
+								chip === FPL_CHIPS.TRIPLE_CAPTAIN
 									? liveT('tripleCaptain')
-									: chip === 'BENCH_BOOST'
+									: chip === FPL_CHIPS.BENCH_BOOST
 										? liveT('benchBoost')
-										: chip === 'WILDCARD'
+										: chip === FPL_CHIPS.WILDCARD
 											? liveT('wildcard')
-											: chip === 'FREE_HIT'
+											: chip === FPL_CHIPS.FREE_HIT
 												? liveT('freeHit')
 												: liveT('assistantManager')
 							return (
