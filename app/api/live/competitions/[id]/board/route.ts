@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
+import { FPL_CHIP_VALUES, isFplChip, type FplChip } from '@/lib/fpl/chips'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { GraphQLRequestError } from '@/lib/graphql-client'
 import {
@@ -45,15 +46,6 @@ const allowedSorts = new Set([
 	'RANK',
 	'ENTRY_NAME'
 ])
-const allowedChips = new Set([
-	'NONE',
-	'TRIPLE_CAPTAIN',
-	'BENCH_BOOST',
-	'WILDCARD',
-	'FREE_HIT',
-	'MANAGER'
-])
-
 function parsePostVariables(
 	value: unknown,
 	entryId: number,
@@ -80,8 +72,8 @@ function parsePostVariables(
 	const teamCountRules = input.teamCountRules ?? []
 	if (
 		!Array.isArray(chips) ||
-		chips.length > 6 ||
-		!chips.every(chip => typeof chip === 'string' && allowedChips.has(chip)) ||
+		chips.length > FPL_CHIP_VALUES.length ||
+		!chips.every(isFplChip) ||
 		new Set(chips).size !== chips.length ||
 		!Array.isArray(captainPlayerIds) ||
 		captainPlayerIds.length > 15 ||
@@ -91,6 +83,7 @@ function parsePostVariables(
 		teamCountRules.length > 4
 	)
 		return null
+	const canonicalChips = chips as FplChip[]
 	let ownership: NonNullable<EntryLiveCompetitionBoardVariables['input']>['ownership'] = null
 	if (input.ownership != null) {
 		if (!isRecord(input.ownership)) return null
@@ -147,7 +140,7 @@ function parsePostVariables(
 			sort: sort as NonNullable<EntryLiveCompetitionBoardVariables['input']>['sort'],
 			direction,
 			search,
-			chips,
+			chips: canonicalChips,
 			captainPlayerIds,
 			ownership,
 			teamCountRules: normalizedTeamRules

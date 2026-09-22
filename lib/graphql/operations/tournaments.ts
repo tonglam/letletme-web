@@ -1,3 +1,4 @@
+import type { FplChip } from '@/lib/fpl/chips'
 import type {
 	LiveDelivery,
 	LivePointsScore,
@@ -860,7 +861,7 @@ export interface EntryLiveCompetitionBoardInput {
 	sort?: EntryLiveCompetitionBoardSort
 	direction?: EntryLiveCompetitionBoardSortDirection
 	search?: string | null
-	chips?: string[]
+	chips?: FplChip[]
 	captainPlayerIds?: number[]
 	ownership?: EntryLiveCompetitionOwnershipFilter | null
 	teamCountRules?: EntryLiveCompetitionTeamCountRule[]
@@ -874,7 +875,7 @@ export interface EntryLiveCompetitionBoardRow {
 	liveRank: number | null
 	overallRank: number | null
 	teamValue: number | null
-	chip: string | null
+	chip: FplChip | null
 	transferCost: number | null
 	played: number | null
 	toPlay: number | null
