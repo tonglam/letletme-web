@@ -154,10 +154,10 @@ function deriveInitialPointsSections(
 	review: MyTournamentSeasonReview | null
 ): SeasonSectionData[] {
 	if (!review || review.format !== 'POINTS') return []
-	const phase = phaseAtEvent(
-		review.phases,
-		review.latestEventId ?? review.throughEventId
-	)
+	// `latestEventId` is the latest finalized event across the tournament. A
+	// Season deep link can target an older phase, whose identity is carried by
+	// the review's throughEventId.
+	const phase = phaseAtEvent(review.phases, review.throughEventId)
 	if (!phase?.revision || !phase.semanticSha256) return []
 	const makeSection = (
 		section: 'POINTS_STANDINGS' | 'POINTS_TRAJECTORIES',
