@@ -503,11 +503,17 @@ export default async function TournamentStatsPage({
 							initialSeasonSections = []
 						} else {
 							try {
-								const seasonSeed = await hydrateSeasonSeed(
-									session,
-									initialSelectedTournamentId,
-									initialEventId,
-									seasonResult.value.myTournamentSeasonReview
+								const selectedTournamentId = initialSelectedTournamentId
+								const selectedEventId = initialEventId
+								const seasonSeed = await timing.measure(
+									'my-tournament-review-v2.1-season-sections',
+									() =>
+										hydrateSeasonSeed(
+											session,
+											selectedTournamentId,
+											selectedEventId,
+											seasonResult.value.myTournamentSeasonReview
+										)
 								)
 								initialSeasonReview = seasonSeed.review
 								initialSeasonSections = seasonSeed.sections

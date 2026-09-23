@@ -1451,6 +1451,10 @@ describe('asynchronous selection safety', () => {
 			page,
 			/if \(initialView !== 'season'\)[\s\S]*else \{[\s\S]*hydrateSeasonSeed\(/
 		)
+		assert.match(
+			page,
+			/measure\(\s*['"]my-tournament-review-v2\.1-season-sections['"]/
+		)
 		assert.match(client, /viewRef\.current = nextView[\s\S]*phaseAtEvent\(/)
 		assert.match(
 			client,
