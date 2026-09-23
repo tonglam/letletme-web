@@ -6,6 +6,7 @@ import {
 } from '../app/data/selections/_lib/trend-cohorts'
 import {
 	buildTrendUrl,
+	isTrendSelectionHistoryState,
 	readTrendUrlSelection,
 	resolveTrendUrlAccess
 } from '../app/data/selections/_lib/trend-url'
@@ -95,6 +96,37 @@ describe('visible Trends cohorts', () => {
 				'https://letletme.top/explore/selections?cohort=competition:5&gw=39&scope=public'
 			),
 			null
+		)
+	})
+
+	it('recognizes a local selector history entry only for the same selection', () => {
+		const selection = readTrendUrlSelection(
+			'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
+		)
+		assert.ok(selection)
+		assert.equal(
+			isTrendSelectionHistoryState(
+				{
+					__letletmeTrendSelection: true,
+					access: 'PUBLIC',
+					cohort: 'competition:5',
+					gw: 4
+				},
+				selection
+			),
+			true
+		)
+		assert.equal(
+			isTrendSelectionHistoryState(
+				{
+					__letletmeTrendSelection: true,
+					access: 'MINE',
+					cohort: 'competition:5',
+					gw: 4
+				},
+				selection
+			),
+			false
 		)
 	})
 

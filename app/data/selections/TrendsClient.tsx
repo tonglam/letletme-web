@@ -2,7 +2,14 @@
 
 import { Link } from '@/i18n/navigation'
 import { useLocale, useTranslations } from 'next-intl'
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react'
 import { Activity, ArrowRight, RefreshCw, Sparkles } from 'lucide-react'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
@@ -27,6 +34,7 @@ import {
 } from './_lib/trend-cohorts'
 import {
 	buildTrendUrl,
+	isTrendSelectionHistoryState,
 	readTrendUrlSelection,
 	resolveTrendUrlAccess
 } from './_lib/trend-url'
@@ -681,42 +689,21 @@ export default function TrendsClient({
 			nextEvent
 		)
 		window.history[mode === 'replace' ? 'replaceState' : 'pushState'](
-			{ access: nextAccess, cohort: nextCohort, gw: nextEvent },
+			{
+				...(window.history.state && typeof window.history.state === 'object'
+					? window.history.state
+					: {}),
+				__letletmeTrendSelection: true,
+				access: nextAccess,
+				cohort: nextCohort,
+				gw: nextEvent
+			},
 			'',
 			`${url.pathname}${url.search}${url.hash}`
 		)
 	}
 
-	useEffect(() => {
-		if (!initialCohortId) return
-		const currentUrl = new URL(window.location.href)
-		const selectedUrl = buildTrendUrl(
-			currentUrl.href,
-			initialAccess,
-			initialCohortId,
-			initialEventId
-		)
-		if (
-			`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` ===
-			`${selectedUrl.pathname}${selectedUrl.search}${selectedUrl.hash}`
-		)
-			return
-		const urlSelection = readTrendUrlSelection(currentUrl.href)
-		const authoritativeUrlAccess = resolveTrendUrlAccess(urlSelection, cohorts)
-		const urlSelectionIsReady = Boolean(
-			urlSelection &&
-			authoritativeUrlAccess?.ready &&
-			authoritativeUrlAccess.access === urlSelection.access
-		)
-		// Selector changes use client-side history entries. When Next restores
-		// this route after a player-detail visit, its server seed can still carry
-		// the original selection. Keep a valid explicit URL and let popstate load
-		// that selection instead of replacing it with the stale server seed.
-		if (urlSelectionIsReady) return
-		updateUrl(initialAccess, initialCohortId, initialEventId, 'replace')
-	}, [cohorts, initialAccess, initialCohortId, initialEventId])
-
-	async function select(
+	const select = useCallback(async function select(
 		nextCohort: string,
 		nextEvent: number,
 		pushHistory = true,
@@ -802,7 +789,82 @@ export default function TrendsClient({
 			inFlight.current.delete(key)
 			if (requestGeneration === generation.current) setPending(false)
 		}
-	}
+	}, [cohorts, committed, t, access])
+
+	useEffect(() => {
+		if (!initialCohortId) return
+		const currentUrl = new URL(window.location.href)
+		const selectedUrl = buildTrendUrl(
+			currentUrl.href,
+			initialAccess,
+			initialCohortId,
+			initialEventId
+		)
+		if (
+			`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` ===
+			`${selectedUrl.pathname}${selectedUrl.search}${selectedUrl.hash}`
+		)
+			return
+		const urlSelection = readTrendUrlSelection(currentUrl.href)
+		const urlCohortIsReady = Boolean(
+			urlSelection &&
+			cohorts.some(
+				cohort =>
+					cohort.id === urlSelection.cohortId &&
+					cohort.access === urlSelection.access &&
+					isTrendCohortReady(cohort)
+			)
+		)
+		const isLocalSelectionHistory = Boolean(
+			urlSelection &&
+			isTrendSelectionHistoryState(window.history.state, urlSelection)
+		)
+		const authoritativeUrlAccess = resolveTrendUrlAccess(urlSelection, cohorts)
+		const urlSelectionIsReady = Boolean(
+			urlSelection &&
+			authoritativeUrlAccess?.ready &&
+			authoritativeUrlAccess.access === urlSelection.access
+		)
+		// Selector changes use client-side history entries. When Next restores
+		// this route after a player-detail visit, its server seed can still carry
+		// the original selection. A marked local entry is an explicit user choice;
+		// rehydrate that exact ready cohort before considering the stale seed.
+		if (urlCohortIsReady && isLocalSelectionHistory) {
+			const currentDeskMatches = Boolean(
+				committed &&
+				access === urlSelection?.access &&
+				cohortId === urlSelection?.cohortId &&
+				eventId === urlSelection?.eventId &&
+				committed.cohort.access === urlSelection?.access &&
+				committed.cohort.id === urlSelection?.cohortId &&
+				committed.eventId === urlSelection?.eventId
+			)
+			if (!currentDeskMatches && urlSelection) {
+				void select(
+					urlSelection.cohortId,
+					urlSelection.eventId,
+					false,
+					false,
+					urlSelection.access
+				)
+			}
+			return
+		}
+		// For a server-seeded or otherwise unmarked URL, preserve it only when
+		// it agrees with the authoritative duplicate-cohort resolution.
+		if (urlSelectionIsReady) return
+		updateUrl(initialAccess, initialCohortId, initialEventId, 'replace')
+	}, [
+		access,
+		cohortId,
+		cohorts,
+		committed,
+		eventId,
+		initialAccess,
+		initialCohortId,
+		initialEventId,
+		select
+	])
 
 	function selectScope(nextAccess: TrendAccess) {
 		if (nextAccess === access) return
