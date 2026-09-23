@@ -7,7 +7,12 @@ import { useSearchParams } from 'next/navigation'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
+import {
+	GET_ENTRY_LEAGUES,
+	selectUntrackedFplClassicLeagueRanks,
+	type EntryLeaguesResponse,
+	type FplClassicLeagueRank
+} from '@/lib/graphql/operations/leagues'
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -885,6 +890,7 @@ export default function TournamentReviewV2Client({
 	initialFplClassicRanks,
 	initialCatalog,
 	initialScope,
+	initialView,
 	initialSelectedTournamentId,
 	initialEventId: serverInitialEventId,
 	initialFinalizedEventIds,
@@ -986,6 +992,29 @@ export default function TournamentReviewV2Client({
 		...(initialGameweekError ? (['gameweek'] as const) : []),
 		...(initialSeasonError ? (['season'] as const) : [])
 	])
+	const [fplClassicRanks, setFplClassicRanks] = useState(initialFplClassicRanks)
+	useEffect(() => {
+		if (initialFplClassicRanks.length > 0 || initialView !== 'season') return
+		let cancelled = false
+		void executeQuery<EntryLeaguesResponse>(
+			GET_ENTRY_LEAGUES,
+			{ entryId },
+			{ cache: 'no-store', timeoutMs: 1_500 }
+		)
+			.then(response => {
+				if (!cancelled)
+					setFplClassicRanks(
+						selectUntrackedFplClassicLeagueRanks(response.entryLeagues)
+					)
+			})
+			.catch(() => {
+				// The ranking strip is supplemental; a failed browser refresh does
+				// not invalidate the authorized tournament review seed.
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [entryId, initialFplClassicRanks.length, initialView])
 	const markRetryOverview = (target: ReviewOverview, retry: boolean) => {
 		setRetryOverview(current => {
 			if (retry)
@@ -1741,6 +1770,10 @@ export default function TournamentReviewV2Client({
 		// Keep the canonical deep link without re-running the server seed loader.
 		const currentPathname = window.location.pathname
 		window.history.replaceState(null, '', query ? `${currentPathname}?${query}` : currentPathname)
+		if (nextView === 'gameweek' && !gameweekReview && selectedTournamentId && eventId) {
+			void loadReview(selectedTournamentId, eventId, true, true, 'gameweek')
+			return
+		}
 		if (nextView !== 'season' || !selectedTournamentId || !eventId) return
 		const phase = phaseAtEvent(seasonReview?.phases ?? [], eventId)
 		if (!phase) return
@@ -1948,7 +1981,7 @@ export default function TournamentReviewV2Client({
 					</div>
 				</div>
 
-				<ClassicLeagueRanks ranks={initialFplClassicRanks} />
+				<ClassicLeagueRanks ranks={fplClassicRanks} />
 
 				<div className="mt-6 grid gap-5 lg:grid-cols-[280px_1fr]">
 					<aside className="space-y-3">

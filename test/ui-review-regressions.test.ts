@@ -1477,6 +1477,39 @@ describe('asynchronous selection safety', () => {
 		assert.match(client, /Repeated tab\/phase clicks reuse the one request/)
 	})
 
+	it('defers the invisible Gameweek payload from Season deep links until the tab is opened', async () => {
+		const [page, client] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/[locale]/my-fpl/competitions/page.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(page, /const fetchInitialGameweek = initialView !== 'season'/)
+		assert.match(
+			page,
+			/fetchInitialGameweek\s*\?\s*executeServerQueryWithSession<[\s\S]*?\s*:\s*Promise\.resolve\(null\)/
+		)
+		assert.match(
+			client,
+			/nextView === 'gameweek' && !gameweekReview && selectedTournamentId && eventId/
+		)
+		assert.match(
+			client,
+			/loadReview\(selectedTournamentId, eventId, true, true, 'gameweek'\)/
+		)
+	})
+
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {
 		const [pickerSource, selectionsSource, teamSource] = await Promise.all([
 			readFile(
