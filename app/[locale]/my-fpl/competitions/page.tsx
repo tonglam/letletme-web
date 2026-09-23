@@ -52,7 +52,7 @@ export async function generateMetadata({ params }: PageProps) {
 
 function TournamentReviewFallback() {
 	return (
-		<div className="container mx-auto max-w-6xl px-4 py-8">
+		<div className="container mx-auto min-h-[calc(100svh-4rem)] max-w-6xl px-4 py-8">
 			<div className="h-8 w-64 animate-pulse rounded bg-muted/60" />
 			<div className="mt-6 h-28 w-full animate-pulse rounded-xl bg-muted/40" />
 			<div className="mt-6 h-56 w-full animate-pulse rounded-xl bg-muted/40" />

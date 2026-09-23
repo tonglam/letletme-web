@@ -1053,14 +1053,14 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
-for (const locale of recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const locale of recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
 const failFirstSections = (recoveryMode === 'retry-button' || recoveryMode === 'tab-reentry')
-test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }) => {
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
@@ -1075,6 +1075,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		nextCursor: null, hasNextPage: false,
 		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
 	}
+	if (recoveryMode === 'loading-layout') points.rows = Array.from({ length: 48 }, (_, index) => ({ ...points.rows[0], entryId: 123 + index, entryName: `Layout Team ${index + 1}`, rank: index + 1 }))
 	const pageInfo = { hasNextPage: false, endCursor: null }
 	const reviewTournamentId = recoveryMode.startsWith('live-journey') ? 6 : 77
 	const scope = { ...phase, tournamentId: reviewTournamentId, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
@@ -1119,6 +1120,53 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
+        if (recoveryMode === 'loading-layout') {
+            const layoutCdp = await page.context().newCDPSession(page)
+            await layoutCdp.send('Network.enable')
+            await layoutCdp.send('Network.setCacheDisabled', {cacheDisabled:true})
+            await layoutCdp.send('Network.emulateNetworkConditions', {offline:false,latency:100,downloadThroughput:500000,uploadThroughput:500000})
+            releaseSections()
+            expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: rules.map(rule => rule.operation === 'GetMyTournamentReviewCatalog' ? { ...rule, delayMs: 1200 } : rule) }) })).ok).toBe(true)
+            await page.addInitScript(() => {
+                const shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }> = []
+                const observer = new PerformanceObserver(list => {
+                    for (const entry of list.getEntries()) {
+                        const shift = entry as PerformanceEntry & { value: number; hadRecentInput: boolean }
+                        shifts.push(Object.assign({ value: shift.value, startTime: shift.startTime, hadRecentInput: shift.hadRecentInput }, {
+                            scrollY, readyState: document.readyState,
+                            main: Array.from(document.querySelectorAll('#main-content, #main-content > div')).map(node => ({className: node.className, rect: node.getBoundingClientRect().toJSON(), minHeight: getComputedStyle(node).minHeight, display: getComputedStyle(node).display})),
+                            footer: document.querySelector('footer')?.getBoundingClientRect().toJSON(),
+                            styles: Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(node => ({loaded: Boolean((node as HTMLLinkElement).sheet), href: (node as HTMLLinkElement).href})),
+                            sources: (entry as PerformanceEntry & { sources: Array<{node?: Element; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly}> }).sources.map(source => ({tag:source.node?.tagName,before:source.previousRect.toJSON(),after:source.currentRect.toJSON()}))
+                        }))
+                    }
+                })
+                observer.observe({ type: 'layout-shift', buffered: true })
+                ;(window as unknown as { __reviewLayout: { shifts: typeof shifts; observer: PerformanceObserver } }).__reviewLayout = { shifts, observer }
+            })
+            for (const width of [1440, 390]) {
+                await page.setViewportSize({ width, height: 900 })
+                await page.goto(`${routePath}?tournamentId=77&view=season&gw=4`)
+                await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-tournament', '77')
+                await expect(page.getByText('Layout Team 48', { exact: true })).toBeVisible()
+                const shifts = await page.evaluate(async () => {
+                    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+                    const state = (window as unknown as { __reviewLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__reviewLayout
+                    state.observer.disconnect()
+                    return state.shifts.filter(shift => !shift.hadRecentInput)
+                })
+                let max = 0, sum = 0, start = 0, previous = -Infinity
+                for (const shift of shifts) {
+                    if (shift.startTime - previous >= 1000 || shift.startTime - start >= 5000) { sum = 0; start = shift.startTime }
+                    sum += shift.value
+                    max = Math.max(max, sum)
+                    previous = shift.startTime
+                }
+                await testInfo.attach(`review-loading-layout-${width}`, { contentType: 'application/json', body: JSON.stringify({ locale, width, shifts, cls: max, budget: 0.1, networkLatencyMs: 100, bytesPerSecond: 500000, catalogDelayMs: 1200, productionDistributionEligible: false }) })
+                expect(max, `Review loading layout ${locale} ${width}: ${JSON.stringify(shifts)}`).toBeLessThanOrEqual(0.1)
+            }
+            return
+        }
 		if (recoveryMode === 'settlement-time') {
 			const url = `${routePath}?tournamentId=77&view=gameweek&gw=4`
 			const response = await page.request.get(url)
