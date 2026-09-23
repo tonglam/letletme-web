@@ -1418,6 +1418,13 @@ describe('asynchronous selection safety', () => {
 			page,
 			/state: optionalSectionFailed \? 'DEGRADED' : review\.state/
 		)
+		assert.match(page, /seededPhase\?\.format === 'POINTS' \? \[\] : seasonSeed\.sections/)
+		assert.match(client, /function deriveInitialPointsSections\(/)
+		assert.match(
+			client,
+			/deriveInitialPointsSections\([\s\S]*phaseAtEvent\(review\.phases, review\.throughEventId\)/
+		)
+		assert.match(client, /seededSeasonSections = \[/)
 		assert.match(
 			client,
 			/setCatalog\(nextCatalog\)[\s\S]*setGameweekReview\(null\)/

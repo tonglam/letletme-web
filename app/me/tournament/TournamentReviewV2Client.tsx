@@ -144,6 +144,49 @@ const CONTRACT = 'my-tournament-review-v2.1' as const
 type SeasonSectionData =
 	MyTournamentSeasonSectionResponse['myTournamentSeasonReviewSection']
 
+/**
+ * A Season seed already carries the first Points section pages on the
+ * normalized review. Rebuild the small section envelopes needed for paging
+ * from that seed instead of serializing the same rows a second time through
+ * initialSeasonSections.
+ */
+function deriveInitialPointsSections(
+	review: MyTournamentSeasonReview | null
+): SeasonSectionData[] {
+	if (!review || review.format !== 'POINTS') return []
+	// `latestEventId` is the latest finalized event across the tournament. A
+	// Season deep link can target an older phase, whose identity is carried by
+	// the review's throughEventId.
+	const phase = phaseAtEvent(review.phases, review.throughEventId)
+	if (!phase?.revision || !phase.semanticSha256) return []
+	const makeSection = (
+		section: 'POINTS_STANDINGS' | 'POINTS_TRAJECTORIES',
+		points: MyTournamentReviewPoints | null | undefined
+	): SeasonSectionData | null =>
+		points
+			? {
+					state: phase.state,
+					tournamentId: review.tournamentId,
+					throughEventId: review.throughEventId,
+					phaseId: phase.phaseId,
+					section,
+					revision: phase.revision!,
+					semanticSha256: phase.semanticSha256!,
+					points,
+					h2h: null,
+					knockout: null,
+					pageInfo: {
+						hasNextPage: points.hasNextPage,
+						endCursor: points.nextCursor
+					}
+				}
+			: null
+	return [
+		makeSection('POINTS_STANDINGS', review.points),
+		makeSection('POINTS_TRAJECTORIES', review.trajectoryPoints)
+	].filter((section): section is SeasonSectionData => Boolean(section))
+}
+
 async function fetchSeasonSection(
 	tournamentId: number,
 	throughEventId: number,
@@ -873,6 +916,17 @@ export default function TournamentReviewV2Client({
 	const initialEventIndexError = restoresDifferentEvent ? null : serverInitialEventIndexError
 	const initialGameweekError = restoresDifferentEvent ? null : serverInitialGameweekError
 	const initialSeasonError = restoresDifferentEvent ? null : serverInitialSeasonError
+	const normalizedInitialSeasonReview = initialSeasonReview
+		? normalizeSeason(
+				initialSeasonReview,
+				null,
+				initialEventId ?? initialSeasonReview.latestFinalizedEventId
+			)
+		: null
+	const seededSeasonSections = [
+		...initialSeasonSections,
+		...deriveInitialPointsSections(normalizedInitialSeasonReview)
+	]
 	const [catalog, setCatalog] = useState(initialCatalog)
 	const [scope, setScope] = useState<MyTournamentReviewScope>(initialScope)
 	const [selectedTournamentId, setSelectedTournamentId] = useState<
@@ -893,13 +947,7 @@ export default function TournamentReviewV2Client({
 		initialGameweekReview ? normalizeGameweek(initialGameweekReview) : null
 	)
 	const [seasonReview, setSeasonReview] = useState(
-		initialSeasonReview
-			? normalizeSeason(
-					initialSeasonReview,
-					null,
-					initialEventId ?? initialSeasonReview.latestFinalizedEventId
-				)
-			: null
+		normalizedInitialSeasonReview
 	)
 	const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(
 		(initialSeasonReview
@@ -953,7 +1001,7 @@ export default function TournamentReviewV2Client({
 	const catalogQueryGeneration = useRef(0)
 	const seasonSectionPages = useRef<SeasonSectionPages>(
 		Object.fromEntries(
-			initialSeasonSections.map(section => [section.section, section])
+			seededSeasonSections.map(section => [section.section, section])
 		) as SeasonSectionPages
 	)
 	const seasonSectionLoad = useRef<SeasonSectionLoad | null>(null)
