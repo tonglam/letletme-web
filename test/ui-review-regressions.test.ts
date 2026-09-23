@@ -1511,4 +1511,22 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.match(teamSource, /force: forceHistoryFetch/)
 	})
+
+	it('bounds player picker search before the GraphQL input limit', async () => {
+		const pickerSource = await readFile(
+			new URL(
+				'../components/player/PlayerDirectoryPicker.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(pickerSource, /const MAX_SEARCH_LENGTH = 50/)
+		assert.match(
+			pickerSource,
+			/for \(const character of value\)[\s\S]*nextValue = boundedValue \+ character[\s\S]*nextValue\.length > MAX_SEARCH_LENGTH/
+		)
+		assert.match(pickerSource, /setSearchTerm\(boundedValue\)/)
+		assert.match(pickerSource, /maxLength=\{MAX_SEARCH_LENGTH\}/)
+	})
 })

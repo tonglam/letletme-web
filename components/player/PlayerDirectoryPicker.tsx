@@ -51,6 +51,10 @@ interface BrowseFilterSnapshot {
 
 const PLAYER_PICKER_PAGE_SIZE = 20
 const PLAYER_PICKER_DEBOUNCE_MS = 300
+// The GraphQL picker contract accepts at most 50 UTF-16 code units. Iterate by
+// code point so a surrogate pair is never split while the request stays within
+// the server-side limit.
+const MAX_SEARCH_LENGTH = 50
 // A non-empty name fragment is a valid FPL search. The backend safely
 // normalizes short fragments, so do not silently turn a one-character query
 // into an unfiltered roster request.
@@ -611,7 +615,14 @@ export function PlayerDirectoryPicker({
 	const isLoading = isTeamsLoading || isPlayersLoading
 
 	const updateNameSearch = (value: string) => {
-		const nextIsNameSearchActive = value.trim().length >= MIN_SEARCH_LENGTH
+		let boundedValue = ''
+		for (const character of value) {
+			const nextValue = boundedValue + character
+			if (nextValue.length > MAX_SEARCH_LENGTH) break
+			boundedValue = nextValue
+		}
+		const nextIsNameSearchActive =
+			boundedValue.trim().length >= MIN_SEARCH_LENGTH
 		if (nextIsNameSearchActive && !isNameSearchActive) {
 			browseFiltersBeforeSearchRef.current = {
 				teamFilter,
@@ -636,7 +647,7 @@ export function PlayerDirectoryPicker({
 			}
 			browseFiltersBeforeSearchRef.current = null
 		}
-		setSearchTerm(value)
+		setSearchTerm(boundedValue)
 	}
 
 	const resetFilters = () => {
@@ -663,6 +674,7 @@ export function PlayerDirectoryPicker({
 				<Input
 					aria-label={t('search')}
 					value={searchTerm}
+					maxLength={MAX_SEARCH_LENGTH}
 					onChange={event => updateNameSearch(event.target.value)}
 					placeholder={t('searchPlaceholder')}
 					className="pl-9 pr-9"

@@ -1,6 +1,18 @@
 import { expect, test } from '@playwright/test'
 
 test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+const PLAYER_SEARCH_MAX_LENGTH = 50
+
+function boundPlayerSearch(value: string): string {
+ let bounded = ''
+ for (const character of value) {
+  const next = bounded + character
+  if (next.length > PLAYER_SEARCH_MAX_LENGTH) break
+  bounded = next
+ }
+ return bounded
+}
+
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
   test(`C05 anonymous directory inputs clear and reset ${locale} ${width}px`, async ({ page, context }) => {
@@ -26,9 +38,13 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(saka).toBeVisible()
    await expect(palmer).toBeVisible()
    for (const query of ['萨卡', 'z'.repeat(200), 'no-such-player']) {
-    const response = page.waitForResponse(response => response.url().endsWith('/api/graphql') && response.request().postDataJSON()?.query?.includes('SearchPlayersForPicker') && response.request().postDataJSON()?.variables?.search === query)
+    const boundedQuery = boundPlayerSearch(query)
+    const response = page.waitForResponse(response => response.url().endsWith('/api/graphql') && response.request().postDataJSON()?.query?.includes('SearchPlayersForPicker') && response.request().postDataJSON()?.variables?.search === boundedQuery)
     await input.fill(query)
-    expect((await response).ok()).toBe(true)
+    await expect(input).toHaveValue(boundedQuery)
+    const responseResult = await response
+    expect(responseResult.ok()).toBe(true)
+    expect((await responseResult.json()).errors ?? []).toHaveLength(0)
     await expect(picker.getByText(zh ? '没有球员符合当前筛选条件。' : 'No players match the current filters.', { exact: true })).toBeVisible()
     await expect(saka).toHaveCount(0)
     await expect(palmer).toHaveCount(0)
