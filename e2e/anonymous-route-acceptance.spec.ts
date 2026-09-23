@@ -126,3 +126,41 @@ for (const locale of ['en', 'zh-CN'] as const) {
   }
  }
 }
+
+// These assertions close only the response-chain step. Data-ready and history
+// contracts remain independent; a 200 response is not full-page acceptance.
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  for (const [caseId, route] of [
+   ['R16', '/explore/fixtures'],
+   ['R17', '/explore/gameweek'],
+   ['R18', '/explore/market'],
+   ['R19', '/explore/player-stats'],
+   ['R21', '/explore/price-predictions'],
+   ['R25', '/live/matches'],
+   ['R31', '/']
+  ] as const) {
+   test(`${caseId}.02 anonymous public response chain ${locale} ${width}`, async ({ page }, testInfo) => {
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const requested = route === '/' ? (prefix || '/') : prefix + route
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    const chain = await redirectChain(await page.goto(requested))
+    expect(chain).toEqual([{ url: requested, status: 200, location: null }])
+    await expect(page).toHaveURL(url => url.pathname === requested)
+    await testInfo.attach('public-route-response-chain', {
+     contentType: 'application/json',
+     body: JSON.stringify({
+      caseId, stepId: `${caseId}.02`, identity: 'anonymous',
+      environment: 'isolated-fixture', locale, viewport: { width, height: 900 },
+      timezone: 'Australia/Perth', theme: 'system-light', requested, chain,
+      assertion: 'Canonical public route has exactly one HTTP 200 response with no redirect',
+      readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_OBSERVED',
+      wholeCaseComplete: false, wholeVariantComplete: false,
+      remainingAssertions: ['Business data readiness', 'Navigation timing', 'Other planned route steps']
+     })
+    })
+   })
+  }
+ }
+}
