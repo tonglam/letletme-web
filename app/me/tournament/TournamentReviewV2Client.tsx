@@ -1893,6 +1893,31 @@ export default function TournamentReviewV2Client({
 		// Reuse the same identity-bound loader; errors still require user retry.
 		if (view === 'season') restoreSeasonView()
 	}, [view])
+	const restoreGameweekView = useEffectEvent(() => {
+		if (
+			view !== 'gameweek' ||
+			gameweekReview ||
+			gameweekError ||
+			loading ||
+			!selectedTournamentId ||
+			!eventId
+		)
+			return
+		void loadReview(selectedTournamentId, eventId, true, true, 'gameweek')
+	})
+	useEffect(() => {
+		// A browser Back/Forward can restore the Gameweek URL while the page
+		// instance still contains the Season-only seed. Rehydrate the missing
+		// Gameweek snapshot for that URL without retrying an already failed read.
+		if (view === 'gameweek') restoreGameweekView()
+	}, [
+		view,
+		gameweekReview,
+		gameweekError,
+		loading,
+		selectedTournamentId,
+		eventId
+	])
 
 	const selectedPhase = useMemo(
 		() =>
