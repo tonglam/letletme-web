@@ -25,7 +25,11 @@ import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import {
 	isTrendCohortReady
 } from './_lib/trend-cohorts'
-import { buildTrendUrl, readTrendUrlSelection } from './_lib/trend-url'
+import {
+	buildTrendUrl,
+	readTrendUrlSelection,
+	resolveTrendUrlAccess
+} from './_lib/trend-url'
 import { buildTrendTemplate } from './_lib/trend-template'
 import {
 	resolveTrendAvailabilityState,
@@ -698,14 +702,9 @@ export default function TrendsClient({
 		)
 			return
 		const urlSelection = readTrendUrlSelection(currentUrl.href)
+		const authoritativeUrlAccess = resolveTrendUrlAccess(urlSelection, cohorts)
 		const urlSelectionIsReady = Boolean(
-			urlSelection &&
-			cohorts.some(
-				cohort =>
-					cohort.access === urlSelection.access &&
-					cohort.id === urlSelection.cohortId &&
-					isTrendCohortReady(cohort)
-			)
+			urlSelection && authoritativeUrlAccess === urlSelection.access
 		)
 		// Selector changes use client-side history entries. When Next restores
 		// this route after a player-detail visit, its server seed can still carry

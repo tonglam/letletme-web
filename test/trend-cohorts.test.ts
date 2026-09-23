@@ -6,7 +6,8 @@ import {
 } from '../app/data/selections/_lib/trend-cohorts'
 import {
 	buildTrendUrl,
-	readTrendUrlSelection
+	readTrendUrlSelection,
+	resolveTrendUrlAccess
 } from '../app/data/selections/_lib/trend-url'
 import type { TrendAccess, TrendCohort } from '../lib/graphql/operations/trends'
 
@@ -94,6 +95,41 @@ describe('visible Trends cohorts', () => {
 				'https://letletme.top/explore/selections?cohort=competition:5&gw=39&scope=public'
 			),
 			null
+		)
+	})
+
+	it('keeps membership access authoritative for duplicate selector cohorts', () => {
+		const cohorts: TrendCohort[] = [
+			cohort(5, 'MINE'),
+			cohort(5, 'PUBLIC')
+		]
+
+		assert.equal(
+			resolveTrendUrlAccess(
+				readTrendUrlSelection(
+					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
+				),
+				cohorts
+			),
+			'MINE'
+		)
+		assert.equal(
+			resolveTrendUrlAccess(
+				readTrendUrlSelection(
+					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=mine'
+				),
+				cohorts
+			),
+			'MINE'
+		)
+		assert.equal(
+			resolveTrendUrlAccess(
+				readTrendUrlSelection(
+					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
+				),
+				[cohort(5, 'PUBLIC')]
+			),
+			'PUBLIC'
 		)
 	})
 })

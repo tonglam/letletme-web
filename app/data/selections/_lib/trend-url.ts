@@ -1,4 +1,7 @@
-import type { TrendAccess } from '@/lib/graphql/operations/trends'
+import type {
+	TrendAccess,
+	TrendCohort
+} from '@/lib/graphql/operations/trends'
 
 export type TrendUrlSelection = {
 	access: TrendAccess
@@ -39,6 +42,21 @@ export function readTrendUrlSelection(currentHref: string): TrendUrlSelection | 
 		cohortId,
 		eventId
 	}
+}
+
+export function resolveTrendUrlAccess(
+	selection: TrendUrlSelection | null,
+	cohorts: TrendCohort[]
+): TrendAccess | null {
+	if (!selection) return null
+	const matches = cohorts.filter(
+		cohort =>
+			cohort.id === selection.cohortId &&
+			cohort.setupStatus?.toLowerCase() === 'ready'
+	)
+	if (matches.some(cohort => cohort.access === 'MINE')) return 'MINE'
+	if (matches.some(cohort => cohort.access === 'PUBLIC')) return 'PUBLIC'
+	return null
 }
 
 export function buildTrendUrl(
