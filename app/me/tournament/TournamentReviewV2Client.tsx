@@ -999,7 +999,11 @@ export default function TournamentReviewV2Client({
 		void executeQuery<EntryLeaguesResponse>(
 			GET_ENTRY_LEAGUES,
 			{ entryId },
-			{ cache: 'no-store', timeoutMs: 1_500 }
+			{
+				cache: 'no-store',
+				timeoutMs: 1_500,
+				dependencyCooldown: 'neutral'
+			}
 		)
 			.then(response => {
 				if (!cancelled)
@@ -1981,8 +1985,6 @@ export default function TournamentReviewV2Client({
 					</div>
 				</div>
 
-				<ClassicLeagueRanks ranks={fplClassicRanks} />
-
 				<div className="mt-6 grid gap-5 lg:grid-cols-[280px_1fr]">
 					<aside className="space-y-3">
 						<label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -2345,6 +2347,10 @@ export default function TournamentReviewV2Client({
 							</>
 						)}
 					</main>
+				</div>
+
+				<div className="mt-6">
+					<ClassicLeagueRanks ranks={fplClassicRanks} />
 				</div>
 			</div>
 		</div>

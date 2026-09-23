@@ -30,6 +30,8 @@ export interface ExecuteQueryOptions {
 	handledErrorCodes?: readonly string[]
 	/** Optional server-side sections may recover without generic console diagnostics. */
 	suppressErrorLog?: boolean
+	/** Optional reads must not fence or clear the primary browser dependency cooldown. */
+	dependencyCooldown?: 'normal' | 'neutral'
 }
 
 type GraphQLRequestErrorOptions = {
@@ -266,7 +268,8 @@ async function doFetch<T>(
 	timeoutMs = DEFAULT_GRAPHQL_TIMEOUT_MS,
 	externalSignal?: AbortSignal,
 	handledErrorCodes?: readonly string[],
-	suppressErrorLog = false
+	suppressErrorLog = false,
+	dependencyCooldown: ExecuteQueryOptions['dependencyCooldown'] = 'normal'
 ): Promise<T> {
 	const startedAt = Date.now()
 	const controller = new AbortController()
@@ -344,6 +347,7 @@ async function doFetch<T>(
 		const firstError = meaningfulErrors[0]
 		const firstErrorCode = graphQLErrorCode(firstError)
 		if (
+			dependencyCooldown === 'normal' &&
 			isClient &&
 			!externalSignal?.aborted &&
 			isTransientDependencyStatus(response.status) &&
@@ -355,6 +359,7 @@ async function doFetch<T>(
 			dependencyFailureRecorded = true
 		}
 		if (
+			dependencyCooldown === 'normal' &&
 			isClient &&
 			!externalSignal?.aborted &&
 			firstErrorCode === 'DEPENDENCY_UNAVAILABLE' &&
@@ -474,7 +479,8 @@ async function doFetch<T>(
 			)
 		}
 
-		if (isClient) clearDependencyCooldown(startedAt)
+		if (isClient && dependencyCooldown === 'normal')
+			clearDependencyCooldown(startedAt)
 
 		const durationMs = Math.max(0, Date.now() - startedAt)
 		if (!isClient && durationMs >= GRAPHQL_SLOW_REQUEST_THRESHOLD_MS) {
@@ -512,7 +518,12 @@ async function doFetch<T>(
 						code: 'REQUEST_CANCELLED'
 					})
 		} else if (!(error instanceof GraphQLRequestError)) {
-			if (isClient && !externalSignal?.aborted && !dependencyFailureRecorded) {
+			if (
+				dependencyCooldown === 'normal' &&
+				isClient &&
+				!externalSignal?.aborted &&
+				!dependencyFailureRecorded
+			) {
 				dependencyFailure = noteDependencyFailure()
 				dependencyFailureRecorded = true
 			}
@@ -661,7 +672,10 @@ export async function executeQuery<T>(
 			if (pending) return pending
 		}
 
-		const dependencyError = dependencyCooldownRequestError()
+		const dependencyError =
+			options?.dependencyCooldown === 'neutral'
+				? null
+				: dependencyCooldownRequestError()
 		if (dependencyError) throw dependencyError
 
 		const promise = doFetch<T>(
@@ -675,7 +689,8 @@ export async function executeQuery<T>(
 			options?.timeoutMs,
 			options?.signal,
 			options?.handledErrorCodes,
-			options?.suppressErrorLog
+			options?.suppressErrorLog,
+			options?.dependencyCooldown
 		).then(result => {
 			if (publicOperation) writePublicBrowserCache(key, result)
 			return result
@@ -698,6 +713,7 @@ export async function executeQuery<T>(
 		options?.timeoutMs,
 		options?.signal,
 		options?.handledErrorCodes,
-		options?.suppressErrorLog
+		options?.suppressErrorLog,
+		options?.dependencyCooldown
 	)
 }

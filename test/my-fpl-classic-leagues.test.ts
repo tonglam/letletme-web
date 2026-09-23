@@ -93,6 +93,11 @@ describe('My FPL Classic league visibility', () => {
 		assert.match(client, /ClassicLeagueRanks ranks=\{fplClassicRanks\}/)
 		assert.match(client, /GET_ENTRY_LEAGUES/)
 		assert.match(client, /initialView !== 'season'/)
+		assert.match(client, /dependencyCooldown: 'neutral'/)
+		assert.match(
+			client,
+			/className="mt-6 grid gap-5 lg:grid-cols-\[280px_1fr\]"[\s\S]*ClassicLeagueRanks ranks=\{fplClassicRanks\}/
+		)
 		assert.match(client, /viewRef\.current/)
 		assert.match(client, /scope: nextScope,[\s\S]*view: viewRef\.current/)
 		assert.match(page, /isScopeAuthorizationError/)
