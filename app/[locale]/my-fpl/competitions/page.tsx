@@ -516,7 +516,15 @@ export default async function TournamentStatsPage({
 										)
 								)
 								initialSeasonReview = seasonSeed.review
-								initialSeasonSections = seasonSeed.sections
+								// POINTS section rows are already attached to the normalized
+								// review and the client rebuilds their paging envelopes. Do
+								// not send the same rows a second time in the RSC seed.
+								const seededPhase = phaseAtEvent(
+									seasonSeed.review.phases,
+									selectedEventId
+								)
+								initialSeasonSections =
+									seededPhase?.format === 'POINTS' ? [] : seasonSeed.sections
 								if (seasonSeed.error)
 									initialSeasonError = t('tournamentStatsFailed')
 							} catch {
