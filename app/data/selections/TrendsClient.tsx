@@ -690,9 +690,6 @@ export default function TrendsClient({
 		)
 		window.history[mode === 'replace' ? 'replaceState' : 'pushState'](
 			{
-				...(window.history.state && typeof window.history.state === 'object'
-					? window.history.state
-					: {}),
 				__letletmeTrendSelection: true,
 				access: nextAccess,
 				cohort: nextCohort,
