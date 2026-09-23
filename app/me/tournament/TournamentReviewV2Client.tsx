@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLocalSnapshotTime } from '@/components/stats/LocalSnapshotTime'
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
@@ -447,18 +448,28 @@ function SettlementMeta({
 	const [hydrated, setHydrated] = useState(false)
 	useEffect(() => setHydrated(true), [])
 	if (!settledAt && !publishedAt) return null
+	const formatTime = (value: string) => {
+		if (hydrated) return formatLocalSnapshotTime(value, locale)
+		const timestamp = Date.parse(value)
+		return Number.isFinite(timestamp)
+			? `${new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ')} UTC`
+			: null
+	}
 	return (
 		<div className="text-xs text-slate-500">
-			{settledAt
-				? t('reviewSettledAt', {
-						value: hydrated ? new Date(settledAt).toLocaleString(locale) : '—'
-					})
-				: null}
-			{publishedAt
-				? ` · ${t('reviewPublishedAt', {
-						value: hydrated ? new Date(publishedAt).toLocaleString(locale) : '—'
-					})}`
-				: null}
+			{settledAt ? (
+				<time dateTime={settledAt}>
+					{t('reviewSettledAt', { value: formatTime(settledAt) ?? '—' })}
+				</time>
+			) : null}
+			{publishedAt ? (
+				<>
+					{' · '}
+					<time dateTime={publishedAt}>
+						{t('reviewPublishedAt', { value: formatTime(publishedAt) ?? '—' })}
+					</time>
+				</>
+			) : null}
 		</div>
 	)
 }

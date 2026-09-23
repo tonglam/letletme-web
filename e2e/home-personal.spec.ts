@@ -1053,8 +1053,8 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
-for (const locale of recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const recoveryMode of ['settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const locale of recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
 for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
@@ -1065,6 +1065,10 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	if (recoveryMode === 'settlement-time') {
+		phase.settledAt = '2026-09-15T18:00:00Z'
+		phase.publishedAt = '2026-09-15T19:00:00Z'
+	}
 	const points = {
 		headlineMetric: 'GROSS_POINTS', grossPointsTotal: 75, grossPointsAverage: 75, netPointsTotal: 71,
 		seasonGrossPointsTotal: 300, seasonGrossPointsAverage: 300, seasonNetPointsTotal: 296,
@@ -1115,6 +1119,35 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			await route.continue()
 		})
+		if (recoveryMode === 'settlement-time') {
+			const url = `${routePath}?tournamentId=77&view=gameweek&gw=4`
+			const response = await page.request.get(url)
+			expect(response.ok()).toBe(true)
+			const html = (await response.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+			// Check rendered SSR content, excluding serialized RSC payloads.
+			expect(html).toContain('2026-09-15 18:00:00 UTC')
+			expect(html).toContain('2026-09-15 19:00:00 UTC')
+			const cdp = await page.context().newCDPSession(page)
+			try {
+				for (const timezoneId of ['UTC', 'Australia/Perth']) {
+					await cdp.send('Emulation.setTimezoneOverride', { timezoneId })
+					for (const width of [1440, 390]) {
+						await page.setViewportSize({ width, height: 900 })
+						await page.goto(url)
+						await expect(page.locator('[data-review-ready="true"]')).toBeVisible()
+						const timestamp = page.locator('time[datetime="2026-09-15T18:00:00Z"]')
+						await expect(timestamp).toContainText(/UTC|GMT|AWST/)
+						await expect(timestamp).not.toContainText('2026-09-15 18:00:00 UTC')
+						await expect(timestamp).toContainText(timezoneId === 'UTC' ? /15/ : /16/)
+						expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+					}
+				}
+			} finally {
+				await cdp.send('Emulation.setTimezoneOverride', { timezoneId: '' })
+				await cdp.detach()
+			}
+			return
+		}
 		if (recoveryMode === 'tournament-race') {
 			const catalogData = rules[0].data
 			if (!('myTournamentReviewCatalog' in catalogData) || !catalogData.myTournamentReviewCatalog) throw new Error('Missing catalog fixture')
