@@ -9,6 +9,11 @@ export type TrendUrlSelection = {
 	eventId: number
 }
 
+export type TrendUrlAccessResolution = {
+	access: TrendAccess
+	ready: boolean
+}
+
 function normalizeTrendCohortId(raw: string | null) {
 	if (!raw) return null
 	if (
@@ -47,16 +52,23 @@ export function readTrendUrlSelection(currentHref: string): TrendUrlSelection | 
 export function resolveTrendUrlAccess(
 	selection: TrendUrlSelection | null,
 	cohorts: TrendCohort[]
-): TrendAccess | null {
+): TrendUrlAccessResolution | null {
 	if (!selection) return null
-	const matches = cohorts.filter(
-		cohort =>
-			cohort.id === selection.cohortId &&
-			cohort.setupStatus?.toLowerCase() === 'ready'
-	)
-	if (matches.some(cohort => cohort.access === 'MINE')) return 'MINE'
-	if (matches.some(cohort => cohort.access === 'PUBLIC')) return 'PUBLIC'
-	return null
+	const matches = cohorts.filter(cohort => cohort.id === selection.cohortId)
+	const access = matches.some(cohort => cohort.access === 'MINE')
+		? 'MINE'
+		: matches.some(cohort => cohort.access === 'PUBLIC')
+			? 'PUBLIC'
+			: null
+	if (!access) return null
+	return {
+		access,
+		ready: matches.some(
+			cohort =>
+				cohort.access === access &&
+				cohort.setupStatus?.toLowerCase() === 'ready'
+		)
+	}
 }
 
 export function buildTrendUrl(

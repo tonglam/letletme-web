@@ -104,32 +104,41 @@ describe('visible Trends cohorts', () => {
 			cohort(5, 'PUBLIC')
 		]
 
-		assert.equal(
+		assert.deepEqual(
 			resolveTrendUrlAccess(
 				readTrendUrlSelection(
 					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
 				),
 				cohorts
 			),
-			'MINE'
+			{ access: 'MINE', ready: true }
 		)
-		assert.equal(
+		assert.deepEqual(
 			resolveTrendUrlAccess(
 				readTrendUrlSelection(
 					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=mine'
 				),
 				cohorts
 			),
-			'MINE'
+			{ access: 'MINE', ready: true }
 		)
-		assert.equal(
+		assert.deepEqual(
 			resolveTrendUrlAccess(
 				readTrendUrlSelection(
 					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
 				),
 				[cohort(5, 'PUBLIC')]
 			),
-			'PUBLIC'
+			{ access: 'PUBLIC', ready: true }
+		)
+		assert.deepEqual(
+			resolveTrendUrlAccess(
+				readTrendUrlSelection(
+					'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
+				),
+				[cohort(5, 'MINE', 'processing'), cohort(5, 'PUBLIC')]
+			),
+			{ access: 'MINE', ready: false }
 		)
 	})
 })

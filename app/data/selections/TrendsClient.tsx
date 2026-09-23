@@ -704,7 +704,9 @@ export default function TrendsClient({
 		const urlSelection = readTrendUrlSelection(currentUrl.href)
 		const authoritativeUrlAccess = resolveTrendUrlAccess(urlSelection, cohorts)
 		const urlSelectionIsReady = Boolean(
-			urlSelection && authoritativeUrlAccess === urlSelection.access
+			urlSelection &&
+			authoritativeUrlAccess?.ready &&
+			authoritativeUrlAccess.access === urlSelection.access
 		)
 		// Selector changes use client-side history entries. When Next restores
 		// this route after a player-detail visit, its server seed can still carry
