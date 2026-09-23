@@ -4,7 +4,10 @@ import {
 	isTrendCohortReady,
 	mergeVisibleTrendCohorts
 } from '../app/data/selections/_lib/trend-cohorts'
-import { buildTrendUrl } from '../app/data/selections/_lib/trend-url'
+import {
+	buildTrendUrl,
+	readTrendUrlSelection
+} from '../app/data/selections/_lib/trend-url'
 import type { TrendAccess, TrendCohort } from '../lib/graphql/operations/trends'
 
 function cohort(
@@ -65,5 +68,32 @@ describe('visible Trends cohorts', () => {
 		assert.equal(url.searchParams.get('scope'), 'mine')
 		assert.equal(url.searchParams.get('tournament'), null)
 		assert.equal(url.searchParams.get('utm'), 'test')
+	})
+
+	it('recognizes only explicit valid selector history entries', () => {
+		assert.deepEqual(
+			readTrendUrlSelection(
+				'https://letletme.top/explore/selections?cohort=competition:5&gw=4&scope=public'
+			),
+			{ access: 'PUBLIC', cohortId: 'competition:5', eventId: 4 }
+		)
+		assert.deepEqual(
+			readTrendUrlSelection(
+				'https://letletme.top/explore/selections?tournament=5&gw=4&scope=mine'
+			),
+			{ access: 'MINE', cohortId: 'competition:5', eventId: 4 }
+		)
+		assert.equal(
+			readTrendUrlSelection(
+				'https://letletme.top/explore/selections?cohort=competition:5&gw=4'
+			),
+			null
+		)
+		assert.equal(
+			readTrendUrlSelection(
+				'https://letletme.top/explore/selections?cohort=competition:5&gw=39&scope=public'
+			),
+			null
+		)
 	})
 })
