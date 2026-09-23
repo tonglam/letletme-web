@@ -547,9 +547,12 @@ describe('data freshness timestamp precision', () => {
 		assert.match(team, /<MyFplSnapshotStatus/)
 		assert.match(snapshotStatus, /timeStyle: 'medium'/)
 		assert.match(tournament, /settledAt/)
+		const localTime = await readFile(new URL('../components/stats/LocalSnapshotTime.tsx', import.meta.url), 'utf8')
+		assert.match(localTime, /second: '2-digit'/)
+		assert.match(localTime, /timeZoneName: 'short'/)
 		assert.match(
 			tournament,
-			/function SettlementMeta[\s\S]*?new Date\(settledAt\)\.toLocaleString\(locale\)/
+			/function SettlementMeta[\s\S]*?formatLocalSnapshotTime\(value, locale\)/
 		)
 	})
 })
