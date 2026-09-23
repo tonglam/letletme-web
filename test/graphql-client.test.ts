@@ -327,6 +327,77 @@ test('browser dependency failures cool down later requests without another fetch
 	}
 })
 
+test('optional browser reads do not fence or clear primary dependency cooldowns', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const originalError = console.error
+	const storage = new Map<string, string>()
+	let calls = 0
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: {
+			location: { origin: 'https://letletme.test' },
+			sessionStorage: {
+				getItem: (key: string) => storage.get(key) ?? null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+				removeItem: (key: string) => storage.delete(key)
+			}
+		}
+	})
+	console.error = () => undefined
+	globalThis.fetch = (async () => {
+		calls += 1
+		if (calls === 1)
+			return Response.json(
+				{
+					errors: [
+						{
+							message: 'Unavailable',
+							extensions: { code: 'DEPENDENCY_UNAVAILABLE' }
+						}
+				]
+				},
+				{ status: 503, headers: { 'Retry-After': '300' } }
+			)
+		return Response.json({ data: { ok: true } })
+	}) as typeof fetch
+	clearPendingClientQueries()
+	clearDependencyCooldown()
+
+	try {
+		await assert.rejects(
+			executeQuery('query OptionalRankProbe { __typename }', undefined, {
+				dependencyCooldown: 'neutral'
+			})
+		)
+		assert.equal(readDependencyCooldown().active, false)
+		assert.deepEqual(
+			await executeQuery<{ ok: boolean }>(
+				'query PrimaryReviewProbe { ok }'
+			),
+			{ ok: true }
+		)
+		assert.equal(calls, 2)
+
+		noteDependencyFailure('300')
+		assert.equal(readDependencyCooldown().active, true)
+		await executeQuery('query OptionalRankSuccess { __typename }', undefined, {
+			dependencyCooldown: 'neutral'
+		})
+		assert.equal(readDependencyCooldown().active, true)
+	} finally {
+		clearDependencyCooldown()
+		clearPendingClientQueries()
+		globalThis.fetch = originalFetch
+		console.error = originalError
+		if (originalWindow) {
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		} else {
+			Reflect.deleteProperty(globalThis, 'window')
+		}
+	}
+})
+
 test('a success that started before a newer failure cannot clear its cooldown', () => {
 	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
 	const storage = new Map<string, string>()

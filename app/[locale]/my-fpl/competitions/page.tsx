@@ -295,24 +295,27 @@ export default async function TournamentStatsPage({
 		redirect(localizeHref('/onboarding/bind-entry', locale))
 	}
 
-	const fplClassicRanksPromise: Promise<FplClassicLeagueRank[]> = timing
-		.measure('fpl-classic-ranks', () =>
-			executeServerQueryWithSession<EntryLeaguesResponse>(
-				session,
-				GET_ENTRY_LEAGUES,
-				{ entryId },
-				{ cache: 'no-store', timeoutMs: 1_500 }
-			)
-		)
-		.then(response =>
-			selectUntrackedFplClassicLeagueRanks(response.entryLeagues)
-		)
-		.catch(error => {
-			console.warn('[tournament review] FPL Classic ranks unavailable', {
-				error: error instanceof Error ? error.name : 'UnknownError'
-			})
-			return []
-		})
+	const fplClassicRanksPromise: Promise<FplClassicLeagueRank[]> =
+		initialView === 'season'
+			? Promise.resolve([])
+			: timing
+					.measure('fpl-classic-ranks', () =>
+						executeServerQueryWithSession<EntryLeaguesResponse>(
+							session,
+							GET_ENTRY_LEAGUES,
+							{ entryId },
+							{ cache: 'no-store', timeoutMs: 1_500 }
+						)
+					)
+					.then(response =>
+						selectUntrackedFplClassicLeagueRanks(response.entryLeagues)
+					)
+					.catch(error => {
+						console.warn('[tournament review] FPL Classic ranks unavailable', {
+							error: error instanceof Error ? error.name : 'UnknownError'
+						})
+						return []
+					})
 
 	const requestedTournamentId = positiveInteger(sp.tournamentId)
 	const requestedEventId = positiveInteger(sp.gw)
@@ -420,6 +423,7 @@ export default async function TournamentStatsPage({
 		initialSelectedTournamentId = selected?.tournamentId ?? null
 		const latestSettledEventId = selected?.latestFinalizedEventId ?? null
 		if (initialSelectedTournamentId && latestSettledEventId) {
+			const fetchInitialGameweek = initialView !== 'season'
 			// Resolve the tournament's immutable event set before accepting a URL
 			// gameweek. A positive event below the latest one may still predate a
 			// custom tournament and therefore have no publication.
@@ -462,16 +466,18 @@ export default async function TournamentStatsPage({
 						'my-tournament-review-v2.1-snapshots',
 						() =>
 							Promise.allSettled([
-								executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
-									session,
-									GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
-									{
-										tournamentId: initialSelectedTournamentId,
-										eventId: initialEventId,
-										first: 50
-									},
-									{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
-								),
+								fetchInitialGameweek
+									? executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
+											session,
+											GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+											{
+												tournamentId: initialSelectedTournamentId,
+												eventId: initialEventId,
+												first: 50
+											},
+											{ cache: 'no-store', contract: 'my-tournament-review-v2.1' }
+										)
+									: Promise.resolve(null),
 								initialEventId === latestSettledEventId
 									? Promise.resolve(latestSeasonResponse)
 									: executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
@@ -489,8 +495,9 @@ export default async function TournamentStatsPage({
 							])
 					)
 					if (gameweekResult.status === 'fulfilled') {
-						initialGameweekReview =
-							gameweekResult.value.myTournamentGameweekReview
+						if (gameweekResult.value)
+							initialGameweekReview =
+								gameweekResult.value.myTournamentGameweekReview
 					} else {
 						initialGameweekError = t('tournamentStatsFailed')
 					}
