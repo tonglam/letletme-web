@@ -14,6 +14,26 @@ export type TrendUrlAccessResolution = {
 	ready: boolean
 }
 
+/**
+ * Client selector entries are written with a small marker so a later
+ * Next/App Router restoration can distinguish an explicit local selection
+ * from a server-seeded default. The marker is only a history hint; access is
+ * still checked against the loaded cohort catalog before it is used.
+ */
+export function isTrendSelectionHistoryState(
+	state: unknown,
+	selection: TrendUrlSelection
+): boolean {
+	if (!state || typeof state !== 'object') return false
+	const candidate = state as Record<string, unknown>
+	return (
+		candidate.__letletmeTrendSelection === true &&
+		candidate.access === selection.access &&
+		candidate.cohort === selection.cohortId &&
+		candidate.gw === selection.eventId
+	)
+}
+
 function normalizeTrendCohortId(raw: string | null) {
 	if (!raw) return null
 	if (
