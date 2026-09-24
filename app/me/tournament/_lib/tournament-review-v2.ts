@@ -7,6 +7,12 @@ export type TournamentReviewV2View = 'gameweek' | 'season'
 
 /** The Season trajectory panel renders a fixed preview instead of a paged table. */
 export const TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS = 12
+/**
+ * Keep the initial Season section bounded to the same page size as the
+ * GraphQL operation default. The UI reveals a small preview and already has
+ * cursor pagination for the remaining standings/matches.
+ */
+export const TOURNAMENT_REVIEW_INITIAL_ROWS = 50
 
 export function selectTournamentReviewEventId(
 	requestedEventId: number | null,

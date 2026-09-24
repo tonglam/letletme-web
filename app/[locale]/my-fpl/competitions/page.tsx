@@ -29,6 +29,7 @@ import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
 import {
 	selectTournamentReviewEventId,
+	TOURNAMENT_REVIEW_INITIAL_ROWS,
 	TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS
 } from '@/app/me/tournament/_lib/tournament-review-v2'
 
@@ -151,7 +152,7 @@ async function hydrateSeasonSeed(
 			| 'H2H_STANDINGS'
 			| 'H2H_FIXTURES'
 			| 'KNOCKOUT_BRACKET',
-		first = 100
+		first = TOURNAMENT_REVIEW_INITIAL_ROWS
 	) =>
 		executeServerQueryWithSession<MyTournamentSeasonSectionResponse>(
 			session,
@@ -183,7 +184,7 @@ async function hydrateSeasonSeed(
 					optionalSection,
 					phase.format === 'POINTS'
 						? TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS
-						: 100
+						: TOURNAMENT_REVIEW_INITIAL_ROWS
 				)
 			: Promise.resolve(null)
 	])
