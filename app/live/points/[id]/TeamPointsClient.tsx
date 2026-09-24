@@ -121,11 +121,13 @@ export default function TeamPointsClient({
 		livePoints.snapshot?.eventId
 	])
 	useEffect(() => {
+		let active = true
 		const reconcileFromUrl = (
 			refreshedCurrentGameweek?: number,
 			anchorWasRefreshed = false,
 			fromAnchorRefreshRetry = false
 		) => {
+			if (!active) return
 			if (!fromAnchorRefreshRetry) {
 				if (anchorRefreshRetryTimerRef.current !== null) {
 					window.clearTimeout(anchorRefreshRetryTimerRef.current)
@@ -157,6 +159,7 @@ export default function TeamPointsClient({
 				anchorRefreshInFlightRef.current = true
 				void refreshCurrentGameweek()
 					.then(refreshResult => {
+						if (!active) return
 						if (refreshResult.gameweek === null) {
 							const retryDelay =
 								ANCHOR_REFRESH_RETRY_DELAYS_MS[
@@ -213,6 +216,7 @@ export default function TeamPointsClient({
 		const handlePopState = () => reconcileFromUrl()
 		window.addEventListener('popstate', handlePopState)
 		return () => {
+			active = false
 			window.removeEventListener('popstate', handlePopState)
 			if (anchorRefreshRetryTimerRef.current !== null) {
 				window.clearTimeout(anchorRefreshRetryTimerRef.current)
