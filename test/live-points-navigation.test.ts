@@ -20,6 +20,10 @@ const pitchDetailHook = readFileSync(
 	'app/live/points/_hooks/useLivePlayerDetail.ts',
 	'utf8'
 )
+const livePointsHook = readFileSync(
+	'app/live/points/_hooks/useLivePoints.ts',
+	'utf8'
+)
 const tournamentReview = readFileSync(
 	'app/me/tournament/TournamentReviewV2Client.tsx',
 	'utf8'
@@ -79,10 +83,15 @@ describe('live points navigation context', () => {
 		assert.match(teamPoints, /window\.history\.replaceState\(/)
 		assert.match(teamPoints, /window\.addEventListener\('popstate'/)
 		assert.match(teamPoints, /new URL\(window\.location\.href\)/)
+		assert.match(teamPoints, /reconcileFromUrl\(\)/)
+		assert.match(teamPoints, /teamPath = pathname\.match/)
+		assert.match(teamPoints, /followAnchor: !hasUsableExplicitGameweek/)
 		assert.match(teamPoints, /reconciledGameweekRef/)
 		assert.match(teamPoints, /contentGameweek === targetGameweek/)
 		assert.match(teamPoints, /livePoints\.changeGameweek\(gameweek\)/)
 		assert.match(teamPoints, /onGameweekChange=\{changeGameweek\}/)
+		assert.match(livePointsHook, /interface ChangeGameweekOptions/)
+		assert.match(livePointsHook, /followsAnchorRef\.current = options\?\.followAnchor \?\? false/)
 		assert.ok(
 			teamPoints.indexOf('livePoints.changeGameweek(gameweek)') <
 				teamPoints.indexOf('window.history.replaceState(')

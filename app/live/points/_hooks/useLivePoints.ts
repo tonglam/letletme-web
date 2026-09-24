@@ -82,6 +82,10 @@ interface UseLivePointsOptions {
 	isOfficialUpdating?: boolean
 }
 
+interface ChangeGameweekOptions {
+	followAnchor?: boolean
+}
+
 export function useLivePoints({
 	initialEntryId,
 	initialEventId,
@@ -623,7 +627,7 @@ export function useLivePoints({
 	])
 
 	const changeGameweek = useCallback(
-		(gameweek: number) => {
+		(gameweek: number, options?: ChangeGameweekOptions) => {
 			const selectionId = ++gameweekSelectionRef.current
 			resetLiveDataRetry()
 			if (gameweek !== selectedGameweek) {
@@ -644,7 +648,7 @@ export function useLivePoints({
 				setIsRefreshing(false)
 				setIsLoading(true)
 			}
-			followsAnchorRef.current = false
+			followsAnchorRef.current = options?.followAnchor ?? false
 			lastExplainAttemptAtRef.current = 0
 			const selectingCurrentGameweek =
 				gameweek === currentGameweekRef.current

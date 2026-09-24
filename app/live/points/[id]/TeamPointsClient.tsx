@@ -110,16 +110,23 @@ export default function TeamPointsClient({
 		livePoints.snapshot?.eventId
 	])
 	useEffect(() => {
-		const handlePopState = () => {
-			const requestedGameweek = Number(
-				new URL(window.location.href).searchParams.get('gw')
-			)
+		const reconcileFromUrl = () => {
+			const pathname = window.location.pathname.replace(/\/+$/, '')
+			const teamPath = pathname.match(/(?:^|\/)live\/points\/(\d+)$/)
+			if (!teamPath || Number(teamPath[1]) !== entryId) return
+
+			const url = new URL(window.location.href)
+			const requestedValue = url.searchParams.get('gw')
+			const requestedGameweek = Number(requestedValue)
 			const { currentGameweek, isLoading, liveDataEvent, selectedGameweek, snapshotEventId } =
 				historyStateRef.current
-			const targetGameweek =
+			const hasUsableExplicitGameweek =
+				requestedValue !== null &&
 				Number.isInteger(requestedGameweek) &&
 				requestedGameweek >= 1 &&
-				requestedGameweek <= 38
+				requestedGameweek <= Math.min(38, currentGameweek)
+			const targetGameweek =
+				hasUsableExplicitGameweek
 					? requestedGameweek
 					: currentGameweek
 			if (!Number.isInteger(targetGameweek) || targetGameweek <= 0) return
@@ -133,9 +140,13 @@ export default function TeamPointsClient({
 			const targetKey = `${entryId}:${targetGameweek}`
 			if (reconciledGameweekRef.current === targetKey) return
 			reconciledGameweekRef.current = targetKey
-			reconcileGameweek(targetGameweek)
+			reconcileGameweek(targetGameweek, {
+				followAnchor: !hasUsableExplicitGameweek
+			})
 		}
 
+		reconcileFromUrl()
+		const handlePopState = () => reconcileFromUrl()
 		window.addEventListener('popstate', handlePopState)
 		return () => window.removeEventListener('popstate', handlePopState)
 	}, [entryId, reconcileGameweek])
