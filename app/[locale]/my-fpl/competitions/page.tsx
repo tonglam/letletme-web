@@ -9,6 +9,7 @@ import {
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
+	GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION,
 	GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
 	GET_MY_TOURNAMENT_SEASON_REVIEW,
 	type MyTournamentGameweekReviewResponse,
@@ -154,7 +155,9 @@ async function hydrateSeasonSeed(
 	) =>
 		executeServerQueryWithSession<MyTournamentSeasonSectionResponse>(
 			session,
-			GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
+			section === 'POINTS_STANDINGS' || section === 'POINTS_TRAJECTORIES'
+				? GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION
+				: GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
 			{
 				tournamentId,
 				throughEventId,

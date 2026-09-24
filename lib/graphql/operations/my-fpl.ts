@@ -1010,6 +1010,42 @@ export const GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION = `
   }
 `
 
+/**
+ * Season POINTS only renders the fields below for standings and trajectory
+ * cards. Keep the gameweek operation and the H2H/knockout season sections
+ * unchanged; this document only bounds the immutable POINTS response payload.
+ */
+export const GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION = `
+  query GetMyTournamentSeasonReviewPointsSection(
+    $tournamentId: Int!
+    $throughEventId: Int!
+    $phaseId: String!
+    $section: MyTournamentReviewSeasonSection!
+    $first: Int = 50
+    $after: String
+    $revision: String!
+    $semanticSha256: String!
+  ) {
+    myTournamentSeasonReviewSection(
+      tournamentId: $tournamentId throughEventId: $throughEventId phaseId: $phaseId
+      section: $section first: $first after: $after revision: $revision semanticSha256: $semanticSha256
+    ) {
+      state tournamentId throughEventId phaseId section revision semanticSha256
+      pageInfo { hasNextPage endCursor }
+      points {
+        headlineMetric grossPointsTotal grossPointsAverage netPointsTotal
+        seasonGrossPointsTotal seasonGrossPointsAverage seasonNetPointsTotal
+        nextCursor hasNextPage
+        rows {
+          entryId entryName playerName rank previousRank
+          grossPoints transferCost netPoints tournamentScore
+          seasonGrossPoints seasonNetPoints
+        }
+      }
+    }
+  }
+`
+
 export const GET_MY_TOURNAMENT_REVIEW_STATUS = `
   query GetMyTournamentReviewStatus($tournamentId: Int!) {
     myTournamentReviewStatus(tournamentId: $tournamentId) {

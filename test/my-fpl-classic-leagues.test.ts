@@ -77,6 +77,7 @@ describe('My FPL Classic league visibility', () => {
 		assert.match(page, /GET_MY_TOURNAMENT_REVIEW_CATALOG/)
 		assert.match(page, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
 		assert.match(page, /GET_MY_TOURNAMENT_SEASON_REVIEW/)
+		assert.match(page, /GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION/)
 		assert.match(page, /GET_ENTRY_LEAGUES/)
 		assert.match(page, /selectUntrackedFplClassicLeagueRanks/)
 		assert.match(page, /latestSettledEventId/)
@@ -88,6 +89,11 @@ describe('My FPL Classic league visibility', () => {
 		assert.match(client, /GET_MY_TOURNAMENT_REVIEW_CATALOG/)
 		assert.match(client, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
 		assert.match(client, /GET_MY_TOURNAMENT_SEASON_REVIEW/)
+		assert.match(client, /GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION/)
+		assert.match(
+			client,
+			/sectionKey === 'POINTS_STANDINGS' \|\| sectionKey === 'POINTS_TRAJECTORIES'/
+		)
 		assert.match(client, /CONTRACT = 'my-tournament-review-v2\.1'/)
 		assert.match(client, /initialFplClassicRanks: FplClassicLeagueRank\[\]/)
 		assert.match(client, /ClassicLeagueRanks ranks=\{fplClassicRanks\}/)
