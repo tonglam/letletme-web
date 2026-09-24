@@ -1645,6 +1645,14 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
  let failedReads = 0
  await page.route('**/api/graphql', async route => {
   const payload = route.request().postDataJSON()
+  if (payload.query?.includes('GetEntryTransferHistory')) {
+   await route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: { entryTransferHistory: [] } })
+   })
+   return
+  }
   if (fail && payload.query?.includes('GetLiveCalcPoints')) {
    failedReads += 1
    if ((failureMode === 'request-error' || failureMode === 'refresh-error')) {
