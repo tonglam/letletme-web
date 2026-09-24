@@ -5,6 +5,9 @@ import type {
 
 export type TournamentReviewV2View = 'gameweek' | 'season'
 
+/** The Season trajectory panel renders a fixed preview instead of a paged table. */
+export const TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS = 12
+
 export function selectTournamentReviewEventId(
 	requestedEventId: number | null,
 	latestSettledEventId: number | null,

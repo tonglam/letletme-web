@@ -93,6 +93,9 @@ describe('My FPL Classic league visibility', () => {
 		assert.match(client, /ClassicLeagueRanks ranks=\{fplClassicRanks\}/)
 		assert.match(client, /GET_ENTRY_LEAGUES/)
 		assert.match(client, /initialView !== 'season'/)
+		assert.match(page, /TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS/)
+		assert.match(client, /TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS/)
+		assert.match(client, /section\?\.section !== 'POINTS_TRAJECTORIES'/)
 		assert.match(client, /dependencyCooldown: 'neutral'/)
 		assert.match(
 			client,

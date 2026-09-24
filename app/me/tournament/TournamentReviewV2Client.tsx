@@ -34,6 +34,7 @@ import {
 import { buildTournamentStatsQueryString, parseTournamentStatsView } from './_lib/tournament-stats-url'
 import {
 	mergeTournamentReviewEventIds,
+	TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS,
 	tournamentReviewPointsRow,
 	tournamentReviewPointsSummary,
 	type TournamentReviewV2View
@@ -181,8 +182,10 @@ function deriveInitialPointsSections(
 					h2h: null,
 					knockout: null,
 					pageInfo: {
-						hasNextPage: points.hasNextPage,
-						endCursor: points.nextCursor
+						hasNextPage:
+							section === 'POINTS_TRAJECTORIES' ? false : points.hasNextPage,
+						endCursor:
+							section === 'POINTS_TRAJECTORIES' ? null : points.nextCursor
 					}
 				}
 			: null
@@ -1070,7 +1073,7 @@ export default function TournamentReviewV2Client({
 					tournamentId,
 					throughEventId,
 					phase,
-					100,
+					TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS,
 					null,
 					'POINTS_TRAJECTORIES'
 				)
@@ -1093,7 +1096,15 @@ export default function TournamentReviewV2Client({
 				throw new Error('Season phase publication is not ready')
 			if (primarySection.status === 'rejected') throw primarySection.reason
 			const sections = settledSections.map(result =>
-				result.status === 'fulfilled' ? result.value : null
+				result.status === 'fulfilled' &&
+				result.value?.section === 'POINTS_TRAJECTORIES'
+					? {
+							...result.value,
+							pageInfo: { hasNextPage: false, endCursor: null }
+						}
+					: result.status === 'fulfilled'
+						? result.value
+						: null
 			)
 		const pages = Object.fromEntries(
 			sections
@@ -1479,7 +1490,8 @@ export default function TournamentReviewV2Client({
 		const pendingSeasonSections = seasonPages
 			? Object.values(seasonPages).filter(
 					(section): section is SeasonSectionData =>
-						Boolean(section?.pageInfo.hasNextPage && section.pageInfo.endCursor)
+						section?.section !== 'POINTS_TRAJECTORIES' &&
+						Boolean(section.pageInfo.hasNextPage && section.pageInfo.endCursor)
 				)
 			: []
 		if (requestView === 'gameweek' && (!gameweekCursor || !requestRevision)) {
