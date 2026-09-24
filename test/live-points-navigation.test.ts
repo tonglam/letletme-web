@@ -104,7 +104,10 @@ describe('live points navigation context', () => {
 		assert.match(livePointsHook, /const refreshCurrentGameweek = useCallback/)
 		assert.match(livePointsHook, /updateSyncState: false/)
 		assert.match(livePointsHook, /gameweek: result\.refreshed \? currentGameweekRef\.current : null/)
-		assert.match(livePointsHook, /const acceptedCurrentGameweek = Math\.max/)
+		assert.match(livePointsHook, /Math\.max\(currentGameweekRef\.current/)
+		assert.match(livePointsHook, /const seasonChanged =/)
+		assert.match(livePointsHook, /currentSeasonRef\.current = observedSeason/)
+		assert.match(entryPage, /initialSeason=\{liveContext\?\.season/)
 		assert.match(livePointsHook, /if \(selectionId !== gameweekSelectionRef\.current\)/)
 		assert.match(livePointsHook, /const setGameweekAnchorFollowing = useCallback/)
 		assert.ok(

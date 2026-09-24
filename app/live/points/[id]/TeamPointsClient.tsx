@@ -25,6 +25,7 @@ const ANCHOR_REFRESH_RETRY_DELAYS_MS = [1000, 2000] as const
 
 interface TeamPointsClientProps {
 	entryId: number
+	initialSeason?: string
 	tournamentId?: string
 	from?: 'home'
 	initialEventId: number
@@ -39,6 +40,7 @@ interface TeamPointsClientProps {
 
 export default function TeamPointsClient({
 	entryId,
+	initialSeason,
 	tournamentId,
 	from,
 	initialEventId,
@@ -58,6 +60,7 @@ export default function TeamPointsClient({
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
+		initialSeason,
 		initialSelectedGameweek,
 		initialLiveData,
 		initialSnapshot,

@@ -76,6 +76,7 @@ const hydrateLiveSnapshot = (
 interface UseLivePointsOptions {
 	initialEntryId: number
 	initialEventId: number
+	initialSeason?: string
 	initialSelectedGameweek?: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
@@ -99,6 +100,7 @@ interface CurrentGameweekRefreshResult {
 export function useLivePoints({
 	initialEntryId,
 	initialEventId,
+	initialSeason,
 	initialSelectedGameweek,
 	initialLiveData,
 	initialSnapshot,
@@ -178,6 +180,9 @@ export function useLivePoints({
 	)
 	const [activeEntryId, setActiveEntryId] = useState(initialEntryId)
 	const currentGameweekRef = useRef(initialEventId)
+	const currentSeasonRef = useRef<string | null>(
+		initialSeason ?? initialLiveSnapshot?.season ?? initialLiveData?.snapshot?.season ?? null
+	)
 	const gameweekSelectionRef = useRef(0)
 	const requestIdRef = useRef(0)
 	const hasLoadedLiveDataRef = useRef(Boolean(initialLiveData))
@@ -255,19 +260,24 @@ export function useLivePoints({
 				const context = probe.liveContext
 				const observedCurrentGameweek =
 					context?.anchorEventId ?? currentGameweekRef.current
+				const observedSeason = context?.season ?? null
+				const seasonChanged =
+					observedSeason !== null &&
+					currentSeasonRef.current !== null &&
+					observedSeason !== currentSeasonRef.current
 				// A context response can come from an older fallback publication. The
-				// accepted client anchor is monotonic for this session, so an older
-				// response may not move the page backwards.
-				const acceptedCurrentGameweek = Math.max(
-					currentGameweekRef.current,
-					observedCurrentGameweek
-				)
+				// accepted client anchor is monotonic within a season. A season change
+				// resets the comparison because GW 1 follows GW 38.
+				const acceptedCurrentGameweek = seasonChanged
+					? observedCurrentGameweek
+					: Math.max(currentGameweekRef.current, observedCurrentGameweek)
 				const selectedIsCurrent = eventId === acceptedCurrentGameweek
 				const observedOfficialUpdating =
 					selectedIsCurrent && isOfficialLiveUpdatingContext(context)
 				const hasAuthoritativeCurrentEvent = context?.anchorEventId != null
 				const selectedSnapshotIsMissing =
 					!snapshotRef.current || snapshotRef.current.eventId !== eventId
+				if (observedSeason !== null) currentSeasonRef.current = observedSeason
 				currentGameweekRef.current = acceptedCurrentGameweek
 				setCurrentGameweek(current =>
 					current === acceptedCurrentGameweek
@@ -849,6 +859,7 @@ export function useLivePoints({
 		const seedKey = [
 			initialEntryId,
 			initialEventId,
+			initialSeason ?? '',
 			initialSelectedGameweek ?? '',
 			initialLiveData?.event ?? '',
 			initialLiveData?.score?.revisions.input ?? '',
@@ -864,6 +875,8 @@ export function useLivePoints({
 
 		followsAnchorRef.current = initialSelectedGameweek == null
 		currentGameweekRef.current = initialEventId
+		currentSeasonRef.current =
+			initialSeason ?? initialLiveSnapshot?.season ?? initialLiveData?.snapshot?.season ?? null
 		setCurrentGameweek(initialEventId)
 		const officialUpdatingForSelection =
 			initialOfficialUpdating && nextSelectedGameweek === initialEventId
@@ -929,6 +942,7 @@ export function useLivePoints({
 		initialEventId,
 		initialLiveData,
 		initialOfficialUpdating,
+		initialSeason,
 		initialSelectedGameweek,
 		initialLiveSnapshot,
 		initialSnapshot
