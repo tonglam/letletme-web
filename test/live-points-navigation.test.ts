@@ -76,9 +76,16 @@ describe('live points navigation context', () => {
 	it('keeps the address bar aligned with the displayed gameweek', () => {
 		assert.match(teamPoints, /const changeGameweek = \(gameweek: number\)/)
 		assert.match(teamPoints, /nextUrl\.searchParams\.set\('gw', String\(gameweek\)\)/)
+		assert.match(teamPoints, /useSearchParams/)
 		assert.match(teamPoints, /window\.history\.replaceState\(/)
+		assert.match(teamPoints, /reconciledGameweekRef/)
+		assert.match(teamPoints, /contentGameweek === targetGameweek/)
 		assert.match(teamPoints, /livePoints\.changeGameweek\(gameweek\)/)
 		assert.match(teamPoints, /onGameweekChange=\{changeGameweek\}/)
+		assert.ok(
+			teamPoints.indexOf('livePoints.changeGameweek(gameweek)') <
+				teamPoints.indexOf('window.history.replaceState(')
+		)
 	})
 
 	it('links tournament review directly to the formal live board query', () => {

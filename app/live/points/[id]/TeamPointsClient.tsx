@@ -14,7 +14,9 @@ import type {
 } from '@/lib/graphql/operations/live'
 import { Link } from '@/i18n/navigation'
 import { ArrowLeft } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import { useEffect, useRef } from 'react'
 import { LivePointsDashboard } from '../_components/LivePointsDashboard'
 import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
@@ -48,6 +50,8 @@ export default function TeamPointsClient({
 	isOfficialUpdating = false
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
+	const searchParams = useSearchParams()
+	const reconciledGameweekRef = useRef<string | null>(null)
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
@@ -56,6 +60,12 @@ export default function TeamPointsClient({
 		initialSnapshot,
 		isOfficialUpdating
 	})
+	const reconcileGameweek = livePoints.changeGameweek
+	const currentGameweek = livePoints.currentGameweek
+	const isLoading = livePoints.isLoading
+	const liveDataEvent = livePoints.liveData?.event
+	const selectedGameweek = livePoints.selectedGameweek
+	const snapshotEventId = livePoints.snapshot?.eventId
 	const {
 		overall,
 		entryLookupStatus,
@@ -71,6 +81,40 @@ export default function TeamPointsClient({
 		initialEntryLookupStatus,
 		initialEntryPersistenceState
 	})
+	useEffect(() => {
+		const requestedGameweek = Number(searchParams.get('gw'))
+		const targetGameweek =
+			Number.isInteger(requestedGameweek) &&
+			requestedGameweek >= 1 &&
+			requestedGameweek <= 38
+				? requestedGameweek
+				: currentGameweek
+		if (!Number.isInteger(targetGameweek) || targetGameweek <= 0) return
+
+		const targetKey = `${entryId}:${targetGameweek}`
+		const contentGameweek = liveDataEvent ?? snapshotEventId
+		const alreadyAligned =
+			selectedGameweek === targetGameweek &&
+			(isLoading || contentGameweek === targetGameweek)
+		if (alreadyAligned) {
+			if (reconciledGameweekRef.current === targetKey)
+				reconciledGameweekRef.current = null
+			return
+		}
+		if (reconciledGameweekRef.current === targetKey) return
+
+		reconciledGameweekRef.current = targetKey
+		reconcileGameweek(targetGameweek)
+	}, [
+		currentGameweek,
+		entryId,
+		isLoading,
+		liveDataEvent,
+		reconcileGameweek,
+		selectedGameweek,
+		snapshotEventId,
+		searchParams
+	])
 	const refreshAll = async () => {
 		retryEntryLookup()
 		await livePoints.refresh()
@@ -79,12 +123,12 @@ export default function TeamPointsClient({
 	const changeGameweek = (gameweek: number) => {
 		const nextUrl = new URL(window.location.href)
 		nextUrl.searchParams.set('gw', String(gameweek))
+		livePoints.changeGameweek(gameweek)
 		window.history.replaceState(
 			window.history.state,
 			'',
 			`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
 		)
-		livePoints.changeGameweek(gameweek)
 	}
 
 	const hasCompetitionContext = Boolean(tournamentId) && from !== 'home'
