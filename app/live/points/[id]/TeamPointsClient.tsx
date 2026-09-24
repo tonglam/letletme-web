@@ -50,6 +50,7 @@ export default function TeamPointsClient({
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const reconciledGameweekRef = useRef<string | null>(null)
+	const anchorRefreshInFlightRef = useRef(false)
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
@@ -59,6 +60,8 @@ export default function TeamPointsClient({
 		isOfficialUpdating
 	})
 	const reconcileGameweek = livePoints.changeGameweek
+	const refreshCurrentGameweek = livePoints.refreshCurrentGameweek
+	const setGameweekAnchorFollowing = livePoints.setGameweekAnchorFollowing
 	const historyStateRef = useRef({
 		currentGameweek: livePoints.currentGameweek,
 		isLoading: livePoints.isLoading,
@@ -110,7 +113,10 @@ export default function TeamPointsClient({
 		livePoints.snapshot?.eventId
 	])
 	useEffect(() => {
-		const reconcileFromUrl = () => {
+		const reconcileFromUrl = (
+			refreshedCurrentGameweek?: number,
+			anchorWasRefreshed = false
+		) => {
 			const pathname = window.location.pathname.replace(/\/+$/, '')
 			const teamPath = pathname.match(/(?:^|\/)live\/points\/(\d+)$/)
 			if (!teamPath || Number(teamPath[1]) !== entryId) return
@@ -118,8 +124,32 @@ export default function TeamPointsClient({
 			const url = new URL(window.location.href)
 			const requestedValue = url.searchParams.get('gw')
 			const requestedGameweek = Number(requestedValue)
-			const { currentGameweek, isLoading, liveDataEvent, selectedGameweek, snapshotEventId } =
-				historyStateRef.current
+			const {
+				currentGameweek: cachedCurrentGameweek,
+				isLoading,
+				liveDataEvent,
+				selectedGameweek,
+				snapshotEventId
+			} = historyStateRef.current
+			const currentGameweek =
+				refreshedCurrentGameweek ?? cachedCurrentGameweek
+			if (
+				!anchorWasRefreshed &&
+				requestedValue !== null &&
+				Number.isInteger(requestedGameweek) &&
+				requestedGameweek > Math.min(38, currentGameweek) &&
+				!anchorRefreshInFlightRef.current
+			) {
+				anchorRefreshInFlightRef.current = true
+				void refreshCurrentGameweek()
+					.then(nextCurrentGameweek =>
+						reconcileFromUrl(nextCurrentGameweek, true)
+					)
+					.finally(() => {
+						anchorRefreshInFlightRef.current = false
+					})
+				return
+			}
 			const hasUsableExplicitGameweek =
 				requestedValue !== null &&
 				Number.isInteger(requestedGameweek) &&
@@ -135,6 +165,7 @@ export default function TeamPointsClient({
 			const alreadyAligned =
 				selectedGameweek === targetGameweek &&
 				(isLoading || contentGameweek === targetGameweek)
+			setGameweekAnchorFollowing(!hasUsableExplicitGameweek)
 			if (alreadyAligned) return
 
 			const targetKey = `${entryId}:${targetGameweek}`
@@ -149,7 +180,12 @@ export default function TeamPointsClient({
 		const handlePopState = () => reconcileFromUrl()
 		window.addEventListener('popstate', handlePopState)
 		return () => window.removeEventListener('popstate', handlePopState)
-	}, [entryId, reconcileGameweek])
+	}, [
+		entryId,
+		reconcileGameweek,
+		refreshCurrentGameweek,
+		setGameweekAnchorFollowing
+	])
 	const refreshAll = async () => {
 		retryEntryLookup()
 		await livePoints.refresh()

@@ -86,12 +86,16 @@ describe('live points navigation context', () => {
 		assert.match(teamPoints, /reconcileFromUrl\(\)/)
 		assert.match(teamPoints, /teamPath = pathname\.match/)
 		assert.match(teamPoints, /followAnchor: !hasUsableExplicitGameweek/)
+		assert.match(teamPoints, /setGameweekAnchorFollowing\(!hasUsableExplicitGameweek\)/)
+		assert.match(teamPoints, /refreshCurrentGameweek\(\)/)
 		assert.match(teamPoints, /reconciledGameweekRef/)
 		assert.match(teamPoints, /contentGameweek === targetGameweek/)
 		assert.match(teamPoints, /livePoints\.changeGameweek\(gameweek\)/)
 		assert.match(teamPoints, /onGameweekChange=\{changeGameweek\}/)
 		assert.match(livePointsHook, /interface ChangeGameweekOptions/)
 		assert.match(livePointsHook, /followsAnchorRef\.current = options\?\.followAnchor \?\? false/)
+		assert.match(livePointsHook, /const refreshCurrentGameweek = useCallback/)
+		assert.match(livePointsHook, /const setGameweekAnchorFollowing = useCallback/)
 		assert.ok(
 			teamPoints.indexOf('livePoints.changeGameweek(gameweek)') <
 				teamPoints.indexOf('window.history.replaceState(')

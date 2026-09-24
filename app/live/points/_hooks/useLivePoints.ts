@@ -681,6 +681,17 @@ export function useLivePoints({
 		]
 	)
 
+	const setGameweekAnchorFollowing = useCallback((followAnchor: boolean) => {
+		followsAnchorRef.current = followAnchor
+	}, [])
+	const refreshCurrentGameweek = useCallback(async () => {
+		await refreshOfficialSyncStateForCurrentEvent(
+			currentGameweekRef.current,
+			gameweekSelectionRef.current
+		)
+		return currentGameweekRef.current
+	}, [refreshOfficialSyncStateForCurrentEvent])
+
 	const refresh = useCallback(async () => {
 		if (selectedGameweek !== undefined) {
 			if (readyMeasurementMode === 'recovery') {
@@ -987,8 +998,10 @@ export function useLivePoints({
 		selectedGameweek,
 		snapshot,
 		setEntryIdInput,
+		setGameweekAnchorFollowing,
 		shouldAutoRefresh,
 		startingPlayers,
-		submitEntry
+		submitEntry,
+		refreshCurrentGameweek
 	}
 }
