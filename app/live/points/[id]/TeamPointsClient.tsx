@@ -133,18 +133,21 @@ export default function TeamPointsClient({
 			} = historyStateRef.current
 			const currentGameweek =
 				refreshedCurrentGameweek ?? cachedCurrentGameweek
+			const shouldRefreshCurrentAnchor =
+				requestedValue === null ||
+				(Number.isInteger(requestedGameweek) &&
+					requestedGameweek > Math.min(38, currentGameweek))
 			if (
 				!anchorWasRefreshed &&
-				requestedValue !== null &&
-				Number.isInteger(requestedGameweek) &&
-				requestedGameweek > Math.min(38, currentGameweek) &&
+				shouldRefreshCurrentAnchor &&
 				!anchorRefreshInFlightRef.current
 			) {
 				anchorRefreshInFlightRef.current = true
 				void refreshCurrentGameweek()
-					.then(nextCurrentGameweek =>
+					.then(nextCurrentGameweek => {
+						if (nextCurrentGameweek === null) return
 						reconcileFromUrl(nextCurrentGameweek, true)
-					)
+					})
 					.finally(() => {
 						anchorRefreshInFlightRef.current = false
 					})

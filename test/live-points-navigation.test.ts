@@ -88,6 +88,8 @@ describe('live points navigation context', () => {
 		assert.match(teamPoints, /followAnchor: !hasUsableExplicitGameweek/)
 		assert.match(teamPoints, /setGameweekAnchorFollowing\(!hasUsableExplicitGameweek\)/)
 		assert.match(teamPoints, /refreshCurrentGameweek\(\)/)
+		assert.match(teamPoints, /requestedValue === null \|\|/)
+		assert.match(teamPoints, /nextCurrentGameweek === null/)
 		assert.match(teamPoints, /reconciledGameweekRef/)
 		assert.match(teamPoints, /contentGameweek === targetGameweek/)
 		assert.match(teamPoints, /livePoints\.changeGameweek\(gameweek\)/)
@@ -95,6 +97,8 @@ describe('live points navigation context', () => {
 		assert.match(livePointsHook, /interface ChangeGameweekOptions/)
 		assert.match(livePointsHook, /followsAnchorRef\.current = options\?\.followAnchor \?\? false/)
 		assert.match(livePointsHook, /const refreshCurrentGameweek = useCallback/)
+		assert.match(livePointsHook, /return refreshed \? currentGameweekRef\.current : null/)
+		assert.match(livePointsHook, /if \(selectionId !== gameweekSelectionRef\.current\) return false/)
 		assert.match(livePointsHook, /const setGameweekAnchorFollowing = useCallback/)
 		assert.ok(
 			teamPoints.indexOf('livePoints.changeGameweek(gameweek)') <

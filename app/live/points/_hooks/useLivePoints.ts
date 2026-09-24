@@ -237,7 +237,7 @@ export function useLivePoints({
 						suppressErrorLog: true
 					}
 				)
-				if (selectionId !== gameweekSelectionRef.current) return
+				if (selectionId !== gameweekSelectionRef.current) return false
 				const context = probe.liveContext
 				const observedCurrentGameweek =
 					context?.anchorEventId ?? currentGameweekRef.current
@@ -262,8 +262,9 @@ export function useLivePoints({
 				setIsOfficialUpdating(
 					observedOfficialUpdating || officialSyncPendingRef.current
 				)
+				return true
 			} catch {
-				if (selectionId !== gameweekSelectionRef.current) return
+				if (selectionId !== gameweekSelectionRef.current) return false
 				// A failed lifecycle probe must not strand a newly selected current
 				// event with polling disabled. Keep sync pending so the next heartbeat
 				// can re-probe instead of requiring a manual reload.
@@ -273,6 +274,7 @@ export function useLivePoints({
 				officialSyncPendingRef.current = shouldKeepSyncPending
 				setIsOfficialSyncPending(shouldKeepSyncPending)
 				setIsOfficialUpdating(shouldKeepSyncPending)
+				return false
 			}
 		},
 		[]
@@ -685,11 +687,11 @@ export function useLivePoints({
 		followsAnchorRef.current = followAnchor
 	}, [])
 	const refreshCurrentGameweek = useCallback(async () => {
-		await refreshOfficialSyncStateForCurrentEvent(
+		const refreshed = await refreshOfficialSyncStateForCurrentEvent(
 			currentGameweekRef.current,
 			gameweekSelectionRef.current
 		)
-		return currentGameweekRef.current
+		return refreshed ? currentGameweekRef.current : null
 	}, [refreshOfficialSyncStateForCurrentEvent])
 
 	const refresh = useCallback(async () => {
