@@ -196,7 +196,7 @@ export default function TeamPointsClient({
 							return
 						}
 						anchorRefreshRetryCountRef.current = 0
-							reconcileFromUrl(
+						reconcileFromUrl(
 								refreshResult.gameweek,
 								true,
 								false,
