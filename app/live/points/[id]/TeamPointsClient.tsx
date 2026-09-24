@@ -72,10 +72,13 @@ export default function TeamPointsClient({
 	const setGameweekAnchorFollowing = livePoints.setGameweekAnchorFollowing
 	const historyStateRef = useRef({
 		currentGameweek: livePoints.currentGameweek,
+		currentSeason: livePoints.currentSeason,
 		isLoading: livePoints.isLoading,
 		liveDataEvent: livePoints.liveData?.event,
+		liveDataSeason: livePoints.liveData?.snapshot?.season,
 		selectedGameweek: livePoints.selectedGameweek,
-		snapshotEventId: livePoints.snapshot?.eventId
+		snapshotEventId: livePoints.snapshot?.eventId,
+		snapshotSeason: livePoints.snapshot?.season
 	})
 	const {
 		overall,
@@ -98,10 +101,13 @@ export default function TeamPointsClient({
 	useEffect(() => {
 		historyStateRef.current = {
 			currentGameweek: livePoints.currentGameweek,
+			currentSeason: livePoints.currentSeason,
 			isLoading: livePoints.isLoading,
 			liveDataEvent: livePoints.liveData?.event,
+			liveDataSeason: livePoints.liveData?.snapshot?.season,
 			selectedGameweek: livePoints.selectedGameweek,
-			snapshotEventId: livePoints.snapshot?.eventId
+			snapshotEventId: livePoints.snapshot?.eventId,
+			snapshotSeason: livePoints.snapshot?.season
 		}
 		const reconciled = reconciledGameweekRef.current
 		if (!reconciled) return
@@ -118,17 +124,21 @@ export default function TeamPointsClient({
 	}, [
 		entryId,
 		livePoints.currentGameweek,
+		livePoints.currentSeason,
 		livePoints.isLoading,
 		livePoints.liveData?.event,
+		livePoints.liveData?.snapshot?.season,
 		livePoints.selectedGameweek,
-		livePoints.snapshot?.eventId
+		livePoints.snapshot?.eventId,
+		livePoints.snapshot?.season
 	])
 	useEffect(() => {
 		let active = true
 		const reconcileFromUrl = (
 			refreshedCurrentGameweek?: number,
 			anchorWasRefreshed = false,
-			fromAnchorRefreshRetry = false
+			fromAnchorRefreshRetry = false,
+			refreshedSeason?: string | null
 		) => {
 			if (!active) return
 			if (!fromAnchorRefreshRetry) {
@@ -147,13 +157,17 @@ export default function TeamPointsClient({
 			const requestedGameweek = Number(requestedValue)
 			const {
 				currentGameweek: cachedCurrentGameweek,
+				currentSeason: cachedCurrentSeason,
 				isLoading,
 				liveDataEvent,
+				liveDataSeason,
 				selectedGameweek,
-				snapshotEventId
+				snapshotEventId,
+				snapshotSeason
 			} = historyStateRef.current
 			const currentGameweek =
 				refreshedCurrentGameweek ?? cachedCurrentGameweek
+			const currentSeason = refreshedSeason ?? cachedCurrentSeason
 			const shouldRefreshCurrentAnchor = !anchorWasRefreshed
 			if (
 				shouldRefreshCurrentAnchor &&
@@ -182,7 +196,12 @@ export default function TeamPointsClient({
 							return
 						}
 						anchorRefreshRetryCountRef.current = 0
-						reconcileFromUrl(refreshResult.gameweek, true)
+							reconcileFromUrl(
+								refreshResult.gameweek,
+								true,
+								false,
+								refreshResult.season
+							)
 					})
 					.finally(() => {
 						anchorRefreshInFlightRef.current = false
@@ -201,9 +220,13 @@ export default function TeamPointsClient({
 			if (!Number.isInteger(targetGameweek) || targetGameweek <= 0) return
 
 			const contentGameweek = liveDataEvent ?? snapshotEventId
+			const contentSeason = liveDataSeason ?? snapshotSeason
+			const seasonAligned =
+				currentSeason === null || contentSeason === currentSeason
 			const alreadyAligned =
 				selectedGameweek === targetGameweek &&
-				(isLoading || contentGameweek === targetGameweek)
+				(isLoading || contentGameweek === targetGameweek) &&
+				(isLoading || seasonAligned)
 			setGameweekAnchorFollowing(!hasUsableExplicitGameweek)
 			if (alreadyAligned) return
 

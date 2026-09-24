@@ -90,11 +90,35 @@ interface ChangeGameweekOptions {
 interface LiveContextRefreshResult {
 	refreshed: boolean
 	retryAfterSeconds: number | null
+	season: string | null
 }
 
 interface CurrentGameweekRefreshResult {
 	gameweek: number | null
 	retryAfterSeconds: number | null
+	season: string | null
+}
+
+/**
+ * FPL season labels are normally `2627`, but some server-side sources use
+ * `2026/27`. Compare their starting season year so an older fallback cannot
+ * move an already accepted anchor back across a season boundary.
+ */
+const compareLivePointSeasons = (left: string, right: string): number => {
+	const seasonStart = (value: string): number | null => {
+		const normalized = value.trim()
+		const longLabel = normalized.match(/^(20\d{2})\D*(\d{2})$/)
+		if (longLabel) return Number(longLabel[1])
+		const compactLabel = normalized.match(/^(\d{2})(\d{2})$/)
+		if (compactLabel) return 2000 + Number(compactLabel[1])
+		return null
+	}
+	const leftStart = seasonStart(left)
+	const rightStart = seasonStart(right)
+	if (leftStart !== null && rightStart !== null) {
+		return leftStart - rightStart
+	}
+	return left.localeCompare(right)
 }
 
 export function useLivePoints({
@@ -136,6 +160,9 @@ export function useLivePoints({
 	)
 	const followsAnchorRef = useRef(initialSelectedGameweek == null)
 	const [currentGameweek, setCurrentGameweek] = useState<number>(initialEventId)
+	const [currentSeason, setCurrentSeason] = useState<string | null>(
+		initialSeason ?? initialLiveSnapshot?.season ?? initialLiveData?.snapshot?.season ?? null
+	)
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
 		initialSelectedGameweek ?? seededEventId
 	)
@@ -255,16 +282,35 @@ export function useLivePoints({
 					}
 				)
 				if (selectionId !== gameweekSelectionRef.current) {
-					return { refreshed: false, retryAfterSeconds: null }
+					return { refreshed: false, retryAfterSeconds: null, season: null }
 				}
 				const context = probe.liveContext
+				const coreContext = probe.coreEventContext
 				const observedCurrentGameweek =
-					context?.anchorEventId ?? currentGameweekRef.current
-				const observedSeason = context?.season ?? null
-				const seasonChanged =
-					observedSeason !== null &&
-					currentSeasonRef.current !== null &&
-					observedSeason !== currentSeasonRef.current
+					context?.anchorEventId ?? coreContext?.currentEventId ?? null
+				const observedSeason = context?.season ?? coreContext?.season ?? null
+				if (observedCurrentGameweek === null || observedSeason === null) {
+					return {
+						refreshed: false,
+						retryAfterSeconds: null,
+						season: null
+					}
+				}
+				const currentSeasonValue = currentSeasonRef.current
+				const seasonOrder =
+					currentSeasonValue === null
+						? 1
+						: compareLivePointSeasons(observedSeason, currentSeasonValue)
+				if (seasonOrder < 0) {
+					// Redis/process fallback may still expose the prior season. It
+					// cannot replace an accepted newer season or its anchor.
+					return {
+						refreshed: false,
+						retryAfterSeconds: null,
+						season: null
+					}
+				}
+				const seasonChanged = seasonOrder > 0
 				// A context response can come from an older fallback publication. The
 				// accepted client anchor is monotonic within a season. A season change
 				// resets the comparison because GW 1 follows GW 38.
@@ -274,10 +320,13 @@ export function useLivePoints({
 				const selectedIsCurrent = eventId === acceptedCurrentGameweek
 				const observedOfficialUpdating =
 					selectedIsCurrent && isOfficialLiveUpdatingContext(context)
-				const hasAuthoritativeCurrentEvent = context?.anchorEventId != null
+				const hasAuthoritativeCurrentEvent = observedCurrentGameweek !== null
 				const selectedSnapshotIsMissing =
 					!snapshotRef.current || snapshotRef.current.eventId !== eventId
-				if (observedSeason !== null) currentSeasonRef.current = observedSeason
+				if (currentSeasonRef.current !== observedSeason) {
+					currentSeasonRef.current = observedSeason
+					setCurrentSeason(observedSeason)
+				}
 				currentGameweekRef.current = acceptedCurrentGameweek
 				setCurrentGameweek(current =>
 					current === acceptedCurrentGameweek
@@ -295,17 +344,21 @@ export function useLivePoints({
 						observedOfficialUpdating || officialSyncPendingRef.current
 					)
 				}
-				return { refreshed: true, retryAfterSeconds: null }
+				return {
+					refreshed: true,
+					retryAfterSeconds: null,
+					season: currentSeasonRef.current
+				}
 			} catch (refreshError) {
 				if (selectionId !== gameweekSelectionRef.current) {
-					return { refreshed: false, retryAfterSeconds: null }
+					return { refreshed: false, retryAfterSeconds: null, season: null }
 				}
 				const retryAfterSeconds =
 					refreshError instanceof GraphQLRequestError
 						? refreshError.retryAfterSeconds
 						: null
 				if (!updateSyncState) {
-					return { refreshed: false, retryAfterSeconds }
+					return { refreshed: false, retryAfterSeconds, season: null }
 				}
 				// A failed lifecycle probe must not strand a newly selected current
 				// event with polling disabled. Keep sync pending so the next heartbeat
@@ -316,7 +369,7 @@ export function useLivePoints({
 				officialSyncPendingRef.current = shouldKeepSyncPending
 				setIsOfficialSyncPending(shouldKeepSyncPending)
 				setIsOfficialUpdating(shouldKeepSyncPending)
-				return { refreshed: false, retryAfterSeconds }
+				return { refreshed: false, retryAfterSeconds, season: null }
 			}
 		},
 		[]
@@ -736,7 +789,8 @@ export function useLivePoints({
 		)
 		return {
 			gameweek: result.refreshed ? currentGameweekRef.current : null,
-			retryAfterSeconds: result.retryAfterSeconds
+			retryAfterSeconds: result.retryAfterSeconds,
+			season: result.season
 		}
 	}, [refreshOfficialSyncStateForCurrentEvent])
 
@@ -877,6 +931,7 @@ export function useLivePoints({
 		currentGameweekRef.current = initialEventId
 		currentSeasonRef.current =
 			initialSeason ?? initialLiveSnapshot?.season ?? initialLiveData?.snapshot?.season ?? null
+		setCurrentSeason(currentSeasonRef.current)
 		setCurrentGameweek(initialEventId)
 		const officialUpdatingForSelection =
 			initialOfficialUpdating && nextSelectedGameweek === initialEventId
@@ -1039,6 +1094,7 @@ export function useLivePoints({
 		benchPlayers,
 		changeGameweek,
 		currentGameweek,
+		currentSeason,
 		entryIdInput,
 		error,
 		isLoading,
