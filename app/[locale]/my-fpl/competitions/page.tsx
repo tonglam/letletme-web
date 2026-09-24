@@ -26,7 +26,10 @@ import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
 import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
-import { selectTournamentReviewEventId } from '@/app/me/tournament/_lib/tournament-review-v2'
+import {
+	selectTournamentReviewEventId,
+	TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS
+} from '@/app/me/tournament/_lib/tournament-review-v2'
 
 export const dynamic = 'force-dynamic'
 
@@ -146,7 +149,8 @@ async function hydrateSeasonSeed(
 			| 'POINTS_TRAJECTORIES'
 			| 'H2H_STANDINGS'
 			| 'H2H_FIXTURES'
-			| 'KNOCKOUT_BRACKET'
+			| 'KNOCKOUT_BRACKET',
+		first = 100
 	) =>
 		executeServerQueryWithSession<MyTournamentSeasonSectionResponse>(
 			session,
@@ -156,7 +160,7 @@ async function hydrateSeasonSeed(
 				throughEventId,
 				phaseId: phase.phaseId,
 				section,
-				first: 100,
+				first,
 				after: null,
 				revision: phase.revision,
 				semanticSha256: phase.semanticSha256
@@ -171,7 +175,14 @@ async function hydrateSeasonSeed(
 				: null
 	const [primaryResult, optionalResult] = await Promise.allSettled([
 		fetchSection(sectionForFormat(phase.format)),
-		optionalSection ? fetchSection(optionalSection) : Promise.resolve(null)
+		optionalSection
+			? fetchSection(
+					optionalSection,
+					phase.format === 'POINTS'
+						? TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS
+						: 100
+				)
+			: Promise.resolve(null)
 	])
 	if (primaryResult.status === 'rejected')
 		return { review, sections: [], error: primaryResult.reason }
