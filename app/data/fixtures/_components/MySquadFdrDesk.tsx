@@ -582,6 +582,7 @@ export function MySquadFdrDesk({
 	const [fullSeasonScheduleState, setFullSeasonScheduleState] = useState<
 		'idle' | 'loading' | 'ready' | 'error'
 	>('idle')
+	const selectedPlayerTriggerRef = useRef<HTMLElement | null>(null)
 	const fullSchedulePromiseRef =
 		useRef<Promise<FullSeasonSchedule | null> | null>(null)
 	const fullScheduleAbortRef = useRef<AbortController | null>(null)
@@ -702,9 +703,10 @@ export function MySquadFdrDesk({
 	}, [])
 
 	const handlePitchPlayerClick = useCallback(
-		(playerId: string) => {
+		(playerId: string, opener: HTMLElement) => {
 			const row = pitchData.rowById.get(playerId)
 			if (!row) return
+			selectedPlayerTriggerRef.current = opener
 			setSelectedRow(row)
 			void loadFullSeasonSchedule()
 		},
@@ -816,7 +818,17 @@ export function MySquadFdrDesk({
 					if (!open) setSelectedRow(null)
 				}}
 			>
-				<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overscroll-contain p-3 sm:max-w-2xl sm:p-4">
+				<DialogContent
+					onCloseAutoFocus={event => {
+						const opener = selectedPlayerTriggerRef.current
+						if (opener?.isConnected) {
+							event.preventDefault()
+							opener.focus()
+						}
+						selectedPlayerTriggerRef.current = null
+					}}
+					className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overscroll-contain p-3 sm:max-w-2xl sm:p-4"
+				>
 					{selectedRow ? (
 						<FullSeasonSchedule
 							key={rowId(selectedRow)}
