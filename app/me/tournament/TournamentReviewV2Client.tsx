@@ -35,6 +35,7 @@ import {
 import { buildTournamentStatsQueryString, parseTournamentStatsView } from './_lib/tournament-stats-url'
 import {
 	mergeTournamentReviewEventIds,
+	TOURNAMENT_REVIEW_INITIAL_ROWS,
 	TOURNAMENT_REVIEW_TRAJECTORY_PREVIEW_ROWS,
 	tournamentReviewPointsRow,
 	tournamentReviewPointsSummary,
@@ -200,7 +201,7 @@ async function fetchSeasonSection(
 	tournamentId: number,
 	throughEventId: number,
 	phase: MyTournamentSeasonReview['phases'][number],
-	first = 100,
+	first = TOURNAMENT_REVIEW_INITIAL_ROWS,
 	after: string | null = null,
 	sectionOverride?:
 		| 'POINTS_STANDINGS'
@@ -1090,7 +1091,7 @@ export default function TournamentReviewV2Client({
 					tournamentId,
 					throughEventId,
 					phase,
-					100,
+					TOURNAMENT_REVIEW_INITIAL_ROWS,
 					null,
 					'H2H_FIXTURES'
 				)
