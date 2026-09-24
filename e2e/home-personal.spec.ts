@@ -1060,6 +1060,10 @@ const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/c
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
 const failFirstSections = (recoveryMode === 'retry-button' || recoveryMode === 'tab-reentry')
+const pointsSectionOperation = 'GetMyTournamentSeasonReviewPointsSection'
+const isSeasonSectionOperation = (query: string | undefined) =>
+	query?.includes(pointsSectionOperation) === true ||
+	query?.includes('GetMyTournamentSeasonReviewSection') === true
 test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -1083,7 +1087,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: recoveryMode === 'search-empty', pageInfo, edges: [{ cursor: '77', node: { tournamentId: reviewTournamentId, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
 		{ operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: reviewTournamentId, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
 		{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: { format: 'POINTS', points } } } },
-		...['POINTS_STANDINGS', 'POINTS_TRAJECTORIES'].map(section => ({ operation: 'GetMyTournamentSeasonReviewSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: reviewTournamentId, throughEventId: 4, section, points, h2h: null, knockout: null, pageInfo } } }))
+		...['POINTS_STANDINGS', 'POINTS_TRAJECTORIES'].map(section => ({ operation: pointsSectionOperation, variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: reviewTournamentId, throughEventId: 4, section, points, h2h: null, knockout: null, pageInfo } } }))
 	]
 	let releaseSections!: () => void
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
@@ -1105,7 +1109,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await addSessionCookie(page, session.cookie)
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
-			if (!payload.query?.includes('GetMyTournamentSeasonReviewSection')) return route.continue()
+			if (!isSeasonSectionOperation(payload.query)) return route.continue()
 			if (recoveryMode === 'tournament-race' && payload.variables.tournamentId === 78) {
 				secondSectionRequests += 1
 				expect(payload.variables).toMatchObject({ tournamentId: 78, throughEventId: 4, phaseId: 'points-2', revision: '2', semanticSha256: 'b'.repeat(64) })
@@ -1992,7 +1996,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			expect(readyReports).toBe(0)
 			expect(sectionRequests).toBe(0)
 			const seeded = await (await fetch(fixture)).json()
-			expect(seeded.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(2)
+			expect(seeded.requests.filter((item: { operation: string }) => item.operation === pointsSectionOperation)).toHaveLength(2)
 			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
 			releaseSections()
 			await retry.click()
@@ -2011,7 +2015,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await expect(reviewReady).toHaveAttribute('data-review-revision', '1')
 		await expect.poll(() => readyReports).toBe(1)
 		const observations = await (await fetch(fixture)).json()
-		expect(observations.requests.filter((item: { operation: string }) => item.operation === 'GetMyTournamentSeasonReviewSection')).toHaveLength(0)
+		expect(observations.requests.filter((item: { operation: string }) => item.operation === pointsSectionOperation)).toHaveLength(0)
 		page.on('request', request => {
 			const url = new URL(request.url())
 			if (url.pathname === routePath && url.searchParams.has('_rsc')) viewNavigationRequests += 1

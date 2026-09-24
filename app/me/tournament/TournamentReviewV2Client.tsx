@@ -16,6 +16,7 @@ import {
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
+	GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION,
 	GET_MY_TOURNAMENT_SEASON_REVIEW,
 	GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
 	type MyTournamentGameweekReview,
@@ -209,13 +210,18 @@ async function fetchSeasonSection(
 		| 'KNOCKOUT_BRACKET'
 ): Promise<SeasonSectionData | null> {
 	if (!phase.revision || !phase.semanticSha256) return null
+	const sectionKey = sectionOverride ?? sectionForFormat(phase.format)
+	const query =
+		sectionKey === 'POINTS_STANDINGS' || sectionKey === 'POINTS_TRAJECTORIES'
+			? GET_MY_TOURNAMENT_SEASON_REVIEW_POINTS_SECTION
+			: GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION
 	const section = await executeQuery<MyTournamentSeasonSectionResponse>(
-		GET_MY_TOURNAMENT_SEASON_REVIEW_SECTION,
+		query,
 		{
 			tournamentId,
 			throughEventId,
 			phaseId: phase.phaseId,
-			section: sectionOverride ?? sectionForFormat(phase.format),
+			section: sectionKey,
 			first,
 			after,
 			revision: phase.revision,
