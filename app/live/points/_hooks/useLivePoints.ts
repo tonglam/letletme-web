@@ -86,6 +86,16 @@ interface ChangeGameweekOptions {
 	followAnchor?: boolean
 }
 
+interface LiveContextRefreshResult {
+	refreshed: boolean
+	retryAfterSeconds: number | null
+}
+
+interface CurrentGameweekRefreshResult {
+	gameweek: number | null
+	retryAfterSeconds: number | null
+}
+
 export function useLivePoints({
 	initialEntryId,
 	initialEventId,
@@ -226,8 +236,10 @@ export function useLivePoints({
 	const refreshOfficialSyncStateForCurrentEvent = useCallback(
 		async (
 			eventId: number,
-			selectionId = gameweekSelectionRef.current
-		) => {
+			selectionId = gameweekSelectionRef.current,
+			options: { updateSyncState?: boolean } = {}
+		): Promise<LiveContextRefreshResult> => {
+			const updateSyncState = options.updateSyncState !== false
 			try {
 				const probe = await executeQuery<LiveContextResponse>(
 					GET_LIVE_CONTEXT,
@@ -237,34 +249,54 @@ export function useLivePoints({
 						suppressErrorLog: true
 					}
 				)
-				if (selectionId !== gameweekSelectionRef.current) return false
+				if (selectionId !== gameweekSelectionRef.current) {
+					return { refreshed: false, retryAfterSeconds: null }
+				}
 				const context = probe.liveContext
 				const observedCurrentGameweek =
 					context?.anchorEventId ?? currentGameweekRef.current
-				const selectedIsCurrent = eventId === observedCurrentGameweek
+				// A context response can come from an older fallback publication. The
+				// accepted client anchor is monotonic for this session, so an older
+				// response may not move the page backwards.
+				const acceptedCurrentGameweek = Math.max(
+					currentGameweekRef.current,
+					observedCurrentGameweek
+				)
+				const selectedIsCurrent = eventId === acceptedCurrentGameweek
 				const observedOfficialUpdating =
 					selectedIsCurrent && isOfficialLiveUpdatingContext(context)
 				const hasAuthoritativeCurrentEvent = context?.anchorEventId != null
 				const selectedSnapshotIsMissing =
 					!snapshotRef.current || snapshotRef.current.eventId !== eventId
-				currentGameweekRef.current = observedCurrentGameweek
+				currentGameweekRef.current = acceptedCurrentGameweek
 				setCurrentGameweek(current =>
-					current === observedCurrentGameweek
+					current === acceptedCurrentGameweek
 						? current
-						: observedCurrentGameweek
+						: acceptedCurrentGameweek
 				)
-				officialUpdatingRef.current = observedOfficialUpdating
-				officialSyncPendingRef.current =
-					selectedIsCurrent &&
-					selectedSnapshotIsMissing &&
-					(!hasAuthoritativeCurrentEvent || observedOfficialUpdating)
-				setIsOfficialSyncPending(officialSyncPendingRef.current)
-				setIsOfficialUpdating(
-					observedOfficialUpdating || officialSyncPendingRef.current
-				)
-				return true
-			} catch {
-				if (selectionId !== gameweekSelectionRef.current) return false
+				if (updateSyncState) {
+					officialUpdatingRef.current = observedOfficialUpdating
+					officialSyncPendingRef.current =
+						selectedIsCurrent &&
+						selectedSnapshotIsMissing &&
+						(!hasAuthoritativeCurrentEvent || observedOfficialUpdating)
+					setIsOfficialSyncPending(officialSyncPendingRef.current)
+					setIsOfficialUpdating(
+						observedOfficialUpdating || officialSyncPendingRef.current
+					)
+				}
+				return { refreshed: true, retryAfterSeconds: null }
+			} catch (refreshError) {
+				if (selectionId !== gameweekSelectionRef.current) {
+					return { refreshed: false, retryAfterSeconds: null }
+				}
+				const retryAfterSeconds =
+					refreshError instanceof GraphQLRequestError
+						? refreshError.retryAfterSeconds
+						: null
+				if (!updateSyncState) {
+					return { refreshed: false, retryAfterSeconds }
+				}
 				// A failed lifecycle probe must not strand a newly selected current
 				// event with polling disabled. Keep sync pending so the next heartbeat
 				// can re-probe instead of requiring a manual reload.
@@ -274,7 +306,7 @@ export function useLivePoints({
 				officialSyncPendingRef.current = shouldKeepSyncPending
 				setIsOfficialSyncPending(shouldKeepSyncPending)
 				setIsOfficialUpdating(shouldKeepSyncPending)
-				return false
+				return { refreshed: false, retryAfterSeconds }
 			}
 		},
 		[]
@@ -687,11 +719,15 @@ export function useLivePoints({
 		followsAnchorRef.current = followAnchor
 	}, [])
 	const refreshCurrentGameweek = useCallback(async () => {
-		const refreshed = await refreshOfficialSyncStateForCurrentEvent(
+		const result = await refreshOfficialSyncStateForCurrentEvent(
 			currentGameweekRef.current,
-			gameweekSelectionRef.current
+			gameweekSelectionRef.current,
+			{ updateSyncState: false }
 		)
-		return refreshed ? currentGameweekRef.current : null
+		return {
+			gameweek: result.refreshed ? currentGameweekRef.current : null,
+			retryAfterSeconds: result.retryAfterSeconds
+		}
 	}, [refreshOfficialSyncStateForCurrentEvent])
 
 	const refresh = useCallback(async () => {

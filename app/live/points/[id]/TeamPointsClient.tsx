@@ -156,22 +156,27 @@ export default function TeamPointsClient({
 			) {
 				anchorRefreshInFlightRef.current = true
 				void refreshCurrentGameweek()
-					.then(nextCurrentGameweek => {
-						if (nextCurrentGameweek === null) {
+					.then(refreshResult => {
+						if (refreshResult.gameweek === null) {
 							const retryDelay =
 								ANCHOR_REFRESH_RETRY_DELAYS_MS[
 									anchorRefreshRetryCountRef.current
 								]
 							if (retryDelay === undefined) return
+							const cooldownDelay =
+								refreshResult.retryAfterSeconds != null &&
+								refreshResult.retryAfterSeconds > 0
+									? refreshResult.retryAfterSeconds * 1000
+									: 0
 							anchorRefreshRetryCountRef.current += 1
 							anchorRefreshRetryTimerRef.current = window.setTimeout(() => {
 								anchorRefreshRetryTimerRef.current = null
 								reconcileFromUrl(undefined, false, true)
-							}, retryDelay)
+							}, Math.max(retryDelay, cooldownDelay))
 							return
 						}
 						anchorRefreshRetryCountRef.current = 0
-						reconcileFromUrl(nextCurrentGameweek, true)
+						reconcileFromUrl(refreshResult.gameweek, true)
 					})
 					.finally(() => {
 						anchorRefreshInFlightRef.current = false
