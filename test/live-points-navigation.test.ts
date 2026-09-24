@@ -76,8 +76,9 @@ describe('live points navigation context', () => {
 	it('keeps the address bar aligned with the displayed gameweek', () => {
 		assert.match(teamPoints, /const changeGameweek = \(gameweek: number\)/)
 		assert.match(teamPoints, /nextUrl\.searchParams\.set\('gw', String\(gameweek\)\)/)
-		assert.match(teamPoints, /useSearchParams/)
 		assert.match(teamPoints, /window\.history\.replaceState\(/)
+		assert.match(teamPoints, /window\.addEventListener\('popstate'/)
+		assert.match(teamPoints, /new URL\(window\.location\.href\)/)
 		assert.match(teamPoints, /reconciledGameweekRef/)
 		assert.match(teamPoints, /contentGameweek === targetGameweek/)
 		assert.match(teamPoints, /livePoints\.changeGameweek\(gameweek\)/)
