@@ -21,6 +21,8 @@ import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
 import { useEntryOverall } from '../_hooks/useEntryOverall'
 
+const ANCHOR_REFRESH_RETRY_DELAYS_MS = [1000, 2000] as const
+
 interface TeamPointsClientProps {
 	entryId: number
 	tournamentId?: string
@@ -51,6 +53,8 @@ export default function TeamPointsClient({
 	const t = useTranslations('LivePoints')
 	const reconciledGameweekRef = useRef<string | null>(null)
 	const anchorRefreshInFlightRef = useRef(false)
+	const anchorRefreshRetryTimerRef = useRef<number | null>(null)
+	const anchorRefreshRetryCountRef = useRef(0)
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
@@ -60,6 +64,7 @@ export default function TeamPointsClient({
 		isOfficialUpdating
 	})
 	const reconcileGameweek = livePoints.changeGameweek
+	const reconcileGameweekRef = useRef(reconcileGameweek)
 	const refreshCurrentGameweek = livePoints.refreshCurrentGameweek
 	const setGameweekAnchorFollowing = livePoints.setGameweekAnchorFollowing
 	const historyStateRef = useRef({
@@ -84,6 +89,9 @@ export default function TeamPointsClient({
 		initialEntryLookupStatus,
 		initialEntryPersistenceState
 	})
+	useEffect(() => {
+		reconcileGameweekRef.current = reconcileGameweek
+	}, [reconcileGameweek])
 	useEffect(() => {
 		historyStateRef.current = {
 			currentGameweek: livePoints.currentGameweek,
@@ -115,8 +123,16 @@ export default function TeamPointsClient({
 	useEffect(() => {
 		const reconcileFromUrl = (
 			refreshedCurrentGameweek?: number,
-			anchorWasRefreshed = false
+			anchorWasRefreshed = false,
+			fromAnchorRefreshRetry = false
 		) => {
+			if (!fromAnchorRefreshRetry) {
+				if (anchorRefreshRetryTimerRef.current !== null) {
+					window.clearTimeout(anchorRefreshRetryTimerRef.current)
+					anchorRefreshRetryTimerRef.current = null
+				}
+				anchorRefreshRetryCountRef.current = 0
+			}
 			const pathname = window.location.pathname.replace(/\/+$/, '')
 			const teamPath = pathname.match(/(?:^|\/)live\/points\/(\d+)$/)
 			if (!teamPath || Number(teamPath[1]) !== entryId) return
@@ -133,19 +149,28 @@ export default function TeamPointsClient({
 			} = historyStateRef.current
 			const currentGameweek =
 				refreshedCurrentGameweek ?? cachedCurrentGameweek
-			const shouldRefreshCurrentAnchor =
-				requestedValue === null ||
-				(Number.isInteger(requestedGameweek) &&
-					requestedGameweek > Math.min(38, currentGameweek))
+			const shouldRefreshCurrentAnchor = !anchorWasRefreshed
 			if (
-				!anchorWasRefreshed &&
 				shouldRefreshCurrentAnchor &&
 				!anchorRefreshInFlightRef.current
 			) {
 				anchorRefreshInFlightRef.current = true
 				void refreshCurrentGameweek()
 					.then(nextCurrentGameweek => {
-						if (nextCurrentGameweek === null) return
+						if (nextCurrentGameweek === null) {
+							const retryDelay =
+								ANCHOR_REFRESH_RETRY_DELAYS_MS[
+									anchorRefreshRetryCountRef.current
+								]
+							if (retryDelay === undefined) return
+							anchorRefreshRetryCountRef.current += 1
+							anchorRefreshRetryTimerRef.current = window.setTimeout(() => {
+								anchorRefreshRetryTimerRef.current = null
+								reconcileFromUrl(undefined, false, true)
+							}, retryDelay)
+							return
+						}
+						anchorRefreshRetryCountRef.current = 0
 						reconcileFromUrl(nextCurrentGameweek, true)
 					})
 					.finally(() => {
@@ -174,7 +199,7 @@ export default function TeamPointsClient({
 			const targetKey = `${entryId}:${targetGameweek}`
 			if (reconciledGameweekRef.current === targetKey) return
 			reconciledGameweekRef.current = targetKey
-			reconcileGameweek(targetGameweek, {
+			reconcileGameweekRef.current(targetGameweek, {
 				followAnchor: !hasUsableExplicitGameweek
 			})
 		}
@@ -182,10 +207,15 @@ export default function TeamPointsClient({
 		reconcileFromUrl()
 		const handlePopState = () => reconcileFromUrl()
 		window.addEventListener('popstate', handlePopState)
-		return () => window.removeEventListener('popstate', handlePopState)
+		return () => {
+			window.removeEventListener('popstate', handlePopState)
+			if (anchorRefreshRetryTimerRef.current !== null) {
+				window.clearTimeout(anchorRefreshRetryTimerRef.current)
+				anchorRefreshRetryTimerRef.current = null
+			}
+		}
 	}, [
 		entryId,
-		reconcileGameweek,
 		refreshCurrentGameweek,
 		setGameweekAnchorFollowing
 	])
