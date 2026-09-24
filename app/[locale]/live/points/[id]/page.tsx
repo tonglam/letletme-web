@@ -191,6 +191,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	return (
 		<TeamPointsClient
 			entryId={entryId}
+			initialSeason={liveContext?.season ?? presentation.season ?? undefined}
 			tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
 			from={from === 'home' ? 'home' : undefined}
 			initialEventId={currentEventId}

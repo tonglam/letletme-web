@@ -20,6 +20,10 @@ const pitchDetailHook = readFileSync(
 	'app/live/points/_hooks/useLivePlayerDetail.ts',
 	'utf8'
 )
+const livePointsHook = readFileSync(
+	'app/live/points/_hooks/useLivePoints.ts',
+	'utf8'
+)
 const tournamentReview = readFileSync(
 	'app/me/tournament/TournamentReviewV2Client.tsx',
 	'utf8'
@@ -77,8 +81,46 @@ describe('live points navigation context', () => {
 		assert.match(teamPoints, /const changeGameweek = \(gameweek: number\)/)
 		assert.match(teamPoints, /nextUrl\.searchParams\.set\('gw', String\(gameweek\)\)/)
 		assert.match(teamPoints, /window\.history\.replaceState\(/)
+		assert.match(teamPoints, /window\.addEventListener\('popstate'/)
+		assert.match(teamPoints, /new URL\(window\.location\.href\)/)
+		assert.match(teamPoints, /reconcileFromUrl\(\)/)
+		assert.match(teamPoints, /teamPath = pathname\.match/)
+		assert.match(teamPoints, /followAnchor: !hasUsableExplicitGameweek/)
+		assert.match(teamPoints, /setGameweekAnchorFollowing\(!hasUsableExplicitGameweek\)/)
+		assert.match(teamPoints, /refreshCurrentGameweek\(\)/)
+		assert.match(teamPoints, /const shouldRefreshCurrentAnchor = !anchorWasRefreshed/)
+		assert.match(teamPoints, /refreshResult\.gameweek === null/)
+		assert.match(teamPoints, /ANCHOR_REFRESH_RETRY_DELAYS_MS/)
+		assert.match(teamPoints, /reconcileFromUrl\(undefined, false, true\)/)
+		assert.match(teamPoints, /refreshResult\.retryAfterSeconds/)
+		assert.match(teamPoints, /reconciledGameweekRef/)
+		assert.match(teamPoints, /const reconcileGameweekRef = useRef\(reconcileGameweek\)/)
+		assert.match(teamPoints, /reconcileGameweekRef\.current\(targetGameweek/)
+		assert.match(teamPoints, /contentGameweek === targetGameweek/)
 		assert.match(teamPoints, /livePoints\.changeGameweek\(gameweek\)/)
 		assert.match(teamPoints, /onGameweekChange=\{changeGameweek\}/)
+		assert.match(livePointsHook, /interface ChangeGameweekOptions/)
+		assert.match(livePointsHook, /followsAnchorRef\.current = options\?\.followAnchor \?\? false/)
+		assert.match(livePointsHook, /const refreshCurrentGameweek = useCallback/)
+		assert.match(livePointsHook, /updateSyncState: false/)
+		assert.match(livePointsHook, /gameweek: result\.refreshed \? currentGameweekRef\.current : null/)
+		assert.match(livePointsHook, /Math\.max\(currentGameweekRef\.current/)
+		assert.match(livePointsHook, /const seasonChanged =/)
+		assert.match(livePointsHook, /currentSeasonRef\.current = observedSeason/)
+		assert.match(livePointsHook, /const coreContext = probe\.coreEventContext/)
+		assert.match(livePointsHook, /coreContext\?\.currentEventId/)
+		assert.match(livePointsHook, /compareLivePointSeasons/)
+		assert.match(livePointsHook, /if \(observedCurrentGameweek === null \|\| observedSeason === null\)/)
+		assert.match(livePointsHook, /if \(seasonOrder < 0\)/)
+		assert.match(teamPoints, /currentSeason: livePoints\.currentSeason/)
+		assert.match(teamPoints, /const seasonAligned =/)
+		assert.match(entryPage, /initialSeason=\{liveContext\?\.season/)
+		assert.match(livePointsHook, /if \(selectionId !== gameweekSelectionRef\.current\)/)
+		assert.match(livePointsHook, /const setGameweekAnchorFollowing = useCallback/)
+		assert.ok(
+			teamPoints.indexOf('livePoints.changeGameweek(gameweek)') <
+				teamPoints.indexOf('window.history.replaceState(')
+		)
 	})
 
 	it('links tournament review directly to the formal live board query', () => {
