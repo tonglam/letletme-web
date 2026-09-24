@@ -76,6 +76,17 @@ export default function TeamPointsClient({
 		await livePoints.refresh()
 	}
 
+	const changeGameweek = (gameweek: number) => {
+		const nextUrl = new URL(window.location.href)
+		nextUrl.searchParams.set('gw', String(gameweek))
+		window.history.replaceState(
+			window.history.state,
+			'',
+			`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+		)
+		livePoints.changeGameweek(gameweek)
+	}
+
 	const hasCompetitionContext = Boolean(tournamentId) && from !== 'home'
 	const backParams = new URLSearchParams()
 	if (tournamentId) backParams.set('tournamentId', tournamentId)
@@ -116,7 +127,7 @@ export default function TeamPointsClient({
 				overall={overall}
 				startingPlayers={livePoints.startingPlayers}
 				benchPlayers={livePoints.benchPlayers}
-				onGameweekChange={livePoints.changeGameweek}
+				onGameweekChange={changeGameweek}
 				onAutoRefresh={livePoints.autoRefresh}
 				onRefresh={refreshAll}
 				onEntryLookupRetry={retryEntryLookup}
