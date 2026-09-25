@@ -2117,9 +2117,18 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
 	// commits. Drain a short controlled clock window before observing that
 	// asynchronous evidence; a busy worker must not turn a ready state into a
 	// false timing failure.
-	await page.clock.runFor(100)
 	await expect.poll(
-		() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length,
+		async () => {
+			// The ready marker schedules a paint/beacon task after the DOM state
+			// commits. Keep advancing the controlled clock while the worker is
+			// under load so a late effect cannot wait forever on fake time.
+			await page.clock.runFor(50)
+			return samples.filter(
+				s =>
+					s.metricName === 'LIVE_POINTS_READY' &&
+					s.measurementKind === 'interaction'
+			).length
+		},
 		{ timeout: 5000 }
 	).toBe(1)
 	const recoverySamples = samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction')
