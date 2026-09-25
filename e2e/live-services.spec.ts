@@ -953,22 +953,31 @@ test('official-sync live points auto-refreshes without a polling label', async (
 		})
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toHaveCount(0)
+	// The entry route performs one browser-side anchor reconciliation after
+	// the server seed fails. Let that initial recovery settle before measuring
+	// the separate official-sync refresh cadence.
+	await page.waitForLoadState('networkidle')
+	const initialClientLivePointsRequests = clientLivePointsRequests
+	expect(initialClientLivePointsRequests).toBeGreaterThan(0)
 
-	// The official post-deadline sync is expected lifecycle work.  It should
+	// The official post-deadline sync is expected lifecycle work. It should
 	// recover through the cheap refresh loop without asking the user to retry.
 	if (refreshProfile === 'conserve') {
 		await page.clock.runFor(100_000)
-		expect(clientLivePointsRequests).toBe(1)
+		expect(clientLivePointsRequests).toBe(initialClientLivePointsRequests)
 	}
 	// Stop advancing as soon as polling dispatches. A single large jump can
 	// fire the fetch's 15s timeout before Chromium processes the response.
 	let advancedMs = refreshProfile === 'conserve' ? 100_000 : 0
-	while (clientLivePointsRequests < 2 && advancedMs < firstRefreshWindowMs) {
+	while (
+		clientLivePointsRequests <= initialClientLivePointsRequests &&
+		advancedMs < firstRefreshWindowMs
+	) {
 		const stepMs = Math.min(1_000, firstRefreshWindowMs - advancedMs)
 		await page.clock.runFor(stepMs)
 		advancedMs += stepMs
 	}
-	await expect.poll(() => clientLivePointsRequests).toBeGreaterThan(1)
+	await expect.poll(() => clientLivePointsRequests).toBeGreaterThan(initialClientLivePointsRequests)
 	// Dispatch is not readiness. Let queued client work run while waiting for
 	// the actual recovered team within the existing assertion timeout.
 	const pitch = page.getByRole('region', { name: /formation/ })
