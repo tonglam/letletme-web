@@ -375,6 +375,9 @@ test.describe('SSR remediation PRED03 cached board', () => {
      test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated standalone price cache')
      const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
      const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+     const liveContextSeed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-letletme-contract': 'live-points-v2' }, body: JSON.stringify({ query: 'query GetLiveContext { liveContext { producerState dataAvailability } }' }) })).json()
+     liveContextSeed.data.liveContext.producerState = 'LIVE_ACTIVE'
+     liveContextSeed.data.liveContext.dataAvailability = 'FRESH'
      const cached = { ...seed.data.priceChangeBoard, revision: 'cached-price-proof', fetchedAt: new Date().toISOString() }
      const unavailable = { ...seed.data.priceChangeBoard, status: 'UNAVAILABLE', revision: 'offline-price-proof', players: [], observedPlayerCount: 0 }
      await page.setViewportSize({ width, height: 900 })
@@ -383,7 +386,10 @@ test.describe('SSR remediation PRED03 cached board', () => {
       localStorage.setItem('letletme:price-change-board:v2', cacheState === 'malformed' ? '{broken' : JSON.stringify({ savedAt, board: cached }))
      }, { cached, cacheState })
      try {
-      expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: { priceChangeBoard: unavailable } }] }) })).ok).toBe(true)
+      expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [
+       { operation: 'GetPriceChangeBoard', data: { priceChangeBoard: unavailable } },
+       { operation: 'GetLiveContext', data: liveContextSeed.data }
+      ] }) })).ok).toBe(true)
       await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions`)
       const board = page.locator('[data-price-predictions-board]')
       const valid = cacheState === 'valid'

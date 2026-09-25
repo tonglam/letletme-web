@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // Run against a fresh standalone process so a prior successful bootstrap cache
 // cannot hide the deliberately malformed fixture response.
-test('J20 route error retries into a usable player directory', async ({ page }) => {
+test('J20 route error retries into a usable player directory', async ({ page }, testInfo) => {
  test.skip(process.env.E2E_ROUTE_ERROR_RECOVERY !== '1', 'Run alone before successful bootstrap cache fills')
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
  const control = async (rules: unknown[]) => {
@@ -27,6 +27,17 @@ test('J20 route error retries into a usable player directory', async ({ page }) 
   await players.getByRole('button', { name: /^Saka/ }).click()
   await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1')
   await expect(page.getByRole('region', { name: 'Player overall', exact: true })).toContainText('Saka')
+  await testInfo.attach('C13-states', { body: JSON.stringify({
+   caseId: 'C13',
+   stepIds: ['C13.01'],
+   state: 'route-global-error-to-ready',
+   fixture: 'GetPlayerStatsBootstrap null after route not-found, then Try again reloads the player directory',
+   assertions: ['route not-found recovery link reaches player route', 'global error Retry is visible', 'actual Retry restores Players and Saka detail'],
+   functionalStatus: 'PASS',
+   performanceStatus: 'NOT_OBSERVED',
+   readyMs: null,
+   wholeCaseComplete: false
+  }), contentType: 'application/json' })
  } finally { await control([]) }
 })
 

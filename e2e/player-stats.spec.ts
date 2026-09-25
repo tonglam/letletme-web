@@ -118,7 +118,7 @@ test('two-player deep link is server-seeded with zero browser desk requests', as
 
 test('selection keeps committed detail while pending and reuses the server seed', async ({
 	page
-}) => {
+}, testInfo) => {
 	let deskRequests = 0
 	let heldRequest: import('@playwright/test').Request | undefined
 	let heldRequestSettled = false
@@ -179,6 +179,17 @@ test('selection keeps committed detail while pending and reuses the server seed'
 	await expect(page.getByText('Loading player statistics')).toHaveCount(0)
 	await expect(overall).not.toContainText('Palmer')
 	expect(deskRequests).toBe(1)
+	await testInfo.attach('C13-states', { body: JSON.stringify({
+		caseId: 'C13',
+		stepIds: ['C13.01'],
+		state: 'loading-to-ready',
+		fixture: 'held /api/player-stats/desk response while selecting Palmer, then released after returning to Saka',
+		assertions: ['loading status visible while committed Saka remains', 'new selection is usable after settlement', 'no stranded loading state'],
+		functionalStatus: 'PASS',
+		performanceStatus: 'NOT_OBSERVED',
+		readyMs: null,
+		wholeCaseComplete: false
+	}), contentType: 'application/json' })
 })
 
 test.describe('SSR detail stream', () => {
@@ -194,7 +205,7 @@ test.describe('SSR detail stream', () => {
 
 	for (const locale of ['en', 'zh-CN'] as const) {
 		for (const compare of [false, true]) {
-			test(`recovers all detail sections from an unavailable directory seed ${locale} ${compare ? 'compare' : 'single'}`, async ({ page }) => {
+			test(`recovers all detail sections from an unavailable directory seed ${locale} ${compare ? 'compare' : 'single'}`, async ({ page }, testInfo) => {
 				await page.setViewportSize({ width: compare ? 390 : 1440, height: 900 })
 				await control()
 				const initialPlayerId = runPlayerId(compare ? 8 : 7)
@@ -223,6 +234,19 @@ test.describe('SSR detail stream', () => {
 				await expect(page.getByRole('button', { name: locale === 'en' ? 'Recent GWs' : '近期轮次', exact: true })).toBeVisible()
 				await expect(page.getByRole('button', { name: locale === 'en' ? 'Process' : '比赛过程', exact: true })).toBeVisible()
 				await expect(page).toHaveURL(new RegExp(`p1=${initialPlayerId}${compare ? '&p2=2' : ''}`))
+				await testInfo.attach('C13-states', { body: JSON.stringify({
+					caseId: 'C13',
+					stepIds: ['C13.01'],
+					state: 'unavailable-to-ready',
+					fixture: 'GetPlayerStatsBootstrap statsContext UNAVAILABLE + GetPlayerStatsDeskOverview error, then cleared before Retry',
+					assertions: ['unavailable Retry visible', 'actual Retry click recovers profile/state/process controls', 'URL and selected player preserved'],
+					locale,
+					viewport: { width: compare ? 390 : 1440, height: 900 },
+					functionalStatus: 'PASS',
+					performanceStatus: 'NOT_OBSERVED',
+					readyMs: null,
+					wholeCaseComplete: false
+				}), contentType: 'application/json' })
 			})
 		}
 	}
@@ -472,7 +496,7 @@ test.describe('process evidence availability', () => {
  for (const locale of ['en', 'zh-CN'] as const) {
   for (const width of [1440, 390]) {
    for (const scenario of ['empty-single', 'empty-both', 'valid-single', 'valid-second', 'unverified-first'] as const) {
-    test(`${scenario} ${locale} ${width}px`, async ({ page }) => {
+    test(`${scenario} ${locale} ${width}px`, async ({ page }, testInfo) => {
      test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Response replacement is isolated-only')
      const zh = locale === 'zh-CN'
      const compare = !scenario.endsWith('single')
@@ -509,6 +533,19 @@ test.describe('process evidence availability', () => {
       await expect(section).not.toContainText('9.99')
      }
      await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && url.hash === '#ps-process')
+     if (scenario.startsWith('empty')) await testInfo.attach('C13-states', { body: JSON.stringify({
+			caseId: 'C13',
+			stepIds: ['C13.01'],
+			state: 'empty',
+			fixture: `REAL_WORLD_PROCESS dimension metrics emptied for ${scenario}`,
+			assertions: ['process section remains usable', 'explicit verified-data-unavailable empty message visible', 'no fabricated process judgement'],
+			locale,
+			viewport: { width, height: 900 },
+			functionalStatus: 'PASS',
+			performanceStatus: 'NOT_OBSERVED',
+			readyMs: null,
+			wholeCaseComplete: false
+	 }), contentType: 'application/json' })
     })
    }
   }

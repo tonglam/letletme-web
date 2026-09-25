@@ -43,7 +43,33 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(page.getByText(story.summary, { exact: true })).toBeVisible()
     await expect(page.locator(`article a[href="${story.sourceUrl}"]`)).toBeVisible()
     await testInfo.attach('R10-direct-canonical', { contentType: 'application/json', body: JSON.stringify({ locale, width, directChain, finalUrl: page.url(), canonicalSlug: canonical.slug, storyRevision: canonical.storyRevision, title: story.title, sourceUrl: story.sourceUrl, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null }) })
-    await page.goto(`${prefix}/briefing`)
+    const briefingResponse = await page.goto(`${prefix}/briefing`)
+    expect(briefingResponse).not.toBeNull()
+    const briefingChain: Array<{ url: string; status: number; location: string | null }> = []
+    for (let request = briefingResponse!.request(); ; ) {
+     const response = await request.response()
+     expect(response).not.toBeNull()
+     const url = new URL(request.url())
+     briefingChain.unshift({ url: url.pathname + url.search, status: response!.status(), location: await response!.headerValue('location') })
+     const previous = request.redirectedFrom()
+     if (!previous) break
+     request = previous
+    }
+    await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/week$`))
+    await expect(page.getByText('J17 GW4', { exact: true })).toBeVisible()
+    await expect(page.getByText('7', { exact: true })).toBeVisible()
+    const directWeekResponse = await page.goto(`${prefix}/briefing/week`)
+    expect(directWeekResponse).not.toBeNull()
+    const directWeekChain: Array<{ url: string; status: number; location: string | null }> = []
+    for (let request = directWeekResponse!.request(); ; ) {
+     const response = await request.response()
+     expect(response).not.toBeNull()
+     const url = new URL(request.url())
+     directWeekChain.unshift({ url: url.pathname + url.search, status: response!.status(), location: await response!.headerValue('location') })
+     const previous = request.redirectedFrom()
+     if (!previous) break
+     request = previous
+    }
     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/week$`))
     await expect(page.getByText('J17 GW4', { exact: true })).toBeVisible()
     await expect(page.getByText('7', { exact: true })).toBeVisible()
@@ -65,21 +91,23 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(page.getByText('J17 GW4', { exact: true })).toBeVisible()
     await expect(page.getByText('7', { exact: true })).toBeVisible()
     // R10.05 / R11.05: browser history and reload are distinct from the page backlink.
-    expect((await page.reload())?.status()).toBe(200)
+    const weekReloadResponse = await page.reload()
+    expect(weekReloadResponse?.status()).toBe(200)
     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/week$`))
     await expect(page.getByText('J17 GW4', { exact: true })).toBeVisible()
     await expect(page.getByText('7', { exact: true })).toBeVisible()
     await expect(link).toBeVisible()
-    await page.goBack()
+    const weekBackResponse = await page.goBack()
     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/story/j17-canonical$`))
     await expect(page.getByRole('heading', { level: 1, name: story.title, exact: true })).toBeVisible()
     await expect(page.getByText(story.summary, { exact: true })).toBeVisible()
-    expect((await page.reload())?.status()).toBe(200)
+    const storyReloadResponse = await page.reload()
+    expect(storyReloadResponse?.status()).toBe(200)
     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/story/j17-canonical$`))
     await expect(page.getByRole('heading', { level: 1, name: story.title, exact: true })).toBeVisible()
     await expect(page.getByText(story.summary, { exact: true })).toBeVisible()
     await expect(source).toBeVisible()
-    await page.goForward()
+    const weekForwardResponse = await page.goForward()
     await expect(page).toHaveURL(new RegExp(`${prefix}/briefing/week$`))
     await expect(page.getByText('J17 GW4', { exact: true })).toBeVisible()
     await expect(page.getByText('7', { exact: true })).toBeVisible()
@@ -89,6 +117,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
     const reads = observations.requests.filter((row: { operation: string }) => row.operation.startsWith('Briefing'))
     expect(reads.some((row: { operation: string; variables: { slug?: string } }) => row.operation === 'BriefingStory' && row.variables.slug === 'j17-canonical')).toBe(true)
     expect(reads.every((row: { variables: { locale: string } }) => row.variables.locale === gqlLocale)).toBe(true)
+    await testInfo.attach('R09-scope', { body: JSON.stringify({
+     caseId: 'R09',
+     stepIds: ['R09.01', 'R09.02', 'R09.04', 'R09.05'],
+     n_aStepIds: ['R09.03'],
+     locale,
+     width,
+     requested: `${prefix}/briefing`,
+     directChain: briefingChain,
+     directStatus: briefingResponse!.status(),
+     finalUrl: page.url(),
+     reloadStatus: weekReloadResponse?.status() ?? null,
+     backStatus: weekBackResponse?.status() ?? null,
+     forwardStatus: weekForwardResponse?.status() ?? null,
+     functionalStatus: 'PASS',
+     performanceStatus: 'NOT_OBSERVED',
+     readyMs: null,
+     wholeVariantComplete: false,
+     missingReason: 'R09.03 has no rendered /briefing entry in the public navigation; source review records it as N/A. Direct-only /briefing route and history were observed.'
+    }), contentType: 'application/json' })
+    await testInfo.attach('R11-scope', { body: JSON.stringify({
+     caseId: 'R11',
+     stepIds: ['R11.01', 'R11.02', 'R11.04', 'R11.05'],
+     locale,
+     width,
+     requested: `${prefix}/briefing/week`,
+     directChain: directWeekChain,
+     directStatus: directWeekResponse!.status(),
+     reloadStatus: weekReloadResponse?.status() ?? null,
+     backStatus: weekBackResponse?.status() ?? null,
+     forwardStatus: weekForwardResponse?.status() ?? null,
+     functionalStatus: 'PASS',
+     performanceStatus: 'NOT_OBSERVED',
+     readyMs: null,
+     wholeVariantComplete: false,
+     missingReason: 'Scoped enabled publication route evidence; remaining state/locale/device/role variants and performance markers remain open.'
+    }), contentType: 'application/json' })
     await testInfo.attach('J17-scope', { body: JSON.stringify({ caseId: 'J17', additionalStepAssertions: ['R10.05', 'R11.05'], steps: ['J17.01','J17.02','J17.03','J17.04','J17.05','J17.06','J17.07'], variantId: `J17.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, reads, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false, limitation: 'Summary/source contract only; no full-body field. No cold/warm or browser vitals measured.' }), contentType: 'application/json' })
    })
   })
@@ -136,7 +200,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
    test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'true', 'Enabled isolated runtime only')
    test.afterEach(async () => { await control() })
-   test('state transitions exclude expired content and recover the published edition', async ({ page }) => {
+   test('state transitions exclude expired content and recover the published edition', async ({ page }, testInfo) => {
     const prefix = locale === 'en' ? '' : '/zh-CN'
     const gqlLocale = locale === 'en' ? 'EN' : 'ZH_CN'
     const story = { id: 'brief02-story', slug: 'brief02-story', storyRevision: 1, title: 'BRIEF02 published story', summary: 'BRIEF02 publication summary', sourceName: 'Fixture source', sourceUrl: null, sourceCheckedAt: '2026-09-15T10:00:00Z', expiresAt: null }
@@ -157,6 +221,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
      await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible()
      await expect(page.getByRole('link', { name: story.title, exact: true })).toHaveCount(0)
      await expect(page.getByText(story.summary, { exact: true })).toHaveCount(0)
+     if (state === 'NOT_PUBLISHED') {
+      await testInfo.attach('S03-not-published', { contentType: 'application/json', body: JSON.stringify({
+       caseId: 'S03', stepIds: ['S03.01'], state, locale, viewport: { width, height: 900 },
+       assertions: ['NOT_PUBLISHED is rendered as a closed publication state', 'no expired story or retry action is shown', 'the page does not wait indefinitely for READY'],
+       businessWrites: [], functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null, eventToPaintMs: null, wholeCaseComplete: false,
+       missingReason: 'NOT_PUBLISHED is covered on the briefing route; PRESEASON/BETWEEN_GAMEWEEKS/OFFSEASON phase variants and full cross-route matrix remain open.'
+      }) })
+     }
     }
     await visit('READY')
     await expect(page.getByRole('link', { name: story.title, exact: true })).toBeVisible()

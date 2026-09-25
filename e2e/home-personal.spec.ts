@@ -150,8 +150,14 @@ test('a verified session without an FPL binding gets the existing bind prompt', 
 
 test('a bound user receives the complete compact Team Desk in one commit', async ({
 	page
-}) => {
+}, testInfo) => {
 	const session = await createSession({ entryId: 15702 })
+	const clientGraphqlOperations: string[] = []
+	page.on('request', request => {
+		if (request.url().includes('/api/graphql')) {
+			clientGraphqlOperations.push(request.postData() ?? '')
+		}
+	})
 	try {
 		await addSessionCookie(page, session.cookie)
 		await page.goto('/')
@@ -215,6 +221,44 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 			main.getByRole('link', { name: /E2E League 2/ })
 		).toHaveAttribute('href', '/my-fpl/competitions?tournamentId=77')
 		await expect(main.locator('summary')).toHaveCount(0)
+		expect(
+			clientGraphqlOperations.some(operation =>
+				operation.includes('tournamentOfficialH2H')
+			)
+		).toBe(false)
+		await testInfo.attach('HOME03-states', {
+			contentType: 'application/json',
+			body: JSON.stringify({
+				caseId: 'HOME03',
+				stepIds: ['HOME03.01', 'HOME03.02'],
+				fixture: {
+					entryId: 15702,
+					leagueRankRows: 8,
+					classic: { name: 'E2E Classic', tournamentId: null },
+					h2h: { name: 'E2E H2H', tournamentId: 6, officialMatchId: 2071743 },
+					custom: {
+						name: 'E2E League 2',
+						tournamentId: 77,
+						route: '/my-fpl/competitions?tournamentId=77'
+					}
+				},
+				assertions: [
+					'classic tab renders ranks and does not expose loading as zero',
+					'H2H tab renders the official matchup and links to live competition 6 at GW1',
+					'custom tournament entry links to tournament management with tournamentId=77',
+					'no client tournamentOfficialH2H polling request after tab navigation'
+				],
+				clientGraphqlOperations: clientGraphqlOperations.length,
+				businessWrites: [],
+				functionalStatus: 'PASS',
+				performanceStatus: 'NOT_OBSERVED',
+				readyMs: null,
+				eventToPaintMs: null,
+				wholeCaseComplete: false,
+				wholePlannedStepComplete: false,
+				missingReason: 'HOME03 state and route subset passed in the isolated fixture; full case variants, component/touchpoint matrix, and controlled timing repeats remain open.'
+			})
+		})
 	} finally {
 		await session.cleanup()
 	}
@@ -476,11 +520,21 @@ test('English and Chinese Home stay accessible without mobile overflow', async (
 		await page.goto(path)
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 		await expect(page).toHaveTitle(/LetLetMe/)
-		expect(
-			await page.evaluate(
-				() => document.documentElement.scrollWidth <= window.innerWidth
+		await page.evaluate(async () => {
+			await document.fonts?.ready
+		})
+		// Streaming market content and the carousel can commit a layout update
+		// after the heading and fonts are ready. Assert the settled layout while
+		// retaining the real overflow condition; persistent overflow still fails.
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						() => document.documentElement.scrollWidth <= window.innerWidth
+					),
+				{ timeout: 5_000 }
 			)
-		).toBe(true)
+			.toBe(true)
 	}
 	const accessibility = await new AxeBuilder({ page }).analyze()
 	expect(accessibility.violations).toEqual([])
@@ -1148,12 +1202,19 @@ test(`SSR remediation tournament season sections load on demand without a false 
                 observer.observe({ type: 'layout-shift', buffered: true })
                 ;(window as unknown as { __reviewLayout: { shifts: typeof shifts; observer: PerformanceObserver } }).__reviewLayout = { shifts, observer }
             })
-            for (const width of [1440, 390]) {
-                await page.setViewportSize({ width, height: 900 })
-                await page.goto(`${routePath}?tournamentId=77&view=season&gw=4`)
-                await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-tournament', '77')
-                await expect(page.getByText('Layout Team 48', { exact: true })).toBeVisible()
-                const shifts = await page.evaluate(async () => {
+			for (const width of [1440, 390]) {
+				await page.setViewportSize({ width, height: 900 })
+				await page.goto(`${routePath}?tournamentId=77&view=season&gw=4`)
+				await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-tournament', '77')
+				const standingsRows = page.locator('table tbody tr')
+				await expect(standingsRows).toHaveCount(48)
+				const renderedEntryNames = await standingsRows.evaluateAll(rows =>
+					rows.map(row => row.querySelector('td:nth-child(2) > div')?.textContent?.trim() ?? '')
+				)
+				expect(renderedEntryNames).toEqual(
+					Array.from({ length: 48 }, (_, index) => `Layout Team ${index + 1}`)
+				)
+				const shifts = await page.evaluate(async () => {
                     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
                     const state = (window as unknown as { __reviewLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__reviewLayout
                     state.observer.disconnect()
@@ -1166,7 +1227,27 @@ test(`SSR remediation tournament season sections load on demand without a false 
                     max = Math.max(max, sum)
                     previous = shift.startTime
                 }
-                await testInfo.attach(`review-loading-layout-${width}`, { contentType: 'application/json', body: JSON.stringify({ locale, width, shifts, cls: max, budget: 0.1, networkLatencyMs: 100, bytesPerSecond: 500000, catalogDelayMs: 1200, productionDistributionEligible: false }) })
+				await testInfo.attach(`review-loading-layout-${width}`, { contentType: 'application/json', body: JSON.stringify({ locale, width, shifts, cls: max, budget: 0.1, networkLatencyMs: 100, bytesPerSecond: 500000, catalogDelayMs: 1200, productionDistributionEligible: false }) })
+				await testInfo.attach(`S01-max-reasonable-${locale}-${width}`, {
+					contentType: 'application/json',
+					body: JSON.stringify({
+						caseId: 'S01',
+						stepIds: ['S01.01'],
+						state: 'max-reasonable',
+						locale,
+						viewport: { width, height: 900 },
+						rows: 48,
+						readyMarker: { selector: '[data-review-ready="true"]', tournamentId: 77, gw: 4 },
+						assertions: ['all 48 fixture rows are visible after the delayed catalog/section response', 'ready is emitted after business content is present', 'layout shift stays within the 0.1 fixture budget'],
+						businessWrites: [],
+						functionalStatus: 'PASS',
+						performanceStatus: 'NOT_OBSERVED',
+						readyMs: null,
+						eventToPaintMs: null,
+						wholeCaseComplete: false,
+						missingReason: 'Maximum fixture set is scoped to the season review table; minimum set, other routes, full matrix bindings and controlled timing remain open.'
+					})
+				})
                 expect(max, `Review loading layout ${locale} ${width}: ${JSON.stringify(shifts)}`).toBeLessThanOrEqual(0.1)
             }
             return
@@ -2089,6 +2170,28 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await expect(season).toHaveAttribute('aria-selected', 'true')
 		await expect(page).toHaveURL(url => url.pathname === routePath && !url.searchParams.has('view'))
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+		if (recoveryMode === 'none') {
+			await testInfo.attach(`S01-minimal-complete-${locale}`, {
+				contentType: 'application/json',
+				body: JSON.stringify({
+					caseId: 'S01',
+					stepIds: ['S01.01'],
+					state: 'minimal-complete',
+					locale,
+					viewport: { width: 0, height: 0, configured: 'default desktop project' },
+					rows: 1,
+					readyMarker: { selector: '[data-review-ready="true"]', tournamentId: 77, gw: 4 },
+					assertions: ['single complete review row is visible', 'ready is true only with the row content present', 'gameweek/season navigation returns to the same seeded review'],
+					businessWrites: [],
+					functionalStatus: 'PASS',
+					performanceStatus: 'NOT_OBSERVED',
+					readyMs: null,
+					eventToPaintMs: null,
+					wholeCaseComplete: false,
+					missingReason: 'Minimum fixture set is scoped to the tournament review page; other routes, full matrix bindings and controlled timing remain open.'
+				})
+			})
+		}
 	} finally {
 		releaseSections()
 		await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
@@ -2100,6 +2203,107 @@ test(`SSR remediation tournament season sections load on demand without a false 
 
 }
 }
+
+test('C07 extreme live table data keeps paging, sort and mobile geometry bounded', async ({ page }, testInfo) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated extreme table fixture')
+ const session = await createSession({ entryId: 123 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const requests: Array<{ sort?: string; direction?: string; after?: string | null }> = []
+ const businessWrites: string[] = []
+ page.on('request', request => {
+  if (
+   !['GET', 'HEAD'].includes(request.method()) &&
+   !request.url().includes('/api/vitals') &&
+   !request.url().includes('/api/graphql') &&
+   !request.url().includes('/api/live/competitions/')
+  ) businessWrites.push(`${request.method()} ${new URL(request.url()).pathname}`)
+ })
+ try {
+  const liveSeed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveContext { __typename }' }) })).json()
+  expect(liveSeed.errors).toBeUndefined()
+  Object.assign(liveSeed.data.coreEventContext, { currentEventId: 4, nextEventId: 5, latestFinishedEventId: 3 })
+  Object.assign(liveSeed.data.liveContext, { eventId: 4, nextEventId: 5, anchorEventId: 4, latestFinalizedEventId: 3 })
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetLiveContext', data: liveSeed.data }, { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...managedTournament, id: 6, name: 'Extreme Coverage League', adminEntryId: 15702 }] } }] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.route('**/api/live/competitions/6/board', async route => {
+   const payload = route.request().postDataJSON()
+   const input = payload.input ?? {}
+   requests.push(input)
+   const response = await route.fetch()
+   const body = await response.json()
+   const board = body.entryLiveCompetitionBoard
+   const template = board.rows[0]
+	   const rows = Array.from({ length: 48 }, (_, index) => ({
+	    ...template,
+	    entry: 2000 + index,
+	    entryName: `Extreme Team ${String(index + 1).padStart(2, '0')} ${'LongName '.repeat(8)}`,
+	    liveRank: index + 1,
+	    overallRank: index + 1,
+	    availability: index === 0 ? 'MISSING' : template.availability,
+	    score: index === 0 ? null : { ...template.score, eventPoints: index + 1, netEventPoints: index + 1, totalPoints: index === 1 ? 0 : (index + 1) * 100 }
+	   }))
+	   const sortKey = input.sort === 'TOTAL_POINTS' ? 'totalPoints' : 'eventPoints'
+	   rows.sort((left, right) => {
+	    const leftValue = left.score?.[sortKey] ?? 0
+	    const rightValue = right.score?.[sortKey] ?? 0
+	    return input.direction === 'ASC' ? leftValue - rightValue : rightValue - leftValue
+	   })
+   const pageIndex = input.after === 'extreme-page-2' ? 1 : input.after === 'extreme-page-3' ? 2 : 0
+   const pageRows = rows.slice(pageIndex * 20, (pageIndex + 1) * 20)
+   board.rows = pageRows
+   board.viewerRow = null
+   board.totalEntries = rows.length
+   board.filteredEntries = rows.length
+   board.pageInfo = { hasNextPage: pageIndex < 2, endCursor: pageIndex < 2 ? `extreme-page-${pageIndex + 2}` : null }
+   await route.fulfill({ response, json: body })
+  })
+  for (const width of [1440, 390]) {
+   requests.length = 0
+   await page.setViewportSize({ width, height: 900 })
+   await page.goto('/live/competitions?tournamentId=6&gw=4')
+   const teams = page.getByRole('link', { name: /Extreme Team/ }).filter({ visible: true })
+   await expect(teams).toHaveCount(20)
+   await expect(teams.first()).toContainText('Extreme Team 48')
+	   const loadMore = page.getByRole('button', { name: /Show 20 more|Show 8 more/ }).filter({ visible: true })
+	   await loadMore.click()
+	   await expect(teams).toHaveCount(40)
+	   const loadMoreFinal = page.getByRole('button', { name: 'Show 8 more', exact: true }).filter({ visible: true })
+	   await expect(loadMoreFinal).toBeVisible()
+	   await loadMoreFinal.click()
+	   await expect(teams).toHaveCount(48)
+	   expect(new Set(await teams.evaluateAll(nodes => nodes.map(node => (node as HTMLAnchorElement).href))).size).toBe(48)
+	   const missingRow = page.locator('li').filter({ hasText: 'Extreme Team 01' }).filter({ visible: true }).first()
+	   const zeroRow = page.locator('li').filter({ hasText: 'Extreme Team 02' }).filter({ visible: true }).first()
+	   await expect(missingRow).toContainText('—')
+	   await expect(zeroRow).toContainText('0')
+   await page.getByRole('combobox', { name: 'Sort competition standings', exact: true }).click()
+   await page.getByRole('option', { name: 'Total Pts', exact: true }).click()
+   await expect(teams.first()).toContainText('Extreme Team 48')
+   await page.getByRole('button', { name: 'Desc', exact: true }).click()
+   await expect(teams.first()).toContainText('Extreme Team 01')
+   await expect(teams).toHaveCount(48)
+   expect(new Set(await teams.evaluateAll(nodes => nodes.map(node => (node as HTMLAnchorElement).href))).size).toBe(48)
+   const geometry = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth }))
+   expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewport + 1)
+   expect(businessWrites).toEqual([])
+	   await testInfo.attach(`C07-extreme-table-${width}`, { contentType: 'application/json', body: JSON.stringify({
+    caseId: 'C07', stepIds: ['C07.04'], state: 'extreme-table', locale: 'en', viewport: { width, height: 900 }, rows: 48,
+    assertions: ['stable sort order across 48 rows', 'server paging 20→40→48 without duplicate hrefs', 'long team names stay inside the viewport', 'no business writes'],
+    geometry, requests, businessWrites, functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null, eventToPaintMs: null, wholeCaseComplete: false
+   }) })
+	   await testInfo.attach(`S17-extreme-bounds-${width}`, { contentType: 'application/json', body: JSON.stringify({
+	    caseId: 'S17', stepIds: ['S17.01'], state: 'large-paged-mixed-values', locale: 'en', viewport: { width, height: 900 },
+	    rows: 48, pages: [20, 40, 48], longName: true, missingValue: 'Extreme Team 01 → —', zeroValue: 'Extreme Team 02 → 0',
+	    assertions: ['48-row list remains paged and hrefs remain unique', 'sort order remains stable for numeric and missing values', 'zero and missing values render distinctly', 'document width stays within viewport'],
+	    businessWrites: [], functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null, eventToPaintMs: null, wholeCaseComplete: false,
+	    missingReason: 'Large-list/paging/long-name/zero-vs-missing subset is covered; memory growth, minimum dataset, all historical pages and controlled performance remain open.'
+	   }) })
+  }
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`personal league carousel covers navigation pause focus and full list [${locale}]`, async ({ page }) => {
@@ -3101,6 +3305,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
   expect(mutations).toEqual([])
   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+  await testInfo.attach('R12-entry-scope', { body: JSON.stringify({
+   caseId: 'R12',
+   stepIds: ['R12.03'],
+   variantId: `R12.O.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+   locale,
+   viewport: page.viewportSize(),
+   timezone: 'Australia/Perth',
+   entry: 'Tournament browse → Actions for J12 Owned Cup → Manage tournament',
+   href: `${prefix}/competitions/77/manage`,
+   finalUrl: page.url(),
+   readyMarker: { tournamentId: 77, route: 'manage' },
+   functionalStatus: 'PASS',
+   performanceStatus: 'NOT_OBSERVED',
+   readyMs: null,
+   businessWrites: mutations,
+   wholeVariantComplete: false,
+   limitation: 'This binds only the actual internal manage-link click; full R12 route/status variants and timing remain open.'
+  }), contentType: 'application/json' })
   await testInfo.attach('J12-baseline-scope', { body: JSON.stringify({ variantId: `J12.O.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, viewport: page.viewportSize(), timezone: 'Australia/Perth', theme: 'system', scope: 'One functional journey; cache cold/warm repetitions and performance remain unverified' }), contentType: 'application/json' })
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
@@ -3475,6 +3697,11 @@ for (const width of [1440, 390]) {
    await menu.locator(':scope > summary').click()
    await menu.getByRole('link', { name: zh ? '赛程' : 'Fixtures', exact: true }).click()
    await expect(page).toHaveURL(/\/explore\/fixtures$/)
+   // The FDR table is server-rendered, but its search is client-owned. Under
+   // the full parallel suite the input can be filled before hydration attaches
+   // its change handler, leaving the visible rows unfiltered. Treat the
+   // existing route-ready marker as the interaction boundary.
+   await expect.poll(() => reportedVitals.some(sample => sample.metricName === 'FIXTURES_WINDOW_READY')).toBe(true)
    const matrix = page.getByRole('region', { name: zh ? '球队 FDR' : 'Team FDR', exact: true })
    await expect(matrix.locator('tbody tr')).toHaveCount(3)
    await matrix.getByRole('searchbox', { name: zh ? '搜索球队' : 'Search teams' }).fill('Arsenal')
@@ -4347,7 +4574,7 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
-  test(`SSR remediation manager chart integer ticks ${locale} ${width}px`, async ({ page }) => {
+  test(`SSR remediation manager chart integer ticks ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager chart fixture')
    const session = await createSession({ entryId: 15702 })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -4410,6 +4637,22 @@ for (const locale of ['en', 'zh-CN'] as const) {
        await page.mouse.move(0, 0)
        await expect(summary).not.toContainText('GW3')
       }
+      await testInfo.attach('C07-extreme-chart', {
+       contentType: 'application/json',
+       body: JSON.stringify({
+        caseId: 'C07',
+        stepIds: ['C07.04'],
+        state: 'extreme-chart',
+        locale,
+        viewport: { width, height: 900 },
+        assertions: ['integer chart ticks remain unique and readable', 'bar tooltip exposes GW3 and Saka', 'past-season line tooltip exposes season and clears on pointer leave', 'chart units remain explicit for rank/points/captain/bench modes'],
+        functionalStatus: 'PASS',
+        performanceStatus: 'NOT_OBSERVED',
+        readyMs: null,
+        eventToPaintMs: null,
+        wholeCaseComplete: false
+       })
+      })
      }
     }
    } finally {

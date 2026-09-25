@@ -558,8 +558,6 @@ const liveScore = (eventPoints = 22, revision = 'a'.repeat(64)) => ({
 	delivery: liveDelivery('FRESH')
 })
 
-let recoveryEntryRequestCount = 0
-
 // Isolated fixture controls: never part of the Web production server.
 let performanceRules = []
 let performanceRequests = []
@@ -1640,8 +1638,11 @@ const server = createServer((request, response) => {
 		if (query.includes('GetLiveCalcPoints')) {
 			const requestedEntry = Number(variables.entryId) || 123
 			const requestedEvent = Number(variables.eventId) || 33
-			if (requestedEntry === 999 && recoveryEntryRequestCount < 2) {
-				recoveryEntryRequestCount += 1
+			// Keep the server-rendered seed unavailable for the dedicated
+			// official-sync browser test. Its browser route controls the
+			// first failure and recovery response; this fixture must not carry
+			// mutable process-wide state across repeated tests.
+			if (requestedEntry === 999) {
 				json(response, 200, {
 					errors: [{ message: 'Temporary live points failure' }]
 				})
