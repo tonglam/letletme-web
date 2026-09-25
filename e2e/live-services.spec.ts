@@ -1332,6 +1332,10 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect.poll(() => fullRequestCount).toBe(2)
 	expect(probeCount).toBe(0)
 	await expect.poll(() => secondFullResponseCompleted).toBe(true)
+	// The failed refresh leaves the last-good snapshot visible while the next
+	// scheduled cycle may already be due. Hold the network offline before the
+	// assertion so a trailing cycle cannot clear the error state mid-check.
+	await context.setOffline(true)
 	await page.clock.runFor(0)
 	await expect(
 		page.getByRole('button', { name: 'Refresh matches', exact: true })
@@ -1343,7 +1347,6 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	).toBeVisible()
 	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
 
-	await context.setOffline(true)
 	await expect(page.getByText(/Auto refresh in/)).toHaveCount(0)
 	await page.clock.fastForward(60_000)
 	expect(fullRequestCount).toBe(2)

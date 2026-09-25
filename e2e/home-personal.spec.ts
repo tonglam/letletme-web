@@ -520,6 +520,9 @@ test('English and Chinese Home stay accessible without mobile overflow', async (
 		await page.goto(path)
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 		await expect(page).toHaveTitle(/LetLetMe/)
+		await page.evaluate(async () => {
+			await document.fonts?.ready
+		})
 		expect(
 			await page.evaluate(
 				() => document.documentElement.scrollWidth <= window.innerWidth
