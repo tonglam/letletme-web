@@ -148,6 +148,23 @@ describe('Live Points V2 web contract', () => {
 		}
 	})
 
+	it('does not refetch selection index when revision recovery callback changes', () => {
+		const source = readFileSync(
+			new URL(
+				'../components/tournament/LiveCompetitionBoardFilters.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+		const selectionIndexEffect = source.slice(
+			source.indexOf('\tuseEffect(() => {\n\t\tconst controller'),
+			source.indexOf('\tconst selectionIndexLoading')
+		)
+		assert.match(source, /const onRevisionGoneRef = useRef\(onRevisionGone\)/)
+		assert.match(selectionIndexEffect, /onRevisionGoneRef\.current\?\.\(\)/)
+		assert.doesNotMatch(selectionIndexEffect, /\bonRevisionGone\s*,/)
+	})
+
 	it('requests only V2 fields and keeps duplicate score aliases out of the document', () => {
 		assert.match(GET_LIVE_POINTS, /score\s*\{/)
 		assert.match(GET_LIVE_POINTS, /revisions\s*\{/)
