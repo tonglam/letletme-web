@@ -1493,19 +1493,27 @@ test('full match snapshot source timeout keeps last-good data and recovers', asy
 		await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
 		await expect(page.getByText(/1\s*[–-]\s*0/)).toHaveCount(0)
 
-		const afterTimeout = await (await fetch(controls)).json() as {
-			requests: Array<{
-				operation: string
-				startedAt: number
-				finishedAt: number | null
-				abortedAt: number | null
-			}>
-		}
-		const sourceTimeout = afterTimeout.requests
-			.filter(request => request.operation === 'GetLiveMatchdayV3')
-			.at(-1)
+		let sourceTimeout: {
+			operation: string
+			startedAt: number
+			finishedAt: number | null
+			abortedAt: number | null
+		} | undefined
+		await expect.poll(async () => {
+			const afterTimeout = await (await fetch(controls)).json() as {
+				requests: Array<{
+					operation: string
+					startedAt: number
+					finishedAt: number | null
+					abortedAt: number | null
+				}>
+			}
+			sourceTimeout = afterTimeout.requests
+				.filter(request => request.operation === 'GetLiveMatchdayV3')
+				.at(-1)
+			return sourceTimeout?.abortedAt ?? null
+		}, { timeout: 5000 }).not.toBeNull()
 		expect(sourceTimeout).toBeDefined()
-		expect(sourceTimeout?.abortedAt).not.toBeNull()
 		const sourceTimeoutElapsedMs = sourceTimeout?.abortedAt && sourceTimeout.startedAt
 			? sourceTimeout.abortedAt - sourceTimeout.startedAt
 			: null
@@ -1616,6 +1624,7 @@ test('stale and degraded match publications show a timestamped delay notice', as
 				hasText: 'Official scores are delayed'
 			})
 			await expect(notice).toBeVisible()
+			await expect.poll(() => notice.innerText(), { timeout: 5000 }).toMatch(/\([^()]+\)$/)
 			const text = await notice.innerText()
 			expect(text).toMatch(/Official scores are delayed/)
 			expect(text).toMatch(/\([^()]+\)$/)

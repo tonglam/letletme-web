@@ -2274,8 +2274,11 @@ test('C07 extreme live table data keeps paging, sort and mobile geometry bounded
    await expect(teams.first()).toContainText('Extreme Team 48')
    await page.getByRole('button', { name: 'Desc', exact: true }).click()
    await expect(teams.first()).toContainText('Extreme Team 01')
+   await expect(teams).toHaveCount(48)
+   expect(new Set(await teams.evaluateAll(nodes => nodes.map(node => (node as HTMLAnchorElement).href))).size).toBe(48)
    const geometry = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth }))
    expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewport + 1)
+   expect(businessWrites).toEqual([])
 	   await testInfo.attach(`C07-extreme-table-${width}`, { contentType: 'application/json', body: JSON.stringify({
     caseId: 'C07', stepIds: ['C07.04'], state: 'extreme-table', locale: 'en', viewport: { width, height: 900 }, rows: 48,
     assertions: ['stable sort order across 48 rows', 'server paging 20→40→48 without duplicate hrefs', 'long team names stay inside the viewport', 'no business writes'],
