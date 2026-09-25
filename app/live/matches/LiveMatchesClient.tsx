@@ -636,7 +636,7 @@ export function LiveMatchesClient({
 			{lastUpdatedAt && lastUpdatedLabel && !deliveryDelayed ? (
 				<time
 					dateTime={lastUpdatedAt}
-					className="whitespace-nowrap text-xs text-muted-foreground"
+					className="min-w-0 max-w-full whitespace-normal break-words text-right text-xs text-muted-foreground"
 					role="status"
 				>
 					{t('lastUpdated', { time: lastUpdatedLabel })}

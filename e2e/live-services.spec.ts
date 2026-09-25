@@ -1016,6 +1016,10 @@ test('official-sync live points auto-refreshes without a polling label', async (
 	await expect(
 		pitch.getByRole('button', { name: /View details for Player/ })
 	).toHaveCount(15)
+	await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute(
+		'data-live-revision',
+		'recovery-revision'
+	)
 	await testInfo.attach('S04-revision-recovery', {
 		contentType: 'application/json',
 		body: JSON.stringify({
@@ -1638,16 +1642,52 @@ test('stale and degraded match publications show a timestamped delay notice', as
 				'STALE'
 			)
 		}
+		const timezoneCdp = await page.context().newCDPSession(page)
+		await timezoneCdp.send('Emulation.setTimezoneOverride', {
+			timezoneId: 'America/North_Dakota/New_Salem'
+		})
+		const freshPayload = structuredClone(seed)
+		freshPayload.liveMatchday.delivery = {
+			state: 'FRESH',
+			servedFrom: 'REDIS_CURRENT',
+			reasonCodes: []
+		}
+		await expect(
+			(await fetch(controls, {
+				method: 'POST',
+				body: JSON.stringify({
+					rules: [{ operation: 'GetLiveMatchdayV3', variables: { eventId: null }, data: freshPayload }]
+				})
+			})).ok
+		).toBe(true)
+		await page.goto('/live/matches')
+		const freshTimestamp = page.locator('time[role="status"]')
+		await expect(freshTimestamp).toBeVisible()
+		const resolvedTimeZone = await page.evaluate(
+			() => Intl.DateTimeFormat().resolvedOptions().timeZone
+		)
+		await expect(freshTimestamp).toContainText(`(${resolvedTimeZone})`)
+		await expect.poll(
+			() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+			{ timeout: 5000 }
+		).toBe(true)
 		await testInfo.attach('S05-S07-stale-degraded-age', {
 			contentType: 'application/json',
 			body: JSON.stringify({
 				caseIds: ['S05', 'S07'],
 				stepIds: ['S05.01', 'S07.01'],
 				states: observations,
+				freshTimestamp: {
+					text: await freshTimestamp.innerText(),
+					timezone: resolvedTimeZone,
+					viewportWidth: 390,
+					noHorizontalOverflow: true
+				},
 				assertions: [
 					'STALE and DEGRADED publications remain visible as stale data',
 					'delay notice includes the last complete snapshot time',
 					'displayed local time includes an explicit timezone label',
+					'fresh update timestamp wraps within the 390px viewport with an explicit timezone label',
 					'contract marker remains STALE for both degraded delivery states'
 				],
 				coveredStates: ['STALE', 'DEGRADED'],

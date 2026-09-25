@@ -1202,12 +1202,19 @@ test(`SSR remediation tournament season sections load on demand without a false 
                 observer.observe({ type: 'layout-shift', buffered: true })
                 ;(window as unknown as { __reviewLayout: { shifts: typeof shifts; observer: PerformanceObserver } }).__reviewLayout = { shifts, observer }
             })
-            for (const width of [1440, 390]) {
-                await page.setViewportSize({ width, height: 900 })
-                await page.goto(`${routePath}?tournamentId=77&view=season&gw=4`)
-                await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-tournament', '77')
-                await expect(page.getByText('Layout Team 48', { exact: true })).toBeVisible()
-                const shifts = await page.evaluate(async () => {
+			for (const width of [1440, 390]) {
+				await page.setViewportSize({ width, height: 900 })
+				await page.goto(`${routePath}?tournamentId=77&view=season&gw=4`)
+				await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-tournament', '77')
+				const standingsRows = page.locator('table tbody tr')
+				await expect(standingsRows).toHaveCount(48)
+				const renderedEntryNames = await standingsRows.evaluateAll(rows =>
+					rows.map(row => row.querySelector('td:nth-child(2) > div')?.textContent?.trim() ?? '')
+				)
+				expect(renderedEntryNames).toEqual(
+					Array.from({ length: 48 }, (_, index) => `Layout Team ${index + 1}`)
+				)
+				const shifts = await page.evaluate(async () => {
                     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
                     const state = (window as unknown as { __reviewLayout: { shifts: Array<{ value: number; startTime: number; hadRecentInput: boolean }>; observer: PerformanceObserver } }).__reviewLayout
                     state.observer.disconnect()
