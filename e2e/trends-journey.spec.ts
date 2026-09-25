@@ -64,7 +64,7 @@ for (const locale of ['en', 'zh-CN']) {
 for (const locale of ['en', 'zh-CN']) {
 	for (const width of [1440, 390]) {
 		for (const state of ['failure', 'empty', 'unavailable'] as const) {
-			test(`J05 ${state} recovery ${locale} ${width}px`, async ({ page }) => {
+			test(`J05 ${state} recovery ${locale} ${width}px`, async ({ page }, testInfo) => {
 				const zh = locale === 'zh-CN'
 				await page.setViewportSize({ width, height: 900 })
 				await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&tournament=777&gw=33`)
@@ -121,6 +121,32 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(cohort).toHaveValue('competition:779')
 				await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:779' && url.searchParams.get('gw') === (state === 'empty' ? '32' : '33'))
 				expect(requests).toBe(2)
+				if (state === 'empty') {
+					await testInfo.attach('S02-empty-success', {
+						contentType: 'application/json',
+						body: JSON.stringify({
+							caseId: 'S02',
+							stepIds: ['S02.01'],
+							state: 'CONFIRMED_EMPTY',
+							locale,
+							viewport: { width, height: 900 },
+							request: { cohortId: 'competition:779', initialEventId: 33, recoveredEventId: 32, status: 200 },
+							assertions: [
+								'HTTP success with explicit CONFIRMED_EMPTY sections',
+								'empty message is shown for each panel without an error alert',
+								'no player rows or fabricated 0 values are rendered',
+								'actual gameweek change recovers Palmer data'
+							],
+							businessWrites: [],
+							functionalStatus: 'PASS',
+							performanceStatus: 'NOT_OBSERVED',
+							readyMs: null,
+							eventToPaintMs: null,
+							wholeCaseComplete: false,
+							missingReason: 'S02 empty-success state is covered in the public trends fixture for this locale/viewport; other zero-record consumers, full matrix bindings and controlled timing remain open.'
+						})
+					})
+				}
 			})
 		}
 

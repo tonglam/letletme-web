@@ -542,6 +542,8 @@
 		"none": "暂无比赛",
 		"refresh": "刷新比赛",
 		"lastUpdated": "更新于 {time}",
+		"deliveryDelayed": "官方比分延迟",
+		"deliveryDelayedSince": "官方比分延迟 · 显示 {time} 的最后完整快照",
 		"detailUpdating": "球员数据正在更新",
 		"detailUpdatingSince": "球员数据正在更新 · 明细更新于 {time}",
 		"loading": "正在加载比赛…",

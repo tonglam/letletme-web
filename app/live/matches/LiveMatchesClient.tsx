@@ -483,17 +483,19 @@ export function LiveMatchesClient({
 			return
 		}
 		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-		setLastUpdatedLabel(
-			format.dateTime(parsed, {
-				day: 'numeric',
-				month: 'short',
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				timeZone: browserTimeZone
-			})
-		)
+		const formatted = format.dateTime(parsed, {
+			day: 'numeric',
+			month: 'short',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			timeZone: browserTimeZone
+		})
+		setLastUpdatedLabel(`${formatted} (${browserTimeZone})`)
 	}, [format, lastUpdatedAt])
+	const deliveryDelayed =
+		snapshot?.delivery.state === 'STALE' ||
+		snapshot?.delivery.state === 'DEGRADED'
 	const detailDelayed =
 		matches.some(match => match.status !== 'NOT_STARTED') &&
 		(snapshot?.detailDelivery.state === 'PENDING' ||
@@ -621,7 +623,17 @@ export function LiveMatchesClient({
 						: t('detailUpdating')}
 				</span>
 			) : null}
-			{lastUpdatedAt && lastUpdatedLabel ? (
+			{deliveryDelayed ? (
+				<span
+					className="whitespace-nowrap text-xs text-amber-700 dark:text-amber-300"
+					role="status"
+				>
+					{lastUpdatedLabel
+						? t('deliveryDelayedSince', { time: lastUpdatedLabel })
+						: t('deliveryDelayed')}
+				</span>
+			) : null}
+			{lastUpdatedAt && lastUpdatedLabel && !deliveryDelayed ? (
 				<time
 					dateTime={lastUpdatedAt}
 					className="whitespace-nowrap text-xs text-muted-foreground"

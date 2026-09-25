@@ -558,7 +558,7 @@ for (const width of [1440, 390]) {
 
 test('live points restores transfer details and distinguishes failure from empty records', async ({
 	page
-}) => {
+}, testInfo) => {
 	test.skip(
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
@@ -680,6 +680,31 @@ test('live points restores transfer details and distinguishes failure from empty
 		'No synced transfer records for this gameweek.'
 	)
 	await expect(section).not.toContainText('Incoming Player')
+	await testInfo.attach('S06-S07-transfer-states', {
+		contentType: 'application/json',
+		body: JSON.stringify({
+			caseIds: ['S06', 'S07'],
+			stepIds: ['S06.01', 'S07.01'],
+			states: [
+				'optional transfer read returns GraphQL error/503, primary live points shell remains usable',
+				'optional transfer read recovers to records, then confirmed empty records without an error alert'
+			],
+			assertions: [
+				'primary Live Points content is not replaced by an optional transfer failure',
+				'failure and confirmed empty transfer records remain distinct',
+				'retry is bounded to explicit user action and does not create a request storm'
+			],
+			coveredFaults: ['GraphQL errors', 'HTTP 503', 'successful empty records'],
+			missingFaults: ['offline transport', 'timeout', 'HTTP 500', 'HTTP 502', 'malformed payload'],
+			businessWrites: [],
+			functionalStatus: 'PASS',
+			performanceStatus: 'NOT_OBSERVED',
+			readyMs: null,
+			eventToPaintMs: null,
+			wholeCaseComplete: false,
+			missingReason: 'Only the transfer subsection fault matrix is covered here; the complete cross-route S06/S07 matrix and controlled timing remain open.'
+		})
+	})
 })
 
 for (const locale of ['en', 'zh-CN'] as const) {
@@ -809,7 +834,7 @@ test('public live transfers expose request failures and allow retry without a lo
 
 test('official-sync live points auto-refreshes without a polling label', async ({
 	page
-}) => {
+}, testInfo) => {
 	test.skip(
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
@@ -991,12 +1016,33 @@ test('official-sync live points auto-refreshes without a polling label', async (
 	await expect(
 		pitch.getByRole('button', { name: /View details for Player/ })
 	).toHaveCount(15)
+	await testInfo.attach('S04-revision-recovery', {
+		contentType: 'application/json',
+		body: JSON.stringify({
+			caseId: 'S04',
+			stepIds: ['S04.01'],
+			initial: { windowState: 'PRE_DEADLINE', dataAvailability: 'UNAVAILABLE', scoreCoreRevision: 'a'.repeat(64) },
+			recovery: { response: 'READY', scoreCoreRevision: 'recovery-revision', entry: 999, picks: 15 },
+			assertions: [
+				'official updating status is shown without a false empty score',
+				'new revision is accepted only after the refresh response is ready',
+				'final formation contains all 15 players'
+			],
+			businessWrites: [],
+			functionalStatus: 'PASS',
+			performanceStatus: 'NOT_OBSERVED',
+			readyMs: null,
+			eventToPaintMs: null,
+			wholeCaseComplete: false,
+			missingReason: 'S04 revision recovery is covered for the Live Points refresh path; OFFICIAL_UPDATING/SETTLING permutations and full cross-route matrix remain open.'
+		})
+	})
 })
 
 test('scheduled match polling is overlap-safe, keeps last-good data, and resumes immediately', async ({
 	context,
 	page
-}) => {
+}, testInfo) => {
 	test.skip(
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
@@ -1006,6 +1052,11 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	let probeCount = 0
 	let headRequestCount = 0
 	let fullRequestCount = 0
+	let delayNextHeadForTimeout = false
+	let releaseHeadTimeout!: () => void
+	const headTimeoutGate = new Promise<void>(resolve => {
+		releaseHeadTimeout = resolve
+	})
 	let releaseFirstResponse: (() => void) | undefined
 	const firstResponseGate = new Promise<void>(resolve => {
 		releaseFirstResponse = resolve
@@ -1121,9 +1172,41 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			})
 			return
 		}
+		if (fullRequestCount === 4) {
+			await route.fulfill({
+				status: 500,
+				json: { errors: [{ message: 'Fixture HTTP 500' }] }
+			})
+			return
+		}
+		if (fullRequestCount === 5) {
+			await route.fulfill({
+				status: 502,
+				json: { errors: [{ message: 'Fixture HTTP 502' }] }
+			})
+			return
+		}
+		if (fullRequestCount === 6) {
+			await route.fulfill({
+				status: 200,
+				json: { errors: [{ message: 'Fixture GraphQL error payload' }] }
+			})
+			return
+		}
+		if (fullRequestCount === 7) {
+			await route.fulfill({
+				status: 200,
+				json: { liveMatchday: { availability: 'READY' } }
+			})
+			return
+		}
 		await route.fulfill({
 			status: 200,
-			json: liveResponse(2, 'c'.repeat(24), 3).data
+			json: liveResponse(
+				fullRequestCount >= 8 ? 3 : 2,
+				fullRequestCount >= 8 ? 'i'.repeat(24) : 'c'.repeat(24),
+				fullRequestCount >= 8 ? 9 : 3
+			).data
 		})
 	})
 
@@ -1134,18 +1217,22 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			// The first freshness observation sees the newly published score. Once
 			// the full response is accepted, the next observation sees a newer
 			// revision and exercises the failed FULL/LKG path.
-			const revision = fullRequestCount === 0 ? 'b'.repeat(24) : 'c'.repeat(24)
-			const score = fullRequestCount === 0 ? 1 : 2
-			await route.fulfill({
-				status: 200,
-				json: {
-					data: liveHeadResponse(
-						score,
-						revision,
-						fullRequestCount === 0 ? 2 : 3
-					).data
-				}
-			})
+			const revision = fullRequestCount === 0
+				? 'b'.repeat(24)
+				: String.fromCharCode(99 + Math.min(fullRequestCount - 1, 6)).repeat(24)
+			const score = fullRequestCount >= 3 ? 3 : fullRequestCount >= 1 ? 2 : 1
+			const headBody = {
+				data: liveHeadResponse(
+					score,
+					revision,
+					fullRequestCount === 0 ? 2 : 3
+				).data
+			}
+			if (delayNextHeadForTimeout) {
+				delayNextHeadForTimeout = false
+				await headTimeoutGate
+			}
+			await route.fulfill({ status: 200, json: headBody }).catch(() => {})
 			return
 		}
 		if (payload.query?.includes('GetLiveContext')) {
@@ -1245,11 +1332,302 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	expect(fullRequestCount).toBe(2)
 	expect(probeCount).toBe(0)
 
+	delayNextHeadForTimeout = true
 	await context.setOffline(false)
 	await expect.poll(() => headRequestCount).toBeGreaterThan(2)
+	await page.clock.runFor(16_000)
+	await expect(
+		page.getByRole('alert').filter({
+			hasText: 'Latest match update failed. Showing the last available scores.'
+		})
+	).toBeVisible()
+	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
+	expect(fullRequestCount).toBe(2)
+	releaseHeadTimeout()
+	await page.clock.runFor(0)
+	await context.setOffline(true)
+	await page.clock.runFor(100)
+	await context.setOffline(false)
 	await expect.poll(() => fullRequestCount).toBe(3)
 	expect(probeCount).toBe(0)
 	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
+
+	const additionalFaults = [
+		{ label: 'HTTP 500', nextFullRequest: 4 },
+		{ label: 'HTTP 502', nextFullRequest: 5 },
+		{ label: 'GraphQL 200 with errors', nextFullRequest: 6 },
+		{ label: 'malformed payload', nextFullRequest: 7 }
+	] as const
+	for (const fault of additionalFaults) {
+		// A failed refresh deliberately does not manufacture a countdown. Use the
+		// visible refresh control to admit exactly one next revision.
+		await page.getByRole('button', { name: 'Refresh matches', exact: true }).click()
+		await expect.poll(() => fullRequestCount).toBe(fault.nextFullRequest)
+		await expect(
+			page.getByRole('alert').filter({
+				hasText: 'Latest match update failed. Showing the last available scores.'
+			})
+		).toBeVisible()
+		await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
+		await expect(page.getByText(/0\s*[–-]\s*0/)).toHaveCount(0)
+	}
+	await page.getByRole('button', { name: 'Refresh matches', exact: true }).click()
+	await expect.poll(() => fullRequestCount).toBe(8)
+	await expect(page.getByText(/3\s*[–-]\s*0/)).toBeVisible()
+	await testInfo.attach('S05-S07-live-recovery', {
+		contentType: 'application/json',
+		body: JSON.stringify({
+			caseIds: ['S05', 'S07'],
+			stepIds: ['S05.01', 'S07.01'],
+			states: [
+				'fresh revision b accepted',
+				'HTTP 503 retains last-good score and exposes a visible failure alert',
+				'offline transport pauses polling without replacing last-good content',
+				'network recovery accepts revision c and resumes immediately',
+				'HTTP 500, HTTP 502, GraphQL 200 errors and malformed payload each retain last-good score',
+				'visible refresh admits a newer revision after each injected fault',
+				'client GraphQL HEAD timeout retains last-good score before recovery'
+			],
+			assertions: [
+				'event and revision remain bound while last-good data is shown',
+				'failure does not become a zero score',
+				'overlap-safe polling avoids duplicate full reads',
+				'network recovery renders the newer score',
+				'HTTP 500, HTTP 502, GraphQL errors and malformed payload surface the same bounded failure state',
+				'HEAD timeout is classified as a failure and never renders a fabricated zero score'
+			],
+			coveredFaults: ['HTTP 503', 'offline transport', 'client GraphQL HEAD timeout', 'HTTP 500', 'HTTP 502', 'GraphQL 200 with errors', 'malformed payload', 'new revision'],
+			missingFaults: ['full snapshot timeout-at-source-deadline'],
+			businessWrites: [],
+			functionalStatus: 'PASS',
+			performanceStatus: 'NOT_OBSERVED',
+			readyMs: null,
+			eventToPaintMs: null,
+			wholeCaseComplete: false,
+			missingReason: 'Client GraphQL HEAD timeout is now executed through the real 15s timer; full snapshot timeout-at-source-deadline, explicit stale/degraded age display and full cross-route S07 variants remain open.'
+		})
+	})
+})
+
+test('full match snapshot source timeout keeps last-good data and recovers', async ({
+	page
+}, testInfo) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	test.skip(
+		test.info().config.workers !== 1,
+		'Global fixture controls require a dedicated single-worker run'
+	)
+
+	const controls = graphqlFixtureUrl.replace('/graphql', '/__performance')
+	try {
+		await page.goto('/live/matches')
+		await expect(
+			page.getByRole('heading', { name: 'Live Matches', exact: true })
+		).toBeVisible()
+		await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+
+		const before = await (await fetch(controls)).json() as {
+			requests: Array<{
+				operation: string
+				startedAt: number
+				finishedAt: number | null
+				abortedAt: number | null
+			}>
+		}
+		await expect.poll(() =>
+			before.requests.filter(request => request.operation === 'GetLiveMatchdayV3').length
+		).toBeGreaterThan(0)
+		await expect(
+			page.getByRole('button', { name: 'Refresh matches', exact: true })
+		).toBeVisible()
+
+		await expect(
+			(await fetch(controls, {
+				method: 'POST',
+				body: JSON.stringify({
+					rules: [{ operation: 'GetLiveMatchdayV3', delayMs: 16_000 }]
+				})
+			})).ok
+		).toBe(true)
+
+		const timeoutResponse = page.waitForResponse(response => {
+			const url = new URL(response.url())
+			return url.pathname === '/api/live/matches' && response.status() === 504
+		})
+		await page.getByRole('button', { name: 'Refresh matches', exact: true }).click()
+		const response = await timeoutResponse
+		expect(response.status()).toBe(504)
+		await expect(
+			page.getByRole('alert').filter({
+				hasText: 'Latest match update failed. Showing the last available scores.'
+			})
+		).toBeVisible()
+		await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+		await expect(page.getByText(/1\s*[–-]\s*0/)).toHaveCount(0)
+
+		const afterTimeout = await (await fetch(controls)).json() as {
+			requests: Array<{
+				operation: string
+				startedAt: number
+				finishedAt: number | null
+				abortedAt: number | null
+			}>
+		}
+		const sourceTimeout = afterTimeout.requests
+			.filter(request => request.operation === 'GetLiveMatchdayV3')
+			.at(-1)
+		expect(sourceTimeout).toBeDefined()
+		expect(sourceTimeout?.abortedAt).not.toBeNull()
+		const sourceTimeoutElapsedMs = sourceTimeout?.abortedAt && sourceTimeout.startedAt
+			? sourceTimeout.abortedAt - sourceTimeout.startedAt
+			: null
+		expect(sourceTimeoutElapsedMs).toBeGreaterThanOrEqual(14_000)
+
+		await expect(
+			(await fetch(controls, {
+				method: 'POST',
+				body: JSON.stringify({ rules: [] })
+			})).ok
+		).toBe(true)
+		const recoveredResponse = page.waitForResponse(response => {
+			const url = new URL(response.url())
+			return url.pathname === '/api/live/matches' && response.status() === 200
+		})
+		await page.getByRole('button', { name: 'Refresh matches', exact: true }).click()
+		expect((await recoveredResponse).status()).toBe(200)
+		await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
+		await testInfo.attach('S05-S07-full-snapshot-timeout', {
+			contentType: 'application/json',
+			body: JSON.stringify({
+				caseIds: ['S05', 'S07'],
+				stepIds: ['S05.01', 'S07.01'],
+				state: 'full snapshot source deadline returns HTTP 504 and retains last-good content',
+				assertions: [
+					'GetLiveMatchdayV3 is delayed beyond the server 15s GraphQL deadline',
+					'API returns HTTP 504 for the source timeout',
+					'last-good score remains visible and no fabricated score is rendered',
+					'clearing the delay allows an explicit refresh to recover'
+				],
+				coveredFaults: ['full snapshot timeout-at-source-deadline'],
+				observedSourceTimeout: sourceTimeout,
+				sourceTimeoutElapsedMs,
+				missingFaults: ['explicit stale/degraded age display', 'full cross-route S07 variants'],
+				businessWrites: [],
+				functionalStatus: 'PASS',
+				performanceStatus: 'NOT_OBSERVED',
+				readyMs: null,
+				eventToPaintMs: null,
+				wholeCaseComplete: false,
+				missingReason: 'The source deadline timeout is now executed through the real server GraphQL 15s timer; normal performance timing, age-display variants and full cross-route coverage remain open.'
+			})
+		})
+	} finally {
+		await fetch(controls, {
+			method: 'POST',
+			body: JSON.stringify({ rules: [] })
+		}).catch(() => {})
+	}
+})
+
+test('stale and degraded match publications show a timestamped delay notice', async ({
+	page
+}, testInfo) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	test.skip(
+		test.info().config.workers !== 1,
+		'Global fixture controls require a dedicated single-worker run'
+	)
+
+	const controls = graphqlFixtureUrl.replace('/graphql', '/__performance')
+	const response = await fetch(graphqlFixtureUrl, {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json',
+			'X-LetLetMe-Contract': 'live-matches-v3'
+		},
+		body: JSON.stringify({
+			query: 'query GetLiveMatchdayV3 { __typename }',
+			variables: { eventId: null }
+		})
+	})
+	expect(response.ok).toBe(true)
+	const seed = (await response.json()).data as {
+		liveMatchday: {
+			delivery: { state: string; servedFrom: string | null; reasonCodes: string[] }
+			snapshot: unknown
+			availability: string
+		}
+	}
+	const observations: Array<{
+		state: 'STALE' | 'DEGRADED'
+		text: string
+		timezoneLabel: boolean
+	}> = []
+	try {
+		for (const state of ['STALE', 'DEGRADED'] as const) {
+			const payload = structuredClone(seed)
+			payload.liveMatchday.delivery = {
+				state,
+				servedFrom: state === 'STALE' ? 'REDIS_PREVIOUS' : 'PROCESS_LKG',
+				reasonCodes: ['ISOLATED_DELAY']
+			}
+			await expect(
+				(await fetch(controls, {
+					method: 'POST',
+					body: JSON.stringify({
+						rules: [{ operation: 'GetLiveMatchdayV3', variables: { eventId: null }, data: payload }]
+					})
+				})).ok
+			).toBe(true)
+			await page.goto('/live/matches')
+			const notice = page.getByRole('status').filter({
+				hasText: 'Official scores are delayed'
+			})
+			await expect(notice).toBeVisible()
+			const text = await notice.innerText()
+			expect(text).toMatch(/Official scores are delayed/)
+			expect(text).toMatch(/\([^()]+\)$/)
+			observations.push({ state, text, timezoneLabel: /\([^()]+\)$/.test(text) })
+			await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute(
+				'data-status',
+				'STALE'
+			)
+		}
+		await testInfo.attach('S05-S07-stale-degraded-age', {
+			contentType: 'application/json',
+			body: JSON.stringify({
+				caseIds: ['S05', 'S07'],
+				stepIds: ['S05.01', 'S07.01'],
+				states: observations,
+				assertions: [
+					'STALE and DEGRADED publications remain visible as stale data',
+					'delay notice includes the last complete snapshot time',
+					'displayed local time includes an explicit timezone label',
+					'contract marker remains STALE for both degraded delivery states'
+				],
+				coveredStates: ['STALE', 'DEGRADED'],
+				missingStates: ['production natural stale/degraded observation', 'full cross-route S07 variants'],
+				businessWrites: [],
+				functionalStatus: 'PASS',
+				performanceStatus: 'NOT_OBSERVED',
+				readyMs: null,
+				eventToPaintMs: null,
+				wholeCaseComplete: false,
+				missingReason: 'Both isolated delivery states are rendered with a timestamp and timezone; production natural occurrence, normal timing and full route/variant coverage remain open.'
+			})
+		})
+	} finally {
+		await fetch(controls, {
+			method: 'POST',
+			body: JSON.stringify({ rules: [] })
+		}).catch(() => {})
+	}
 })
 
 test('match requests are cancelled when actual navigation unmounts the page', async ({ page }) => {

@@ -542,6 +542,8 @@
 		"none": "No matches available",
 		"refresh": "Refresh matches",
 		"lastUpdated": "Updated {time}",
+		"deliveryDelayed": "Official scores are delayed",
+		"deliveryDelayedSince": "Official scores are delayed · showing the last complete snapshot from {time}",
 		"detailUpdating": "Player data is updating",
 		"detailUpdatingSince": "Player data is updating · last detail {time}",
 		"loading": "Loading matches…",
