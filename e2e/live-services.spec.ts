@@ -1057,6 +1057,10 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	const headTimeoutGate = new Promise<void>(resolve => {
 		releaseHeadTimeout = resolve
 	})
+	let releaseThirdFullResponse!: () => void
+	const thirdFullResponseGate = new Promise<void>(resolve => {
+		releaseThirdFullResponse = resolve
+	})
 	let releaseFirstResponse: (() => void) | undefined
 	const firstResponseGate = new Promise<void>(resolve => {
 		releaseFirstResponse = resolve
@@ -1199,6 +1203,12 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 				json: { liveMatchday: { availability: 'READY' } }
 			})
 			return
+		}
+		if (fullRequestCount === 3) {
+			// Keep a clock jump or a slow CI worker from allowing the first
+			// post-failure success to clear the failure state before it is
+			// asserted. The recovery path releases this response explicitly.
+			await thirdFullResponseGate
 		}
 		await route.fulfill({
 			status: 200,
@@ -1348,6 +1358,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await context.setOffline(true)
 	await page.clock.runFor(100)
 	await context.setOffline(false)
+	releaseThirdFullResponse()
 	await expect.poll(() => fullRequestCount).toBe(3)
 	expect(probeCount).toBe(0)
 	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
@@ -2071,10 +2082,14 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
  await expect(page.locator('[data-live-points-ready="true"]')).toHaveCount(0)
  // Simulate user dwell on the terminal error; this is not a latency benchmark.
  await page.clock.fastForward(60_000)
- fail = false
- await page.getByRole('button', { name: 'Refresh', exact: true }).click()
- await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', failureMode === 'refresh-error' ? '32' : '31')
- await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length).toBe(1)
+	fail = false
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+	await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', failureMode === 'refresh-error' ? '32' : '31')
+	// The marker reports through a keepalive beacon after the ready DOM state
+	// commits. Drain the page clock before observing that asynchronous evidence;
+	// a busy CI worker must not turn a real recovery into a missing sample.
+	await page.clock.runFor(0)
+	await expect.poll(() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length, { timeout: 15_000 }).toBe(1)
  const recovery = samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction')[0]
  expect(recovery.result).toBe('ok')
  expect(recovery.value).toBeLessThan(60_000)
