@@ -401,6 +401,11 @@ export function LiveCompetitionBoardFilters({
 	const latestValueRef = useRef(value)
 	const queuedFiltersRef = useRef<LiveBoardFilterState | null>(null)
 	const applyPromiseRef = useRef<Promise<void> | null>(null)
+	const onRevisionGoneRef = useRef(onRevisionGone)
+
+	useEffect(() => {
+		onRevisionGoneRef.current = onRevisionGone
+	}, [onRevisionGone])
 
 	useEffect(() => {
 		latestValueRef.current = value
@@ -458,7 +463,7 @@ export function LiveCompetitionBoardFilters({
 					setRows([])
 					setSelectionIndexStatus('recovering')
 					try {
-						await onRevisionGone?.()
+						await onRevisionGoneRef.current?.()
 					} catch {
 						// The local retry remains available when the board refresh fails.
 					}
@@ -475,7 +480,6 @@ export function LiveCompetitionBoardFilters({
 		return () => controller.abort()
 	}, [
 		eventId,
-		onRevisionGone,
 		scoreCoreRevision,
 		selectionIndexRetryNonce,
 		tournamentId
