@@ -1053,10 +1053,13 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	let headRequestCount = 0
 	let fullRequestCount = 0
 	let secondFullResponseCompleted = false
-	let delayNextHeadForTimeout = false
-	let releaseHeadTimeout!: () => void
-	const headTimeoutGate = new Promise<void>(resolve => {
-		releaseHeadTimeout = resolve
+	let releaseRecoveryHeadResponses!: () => void
+	let recoveryHeadResponsesReleased = false
+	const recoveryHeadResponseGate = new Promise<void>(resolve => {
+		releaseRecoveryHeadResponses = () => {
+			recoveryHeadResponsesReleased = true
+			resolve()
+		}
 	})
 	let releaseThirdFullResponse!: () => void
 	const thirdFullResponseGate = new Promise<void>(resolve => {
@@ -1229,6 +1232,13 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 		const payload = route.request().postDataJSON() as { query?: string }
 		if (payload.query?.includes('GetLiveMatchdayHead')) {
 			headRequestCount += 1
+			// A head request may already be in flight when the failed FULL response
+			// commits. Hold recovery observations until the timeout/LKG assertions
+			// finish; otherwise a slow worker can start FULL and clear the failure
+			// alert before the test observes the intended state.
+			if (headRequestCount >= 3 && !recoveryHeadResponsesReleased) {
+				await recoveryHeadResponseGate
+			}
 			// The first freshness observation sees the newly published score. Once
 			// the full response is accepted, the next observation sees a newer
 			// revision and exercises the failed FULL/LKG path.
@@ -1242,10 +1252,6 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 					revision,
 					fullRequestCount === 0 ? 2 : 3
 				).data
-			}
-			if (delayNextHeadForTimeout) {
-				delayNextHeadForTimeout = false
-				await headTimeoutGate
 			}
 			await route.fulfill({ status: 200, json: headBody }).catch(() => {})
 			return
@@ -1351,7 +1357,6 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	expect(fullRequestCount).toBe(2)
 	expect(probeCount).toBe(0)
 
-	delayNextHeadForTimeout = true
 	await context.setOffline(false)
 	await expect.poll(() => headRequestCount).toBeGreaterThan(2)
 	await page.clock.runFor(16_000)
@@ -1362,7 +1367,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	).toBeVisible()
 	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
 	expect(fullRequestCount).toBe(2)
-	releaseHeadTimeout()
+	releaseRecoveryHeadResponses()
 	await page.clock.runFor(0)
 	await context.setOffline(true)
 	await page.clock.runFor(100)
