@@ -373,7 +373,7 @@ export function HomeMarketCarousel({
 			aria-labelledby="home-market-title"
 			data-share-preserve-width="true"
 			data-share-fit-content="true"
-			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
+			className="flex h-full min-w-0 flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
 		>
 			<HomeAutoCarousel
 				slides={slides}

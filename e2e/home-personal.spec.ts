@@ -523,11 +523,18 @@ test('English and Chinese Home stay accessible without mobile overflow', async (
 		await page.evaluate(async () => {
 			await document.fonts?.ready
 		})
-		expect(
-			await page.evaluate(
-				() => document.documentElement.scrollWidth <= window.innerWidth
+		// Streaming market content and the carousel can commit a layout update
+		// after the heading and fonts are ready. Assert the settled layout while
+		// retaining the real overflow condition; persistent overflow still fails.
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						() => document.documentElement.scrollWidth <= window.innerWidth
+					),
+				{ timeout: 5_000 }
 			)
-		).toBe(true)
+			.toBe(true)
 	}
 	const accessibility = await new AxeBuilder({ page }).analyze()
 	expect(accessibility.violations).toEqual([])
