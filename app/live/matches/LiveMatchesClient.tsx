@@ -615,7 +615,7 @@ export function LiveMatchesClient({
 		<div className="flex flex-wrap items-center justify-end gap-2">
 			{detailDelayed ? (
 				<span
-					className="whitespace-nowrap text-xs text-amber-700 dark:text-amber-300"
+					className="min-w-0 max-w-full whitespace-normal break-words text-right text-xs text-amber-700 dark:text-amber-300"
 					role="status"
 				>
 					{detailUpdatedLabel
@@ -625,7 +625,7 @@ export function LiveMatchesClient({
 			) : null}
 			{deliveryDelayed ? (
 				<span
-					className="whitespace-nowrap text-xs text-amber-700 dark:text-amber-300"
+					className="min-w-0 max-w-full whitespace-normal break-words text-right text-xs text-amber-700 dark:text-amber-300"
 					role="status"
 				>
 					{lastUpdatedLabel

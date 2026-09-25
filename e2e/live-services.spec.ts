@@ -1595,6 +1595,7 @@ test('stale and degraded match publications show a timestamped delay notice', as
 		timezoneLabel: boolean
 	}> = []
 	try {
+		await page.setViewportSize({ width: 390, height: 900 })
 		for (const state of ['STALE', 'DEGRADED'] as const) {
 			const payload = structuredClone(seed)
 			payload.liveMatchday.delivery = {
@@ -1618,6 +1619,10 @@ test('stale and degraded match publications show a timestamped delay notice', as
 			const text = await notice.innerText()
 			expect(text).toMatch(/Official scores are delayed/)
 			expect(text).toMatch(/\([^()]+\)$/)
+			await expect.poll(
+				() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+				{ timeout: 5000 }
+			).toBe(true)
 			observations.push({ state, text, timezoneLabel: /\([^()]+\)$/.test(text) })
 			await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute(
 				'data-status',
@@ -2045,7 +2050,7 @@ test('abandoned gameweek readiness does not leak into a later visit', async ({ p
 })
 
 for (const failureMode of ['request-error', 'no-picks', 'pending-exhausted', 'refresh-error'] as const) {
-test(`manual recovery after failed gameweek starts a fresh readiness clock (${failureMode})`, async ({ page }, testInfo) => {
+test(`manual recovery after failed gameweek starts a fresh readiness clock (${failureMode})`, async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fault injection')
  await page.clock.install()
  const samples: { metricName: string; measurementKind: string; result: string; value: number }[] = []
@@ -2104,20 +2109,11 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
 	// asynchronous evidence; a busy worker must not turn a ready state into a
 	// false timing failure.
 	await page.clock.runFor(100)
+	await expect.poll(
+		() => samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction').length,
+		{ timeout: 5000 }
+	).toBe(1)
 	const recoverySamples = samples.filter(s => s.metricName === 'LIVE_POINTS_READY' && s.measurementKind === 'interaction')
-	if (recoverySamples.length === 0) {
-		await testInfo.attach('LIVE_POINTS_READY-missing-evidence', {
-			contentType: 'application/json',
-			body: JSON.stringify({
-				functionalStatus: 'PASS',
-				performanceStatus: 'NOT_OBSERVED',
-				metricName: 'LIVE_POINTS_READY',
-				measurementKind: 'interaction',
-				missingReason: 'The ready DOM state recovered, but the browser beacon was not observed within the controlled fixture window.'
-			})
-		})
-		return
-	}
 	await expect(recoverySamples).toHaveLength(1)
 	const recovery = recoverySamples[0]
  expect(recovery.result).toBe('ok')
