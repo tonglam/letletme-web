@@ -3475,6 +3475,11 @@ for (const width of [1440, 390]) {
    await menu.locator(':scope > summary').click()
    await menu.getByRole('link', { name: zh ? '赛程' : 'Fixtures', exact: true }).click()
    await expect(page).toHaveURL(/\/explore\/fixtures$/)
+   // The FDR table is server-rendered, but its search is client-owned. Under
+   // the full parallel suite the input can be filled before hydration attaches
+   // its change handler, leaving the visible rows unfiltered. Treat the
+   // existing route-ready marker as the interaction boundary.
+   await expect.poll(() => reportedVitals.some(sample => sample.metricName === 'FIXTURES_WINDOW_READY')).toBe(true)
    const matrix = page.getByRole('region', { name: zh ? '球队 FDR' : 'Team FDR', exact: true })
    await expect(matrix.locator('tbody tr')).toHaveCount(3)
    await matrix.getByRole('searchbox', { name: zh ? '搜索球队' : 'Search teams' }).fill('Arsenal')
