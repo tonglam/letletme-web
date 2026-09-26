@@ -2119,7 +2119,10 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
    })
    return
   }
-  if (fail && payload.query?.includes('GetLiveCalcPoints')) {
+  const recoveryClicked = fail && payload.query?.includes('GetLiveCalcPoints')
+   ? await page.evaluate(() => document.documentElement.dataset.fixtureRecoveryClicked === 'true')
+   : false
+  if (fail && !recoveryClicked && payload.query?.includes('GetLiveCalcPoints')) {
    failedReads += 1
    if ((failureMode === 'request-error' || failureMode === 'refresh-error')) {
     await route.fulfill({ status: 200, json: { errors: [{ message: 'Controlled load failure' }] } })
@@ -2150,8 +2153,29 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
  await expect(page.locator('[data-live-points-ready="true"]')).toHaveCount(0)
  // Simulate user dwell on the terminal error; this is not a latency benchmark.
  await page.clock.fastForward(60_000)
-	fail = false
+	// Keep background reads failing during Playwright's actionability wait.
+	// Only the actual DOM click releases the fixture, before React handles it.
+	await page.evaluate(() => {
+		document.addEventListener('click', function releaseRecovery(event) {
+			const button = event.target instanceof Element ? event.target.closest('button') : null
+			if (button?.textContent?.trim() !== 'Refresh') return
+			document.documentElement.dataset.fixtureRecoveryClicked = 'true'
+			document.removeEventListener('click', releaseRecovery, true)
+		}, true)
+	})
+	await expect(page.locator('html')).not.toHaveAttribute('data-fixture-recovery-clicked', 'true')
+	if (failureMode === 'request-error' || failureMode === 'refresh-error') {
+		const beforeClick = await page.evaluate(async () => {
+			const response = await fetch('/api/graphql', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ query: 'query GetLiveCalcPoints { calcLivePointsByEntry(eventId: 31, entryId: 123) { event } }' })
+			})
+			return response.json()
+		})
+		expect(beforeClick.errors).toEqual([{ message: 'Controlled load failure' }])
+	}
 	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+	await expect(page.locator('html')).toHaveAttribute('data-fixture-recovery-clicked', 'true')
 	await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', failureMode === 'refresh-error' ? '32' : '31')
 	// The marker reports through a keepalive beacon after the ready DOM state
 	// commits. Drain a short controlled clock window before observing that
