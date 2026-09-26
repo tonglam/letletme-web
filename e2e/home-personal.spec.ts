@@ -1139,10 +1139,13 @@ const pointsSectionOperation = 'GetMyTournamentSeasonReviewPointsSection'
 const isSeasonSectionOperation = (query: string | undefined) =>
 	query?.includes(pointsSectionOperation) === true ||
 	query?.includes('GetMyTournamentSeasonReviewSection') === true
+test.describe(() => {
+if (recoveryMode === 'live-journey-second-entry') test.use({ timezoneId: 'Australia/Perth' })
 test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
+	if (recoveryMode === 'live-journey-second-entry') await page.addInitScript(() => localStorage.setItem('theme', 'system'))
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
 	if (recoveryMode === 'settlement-time') {
 		phase.settledAt = '2026-09-15T18:00:00Z'
@@ -1187,6 +1190,14 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			// This navigation fixture has no official player breakdown. Return a
 			// deterministic empty result instead of the fixture server's unknown-query
 			// 503, which would fence the subsequent board refresh for 30 seconds.
+			if (recoveryMode === 'live-journey-second-entry' && /query (PlayerLive|EventLiveExplainPlayer)\b/.test(payload.query ?? '')) {
+				const playerId = Number(payload.variables.playerId ?? payload.variables.elementId)
+				expect(payload.variables.eventId).toBe(4)
+				expect([1, 12]).toContain(playerId)
+				const stats = { minutes: 45, goalsScored: playerId === 1 ? 1 : 0, assists: 0, cleanSheets: 0, goalsConceded: playerId === 1 ? 2 : 0, defensiveContribution: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, bonus: 0 }
+				const contributions = [{ identifier: 'minutes', value: 45, points: 1 }, ...(playerId === 1 ? [{ identifier: 'goals_scored', value: 1, points: 6 }, { identifier: 'goals_conceded', value: 2, points: -1 }] : [])]
+				return route.fulfill({ json: { data: /query PlayerLive\b/.test(payload.query) ? { playerLive: { ...stats, totalPoints: playerId === 1 ? 6 : 1, bps: 10 } } : { eventLiveExplain: { elementId: playerId, stats, contributions } } } })
+			}
 			if (recoveryMode.startsWith('live-journey')) {
 				if (/query EventLiveExplainPlayer\b/.test(payload.query ?? '')) {
 					return route.fulfill({ json: { data: { eventLiveExplain: null } } })
@@ -1401,6 +1412,12 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const seed = await response.json()
 				expect(seed.errors).toBeUndefined()
 				const second = seed.data.calcLivePointsByEntry
+				const captain = second.pickList.find((pick: { isCaptain: boolean }) => pick.isCaptain)
+				expect(captain).toMatchObject({ element: 1, totalPoints: 6, multiplier: 2, pickActive: true })
+				const contribution = (pick: { pickActive: boolean; totalPoints: number; multiplier: number }) => pick.pickActive ? pick.totalPoints * pick.multiplier : 0
+				expect(contribution(captain)).toBe(12)
+				expect(second.pickList.reduce((sum: number, pick: { pickActive: boolean; totalPoints: number; multiplier: number }) => sum + contribution(pick), 0)).toBe(second.score.eventPoints)
+				expect(second.score.eventPoints).toBe(22)
 				second.entryName = 'Second Journey United'
 				second.pickList = second.pickList.map((pick: { webName: string }) => ({ ...pick, webName: `Second ${pick.webName}` }))
 				secondEntryRules.push({ operation: 'GetLiveCalcPoints', variables: { entryId: 6733550, eventId: 4 }, data: seed.data })
@@ -1860,11 +1877,18 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await page.getByRole('button', { name: locale === 'zh-CN' ? '下一轮' : 'Next gameweek', exact: true }).click()
 			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
 			await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=4`)
+			if (recoveryMode === 'live-journey-second-entry') expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
 			const originalBoardUrl = page.url()
 			await team.click()
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/15702` && url.searchParams.get('gw') === '4' && url.searchParams.get('tournamentId') === '6')
 			const pitch = page.getByRole('region', { name: locale === 'zh-CN' ? /阵型/ : /formation/ })
 			await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+			if (recoveryMode === 'live-journey-second-entry') {
+				await expect(pitch.getByText(locale === 'zh-CN' ? '得分' : 'GW PTS', { exact: true }).locator('..')).toContainText('22')
+				const captain = pitch.getByRole('button', { name: locale === 'zh-CN' ? '查看 Player 1 的详情' : 'View details for Player 1', exact: true })
+				await expect(captain.getByRole('img', { name: locale === 'zh-CN' ? '队长' : 'Captain', exact: true })).toBeVisible()
+				await expect(captain.getByText('6', { exact: true })).toBeVisible()
+			}
 			for (const playerId of [1, 12]) {
 				const opener = pitch.getByRole('button', { name: locale === 'zh-CN' ? `查看 Player ${playerId} 的详情` : `View details for Player ${playerId}`, exact: true })
 				// Model browsers where pointer activation does not focus the button.
@@ -1873,6 +1897,15 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const dialog = page.getByRole('dialog')
 				await expect(dialog.getByRole('heading', { name: `Player ${playerId}`, exact: true })).toBeVisible()
 				await expect(dialog.getByText(locale === 'zh-CN' ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+				if (recoveryMode === 'live-journey-second-entry') {
+					const items = dialog.getByRole('listitem')
+					await expect(items).toHaveCount(playerId === 1 ? 4 : 2)
+					const values = await items.locator(':scope > span:last-child').allTextContents()
+					const numbers = values.map(value => Number(value.replace(/\s/g, '')))
+					expect(numbers).toEqual(playerId === 1 ? [1, 6, -1, 6] : [1, 1])
+					expect(numbers.slice(0, -1).reduce((sum, value) => sum + value, 0)).toBe(numbers.at(-1))
+					await expect(dialog.getByText(locale === 'zh-CN' ? '估算' : 'Estimated', { exact: true })).toHaveCount(0)
+				}
 				await dialog.getByRole('button', { name: locale === 'zh-CN' ? '关闭' : 'Close', exact: true }).click()
 				await expect(dialog).toHaveCount(0)
 				await expect(opener).toBeFocused()
@@ -1937,6 +1970,15 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await page.goForward()
 				await expect(secondReady).toHaveCount(1)
 				await expect(pitch.getByRole('button', { name: /Second Player/ })).toHaveCount(15)
+				expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+				await testInfo.attach('J06-J11-formal-journey-binding', { contentType: 'application/json', body: JSON.stringify({
+					variantIds: ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
+					locale, viewport: { width: catalogWidth, height: 900 }, theme: 'system', timezone: 'Australia/Perth',
+					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, 12],
+					captainRawPoints: 6, captainMultiplier: 2, captainContribution: 12, activeSquadTotal: 22,
+					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
+					missingReason: 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
+				}) })
 			}
 
 			return
@@ -2272,6 +2314,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
 		await session.cleanup()
 	}
+})
 })
 
 }
