@@ -852,11 +852,12 @@ test('official-sync live points auto-refreshes without a polling label', async (
 	await page.clock.install()
 
 	let clientLivePointsRequests = 0
+	let recoveryAllowed = false
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as { query?: string }
 		if (payload.query?.includes('GetLiveCalcPoints')) {
 			clientLivePointsRequests += 1
-			if (clientLivePointsRequests === 1) {
+			if (!recoveryAllowed) {
 				await route.fulfill({
 					status: 200,
 					json: { errors: [{ message: 'Temporary live points failure' }] }
@@ -981,6 +982,8 @@ test('official-sync live points auto-refreshes without a polling label', async (
 	await expect(
 		page.getByRole('heading', { level: 1, name: 'Live Points' })
 	).toBeVisible()
+	// Observe the initial state after anchor reconciliation has settled.
+	await page.waitForLoadState('networkidle')
 	await expect(
 		page.getByRole('status').filter({
 			hasText:
@@ -988,12 +991,11 @@ test('official-sync live points auto-refreshes without a polling label', async (
 		})
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toHaveCount(0)
-	// The entry route performs one browser-side anchor reconciliation after
-	// the server seed fails. Let that initial recovery settle before measuring
-	// the separate official-sync refresh cadence.
-	await page.waitForLoadState('networkidle')
 	const initialClientLivePointsRequests = clientLivePointsRequests
 	expect(initialClientLivePointsRequests).toBeGreaterThan(0)
+	// Initial reconciliation must not recover before the unavailable state
+	// is asserted; only the subsequent scheduled refresh may return READY.
+	recoveryAllowed = true
 
 	// The official post-deadline sync is expected lifecycle work. It should
 	// recover through the cheap refresh loop without asking the user to retry.
