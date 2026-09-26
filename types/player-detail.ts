@@ -15,14 +15,14 @@ export interface PlayerDetail {
   breakdownSource?: 'official' | 'provisional' | 'snapshot' | 'none';
   playingStatus?: 'NOT_STARTED' | 'PLAYING' | 'FINISHED';
   stats: {
-    minutes: number;
-    goals: number;
-    assists: number;
-    cleanSheets: number;
+    minutes?: number;
+    goals?: number;
+    assists?: number;
+    cleanSheets?: number;
     saves?: number;
     penaltiesSaved?: number;
-    yellowCards: number;
-    redCards: number;
+    yellowCards?: number;
+    redCards?: number;
     goalsConceded?: number;
     defensiveContribution?: number;
     ownGoals?: number;
