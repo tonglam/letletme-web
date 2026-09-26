@@ -1,37 +1,94 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
-for (const locale of ['en', 'zh-CN'] as const) {
-	test(`gameweek selector enumerates its range and commits first-week stepping in ${locale}`, async ({ page }) => {
-		await page.setViewportSize({ width: locale === 'en' ? 1440 : 390, height: 900 })
-		const requestedEvents: string[] = []
-		page.on('request', request => {
-			const url = new URL(request.url())
-			if (url.pathname === '/api/gameweek/desk') requestedEvents.push(url.searchParams.get('eventId') ?? '')
+const selectorVariants = [
+	{ id: 'GW01.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' },
+	...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({
+		id: `GW01.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+		locale, width, theme: 'system', timezone: 'Australia/Perth'
+	})))
+]
+
+for (const variant of selectorVariants) {
+	test.describe(`gameweek selector ${variant.id}`, () => {
+		test.use({ viewport: { width: variant.width, height: 900 }, locale: variant.locale,
+			timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+		test('commits actual controls, clamps boundaries and reuses visited desks', async ({ page, context }, testInfo) => {
+			test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Planned selector variants run only against isolated fixtures')
+			testInfo.annotations.push({ type: 'coverage-variant', description: variant.id })
+			await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+			expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+			const zh = variant.locale === 'zh-CN'
+			const prefix = zh ? '/zh-CN' : ''
+			const requestedEvents: string[] = []
+			page.on('request', request => {
+				const url = new URL(request.url())
+				if (url.pathname === '/api/gameweek/desk') requestedEvents.push(url.searchParams.get('eventId') ?? '')
+			})
+			await page.goto(`${prefix}/explore/gameweek`)
+			await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+			const input = page.locator('#gameweek-jump-input')
+			const previous = page.getByRole('button', { name: zh ? '上一轮' : 'Previous gameweek', exact: true })
+			const next = page.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true })
+			const selector = page.getByRole('combobox', { name: zh ? '选择轮次' : 'Select gameweek', exact: true })
+			const committed: number[] = []
+			const assertDesk = async (gw: number) => {
+				await expect(page).toHaveURL(url => url.pathname === `${prefix}/explore/gameweek` && url.search === '')
+				await expect(input).toHaveValue(String(gw))
+				await expect(input).toHaveAttribute('aria-busy', 'false')
+				await expect(page.getByRole('heading', { name: zh ? `GW${gw} 概览` : `GW${gw} Overview`, exact: true })).toBeVisible()
+				const dreamTeam = page.locator('[aria-labelledby="home-team-of-week-title"]')
+				await expect(dreamTeam.locator('#home-team-of-week-title')).toHaveText(new RegExp(`^GW${gw}\\s*${zh ? '梦之队' : 'Dream Team'}$`))
+				await expect(dreamTeam.locator('li button')).toHaveCount(1)
+				await expect(dreamTeam.locator('li button')).toContainText('Saka')
+				await expect(dreamTeam.locator('li button')).toContainText('12')
+				const hauls = page.locator('[data-share-fit-content="true"]').filter({ has: page.getByRole('heading', { name: zh ? '得分上双球员' : 'Players Scoring 10+', exact: true }) })
+				await expect(hauls.locator('tbody tr').getByRole('button')).toHaveText(['Saka', 'Palmer'])
+				committed.push(gw)
+			}
+			await assertDesk(33)
+			await expect(input).toHaveAttribute('min', '1')
+			await expect(input).toHaveAttribute('max', '33')
+			await expect(next).toBeDisabled()
+			await selector.click()
+			const options = Array.from({ length: 33 }, (_, index) => {
+				const gw = 33 - index
+				return zh ? `第 ${gw} 轮${gw === 33 ? '（当前）' : ''}` : `Gameweek ${gw}${gw === 33 ? ' (Current)' : ''}`
+			})
+			await expect(page.getByRole('option')).toHaveText(options)
+			await page.getByRole('option', { name: options[32], exact: true }).click()
+			await assertDesk(1)
+			await expect(previous).toBeDisabled()
+			await next.click()
+			await assertDesk(2)
+			await previous.click()
+			await assertDesk(1)
+			await input.fill('32')
+			await input.press('Enter')
+			await assertDesk(32)
+			// Blur applies the published clamping contract; native form validation
+			// may prevent out-of-range Enter from submitting.
+			for (const [draft, expected] of [['999', 33], ['0', 1], ['', 1]] as const) {
+				await input.fill(draft)
+				await input.press('Tab')
+				await assertDesk(expected)
+			}
+			await input.fill('32')
+			await input.press('Enter')
+			await assertDesk(32)
+			await selector.click()
+			await page.getByRole('option', { name: options[0], exact: true }).click()
+			await assertDesk(33)
+			await expect(next).toBeDisabled()
+			expect(requestedEvents).toEqual(['1', '2', '32'])
+			await testInfo.attach('gameweek-selector-coverage', { contentType: 'application/json', body: JSON.stringify({
+				variantId: variant.id, steps: ['GW01.01', 'GW01.02', 'GW01.03', 'GW01.04'],
+				identity: 'anonymous', locale: variant.locale, width: variant.width, theme: variant.theme,
+				timezone: variant.timezone, committed, requestedEvents, functionalAssertions: 'PASS',
+				performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false
+			}) })
 		})
-		await page.goto(locale === 'en' ? '/explore/gameweek' : '/zh-CN/explore/gameweek')
-		const input = page.locator('#gameweek-jump-input')
-		await expect(input).toHaveValue('33')
-		await expect(input).toHaveAttribute('min', '1')
-		await expect(input).toHaveAttribute('max', '33')
-		const selector = page.getByRole('combobox', { name: locale === 'en' ? 'Select gameweek' : '选择轮次', exact: true })
-		await selector.click()
-		const expectedOptions = Array.from({ length: 33 }, (_, index) => {
-			const gw = 33 - index
-			return locale === 'en'
-				? `Gameweek ${gw}${gw === 33 ? ' (Current)' : ''}`
-				: `第 ${gw} 轮${gw === 33 ? '（当前）' : ''}`
-		})
-		await expect(page.getByRole('option')).toHaveText(expectedOptions)
-		await page.getByRole('option', { name: expectedOptions[32], exact: true }).click()
-		await expect(page.getByRole('heading', { name: locale === 'en' ? 'GW1 Overview' : 'GW1 概览', exact: true })).toBeVisible()
-		await expect(input).toHaveValue('1')
-		await expect(page.getByRole('button', { name: locale === 'en' ? 'Previous gameweek' : '上一轮', exact: true })).toBeDisabled()
-		await page.getByRole('button', { name: locale === 'en' ? 'Next gameweek' : '下一轮', exact: true }).click()
-		await expect(page.getByRole('heading', { name: locale === 'en' ? 'GW2 Overview' : 'GW2 概览', exact: true })).toBeVisible()
-		await expect(input).toHaveValue('2')
-		await expect(input).toHaveAttribute('aria-busy', 'false')
-		expect(requestedEvents).toEqual(['1', '2'])
 	})
 }
 
