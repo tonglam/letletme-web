@@ -3,8 +3,7 @@
 import {
 	reportBrowserPerformanceMetric,
 	reportBrowserRuntimeError,
-	resolveAudienceHint,
-	resolveNavigationId
+	resolveAudienceHint
 } from '@/lib/analytics/client-vitals'
 import { markBackgroundResumeStart } from '@/lib/analytics/route-navigation'
 import { normalizeMetricPage } from '@/lib/analytics/web-vitals'
@@ -17,10 +16,17 @@ type ReportWebVitalsCallback = Parameters<typeof useReportWebVitals>[0]
 export function WebVitalsReporter() {
 	const pathname = usePathname()
 	const pageRef = useRef(normalizeMetricPage(pathname))
-	const page = normalizeMetricPage(pathname)
 	useEffect(() => {
-		pageRef.current = page
-	}, [page])
+		// Native vitals describe a document lifecycle, not the current SPA route.
+		// BFCache starts a new lifecycle at the URL being restored.
+		const onPageShow = (event: PageTransitionEvent) => {
+			if (event.persisted) {
+				pageRef.current = normalizeMetricPage(window.location.pathname)
+			}
+		}
+		window.addEventListener('pageshow', onPageShow, true)
+		return () => window.removeEventListener('pageshow', onPageShow, true)
+	}, [])
 
 	const reportWebVital = useCallback<ReportWebVitalsCallback>(metric => {
 		const page = pageRef.current
@@ -31,8 +37,7 @@ export function WebVitalsReporter() {
 			rating: metric.rating,
 			metricId: metric.id,
 			page,
-			audienceHint: resolveAudienceHint(),
-			navigationId: resolveNavigationId()
+			audienceHint: resolveAudienceHint()
 		})
 	}, [])
 
