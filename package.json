@@ -14,7 +14,7 @@
 		"worker:dry-run": "npx --yes wrangler@4.123.0 deploy --dry-run --config cloudflare/worker/wrangler.toml",
 		"watchdog:dry-run": "npx --yes wrangler@4.123.0 deploy --dry-run --config cloudflare/watchdog/wrangler.toml",
 		"test:e2e": "playwright test",
-		"test:e2e:hydration": "E2E_LIVE_HYDRATION=1 playwright test e2e/live-hydration.spec.ts",
+		"test:e2e:hydration": "E2E_LIVE_HYDRATION=1 playwright test e2e/live-hydration.spec.ts e2e/match-share-feedback.spec.ts",
 		"test:e2e:ui": "playwright test --ui",
 		"typecheck": "tsc --noEmit",
 		"contract:graphql": "npx tsx scripts/validate-queries-vs-schema.ts",
