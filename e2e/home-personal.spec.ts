@@ -1427,7 +1427,10 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					const body = await response.json()
 					const board = body.entryLiveCompetitionBoard
 					board.rows.push({ ...board.rows[0], entry: 6733550, entryName: 'Second Journey United', liveRank: 2 })
-					board.totalEntries = board.filteredEntries = 2
+					board.totalEntries = 2
+					const search = (route.request().postDataJSON().input.search ?? '').toLowerCase()
+					board.rows = board.rows.filter((row: { entryName: string; playerName: string }) => `${row.entryName} ${row.playerName}`.toLowerCase().includes(search))
+					board.filteredEntries = board.rows.length
 					await route.fulfill({ response, json: body })
 				})
 			}
@@ -1629,6 +1632,27 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await expect(links).toHaveText(direction === 'ASC' ? [/High Sort Team/, /Low Sort Team/] : [/Low Sort Team/, /High Sort Team/])
 				}
 				return
+			}
+			if (formalJourney) {
+				const messages = (locale === 'zh-CN' ? zhMessages : enMessages).LiveTournament
+				const search = page.getByRole('textbox', { name: messages.search, exact: true })
+				for (const [query, expectedEntries] of [['E2E United', [15702]], ['no-such-journey-team', []]] as const) {
+					const result = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.search === query)
+					await search.fill(query)
+					const response = await result
+					expect(response.status()).toBe(200)
+					expect(response.request().postDataJSON()).toMatchObject({ tournamentId: 6, eventId: 4 })
+					const board = (await response.json()).entryLiveCompetitionBoard
+					expect(board.rows.map((row: { entry: number }) => row.entry)).toEqual(expectedEntries)
+					await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(expectedEntries.length)
+					await expect(page.getByRole('link', { name: /Second Journey United/ }).filter({ visible: true })).toHaveCount(0)
+					if (expectedEntries.length === 0) await expect(page.getByText(messages.noMatchingTeams, { exact: true })).toBeVisible()
+				}
+				await page.getByRole('button', { name: messages.clearSearch, exact: true }).click()
+				await expect(search).toHaveValue('')
+				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+				await expect(page.getByRole('link', { name: /Second Journey United/ }).filter({ visible: true })).toHaveCount(1)
+				await expect(page.getByText(messages.noMatchingTeams, { exact: true })).toHaveCount(0)
 			}
 			const team = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
 			await expect(team).toHaveCount(1)
@@ -1995,7 +2019,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await testInfo.attach('J06-J11-formal-journey-binding', { contentType: 'application/json', body: JSON.stringify({
 					variantIds: ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
 					locale, viewport: { width: catalogWidth, height: 900 }, theme: 'system', timezone: 'Australia/Perth',
-					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, 12],
+					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, 12], searchAssertions: ['hit', 'empty', 'clear-restores-both'],
 						reviewStart: recoveryMode === 'live-journey-published' ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
 					captainRawPoints: 6, captainMultiplier: 2, captainContribution: 12, activeSquadTotal: 22,
 					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
