@@ -189,6 +189,38 @@ describe('buildLivePlayerDetailWithPayload', () => {
 		...overrides
 	})
 
+	it('keeps a verified zero-point explanation official after zero-value rows are hidden', () => {
+		const player = basePlayer({ position: 'GKP', playingStatus: 'FINISHED' })
+		const live = completeLive({ minutes: 0, goalsScored: 0, bps: 0, totalPoints: 0 })
+		const explain: EventLiveExplainItem = {
+			elementId: 1,
+			stats: live,
+			contributions: [{ identifier: 'minutes', value: 0, points: 0 }]
+		}
+		const detail = buildLivePlayerDetailWithPayload(player, { explain, live })
+		assert.equal(detail.points, 0)
+		assert.equal(detail.breakdownSource, 'official')
+		assert.equal(detail.breakdownPending, false)
+		assert.deepEqual(detail.pointsBreakdown, [])
+	})
+
+	it('does not treat missing or inconsistent zero-point explanations as official', () => {
+		const player = basePlayer({ position: 'GKP', playingStatus: 'FINISHED' })
+		const live = completeLive({ minutes: 0, goalsScored: 0, bps: 0, totalPoints: 0 })
+		for (const explain of [
+			null,
+			{ elementId: 1, stats: live, contributions: [] },
+			{
+				elementId: 1,
+				stats: { ...live, minutes: 90 },
+				contributions: [{ identifier: 'minutes', value: 0, points: 0 }]
+			}
+		]) {
+			const detail = buildLivePlayerDetailWithPayload(player, { explain, live })
+			assert.notEqual(detail.breakdownSource, 'official')
+		}
+	})
+
 	it('uses the targeted official payload for the latest score and breakdown', () => {
 		const player = basePlayer({
 			position: 'MID',

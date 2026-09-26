@@ -143,7 +143,11 @@ export function resolvePointsBreakdown(input: {
 } {
 	const total = input.player.stats.points
 
-	if (input.officialMatchesTotal && input.official.length > 0) {
+	// Verified zero-point explanations can have no visible scoring rows.
+	if (
+		input.officialMatchesTotal &&
+		(input.official.length > 0 || total === 0)
+	) {
 		return { lines: input.official, source: 'official', pending: false }
 	}
 
