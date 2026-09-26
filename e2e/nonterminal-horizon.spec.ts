@@ -8,7 +8,16 @@ async function control(rules: unknown[] = []) {
 }
 test.afterEach(async () => { await control() })
 
-	test('FIX03 nonterminal 5 to 8 to 3 ignores stale results and returns to the seed without requests', async ({ page }) => {
+for (const locale of ['en', 'zh-CN'] as const) {
+test.describe(`FIX03 nonterminal ${locale}`, () => {
+ if (locale === 'zh-CN') test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('FIX03 nonterminal 5 to 8 to 3 ignores stale results and returns to the seed without requests', async ({ page, context }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture controls')
+  if (locale === 'zh-CN') {
+   testInfo.annotations.push(...['FIX03.state.01', 'FIX03.state.02'].map(description => ({ type: 'coverage-variant', description })))
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+  }
 		await control([{ operation: 'GetCoreEventContext', data: { coreEventContext: {
 			season: '2627', revision: 'horizon-gw30', sourceCheckedAt: '2026-08-13T09:40:00.000Z',
 			currentEventId: 30, nextEventId: 31, latestFinishedEventId: 29,
@@ -37,10 +46,15 @@ test.afterEach(async () => { await control() })
 			finally { settled() }
 		})
 		try {
-			await page.goto('/explore/fixtures')
-			const five = page.getByRole('button', { name: '5 GWs', exact: true })
-			const eight = page.getByRole('button', { name: '8 GWs', exact: true })
-			const three = page.getByRole('button', { name: '3 GWs', exact: true })
+			await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+   if (locale === 'zh-CN') {
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(page.viewportSize()?.width).toBe(390)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   }
+			const five = page.getByRole('button', { name: locale === 'en' ? '5 GWs' : '5 轮', exact: true })
+			const eight = page.getByRole('button', { name: locale === 'en' ? '8 GWs' : '8 轮', exact: true })
+			const three = page.getByRole('button', { name: locale === 'en' ? '3 GWs' : '3 轮', exact: true })
 			await expect(page.getByRole('columnheader', { name: 'GW30', exact: true })).toBeVisible()
 			await expect(five).toHaveAttribute('aria-pressed', 'true')
 			await eight.click()
@@ -74,6 +88,9 @@ test.afterEach(async () => { await control() })
 			expect(requests).toBe(2)
 		} finally { release() }
 	})
+
+})
+}
 
 test.describe('GW01.state.02 preseason', () => {
  test.use({ viewport: { width: 390, height: 900 }, locale: 'zh-CN', timezoneId: 'UTC', colorScheme: 'dark' })

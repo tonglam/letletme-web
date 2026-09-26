@@ -163,9 +163,23 @@ test('team FDR search filters and highlights the matching team', async ({
 	await expect(teamFdr.locator('tbody tr')).toHaveCount(3)
 })
 
-test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses memory cache', async ({
-	page
-}) => {
+for (const locale of ['en', 'zh-CN'] as const) {
+test.describe(`FIX03 terminal ${locale}`, () => {
+ if (locale === 'zh-CN') test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses memory cache', async ({
+	page, context, request
+}, testInfo) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated terminal fixture')
+ if (locale === 'zh-CN') {
+  testInfo.annotations.push({ type: 'coverage-variant', description: 'FIX03.state.03' })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+  const first = await request.get('/api/fixtures/window?fromGw=1&count=1')
+  expect(first.ok()).toBe(true)
+  expect(await first.json()).toMatchObject({ fromGw: 1, toGw: 1, unknownEventIds: [], fixturesByEvent: { '1': [{ id: 1001, eventId: 1, finished: true, homeScore: 2, awayScore: 1 }] } })
+  const overflow = await request.get('/api/fixtures/window?fromGw=38&count=2')
+  expect(overflow.status()).toBe(400)
+ }
 	let requestCount = 0
 	const reportedVitals: Array<Record<string, unknown>> = []
 	let releaseRequest: () => void = () => undefined
@@ -179,6 +193,9 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 
 	await page.route('**/api/fixtures/window?**', async route => {
 		requestCount += 1
+  const url = new URL(route.request().url())
+  expect(url.searchParams.get('fromGw')).toBe('38')
+  expect(url.searchParams.get('count')).toBe('1')
 		markRequestStarted()
 		await requestGate
 		await route.continue()
@@ -188,17 +205,22 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 		if (payload && typeof payload === 'object') reportedVitals.push(payload)
 		return route.fulfill({ status: 204, body: '' })
 	})
-	await page.goto('/explore/fixtures')
+	await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+ if (locale === 'zh-CN') {
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(page.viewportSize()?.width).toBe(390)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+ }
 
 	const interactionMetrics = () => routeReadySamples(reportedVitals).filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY' && sample.measurementKind === 'interaction')
 	await expect.poll(() => routeReadySamples(reportedVitals).filter(sample => sample.metricName === 'FIXTURES_WINDOW_READY').length).toBe(1)
-	const fiveGws = page.getByRole('button', { name: '5 GWs' })
-	const sixGws = page.getByRole('button', { name: '6 GWs' })
+	const fiveGws = page.getByRole('button', { name: locale === 'en' ? '5 GWs' : '5 轮' })
+	const sixGws = page.getByRole('button', { name: locale === 'en' ? '6 GWs' : '6 轮' })
 	await sixGws.click()
 	await requestStarted
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')
 	await expect(sixGws).toHaveAttribute('aria-busy', 'true')
-	await expect(page.getByText('Loading more gameweeks…')).toBeVisible()
+	await expect(page.getByText(locale === 'en' ? 'Loading more gameweeks…' : '正在加载更多轮次…')).toBeVisible()
 	await expect(page.getByRole('columnheader', { name: 'GW38' })).toHaveCount(0)
 
 	await sixGws.click()
@@ -207,6 +229,9 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 	await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
 	await expect(sixGws).toHaveAttribute('aria-busy', 'false')
 	await expect(page.getByRole('columnheader', { name: 'GW38' })).toBeVisible()
+ await expect(page.getByRole('columnheader', { name: 'GW39', exact: true })).toHaveCount(0)
+ await expect(page.locator('#fdr-team-2').getByTitle('GW38 · EVE (H) · FDR 2', { exact: true })).toBeVisible()
+ await expect(page.locator('#fdr-team-3').getByTitle('GW38 · CHE (A) · FDR 3', { exact: true })).toBeVisible()
 	await expect
 		.poll(() =>
 			routeReadySamples(reportedVitals).some(
@@ -235,6 +260,9 @@ test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses 
 	expect(new Set(interactionMetrics().map(sample => sample.interactionId)).size).toBe(3)
 	expect(requestCount).toBe(1)
 })
+
+})
+}
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	for (const width of [1440, 390]) {
