@@ -7,7 +7,7 @@ test.describe('match detail missing statistics', () => {
   test(`${locale} delayed ${outcome} preserves unknown versus zero`, async ({ page }) => {
    test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture controls only')
    const zh = locale === 'zh-CN'
-   const endpoint = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT}/__performance`
+   const endpoint = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const control = async (rules: unknown[]) => expect((await fetch(endpoint, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
    await control([])
    const response = await fetch(endpoint.replace('/__performance', '/graphql'), {
