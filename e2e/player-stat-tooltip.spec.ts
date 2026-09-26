@@ -1,0 +1,34 @@
+import { expect, test } from '@playwright/test'
+
+for (const locale of ['en', 'zh-CN']) {
+ test(`C08 player stat tooltip supports keyboard ${locale}`, async ({ page }) => {
+  const zh = locale === 'zh-CN'
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(`${zh ? '/zh-CN' : ''}/live/points/123?gw=33`)
+  const row = page.locator('div[role="button"]').filter({ has: page.getByText('Player 1', { exact: true }) }).first()
+  await expect(row).toBeVisible()
+  const stat = row.locator('[aria-label]').filter({ hasText: 'MIN' }).first()
+  await stat.hover()
+  const tooltip = page.getByRole('tooltip')
+  await expect(tooltip).toBeVisible()
+  await expect(tooltip).toContainText('45')
+  await page.keyboard.press('Escape')
+  await expect(tooltip).toHaveCount(0)
+  await page.mouse.move(0, 0)
+  await row.focus()
+  await page.keyboard.press('Tab')
+  await expect(stat).toBeFocused()
+  await expect(tooltip).toBeVisible()
+  await expect(tooltip).toHaveText(await stat.getAttribute('aria-label') ?? '')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(tooltip).toHaveCount(0)
+  await expect(stat).toBeFocused()
+  await row.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(row).toBeFocused()
+ })
+}

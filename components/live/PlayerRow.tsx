@@ -285,7 +285,8 @@ export function PlayerRow({ player }: PlayerRowProps) {
 									<Tooltip key={stat.key}>
 										<TooltipTrigger asChild>
 											<div
-												className="min-w-0 px-0.5 text-center"
+												tabIndex={0}
+												className="min-w-0 rounded-sm px-0.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 												aria-label={t('statValue', {
 													stat: description,
 													value
