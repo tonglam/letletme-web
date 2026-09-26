@@ -4804,10 +4804,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 // PROFILE01.03 and PROFILE03.01: isolated accounts and intercepted uploads only.
-test.describe('profile history and avatar fixture coverage', () => {
- test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+for (const profile of ['baseline', 'invalid-file', 'error'] as const) {
+const planned = profile !== 'baseline'
+const timezone = planned ? 'UTC' : 'Australia/Perth'
+test.describe(`profile history and avatar fixture coverage ${profile}`, () => {
+ test.use({ timezoneId: timezone, colorScheme: planned ? 'dark' : 'light' })
  for (const locale of ['en', 'zh-CN'] as const) {
   for (const width of [1440, 390]) {
+   if (planned && (locale !== 'zh-CN' || width !== 390)) continue
    test(`PROFILE01 long name history and PROFILE03 avatar recovery ${locale} ${width}`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated database and FPL fixture')
     const prefix = locale === 'en' ? '' : '/zh-CN'
@@ -4824,10 +4828,10 @@ test.describe('profile history and avatar fixture coverage', () => {
      }
      await addSessionCookie(page, session.cookie)
      await page.setViewportSize({ width, height: 900 })
-     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+     await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
      await page.goto(`${prefix}/profile`)
-     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
-     await expect(page.locator('html')).toHaveClass(/light/)
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+     await expect(page.locator('html')).toHaveClass(planned ? /dark/ : /light/)
      const main = page.locator('#main-content')
      await expect(main).toContainText('E2E Synced United')
      const history = main.locator('li').filter({ hasText: /^· History / })
@@ -4845,6 +4849,8 @@ test.describe('profile history and avatar fixture coverage', () => {
      ] as const
      const observations: Array<{ scenario: string; requestCount: number; requestBytes: number }> = []
      for (const scenario of statuses) {
+      if (profile === 'invalid-file' && !['invalidFile', 'success'].includes(scenario.code)) continue
+      if (profile === 'error' && !['uploadFailed', 'network', 'success'].includes(scenario.code)) continue
       let release!: () => void
       const held = new Promise<void>(resolve => { release = resolve })
       let requests = 0
@@ -4882,6 +4888,8 @@ test.describe('profile history and avatar fixture coverage', () => {
      await expect(history).toHaveCount(40)
      await testInfo.attach('profile-state-evidence', { contentType: 'application/json', body: JSON.stringify({
       stepIds: ['PROFILE01.03', 'PROFILE03.01'], locale, width, identity: 'B isolated bound account',
+      variantId: profile === 'invalid-file' ? 'PROFILE03.state.01' : profile === 'error' ? 'PROFILE03.state.02' : null,
+      scenario: profile, timezone, theme: planned ? 'dark' : 'system',
       history: { count: 40, order: 'last_seen_at descending', preservedAfterUpload: true }, uploads: observations,
       validationScope: 'UI upload response handling; server file validation and storage not exercised',
       readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_OBSERVED', databaseImageUnchanged: true
@@ -4893,6 +4901,49 @@ test.describe('profile history and avatar fixture coverage', () => {
    })
   }
  }
+})
+
+}
+
+test.describe('PROFILE01 planned unbound long-history applicability', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ test('old history is not displayed without a verified entry', async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated account and database only')
+  const session = await createSession()
+  const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+  try {
+   const names = Array.from({ length: 40 }, (_, i) => `Unbound history ${i}`)
+   for (const [i, name] of Array.from(names.entries())) {
+    await sql`INSERT INTO bauth.fpl_entry_name_history (id,user_id,entry_id,team_name,last_seen_at)
+     VALUES (${randomUUID()},${session.userId},15702,${name},${new Date(Date.UTC(2025,0,1,0,i))})`
+   }
+   await addSessionCookie(page, session.cookie)
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.goto('/zh-CN/profile')
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/profile')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   const main = page.locator('#main-content')
+   await expect(main.getByRole('heading', { name: 'E2E Manager', exact: true })).toBeVisible()
+   await expect(main.getByText(zhMessages.Profile.noPreviousTeamNames, { exact: true })).toBeVisible()
+   await expect(main.locator('li').filter({ hasText: /^· Unbound history / })).toHaveCount(0)
+   const [user] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+   expect(user.fpl_entry_id).toBeNull()
+   expect(user.fpl_entry_verified_at).toBeNull()
+   const [history] = await sql`SELECT count(*)::int AS count FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId}`
+   expect(history.count).toBe(40)
+   await testInfo.attach('profile-history-applicability', { contentType: 'application/json', body: JSON.stringify({
+    variantId: 'PROFILE01.state.03', stepId: 'PROFILE01.03', identity: 'U', locale: 'zh-CN', width: 390,
+    theme: 'dark', timezone: 'UTC', storedHistoryCount: 40, renderedHistoryCount: 0,
+    applicability: 'Long-history display requires verified entry; original unbound variant is N/A for that display.',
+    observedAssertion: 'PASS: unbound profile does not disclose retained entry history',
+    readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_OBSERVED'
+   }) })
+  } finally {
+   await sql.end()
+   await session.cleanup()
+  }
+ })
 })
 
 for (const mode of ['delayed', 'failed'] as const) {
