@@ -19,6 +19,7 @@ case "${1:-}" in
     done
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 cached board" --workers=1 --trace=on --output=test-results/prediction-cache
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh governance
+    npx playwright test e2e/match-missing-stats.spec.ts --workers=1 --trace=on --output=test-results/match-missing-stats
     ;;
   governance)
     E2E_GOVERNANCE=1 LETLETME_DATA_URL="http://127.0.0.1:${E2E_GRAPHQL_PORT:-4100}" LETLETME_DATA_API_KEY=isolated-governance-test-key PLATFORM_ADMIN_USER_IDS=e2e-governance-admin PLATFORM_ADMIN_FPL_ENTRY_IDS=909090 npx playwright test e2e/home-personal.spec.ts --grep "GOV REST sections" --workers=1 --trace=on --output=test-results/governance

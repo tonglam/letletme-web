@@ -43,14 +43,14 @@ export type LiveMatchdayStatus = Omit<LiveMatchdaySnapshot, 'matches'> & {
 const statValue = (
 	player: LiveMatchdayPlayer,
 	identifiers: readonly string[]
-): number => {
+): number | undefined => {
 	const normalized = new Set(
 		identifiers.map(identifier => identifier.toLowerCase())
 	)
 	const stat = player.stats.find(item =>
 		normalized.has(item.identifier.toLowerCase())
 	)
-	return stat?.value ?? 0
+	return stat?.value
 }
 
 const positionElementType: Record<LiveMatchdayPlayer['position'], number> = {

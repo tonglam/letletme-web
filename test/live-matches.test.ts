@@ -1023,3 +1023,15 @@ describe('live matchday V3 publication', () => {
 		assert.equal(match?.status, 'LIVE')
 	})
 })
+
+
+it('does not invent zero statistics omitted from a sparse match publication', () => {
+	const seed = snapshot()
+	seed.matches[0].players[0].stats.push({ identifier: 'goals_conceded', value: 0, awardedPoints: 0 })
+	const [match] = transformLiveMatchdayV3(seed)
+	const player = match.homeTeam.players[0]
+	assert.equal(player.goalsConceded, 0)
+	assert.equal(player.defensiveContribution, undefined)
+	assert.equal(player.goals, undefined)
+	assert.equal(player.minutes, 33)
+})
