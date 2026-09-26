@@ -2167,7 +2167,7 @@ test(`manual recovery after failed gameweek starts a fresh readiness clock (${fa
 	if (failureMode === 'request-error' || failureMode === 'refresh-error') {
 		const beforeClick = await page.evaluate(async () => {
 			const response = await fetch('/api/graphql', {
-				method: 'POST', headers: { 'content-type': 'application/json' },
+				method: 'POST', headers: { 'content-type': 'application/json', 'x-letletme-contract': 'live-points-v2' },
 				body: JSON.stringify({ query: 'query GetLiveCalcPoints { calcLivePointsByEntry(eventId: 31, entryId: 123) { event } }' })
 			})
 			return response.json()
