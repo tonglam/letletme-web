@@ -417,6 +417,16 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 	const firstDialog = page.getByRole('dialog')
 	await expect(firstDialog).toBeVisible()
 	if (lateTarget === 'same-player') {
+		// Exercise repeated selection while both reads are still pending. The
+		// dialog overlays the pitch, so dispatch only in this isolated race
+		// fixture; this is not evidence of a physical production click.
+		const samePlayer = page.getByRole('region', { name: /formation/, includeHidden: true })
+			.getByRole('button', { name: 'View details for Player 1', exact: true, includeHidden: true })
+		await samePlayer.dispatchEvent('click')
+		await samePlayer.dispatchEvent('click')
+		await page.clock.runFor(50)
+		expect(playerOneRequestCount).toBe(2)
+		await expect(firstDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
 		await settlePlayerOne()
 		await expect(firstDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
 		await expect(firstDialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
