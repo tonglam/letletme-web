@@ -417,6 +417,16 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 	const firstDialog = page.getByRole('dialog')
 	await expect(firstDialog).toBeVisible()
 	if (lateTarget === 'same-player') {
+		// Exercise repeated selection while both reads are still pending. The
+		// dialog overlays the pitch, so dispatch only in this isolated race
+		// fixture; this is not evidence of a physical production click.
+		const samePlayer = page.getByRole('region', { name: /formation/, includeHidden: true })
+			.getByRole('button', { name: 'View details for Player 1', exact: true, includeHidden: true })
+		await samePlayer.dispatchEvent('click')
+		await samePlayer.dispatchEvent('click')
+		await page.clock.runFor(50)
+		expect(playerOneRequestCount).toBe(2)
+		await expect(firstDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
 		await settlePlayerOne()
 		await expect(firstDialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
 		await expect(firstDialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
@@ -2305,3 +2315,47 @@ test.describe('S18 refresh admission in the planned mobile environment', () => {
   await testInfo.attach('scope', { body: JSON.stringify({ locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', requestsDuringHeldRefresh: requests, early429RetrySuppression: 'NOT_RUN', performance: 'NOT_RUN' }), contentType: 'application/json' })
  })
 })
+
+for (const chip of ['3xc', 'bboost'] as const) {
+ test(`live chip ${chip} preserves raw captain and bench detail scores`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated chip payload only')
+  await page.setViewportSize({ width: 390, height: 844 })
+  const expectedTeamPoints = chip === '3xc' ? 28 : 26
+  let chipReads = 0
+  await page.route('**/api/graphql', async route => {
+   const request = route.request().postDataJSON() as { query?: string }
+   if (!request.query?.includes('GetLiveCalcPoints')) {
+    await continueToGraphqlFixture(route)
+    return
+   }
+   const response = await route.fetch({ url: graphqlFixtureUrl })
+   const body = await response.json()
+   const live = body.data.calcLivePointsByEntry
+   live.chip = chip
+   live.score.eventPoints = expectedTeamPoints
+   live.score.netEventPoints = expectedTeamPoints
+   for (const pick of live.pickList) {
+    pick.multiplier = pick.element === 1 ? (chip === '3xc' ? 3 : 2) : (pick.position <= 11 || chip === 'bboost' ? 1 : 0)
+    pick.pickActive = pick.position <= 11 || chip === 'bboost'
+   }
+   chipReads += 1
+   await route.fulfill({ response, json: body })
+  })
+  await page.goto('/en/live/points/123')
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect.poll(() => chipReads).toBeGreaterThan(0)
+  const pitch = page.getByRole('region', { name: /formation/ })
+  await expect(pitch.getByText(chip === '3xc' ? 'TC' : 'BB', { exact: true }).first()).toBeVisible()
+  await expect(pitch.getByText(String(expectedTeamPoints), { exact: true }).first()).toBeVisible()
+  for (const [id, rawPoints] of [[1, 6], [15, 1]] as const) {
+   await pitch.getByRole('button', { name: `View details for Player ${id}`, exact: true }).click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+   await expect(dialog.getByLabel(`${rawPoints} points`, { exact: true })).toBeVisible()
+   await expect(dialog.getByText('Loading breakdown…', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText('Estimated', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText(`+${rawPoints}`, { exact: true }).last()).toBeVisible()
+   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+  }
+ })
+}

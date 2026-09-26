@@ -5246,3 +5246,47 @@ test.describe('GOV isolated admin REST evidence', () => {
   }
  }
 })
+
+test.describe('LP02 bound-account squad detail coverage', () => {
+ test.use({ timezoneId: 'Australia/Perth' })
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`LP02 bound squad positions ${locale} ${width}`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated identity and data fixture')
+    const session = await createSession({ entryId: 15702 })
+    const chinese = locale === 'zh-CN'
+    try {
+     await page.setViewportSize({ width, height: 900 })
+     await addSessionCookie(page, session.cookie)
+     const auth = await page.request.get('/api/auth/get-session')
+     expect(auth.ok()).toBe(true)
+     expect((await auth.json()).user.id).toBe(session.userId)
+     await page.goto(`/${locale}/live/points/${session.entryId}?gw=33`)
+     await expect(page).toHaveURL(new RegExp(`/${locale}/live/points/${session.entryId}\\?gw=33$`))
+     await expect(page.locator('[data-live-points-ready="true"]')).toHaveAttribute('data-live-gw', '33')
+     const pitch = page.getByRole('region', { name: chinese ? /阵型/ : /formation/ })
+     await expect(pitch.getByRole('button', { name: chinese ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+     await expect(pitch.getByRole('img', { name: chinese ? '队长' : 'Captain', exact: true })).toHaveCount(1)
+     await expect(pitch.getByRole('img', { name: chinese ? '副队长' : 'Vice-captain', exact: true })).toHaveCount(1)
+     for (const [id, position] of [[1, 'GKP'], [3, 'DEF'], [8, 'MID'], [15, 'FWD']] as const) {
+      const opener = pitch.getByRole('button', { name: chinese ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
+      await opener.click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toHaveCount(1)
+      await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+      await expect(dialog.getByText(position, { exact: true })).toBeVisible()
+      await expect(dialog.getByText(chinese ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+      await expect(dialog.getByText(chinese ? '估算' : 'Estimated', { exact: true })).toHaveCount(0)
+      await expect(dialog.getByText(chinese ? '（45 分钟）' : '(45 min)', { exact: true })).toBeVisible()
+      await dialog.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true }).click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(opener).toBeFocused()
+     }
+     testInfo.annotations.push({ type: 'coverage', description: `LP02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base; scoped identity/squad/position detail assertions only; chips/autosubs/performance remain separate` })
+    } finally {
+     await session.cleanup()
+    }
+   })
+  }
+ }
+})
