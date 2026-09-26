@@ -1163,6 +1163,17 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await addSessionCookie(page, session.cookie)
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
+			// This navigation fixture has no official player breakdown. Return a
+			// deterministic empty result instead of the fixture server's unknown-query
+			// 503, which would fence the subsequent board refresh for 30 seconds.
+			if (recoveryMode.startsWith('live-journey')) {
+				if (/query EventLiveExplainPlayer\b/.test(payload.query ?? '')) {
+					return route.fulfill({ json: { data: { eventLiveExplain: null } } })
+				}
+				if (/query PlayerLive\b/.test(payload.query ?? '')) {
+					return route.fulfill({ json: { data: { playerLive: null } } })
+				}
+			}
 			if (!isSeasonSectionOperation(payload.query)) return route.continue()
 			if (recoveryMode === 'tournament-race' && payload.variables.tournamentId === 78) {
 				secondSectionRequests += 1

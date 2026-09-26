@@ -96,6 +96,7 @@ function formatStatValue(value: number | undefined | null): string {
 
 export function PlayerRow({ player }: PlayerRowProps) {
 	const playerOpenerRef = useRef<HTMLElement | null>(null)
+	const detailTriggerRef = useRef<HTMLDivElement | null>(null)
 	const t = useTranslations('LivePoints')
 	const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
 
@@ -179,19 +180,9 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					player.autoSubRole?.endsWith('_OUT') &&
 						'border-destructive/25 bg-destructive/[0.03]'
 				)}
-				role="button"
-				tabIndex={0}
-				aria-label={detailsLabel}
-				onClick={event => {
-					playerOpenerRef.current = event.currentTarget
+				onClick={() => {
+					playerOpenerRef.current = detailTriggerRef.current
 					setIsDetailModalOpen(true)
-				}}
-				onKeyDown={event => {
-					if (event.key === 'Enter' || event.key === ' ') {
-						event.preventDefault()
-						playerOpenerRef.current = event.currentTarget
-						setIsDetailModalOpen(true)
-					}
 				}}
 			>
 				{/*
@@ -230,7 +221,20 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					</span>
 
 					{/* Name + C/V */}
-					<div className="flex min-w-0 items-center gap-1">
+					<div
+						ref={detailTriggerRef}
+						role="button"
+						tabIndex={0}
+						aria-label={detailsLabel}
+						className="flex min-w-0 items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						onKeyDown={event => {
+							if (event.key === 'Enter' || event.key === ' ') {
+								event.preventDefault()
+								playerOpenerRef.current = event.currentTarget
+								setIsDetailModalOpen(true)
+							}
+						}}
+					>
 						<span className="truncate font-display text-sm font-bold uppercase tracking-wide">
 							{player.name}
 						</span>
@@ -285,7 +289,8 @@ export function PlayerRow({ player }: PlayerRowProps) {
 									<Tooltip key={stat.key}>
 										<TooltipTrigger asChild>
 											<div
-												className="min-w-0 px-0.5 text-center"
+												tabIndex={0}
+												className="min-w-0 rounded-sm px-0.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 												aria-label={t('statValue', {
 													stat: description,
 													value
