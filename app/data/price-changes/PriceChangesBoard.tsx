@@ -50,9 +50,7 @@ import type { TimeLeft } from '@/lib/home-deadline'
 import {
 	DEFAULT_PRICE_CHANGE_SCOPE,
 	DEFAULT_PRICE_CHANGE_SORT,
-	matchesPriceChangePlayer,
 	selectPriceChangePlayers,
-	sortPriceChangePlayers,
 	type PriceChangeMovementFilter,
 	type PriceChangeSortColumn,
 	type PriceChangeSortDirection,
@@ -539,33 +537,28 @@ export function PriceChangesBoard({
 		)
 	}, [displayBoard.players, locale])
 
+	const sortedScopePlayers = useMemo(
+		() =>
+			selectPriceChangePlayers(displayBoard.players, {
+				scope,
+				movement,
+				sort,
+				squadElementIds: scope === 'likely' ? new Set<number>() : mySquad,
+				locale
+			}),
+		[displayBoard.players, locale, movement, mySquad, scope, sort]
+	)
+
 	const filteredPlayers = useMemo(() => {
 		const query = search.trim().toLowerCase()
-		const matchingPlayers = displayBoard.players.filter(player => {
-			if (!matchesPriceChangePlayer(player, { scope, movement })) {
-				return false
-			}
+		return sortedScopePlayers.filter(player => {
 			if (teamId !== 'all' && String(player.teamId) !== teamId) return false
 			if (!query) return true
 			return `${player.webName} ${player.teamName} ${player.teamShortName}`
 				.toLowerCase()
 				.includes(query)
 		})
-		return sortPriceChangePlayers(matchingPlayers, {
-			sort,
-			squadElementIds: scope === 'likely' ? new Set<number>() : mySquad,
-			locale
-		})
-	}, [
-		displayBoard.players,
-		locale,
-		movement,
-		mySquad,
-		scope,
-		search,
-		sort,
-		teamId
-	])
+	}, [search, sortedScopePlayers, teamId])
 
 	const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE))
 	const safePage = Math.min(page, pageCount)
@@ -626,15 +619,7 @@ export function PriceChangesBoard({
 	const alertVariant = statusAlertVariant(displayBoard.status, isUpdatingNotice)
 	const from = filteredPlayers.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
 	const to = Math.min(safePage * PAGE_SIZE, filteredPlayers.length)
-	const shareScopePlayers = useMemo(() => {
-		return selectPriceChangePlayers(displayBoard.players, {
-			scope,
-			movement,
-			sort,
-			squadElementIds: scope === 'likely' ? new Set<number>() : mySquad,
-			locale
-		})
-	}, [displayBoard.players, locale, movement, mySquad, scope, sort])
+	const shareScopePlayers = sortedScopePlayers
 	const snapshotUpdatedAtLabel = useMemo(
 		() =>
 			hydrated ? formatLocalSnapshotTime(displayBoard.fetchedAt, locale) : null,
