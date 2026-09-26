@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 case "${1:-}" in
   ssr)
     npx playwright test e2e/navigation-metrics.spec.ts --workers=1 --trace=on --output=test-results/navigation-metrics
-    npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts e2e/match-fallback.spec.ts --grep 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|J19|J10|J08|J12|live board layout fixture' --workers=1 --trace=on
+    npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts e2e/match-fallback.spec.ts --grep 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|R23 actual internal competition entry|J19|J10|J08|J12|live board layout fixture' --workers=1 --trace=on
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-readiness.spec.ts --workers=1 --trace=on --output=test-results/market-readiness
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh horizon
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh trends-unpublished
