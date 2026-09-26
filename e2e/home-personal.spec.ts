@@ -1107,9 +1107,9 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
 for (const locale of recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' ? [1440, 390] : [0]) {
+for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || recoveryMode === 'live-journey-second-entry' ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1360,7 +1360,29 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await route.fulfill({ response, json: body })
 				})
 			}
+			const secondEntryRules: { operation: string; variables: { entryId: number; eventId: number }; data: unknown }[] = []
+			if (recoveryMode === 'live-journey-second-entry') {
+				const response = await fetch(fixture.replace('/__performance', '/graphql'), {
+					method: 'POST', headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ query: 'query GetLiveCalcPoints { __typename }', variables: { entryId: 6733550, eventId: 4 } })
+				})
+				const seed = await response.json()
+				expect(seed.errors).toBeUndefined()
+				const second = seed.data.calcLivePointsByEntry
+				second.entryName = 'Second Journey United'
+				second.pickList = second.pickList.map((pick: { webName: string }) => ({ ...pick, webName: `Second ${pick.webName}` }))
+				secondEntryRules.push({ operation: 'GetLiveCalcPoints', variables: { entryId: 6733550, eventId: 4 }, data: seed.data })
+				await page.route('**/api/live/competitions/6/board', async route => {
+					const response = await route.fetch()
+					const body = await response.json()
+					const board = body.entryLiveCompetitionBoard
+					board.rows.push({ ...board.rows[0], entry: 6733550, entryName: 'Second Journey United', liveRank: 2 })
+					board.totalEntries = board.filteredEntries = 2
+					await route.fulfill({ response, json: body })
+				})
+			}
 			const unavailableRules = [
+				...secondEntryRules,
 				{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } },
 				...rules
 			]
@@ -1863,6 +1885,27 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
 			await page.goForward()
 			await expect(team).toBeVisible()
+			if (recoveryMode === 'live-journey-second-entry') {
+				const secondTeam = page.getByRole('link', { name: /Second Journey United/ }).filter({ visible: true })
+				await expect(secondTeam).toHaveCount(1)
+				await expect(secondTeam).toHaveAttribute('href', `${prefix}/live/points/6733550?tournamentId=6&gw=4`)
+				await secondTeam.click()
+				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/6733550` && url.searchParams.get('gw') === '4' && url.searchParams.get('tournamentId') === '6')
+				const secondReady = page.locator('[data-live-points-ready="true"][data-live-entry="6733550"][data-live-gw="4"]')
+				await expect(secondReady).toHaveCount(1)
+				await expect(pitch.getByRole('button', { name: /Second Player/ })).toHaveCount(15)
+				const secondPlayer = pitch.getByRole('button', { name: locale === 'zh-CN' ? '查看 Second Player 1 的详情' : 'View details for Second Player 1', exact: true })
+				await secondPlayer.click()
+				await expect(page.getByRole('dialog').getByRole('heading', { name: 'Second Player 1', exact: true })).toBeVisible()
+				await expect(page.getByRole('dialog').getByRole('heading', { name: 'Player 1', exact: true })).toHaveCount(0)
+				await page.getByRole('dialog').press('Escape')
+				await expect(secondPlayer).toBeFocused()
+				await page.goBack()
+				await expect(secondTeam).toBeVisible()
+				await page.goForward()
+				await expect(secondReady).toHaveCount(1)
+				await expect(pitch.getByRole('button', { name: /Second Player/ })).toHaveCount(15)
+			}
 
 			return
 		}
