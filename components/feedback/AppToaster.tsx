@@ -1,11 +1,9 @@
 'use client'
 
 import { usePathname } from '@/i18n/navigation'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Toaster } from 'sonner'
 
-const Toaster = lazy(() =>
-	import('sonner').then(module => ({ default: module.Toaster }))
-)
 
 const TOAST_ROUTES = [
 	'/competitions',
@@ -31,9 +29,7 @@ export function AppToaster() {
 	// feature route groups are activated because they expose share actions.
 	if (!activated) return null
 
-	return (
-		<Suspense fallback={null}>
-			<Toaster richColors position="top-center" />
-		</Suspense>
-	)
+	// Mount with the route: Sonner does not replay notifications emitted before
+	// its subscription, so suspending this boundary can lose immediate feedback.
+	return <Toaster richColors position="top-center" />
 }

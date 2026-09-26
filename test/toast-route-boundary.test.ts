@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
-describe('lazy persistent toast boundary', () => {
+describe('persistent toast boundary', () => {
 	it('activates the persistent toaster for every notification route family', () => {
 		const toaster = readFileSync('components/feedback/AppToaster.tsx', 'utf8')
 		for (const route of [
@@ -20,11 +20,12 @@ describe('lazy persistent toast boundary', () => {
 		assert.doesNotMatch(toaster, /setActivated\(false\)/)
 	})
 
-	it('keeps the boundary mounted and lazy-loads Sonner after activation', () => {
+	it('mounts Sonner synchronously after activation to preserve immediate feedback', () => {
 		const toaster = readFileSync('components/feedback/AppToaster.tsx', 'utf8')
 		const localeLayout = readFileSync('app/[locale]/layout.tsx', 'utf8')
 		assert.match(localeLayout, /<AppToaster \/>/)
 		assert.match(toaster, /if \(!activated\) return null/)
-		assert.match(toaster, /lazy\(\(\) =>[\s\S]*import\('sonner'\)/)
+		assert.match(toaster, /import \{ Toaster \} from 'sonner'/)
+		assert.doesNotMatch(toaster, /lazy\(|<Suspense/)
 	})
 })
