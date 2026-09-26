@@ -31,7 +31,7 @@ function coreMatchStatKeys(position: string): Array<{
 		| 'defensiveContribution'
 		| 'yellowCards'
 		| 'redCards'
-	getValue: (p: PlayerDetail) => number
+	getValue: (p: PlayerDetail) => number | undefined
 }> {
 	const common = [
 		{
@@ -61,7 +61,7 @@ function coreMatchStatKeys(position: string): Array<{
 			common[0],
 			{
 				labelKey: 'saves',
-				getValue: p => p.stats.saves ?? 0,
+				getValue: p => p.stats.saves,
 			},
 			{
 				labelKey: 'cleanSheets',
@@ -69,11 +69,11 @@ function coreMatchStatKeys(position: string): Array<{
 			},
 			{
 				labelKey: 'goalsConceded',
-				getValue: p => p.stats.goalsConceded ?? 0,
+				getValue: p => p.stats.goalsConceded,
 			},
 			{
 				labelKey: 'penaltiesSaved',
-				getValue: p => p.stats.penaltiesSaved ?? 0,
+				getValue: p => p.stats.penaltiesSaved,
 			},
 			common[3],
 			common[4],
@@ -91,11 +91,11 @@ function coreMatchStatKeys(position: string): Array<{
 			},
 			{
 				labelKey: 'goalsConceded',
-				getValue: p => p.stats.goalsConceded ?? 0,
+				getValue: p => p.stats.goalsConceded,
 			},
 			{
 				labelKey: 'defensiveContribution',
-				getValue: p => p.stats.defensiveContribution ?? 0,
+				getValue: p => p.stats.defensiveContribution,
 			},
 			common[3],
 			common[4],
@@ -113,7 +113,7 @@ function coreMatchStatKeys(position: string): Array<{
 			},
 			{
 				labelKey: 'defensiveContribution',
-				getValue: p => p.stats.defensiveContribution ?? 0,
+				getValue: p => p.stats.defensiveContribution,
 			},
 			common[3],
 			common[4],
@@ -127,7 +127,7 @@ function coreMatchStatKeys(position: string): Array<{
 		common[2],
 		{
 			labelKey: 'defensiveContribution',
-			getValue: p => p.stats.defensiveContribution ?? 0,
+			getValue: p => p.stats.defensiveContribution,
 		},
 		common[3],
 		common[4],
@@ -170,8 +170,7 @@ export function PlayerDetailModal({
 		0,
 	)
 
-	// Always show position-relevant match stats (including zeros) so the panel
-	// is not an empty grid when only minutes are non-zero.
+	// Preserve the difference between a reported zero and an omitted statistic.
 	const matchStatRows = coreMatchStatKeys(player.position).map(row => ({
 		label: t(row.labelKey),
 		value: row.getValue(player),
@@ -324,12 +323,12 @@ export function PlayerDetailModal({
 										<div
 											className={cn(
 												'mt-0.5 font-mono text-base font-bold tabular-nums sm:text-lg',
-												row.value !== 0
+												row.value != null && row.value !== 0
 													? 'text-foreground'
 													: 'text-muted-foreground/70',
 											)}
 										>
-											{row.value}
+											{row.value ?? '—'}
 										</div>
 									</div>
 								))}

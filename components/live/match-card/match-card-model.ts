@@ -211,18 +211,18 @@ export function createBasePlayerDetail(
 		bps: player.bps ?? 0,
 		bonusPoints: player.bonus_points ?? 0,
 		stats: {
-			minutes: player.minutes ?? 0,
-			goals: player.goals ?? 0,
-			assists: player.assists ?? 0,
-			cleanSheets: player.cleanSheets ?? 0,
-			saves: player.saves ?? 0,
-			penaltiesSaved: player.penalties_saved ?? 0,
-			goalsConceded: player.goalsConceded ?? 0,
-			defensiveContribution: player.defensiveContribution ?? 0,
-			ownGoals: player.ownGoals ?? 0,
-			penaltiesMissed: player.penalties_missed ?? 0,
-			yellowCards: player.yellow_cards ?? 0,
-			redCards: player.red_cards ?? 0
+			minutes: player.minutes,
+			goals: player.goals,
+			assists: player.assists,
+			cleanSheets: player.cleanSheets,
+			saves: player.saves,
+			penaltiesSaved: player.penalties_saved,
+			goalsConceded: player.goalsConceded,
+			defensiveContribution: player.defensiveContribution,
+			ownGoals: player.ownGoals,
+			penaltiesMissed: player.penalties_missed,
+			yellowCards: player.yellow_cards,
+			redCards: player.red_cards
 		},
 		pointsBreakdown: []
 	}

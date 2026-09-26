@@ -148,3 +148,17 @@ describe('live player detail mapping', () => {
 		)
 	})
 })
+
+
+describe('sparse match detail statistics', () => {
+	it('keeps absent statistics unknown and preserves an explicit zero', () => {
+		const detail = createBasePlayerDetail({ player: 'Bassey', elementType: 2,
+			minutes: 90, assists: 1, totalPoints: 6, yellow_cards: 0 }, 'Fulham', 'FUL')
+		assert.equal(detail.stats.goalsConceded, undefined)
+		assert.equal(detail.stats.defensiveContribution, undefined)
+		assert.equal(detail.stats.goals, undefined)
+		assert.equal(detail.stats.yellowCards, 0)
+		assert.equal(detail.stats.minutes, 90)
+		assert.equal(detail.points, 6)
+	})
+})
