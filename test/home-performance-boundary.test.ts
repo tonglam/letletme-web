@@ -527,3 +527,19 @@ it('keeps synthetic performance URLs deterministic and cache control explicit', 
 		assert.match(source, /extractReadyMetrics/)
 	}
 })
+
+it('reports non-finite and non-numeric measurements as missing without losing business success', async () => {
+ const { classifyNavigationSample, missingMetricReasons } = await import('../scripts/performance-metrics.mjs')
+ const complete = { status: 200, businessResult: 'ok', readyMs: 100, lcpMs: 50, cls: 0, inpMs: 10, fcpMs: 20, ttfbMs: 5 }
+ assert.deepEqual(missingMetricReasons(complete), {})
+ for (const key of ['readyMs', 'lcpMs', 'cls', 'inpMs', 'fcpMs', 'ttfbMs']) {
+  for (const invalid of [Number.NaN, Infinity, -Infinity, '123']) {
+   const sample = { ...complete, [key]: invalid }
+   assert.deepEqual(missingMetricReasons(sample), { [key]: 'metric value was not a finite number' })
+   const result = classifyNavigationSample(sample)
+   assert.equal(result.functionalStatus, 'PASS')
+   assert.equal(result.performanceStatus, key === 'readyMs' ? 'NOT_OBSERVED' : 'PASS')
+   assert.equal(result.missingReason[key], 'metric value was not a finite number')
+  }
+ }
+})
