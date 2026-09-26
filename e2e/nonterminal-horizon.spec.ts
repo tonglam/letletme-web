@@ -74,3 +74,65 @@ test.afterEach(async () => { await control() })
 			expect(requests).toBe(2)
 		} finally { release() }
 	})
+
+test.describe('GW01.state.02 preseason', () => {
+ test.use({ viewport: { width: 390, height: 900 }, locale: 'zh-CN', timezoneId: 'UTC', colorScheme: 'dark' })
+ test('only GW1 is selectable without inventing scores or fetching another round', async ({ page, context }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Never inject preseason state into a production session')
+  testInfo.annotations.push({ type: 'coverage-variant', description: 'GW01.state.02' })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+  await control([{ operation: 'GetGameweekDesk', data: { gameweekDesk: {
+   season: '2627', coreRevision: 'preseason-core', scoreCoreRevision: null,
+   anchorEventId: 1, eventId: 1, currentEventId: null, nextEventId: 1,
+   isPreseason: true, lifecycle: 'SCHEDULED', deadlineTime: '2026-08-04T17:30:00.000Z',
+   publishedAt: null, sourceCheckedAt: null, overviewState: 'PENDING', boardsState: 'PENDING',
+   overview: null, dreamTeam: [], hauls: []
+  } } }])
+  const reads: string[] = []
+  page.on('request', request => {
+   const url = new URL(request.url())
+   if (url.pathname === '/api/gameweek/desk') reads.push(url.searchParams.get('eventId') ?? '')
+  })
+  await page.goto('/zh-CN/explore/gameweek')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  const input = page.locator('#gameweek-jump-input')
+  const assertPreseason = async () => {
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/explore/gameweek' && url.search === '')
+   await expect(input).toHaveValue('1')
+   await expect(input).toHaveAttribute('aria-busy', 'false')
+   await expect(page.getByText('GW1 尚未开始', { exact: true })).toBeVisible()
+   await expect(page.getByText('官方截止时间已经公布，但目前还没有轮次积分或球员榜单。', { exact: true })).toBeVisible()
+   await expect(page.getByRole('button', { name: '上一轮', exact: true })).toBeDisabled()
+   await expect(page.getByRole('button', { name: '下一轮', exact: true })).toBeDisabled()
+   await expect(page.locator('[aria-labelledby="home-team-of-week-title"]')).toHaveCount(0)
+   await expect(page.getByRole('heading', { name: '得分上双球员', exact: true })).toHaveCount(0)
+   await expect(page.locator('[data-gameweek-overview="true"]')).not.toContainText('Saka')
+  }
+  await assertPreseason()
+  await expect(input).toHaveAttribute('min', '1')
+  await expect(input).toHaveAttribute('max', '1')
+  await page.getByRole('combobox', { name: '选择轮次', exact: true }).click()
+  await expect(page.getByRole('option')).toHaveText(['第 1 轮'])
+  await page.getByRole('option', { name: '第 1 轮', exact: true }).click()
+  await assertPreseason()
+  for (const draft of ['38', '0', '']) {
+   await input.fill(draft)
+   await input.press('Tab')
+   await assertPreseason()
+  }
+  await input.fill('1')
+  await input.press('Enter')
+  await assertPreseason()
+  expect(reads).toEqual([])
+  const ledger = await (await fetch(fixture)).json()
+  const deskReads = ledger.requests.filter((entry: { operation: string }) => entry.operation === 'GetGameweekDesk')
+  expect(deskReads).toHaveLength(1)
+  await testInfo.attach('preseason-selector-coverage', { contentType: 'application/json', body: JSON.stringify({
+   variantId: 'GW01.state.02', identity: 'anonymous', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC',
+   selectedGameweek: 1, allowedOptions: [1], browserDeskReads: reads, serverDeskReads: deskReads.length,
+   scopedFunctionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, productionStatus: 'NOT_RUN'
+  }) })
+ })
+})
