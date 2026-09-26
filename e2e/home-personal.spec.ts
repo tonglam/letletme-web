@@ -5365,3 +5365,42 @@ test.describe('LP02 bound-account squad detail coverage', () => {
   }
  }
 })
+
+// R23.03: href assertions alone do not prove the internal legacy entry path.
+test.describe('R23 actual internal competition entry', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) {
+  for (const width of [1440, 390]) {
+   test(`home league link commits canonical board ${locale} ${width}px`, async ({ page }) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Requires isolated live fixture and bound session')
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const session = await createSession({ entryId: 15702 })
+    try {
+     await page.setViewportSize({ width, height: 900 })
+     await addSessionCookie(page, session.cookie)
+     await page.goto(prefix || '/')
+     const main = page.locator('#main-content')
+     await expect(main.locator('[data-home-league-ranks-ready]')).toBeVisible()
+     await main.getByRole('tab', { name: /H2H|对战联赛/ }).click()
+     const link = main.locator(`a[href="${prefix}/live/competitions/6?gw=1"]`).filter({ visible: true })
+     await expect(link).toHaveCount(1)
+     await link.click()
+     const assertBoard = async () => {
+      await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '1')
+      const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+      await expect(board).toBeVisible()
+      await expect(board.getByRole('link', { name: 'E2E United Test Manager', exact: true }).filter({ visible: true })).toHaveCount(1)
+     }
+     await assertBoard()
+     await page.reload()
+     await assertBoard()
+     await page.goBack()
+     await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+     await expect(main.locator('[data-home-personal-ready]')).toBeVisible()
+     await page.goForward()
+     await assertBoard()
+    } finally { await session.cleanup() }
+   })
+  }
+ }
+})
