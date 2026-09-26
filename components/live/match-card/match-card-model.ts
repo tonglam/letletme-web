@@ -208,7 +208,7 @@ export function createBasePlayerDetail(
 		position: getPositionFromElementType(player.elementType),
 		points: player.totalPoints ?? 0,
 		ownershipPercentage: 0,
-		bps: player.bps ?? 0,
+		bps: player.bps ?? null,
 		bonusPoints: player.bonus_points ?? 0,
 		stats: {
 			minutes: player.minutes,

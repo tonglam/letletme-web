@@ -160,5 +160,7 @@ describe('sparse match detail statistics', () => {
 		assert.equal(detail.stats.yellowCards, 0)
 		assert.equal(detail.stats.minutes, 90)
 		assert.equal(detail.points, 6)
+		assert.equal(detail.bps, null)
+		assert.equal(createBasePlayerDetail({ player: 'Bassey', bps: 0 }, 'Fulham', 'FUL').bps, 0)
 	})
 })
