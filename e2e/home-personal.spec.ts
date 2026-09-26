@@ -773,10 +773,11 @@ test.describe('SSR remediation', () => {
 	})
 
 	test('PUBLIC Trends is usable while its private catalog is pending', async ({ page }, testInfo) => {
-		const catalogSamples: unknown[] = []
+		const readySamples: Record<string, unknown>[] = []
+		let initialDeskSample: Record<string, unknown> | null = null
 		await page.route('**/api/vitals', async route => {
 			const payload = route.request().postDataJSON()
-			catalogSamples.push(...(payload.samples ?? []).filter((sample: { metricName: string }) => sample.metricName === 'TRENDS_CATALOG_READY'))
+			readySamples.push(...(payload.samples ?? []).filter((sample: { metricName: string }) => ['TRENDS_CATALOG_READY', 'TRENDS_DESK_READY'].includes(sample.metricName)))
 			await route.fulfill({ status: 204, body: '' })
 		})
 		const session = await createSession({ entryId: 15702 })
@@ -788,6 +789,17 @@ test.describe('SSR remediation', () => {
 			await expect(cohort).toHaveValue('competition:777', { timeout: 1500 })
 			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
 			await expect.poll(async () => (await observations()).some(row => row.operation === 'TrendCohorts' && row.variables.access === 'MINE' && row.finishedAt === null)).toBe(true)
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public' && url.searchParams.get('cohort') === 'competition:777' && url.searchParams.get('gw') === '33')
+			await expect.poll(() => readySamples.filter(sample => sample.metricName === 'TRENDS_DESK_READY').length).toBe(1)
+			initialDeskSample = readySamples.find(sample => sample.metricName === 'TRENDS_DESK_READY')!
+			expect(initialDeskSample.result).toBe('ok')
+			expect(initialDeskSample.measurementKind).toBe('initial_navigation')
+			expect(typeof initialDeskSample.value).toBe('number')
+			expect(Number.isFinite(initialDeskSample.value)).toBe(true)
+			expect(initialDeskSample.value).toBeGreaterThan(0)
+			// The initial desk must finish while the independent private read is still pending.
+			expect((await observations()).some(row => row.operation === 'TrendCohorts' && row.variables.access === 'MINE' && row.finishedAt === null)).toBe(true)
 			await cohort.selectOption('competition:779')
 			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
 			await expect.poll(async () => (await observations()).some(row => row.operation === 'TrendCohorts' && row.variables.access === 'MINE' && row.finishedAt !== null), { timeout: 6000 }).toBe(true)
@@ -796,8 +808,17 @@ test.describe('SSR remediation', () => {
 			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true }).first()).toBeVisible()
 			await expect(page.getByRole('button', { name: /^My Leagues/ })).toBeEnabled()
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
-			expect(catalogSamples).toHaveLength(1)
+			expect(readySamples.filter(sample => sample.metricName === 'TRENDS_CATALOG_READY')).toHaveLength(1)
 		} finally {
+			const readyMs = initialDeskSample?.result === 'ok' && typeof initialDeskSample.value === 'number' && Number.isFinite(initialDeskSample.value) ? initialDeskSample.value : null
+			await testInfo.attach('TR02-public-desk-ready', { body: JSON.stringify({
+				caseId: 'TR02', stepId: 'TR02.02', variantId: 'TR02.state.01',
+				environment: 'isolated fixture', scenario: 'private catalog delayed 4000ms',
+				cohortId: 'competition:777', eventId: 33, readyMs, budgetMs: 2500,
+				performanceStatus: readyMs === null ? 'NOT_OBSERVED' : readyMs <= 2500 ? 'PASS' : 'FAIL',
+				measurement: initialDeskSample, normalPerformanceDistribution: false,
+				wholeCaseComplete: false
+			}), contentType: 'application/json' })
 			await testInfo.attach('private-catalog-timeline', { body: JSON.stringify(await observations()), contentType: 'application/json' })
 			await session.cleanup()
 		}
