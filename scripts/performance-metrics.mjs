@@ -30,12 +30,14 @@ export function missingMetricReasons(sample) {
 	const defaultReason = sample?.error ?? 'metric was not observed before the observation ended'
 	const reasons = Object.fromEntries(
 		navigationMetricKeys
-			.filter(key => sample?.[key] == null)
+			.filter(key => typeof sample?.[key] !== 'number' || !Number.isFinite(sample[key]))
 			.map(key => [
 				key,
-				key === 'inpMs' && sample?.phase === 'navigation'
-					? 'no interaction occurred during navigation measurement'
-					: defaultReason
+				sample?.[key] != null
+					? 'metric value was not a finite number'
+					: key === 'inpMs' && sample?.phase === 'navigation'
+						? 'no interaction occurred during navigation measurement'
+						: defaultReason
 			])
 	)
 	if (sample?.browserCache === 'cold' && sample?.browserCacheApplied !== true)
