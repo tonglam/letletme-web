@@ -4541,7 +4541,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 for (const timezoneId of ['UTC', 'Australia/Perth']) {
  test.describe(`HOME05 ${timezoneId}`, () => {
-  test.use({ timezoneId })
+  test.use({ timezoneId, viewport: { width: timezoneId === 'UTC' ? 1440 : 390, height: 900 } })
   for (const locale of ['en', 'zh-CN']) {
    test(`SSR remediation HOME05 finished current event uses next deadline ${locale}`, async ({ page }, testInfo) => {
     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -4559,11 +4559,31 @@ for (const timezoneId of ['UTC', 'Australia/Perth']) {
       return requests.some((row: { operation: string; finishedAt: number | null }) => row.operation === 'GetHomePublicBootstrap' && row.finishedAt !== null)
      }, { timeout: 12_000, intervals: [100, 250, 500] }).toBe(true)
      const setupRequests = (await (await fetch(fixture)).json()).requests.length
-     await page.goto(locale === 'zh-CN' ? '/zh-CN' : '/')
+     const pathname = locale === 'zh-CN' ? '/zh-CN' : '/'
+     const ssrUtcText = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: 'UTC' }).format(new Date(deadline))
+     const ssrHtml = await (await page.request.get(pathname)).text()
+     expect(ssrHtml, 'Deadline row is present before hydration, with explicit UTC').toContain('data-countdown-deadline="true"')
+     expect(ssrHtml).toContain(ssrUtcText)
+     let releaseScripts!: () => void
+     const scriptsReleased = new Promise<void>(resolve => { releaseScripts = resolve })
+     await page.route('**/_next/static/**/*.js', async route => { await scriptsReleased; await route.continue() })
      const card = page.locator('#main-content [data-countdown-card]')
+     let ssrHeight = 0
+     try {
+      await page.goto(pathname, { waitUntil: 'commit' })
+      await expect(card.locator('[data-countdown-deadline] time')).toHaveText(ssrUtcText)
+      await page.evaluate(() => document.fonts.ready.then(() => undefined))
+      ssrHeight = (await card.boundingBox())!.height
+     } finally {
+      releaseScripts()
+     }
      await expect(card.locator('[data-countdown-title]')).toContainText('34')
      const expected = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: timezoneId }).format(new Date(deadline))
      await expect(card.locator('[data-countdown-deadline] time')).toHaveText(expected)
+     await expect(page.locator('details[data-locale-picker]').filter({ visible: true })).toHaveCount(1)
+     const hydratedHeight = (await card.boundingBox())!.height
+     expect(Math.abs(hydratedHeight - ssrHeight), 'Deadline localization preserves the SSR card height').toBeLessThanOrEqual(1)
+     await testInfo.attach('countdown-ssr-hydration-geometry', { body: JSON.stringify({ locale, timezoneId, viewport: page.viewportSize(), ssrUtcText, expected, ssrHeight, hydratedHeight }), contentType: 'application/json' })
      const matches = page.locator('#main-content [data-home-matches]')
      await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
      await expect(matches).toContainText('CHE')
@@ -4588,7 +4608,7 @@ for (const timezoneId of ['UTC', 'Australia/Perth']) {
       await expect(matches).toContainText('EVE')
      }
      expect(hydrationErrors).toEqual([])
-     await testInfo.attach('home-deadline-localized', { body: JSON.stringify({ timezoneId, locale, deadline, expected, requestedEvents, hydrationErrors, ssrUtcText: 'NOT_OBSERVED' }), contentType: 'application/json' })
+     await testInfo.attach('home-deadline-localized', { body: JSON.stringify({ timezoneId, locale, deadline, expected, requestedEvents, hydrationErrors, ssrUtcText }), contentType: 'application/json' })
     } finally {
      await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
     }
