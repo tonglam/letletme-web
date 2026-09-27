@@ -441,3 +441,42 @@ test.describe('SSR remediation PRED03 cached board', () => {
   }
  }
 })
+
+for (const locale of ['en', 'zh-CN']) {
+ for (const width of [1440, 390]) {
+  test(`prediction pagination accessible names ${locale} ${width}`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture controls')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const t = (locale === 'en' ? enMessages : zhMessages).PriceChanges
+   const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+   const board = seed.data.priceChangeBoard
+   board.players = Array.from({ length: 25 }, (_, index) => ({ ...board.players[0], playerId: 7000 + index, playerCode: 8000 + index, webName: `Pagination Player ${index + 1}` }))
+   board.expectedPlayerCount = 25
+   board.observedPlayerCount = 25
+   board.revision = 'pagination-accessible-25'
+   try {
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/price-predictions?scope=all`)
+    const rendered = page.locator('[data-price-predictions-board]')
+    await expect(rendered).toHaveAttribute('data-price-change-revision', 'pagination-accessible-25')
+    const players = rendered.getByRole('link', { name: /^Pagination Player / }).filter({ visible: true })
+    await expect(players).toHaveCount(20)
+    const previous = rendered.getByRole('button', { name: t.previousPage, exact: true })
+    const next = rendered.getByRole('button', { name: t.nextPage, exact: true })
+    await expect(previous).toBeDisabled()
+    await expect(next).toBeEnabled()
+    await next.click()
+    await expect(players).toHaveCount(5)
+    await expect(next).toBeDisabled()
+    await expect(previous).toBeEnabled()
+    await previous.press('Enter')
+    await expect(players).toHaveCount(20)
+    await expect(previous).toBeDisabled()
+    await expect(next).toBeEnabled()
+   } finally {
+    await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+}
