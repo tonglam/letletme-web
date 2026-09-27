@@ -5697,17 +5697,26 @@ for (const width of [1440, 390]) {
 
 test.describe('GOV isolated admin REST evidence', () => {
  test.describe.configure({ mode: 'serial' })
- test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_GOVERNANCE !== '1' || process.env.PLATFORM_ADMIN_USER_IDS !== 'e2e-governance-admin' || process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS !== '909090', 'Dedicated isolated governance runtime only')
- for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
-  for (const identity of ['ordinary', 'entry-only', 'user-only']) {
+ const contexts = [
+  ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ locale, width, timezone: 'Australia/Perth', theme: 'system', planned: false }))),
+  { locale: 'zh-CN', width: 390, timezone: 'UTC', theme: 'dark', planned: true }
+ ]
+ for (const { locale, width, timezone, theme, planned } of contexts) {
+ test.describe(`${locale} ${width} ${timezone} ${theme}`, () => {
+  test.use({ timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
+  test.beforeEach(async ({ page }) => { await page.addInitScript(theme => localStorage.setItem('theme', theme), theme) })
+  for (const identity of planned ? ['anonymous'] : ['ordinary', 'entry-only', 'user-only', 'anonymous']) {
    test(`GOV REST sections denied ${identity} ${locale} ${width}px`, async ({ page }, testInfo) => {
-    const session = await createSession({ entryId: identity === 'entry-only' ? 909090 : undefined, userId: identity === 'user-only' ? 'e2e-governance-admin' : undefined })
+    const session = identity === 'anonymous' ? null : await createSession({ entryId: identity === 'entry-only' ? 909090 : undefined, userId: identity === 'user-only' ? 'e2e-governance-admin' : undefined })
     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
     try {
      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
      await page.setViewportSize({ width, height: 900 })
-     await addSessionCookie(page, session.cookie)
+     if (session) await addSessionCookie(page, session.cookie)
+     const homePath = locale === 'zh-CN' ? '/zh-CN' : '/'
+     await page.goto(homePath)
+     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
      const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/admin/data-governance`
      for (const navigate of [() => page.goto(path), () => page.reload()]) {
       const response = await navigate()
@@ -5716,13 +5725,22 @@ test.describe('GOV isolated admin REST evidence', () => {
       await expect(page.getByRole('heading', { name: locale === 'zh-CN' ? '找不到页面' : 'Page not found', exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'GW governance', exact: true })).toHaveCount(0)
      }
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+     await expect(page.locator('html')).toHaveClass(new RegExp(`(?:^|\\s)${theme === 'dark' ? 'dark' : 'light'}(?:\\s|$)`))
+     await page.goBack()
+     await expect(page).toHaveURL(url => url.pathname === homePath)
+     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+     await page.goForward()
+     await expect(page).toHaveURL(url => url.pathname === path)
+     await expect(page.getByRole('heading', { name: locale === 'zh-CN' ? '找不到页面' : 'Page not found', exact: true })).toBeVisible()
      const requests = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'DataGovernance')
      expect(requests).toEqual([])
-     await testInfo.attach('GOV-denied-identity', { body: JSON.stringify({ identity, locale, width, status: 404, dataRequests: 0, reload: true, readyMs: null }), contentType: 'application/json' })
-    } finally { await session.cleanup() }
+     await testInfo.attach('GOV-denied-identity', { body: JSON.stringify({ caseId: 'R02', stepIds: ['R02.01', 'R02.02', 'R02.04', 'R02.05'], variantId: identity === 'anonymous' ? (planned ? 'R02.state.03' : `R02.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`) : null, identity, locale, width, timezone, theme, status: 404, dataRequests: 0, reload: true, backForward: true, readyMs: null, wholeVariantComplete: false }), contentType: 'application/json' })
+    } finally { await session?.cleanup() }
    })
   }
-  for (const failed of ['none', 'overview', 'windows', 'cases', 'large']) {
+  for (const failed of planned ? [] : ['none', 'overview', 'windows', 'cases', 'large']) {
    test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
     const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -5744,6 +5762,8 @@ test.describe('GOV isolated admin REST evidence', () => {
      await page.setViewportSize({ width, height: 900 })
      await addSessionCookie(page, session.cookie)
      const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/admin/data-governance`
+     const homePath = locale === 'zh-CN' ? '/zh-CN' : '/'
+     if (failed === 'none') { await page.goto(homePath); await expect(page.getByRole('heading', { level: 1 })).toBeVisible() }
      const response = await page.goto(path)
      expect(response?.status()).toBe(200)
      expect(response?.request().redirectedFrom()).toBeNull()
@@ -5791,12 +5811,29 @@ test.describe('GOV isolated admin REST evidence', () => {
       await expect(page.getByRole('cell', { name: 'case evidence unavailable', exact: true })).toHaveCount(0)
       await expect(page.getByText('freshness window evidence unavailable', { exact: true })).toHaveCount(0)
      }
-     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ locale, width, failed, reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+     if (failed === 'none') {
+      for (const navigate of [() => page.reload(), async () => {
+       await page.goBack()
+       await expect(page).toHaveURL(url => url.pathname === homePath)
+       await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+       return page.goForward()
+      }]) {
+       await navigate()
+       await expect(page).toHaveURL(url => url.pathname === path)
+       await expect(page.getByText('fixture-release-gov', { exact: true })).toBeVisible()
+       await expect(page.getByRole('row').filter({ hasText: 'GW5-fixture' })).toContainText('FIXTURE_LATE')
+       await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
+      }
+     }
+     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ caseId: 'R02', stepIds: ['R02.01', 'R02.02', 'R02.04', 'R02.05'], variantId: failed === 'none' ? `R02.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : null, identity: 'platform-admin', locale, width, timezone, theme, failed, backForward: failed === 'none', reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
     } finally {
      try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
     }
    })
   }
+ })
  }
 })
 
