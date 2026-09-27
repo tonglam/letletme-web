@@ -1133,7 +1133,7 @@ const plannedState = recoveryMode === 'live-journey-ready-mobile' ? 'ready' : re
 const plannedStateJourney = plannedState !== null
 const captainPoints = plannedState === 'DGW' ? 7 : 6
 const squadPoints = plannedState === 'DGW' ? 24 : 22
-const benchPlayerId = plannedState === 'auto-sub' ? 13 : 12
+const benchPlayerId = plannedState === 'auto-sub' ? 6 : 12
 const publishedJourney = recoveryMode === 'live-journey-published' || plannedStateJourney
 const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney
 const journeyTimezone = plannedStateJourney ? 'UTC' : 'Australia/Perth'
@@ -1381,6 +1381,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		}
 		if (recoveryMode.startsWith('live-journey')) {
 			let comparisonBoardRevision = 'e2e-competition-score-v1'
+			let journeyPagination = false
 			await page.setViewportSize(catalogWidth ? { width: catalogWidth, height: 900 } : locale === 'zh-CN' ? { width: 390, height: 844 } : { width: 1440, height: 900 })
 			if (recoveryMode === 'live-journey-sort') {
 				await page.route('**/api/live/competitions/6/board', async route => {
@@ -1424,6 +1425,13 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const seed = await response.json()
 				expect(seed.errors).toBeUndefined()
 				const second = seed.data.calcLivePointsByEntry
+				// Use a legal 3-4-3 and four ordered substitutes, not the generic
+				// fixture's first eleven element IDs (which include two keepers).
+				const pickOrder = [1, 3, 4, 5, 8, 9, 10, 11, 13, 14, 15, 2, 6, 7, 12]
+				second.pickList = second.pickList.map((pick: { element: number }) => {
+					const position = pickOrder.indexOf(pick.element) + 1
+					return { ...pick, position, pickActive: position <= 11, multiplier: pick.element === 1 ? 2 : position <= 11 ? 1 : 0, isViceCaptain: pick.element === 8 }
+				})
 				if (plannedState === 'DGW') {
 					const firstPlayer = second.pickList.find((pick: { element: number }) => pick.element === 1)
 					firstPlayer.minutes = 90
@@ -1443,11 +1451,15 @@ test(`SSR remediation tournament season sections load on demand without a false 
 						if (publication.times) publication.times.contentUpdatedAt = '2026-08-03T18:00:00.000Z'
 					}
 				}
-				if (plannedStateJourney) {
+				{
 					const first = structuredClone(seed.data)
 					first.calcLivePointsByEntry.entry = 15702
 					secondEntryRules.push({ operation: 'GetLiveCalcPoints', variables: { entryId: 15702, eventId: 4 }, data: first })
 				}
+				const activePicks = second.pickList.filter((pick: { pickActive: boolean }) => pick.pickActive)
+				expect(activePicks).toHaveLength(11)
+				expect([1, 2, 3, 4].map(type => activePicks.filter((pick: { elementType: number }) => pick.elementType === type).length)).toEqual([1, 3, 4, 3])
+				expect(second.pickList.filter((pick: { pickActive: boolean }) => !pick.pickActive)).toHaveLength(4)
 				const captain = second.pickList.find((pick: { isCaptain: boolean }) => pick.isCaptain)
 				expect(captain).toMatchObject({ element: 1, totalPoints: captainPoints, multiplier: 2, pickActive: true })
 				const contribution = (pick: { pickActive: boolean; totalPoints: number; multiplier: number }) => pick.pickActive ? pick.totalPoints * pick.multiplier : 0
@@ -1458,18 +1470,33 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				second.pickList = second.pickList.map((pick: { webName: string }) => ({ ...pick, webName: `Second ${pick.webName}` }))
 				secondEntryRules.push({ operation: 'GetLiveCalcPoints', variables: { entryId: 6733550, eventId: 4 }, data: seed.data })
 				await page.route('**/api/live/competitions/6/board', async route => {
-					const response = await route.fetch()
+					const request = route.request().postDataJSON()
+					const response = await route.fetch(publishedJourney ? { postData: JSON.stringify({ ...request, input: { ...request.input, chips: [], captainPlayerIds: [], search: null, after: null } }) } : {})
 					const body = await response.json()
 					const board = body.entryLiveCompetitionBoard
 					board.rows.push({ ...board.rows[0], entry: 6733550, entryName: 'Second Journey United', liveRank: 2 })
 					board.totalEntries = 2
-					if (plannedStateJourney) for (const row of board.rows) {
+					if (publishedJourney) for (const row of board.rows) {
 						row.score.eventPoints = row.score.netEventPoints = squadPoints
 						if (plannedState === 'stale') row.score.delivery.state = 'STALE'
 					}
 					const search = (route.request().postDataJSON().input.search ?? '').toLowerCase()
 					board.rows = board.rows.filter((row: { entryName: string; playerName: string }) => `${row.entryName} ${row.playerName}`.toLowerCase().includes(search))
-					board.filteredEntries = board.rows.length
+					if (publishedJourney) {
+						board.rows = board.rows.filter((row: { captainId: number; chip: string | null }) =>
+							(!request.input.captainPlayerIds?.length || request.input.captainPlayerIds.includes(row.captainId)) &&
+							(!request.input.chips?.length || request.input.chips.includes(row.chip)))
+						if (request.input.direction === 'DESC') board.rows.reverse()
+						if (journeyPagination && !search && !request.input.captainPlayerIds?.length && !request.input.chips?.length) {
+							const third = { ...board.rows[0], entry: 9000001, entryName: 'Pagination Journey United', liveRank: 3 }
+							board.totalEntries = board.filteredEntries = 3
+							board.rows = request.input.after ? [third] : board.rows
+							board.pageInfo = { hasNextPage: !request.input.after, endCursor: request.input.after ? null : 'j06-page-1' }
+						} else {
+							board.filteredEntries = board.rows.length
+							board.pageInfo = { hasNextPage: false, endCursor: null }
+						}
+					} else board.filteredEntries = board.rows.length
 					await route.fulfill({ response, json: body })
 				})
 			}
@@ -1692,6 +1719,64 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
 				await expect(page.getByRole('link', { name: /Second Journey United/ }).filter({ visible: true })).toHaveCount(1)
 				await expect(page.getByText(messages.noMatchingTeams, { exact: true })).toHaveCount(0)
+			}
+			if (publishedJourney) {
+				const messages = (locale === 'zh-CN' ? zhMessages : enMessages).LiveTournament
+				if (catalogWidth === 390) await page.getByRole('button', { name: locale === 'zh-CN' ? '更多筛选' : 'More filters', exact: true }).click()
+				await page.getByRole('combobox', { name: messages.filterCaptain, exact: true }).click()
+				const captainFiltered = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.includes(1))
+				await page.getByRole('option', { name: 'Saka · MID · ARS', exact: true }).click()
+				const captainResponse = await captainFiltered
+				expect(captainResponse.status()).toBe(200)
+				const captainBoard = (await captainResponse.json()).entryLiveCompetitionBoard
+				expect(captainBoard.rows.every((row: { captainId: number }) => row.captainId === 1)).toBe(true)
+				expect(captainBoard.rows.find((row: { entry: number }) => row.entry === 15702).score.eventPoints).toBe(squadPoints)
+				const captainCleared = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.captainPlayerIds?.length === 0)
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '移除队长 Saka' : 'Remove captain Saka', exact: true }).click()
+				expect((await captainCleared).status()).toBe(200)
+				await expect(page.getByRole('group', { name: messages.filterChip, exact: true }).getByRole('button')).toHaveText([messages.tripleCaptain, messages.benchBoost, messages.wildcard, messages.freeHit, messages.assistantManager])
+				for (const [chip, label] of [['TRIPLE_CAPTAIN', messages.tripleCaptain], ['BENCH_BOOST', messages.benchBoost], ['WILDCARD', messages.wildcard], ['FREE_HIT', messages.freeHit], ['MANAGER', messages.assistantManager]]) {
+					const button = page.getByRole('group', { name: messages.filterChip, exact: true }).getByRole('button', { name: label, exact: true })
+					const filtered = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.chips?.includes(chip))
+					await button.click()
+					expect((await (await filtered).json()).entryLiveCompetitionBoard).toMatchObject({ filteredEntries: 0, rows: [] })
+					await expect(page.getByText(messages.noMatchingTeams, { exact: true })).toBeVisible()
+					const cleared = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.chips?.length === 0)
+					await button.click()
+					expect((await (await cleared).json()).entryLiveCompetitionBoard.filteredEntries).toBe(2)
+				}
+				if (catalogWidth === 390) await page.keyboard.press('Escape')
+				const sortColumns = [['TOTAL_POINTS', messages.totalPointsShort], ['OVERALL_RANK', messages.overallRankShort], ['TEAM_VALUE', messages.teamValueShort], ['TRANSFER_COST', messages.cost], ['EVENT_POINTS', messages.gameweekPointsShort]]
+				for (const [sort, label] of sortColumns) {
+					const nextSort = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.sort === sort)
+					await page.getByRole('combobox', { name: messages.sortStandings, exact: true }).click()
+					expect((await page.getByRole('option').allTextContents()).sort()).toEqual(sortColumns.map(([, option]) => option).sort())
+					await page.getByRole('option', { name: label, exact: true }).click()
+					const response = await nextSort
+					expect(response.status()).toBe(200)
+					const direction = response.request().postDataJSON().input.direction
+					const links = page.getByRole('link', { name: /(?:E2E|Second Journey) United/ }).filter({ visible: true })
+					await expect(links).toHaveText(direction === 'ASC' ? [/E2E United/, /Second Journey United/] : [/Second Journey United/, /E2E United/])
+					const flipped = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.sort === sort && response.request().postDataJSON()?.input?.direction !== direction)
+					await page.getByRole('button', { name: direction === 'ASC' ? messages.ascending : messages.descending, exact: true }).click()
+					expect((await flipped).status()).toBe(200)
+					await expect(links).toHaveText(direction === 'ASC' ? [/Second Journey United/, /E2E United/] : [/E2E United/, /Second Journey United/])
+				}
+				journeyPagination = true
+				const firstPage = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && !response.request().postDataJSON()?.input?.after)
+				await page.getByRole('button', { name: messages.refresh, exact: true }).click()
+				expect((await (await firstPage).json()).entryLiveCompetitionBoard.pageInfo).toMatchObject({ hasNextPage: true, endCursor: 'j06-page-1' })
+				const nextPage = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON()?.input?.after === 'j06-page-1')
+				const more = page.getByRole('button', { name: locale === 'zh-CN' ? '再显示 1 条' : 'Show 1 more', exact: true })
+				await more.click()
+				const pageResponse = await nextPage
+				expect(pageResponse.request().postDataJSON()).toMatchObject({ tournamentId: 6, eventId: 4 })
+				expect((await pageResponse.json()).entryLiveCompetitionBoard.rows.map((row: { entry: number }) => row.entry)).toEqual([9000001])
+				await expect(page.getByRole('link', { name: /(?:E2E|Second Journey|Pagination Journey) United/ }).filter({ visible: true })).toHaveCount(3)
+				await expect(more).toHaveCount(0)
+				journeyPagination = false
+				await page.getByRole('button', { name: messages.refresh, exact: true }).click()
+				await expect(page.getByRole('link', { name: /Pagination Journey United/ })).toHaveCount(0)
 			}
 			const team = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
 			await expect(team).toHaveCount(1)
@@ -1972,6 +2057,12 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const captain = pitch.getByRole('button', { name: locale === 'zh-CN' ? '查看 Player 1 的详情' : 'View details for Player 1', exact: true })
 				await expect(captain.getByRole('img', { name: locale === 'zh-CN' ? '队长' : 'Captain', exact: true })).toBeVisible()
 				await expect(captain.getByText(String(captainPoints), { exact: true })).toBeVisible()
+				const labels = (locale === 'zh-CN' ? zhMessages : enMessages).LivePoints
+				const viceCaptain = pitch.getByRole('button', { name: locale === 'zh-CN' ? '查看 Player 8 的详情' : 'View details for Player 8', exact: true })
+				await expect(viceCaptain.getByRole('img', { name: labels.viceCaptain, exact: true })).toBeVisible()
+				const substitutes = pitch.getByRole('heading', { name: labels.substitutes, exact: true }).locator('..').locator('..')
+				await expect(substitutes.getByRole('button')).toHaveCount(4)
+				await expect(substitutes.getByRole('button', { name: locale === 'zh-CN' ? `查看 Player ${benchPlayerId} 的详情` : `View details for Player ${benchPlayerId}`, exact: true })).toBeVisible()
 			}
 			if (plannedState === 'stale') {
 				await expect(page.locator('time[datetime="2026-08-03T18:00:00.000Z"]')).toContainText('UTC')
@@ -2071,11 +2162,12 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					variantIds: plannedStateJourney ? [`J06.state.${plannedState === 'ready' ? '01' : plannedState === 'stale' ? '02' : plannedState === 'DGW' ? '03' : '04'}`] : ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
 					locale, viewport: { width: catalogWidth, height: 900 }, theme: journeyTheme, timezone: journeyTimezone, scenario: plannedState ?? 'baseline',
 					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, benchPlayerId], searchAssertions: ['hit', 'empty', 'clear-restores-both'],
+					controlAssertions: publishedJourney ? { captainIds: [1], chips: ['TRIPLE_CAPTAIN', 'BENCH_BOOST', 'WILDCARD', 'FREE_HIT', 'MANAGER'], sortColumns: ['TOTAL_POINTS', 'OVERALL_RANK', 'TEAM_VALUE', 'TRANSFER_COST', 'EVENT_POINTS'], sortDirections: ['ASC', 'DESC'], cursor: 'j06-page-1', appendedEntry: 9000001 } : null,
 						reviewStart: publishedJourney ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
-					captainRawPoints: captainPoints, captainMultiplier: 2, captainContribution: captainPoints * 2, activeSquadTotal: squadPoints,
+					formation: '3-4-3', startingCount: 11, benchCount: 4, viceCaptainId: 8, captainRawPoints: captainPoints, captainMultiplier: 2, captainContribution: captainPoints * 2, activeSquadTotal: squadPoints,
 					doubleGameweekFixtures: plannedState === 'DGW' ? [4001, 4002] : [], autoSub: plannedState === 'auto-sub' ? { playerIn: 12, playerOut: 11 } : null,
 					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
-					missingReason: 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
+					missingReason: publishedJourney ? 'Ownership/team-count option enumeration, alternate competition phases, and controlled production performance remain open; captain/chip filters, five sort columns and cursor pagination are asserted.' : 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
 				}) })
 			}
 
