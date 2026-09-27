@@ -3224,13 +3224,29 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(transfers.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
   await transfers.locator('button[aria-expanded]').click()
   await expect(transfers.getByText('Incoming 1-1', { exact: true })).toBeVisible()
-  for (const chip of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit'])) {
-   await transfers.getByRole('button').filter({ hasText: chip }).click()
+  for (const [index, chip] of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit']).map((chip, index) => [index, chip] as const)) {
+   const opener = transfers.getByRole('button').filter({ hasText: chip })
+   await expect(opener).toHaveCount(1)
+   const overflowBefore = await page.locator('body').evaluate(body => body.style.overflow)
+   await opener.click()
    const dialog = page.getByRole('dialog')
    await expect(dialog).toBeVisible()
    await expect(dialog.getByRole('heading')).toContainText(chip)
+   const eventId = index + 2
+   await expect(dialog.locator('li')).toHaveCount(2)
+   for (const move of [1, 2]) {
+    const row = dialog.locator('li').filter({ hasText: `Incoming ${eventId}-${move}` })
+    await expect(row).toHaveCount(1)
+    await expect(row.getByText(`Incoming ${eventId}-${move}`, { exact: true })).toBeVisible()
+    await expect(row.getByText(`Outgoing ${eventId}-${move}`, { exact: true })).toBeVisible()
+    await expect(row.getByText('ARS', { exact: true })).toBeVisible()
+    await expect(row.getByText('CHE', { exact: true })).toBeVisible()
+   }
    await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
    await expect(dialog).toHaveCount(0)
+   await expect(opener).toBeFocused()
+   await expect(page.locator('body')).not.toHaveAttribute('data-scroll-locked')
+   await expect.poll(() => page.locator('body').evaluate(body => body.style.overflow)).toBe(overflowBefore)
   }
   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
   await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(0)
