@@ -30,9 +30,9 @@ test('J20 route error retries into a usable player directory', async ({ page }, 
   await testInfo.attach('C13-states', { body: JSON.stringify({
    caseId: 'C13',
    stepIds: ['C13.01'],
-   state: 'route-global-error-to-ready',
+   state: 'route-error-to-ready',
    fixture: 'GetPlayerStatsBootstrap null after route not-found, then Try again reloads the player directory',
-   assertions: ['route not-found recovery link reaches player route', 'global error Retry is visible', 'actual Retry restores Players and Saka detail'],
+   assertions: ['route not-found recovery link reaches player route', 'localized route error Retry is visible; global error is not covered', 'actual Retry restores Players and Saka detail'],
    functionalStatus: 'PASS',
    performanceStatus: 'NOT_OBSERVED',
    readyMs: null,
@@ -41,9 +41,16 @@ test('J20 route error retries into a usable player directory', async ({ page }, 
  } finally { await control([]) }
 })
 
-for (const locale of ['en', 'zh-CN']) {
- for (const width of [1440, 390]) {
-  test(`J20 not-found recovery to player detail ${locale} ${width}px`, async ({ page }) => {
+for (const scenario of ['baseline', '404'] as const) {
+for (const locale of scenario === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
+ for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+  const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+  const theme = scenario === 'baseline' ? 'system' : 'dark'
+  test.describe(`J20 planned ${scenario} ${locale} ${width}`, () => {
+   test.use({ timezoneId: timezone, colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+  test(`J20 not-found recovery to player detail ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated planned preference contexts only')
+   await page.addInitScript(preference => { if (localStorage.getItem('theme') === null) localStorage.setItem('theme', preference) }, theme)
    const zh = locale === 'zh-CN'
    const prefix = zh ? '/zh-CN' : ''
    await page.setViewportSize({ width, height: 900 })
@@ -59,6 +66,14 @@ for (const locale of ['en', 'zh-CN']) {
    await players.getByRole('button', { name: /^Saka/ }).click()
    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1')
    await expect(page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })).toContainText('Saka')
+   await expect(page.getByRole('heading', { name: zh ? '找不到页面' : 'Page not found', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('main')).toHaveCount(1)
+   await expect(page.locator('html')).toHaveClass(scenario === 'baseline' ? /\blight\b/ : /\bdark\b/)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+   await testInfo.attach('J20-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: scenario === 'baseline' ? `J20.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : 'J20.state.01', scenario, locale, viewport: page.viewportSize(), theme, timezone, stepIds: ['J20.01','J20.02','J20.03','J20.04','J20.08','J20.09','J20.10'], playerId: 1, functionalStatus: 'PASS', wholeVariantComplete: false, readyMs: null, eventToPaintMs: null, missingReason: '404 recovery only; route error, global error and timing not inferred.' }) })
+  })
   })
  }
+}
 }
