@@ -1161,6 +1161,21 @@ for (const scenario of ['baseline', 'ready'] as const) {
   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/explore/player-stats' && url.searchParams.get('p1') === '2')
   await expect(page.getByRole('region', { name: '球员总览', exact: true })).toContainText('Palmer')
   await expect(page.getByRole('main').locator('[aria-busy="true"]')).toHaveCount(0)
+  // Fixture precondition only: add a fragment without replacing the actual clicked journey.
+  await page.evaluate(() => history.replaceState(history.state, '', `${location.pathname}${location.search}#main-content`))
+  await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
+  await page.getByRole('radio', { name: 'English', exact: true }).click()
+  await expect(page).toHaveURL(url => (url.pathname === '/explore/player-stats' || url.pathname === '/en/explore/player-stats') && url.searchParams.get('p1') === '2' && url.hash === '#main-content')
+  await expect(page.getByRole('region', { name: 'Player overall', exact: true })).toContainText('Palmer')
+  await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
+  await page.getByRole('radio', { name: '简体中文', exact: true }).click()
+  await expect(page).toHaveURL(url => url.pathname === '/zh-CN/explore/player-stats' && url.searchParams.get('p1') === '2' && url.hash === '#main-content')
+  await expect(page.getByRole('region', { name: '球员总览', exact: true })).toContainText('Palmer')
+  if (scenario === 'ready') {
+   await page.locator('summary[aria-label="切换配色主题"]').filter({ visible: true }).click()
+   await page.locator('[data-theme-choice="light"]').filter({ visible: true }).click()
+   await expect(page.locator('html')).toHaveClass(/\blight\b/)
+  }
   await page.locator('summary[aria-label="切换配色主题"]').filter({ visible: true }).click()
   await page.locator('[data-theme-choice="dark"]').filter({ visible: true }).click()
   await expect(page.locator('html')).toHaveClass(/dark/)
@@ -1184,7 +1199,7 @@ for (const scenario of ['baseline', 'ready'] as const) {
   await expect(page).toHaveURL(/\/zh-CN$/)
   await expect(page.locator('html')).toHaveClass(/dark/)
   expect(submissions).toEqual([])
-  await testInfo.attach('J18-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: scenario === 'baseline' ? `J18.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : 'J18.state.01', initialLocale: locale, finalLocale: 'zh-CN', initialTheme: theme, finalTheme: 'dark', timezone, viewport: page.viewportSize(), playerId: 2, marketRevision: 'price-changes-7', marketReadyObserved: marketReady, feedbackSubmissions: submissions, functionalStatus: 'PASS', wholeVariantComplete: false, readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_RUN' }) })
+  await testInfo.attach('J18-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: scenario === 'baseline' ? `J18.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : 'J18.state.01', initialLocale: locale, finalLocale: 'zh-CN', initialTheme: theme, finalTheme: 'dark', timezone, viewport: page.viewportSize(), playerId: 2, marketRevision: 'price-changes-7', marketReadyObserved: marketReady, detailLocaleRoundTripPreservesQueryHash: true, themeTransitionObserved: true, feedbackSubmissions: submissions, functionalStatus: 'PASS', wholeVariantComplete: false, readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_RUN' }) })
   } finally {
    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
   }
