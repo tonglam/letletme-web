@@ -4,6 +4,7 @@ import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
 import type { PlayerStatsCacheStatus } from '@/lib/analytics/performance-correlation'
 import {
 	measureRouteReadyDuration,
+	routeReadyNavigationId,
 	nextPaintOpportunityTime,
 	observeElementPaintTime,
 	clearRouteReadyStart,
@@ -91,9 +92,8 @@ export function RouteReadyMarker({
 		// A missing clock is reported as unavailable below. Use the effect time
 		// only as the observer's lower bound; it must never become a route-ready
 		// latency or be written into the normal distribution.
-		const routeStartedAt =
-			routeReadyStartTime(pathname, undefined, readyKey, readyKeyKind) ??
-			effectAt
+		const claimedStart = routeReadyStartTime(pathname, undefined, readyKey, readyKeyKind)
+		const routeStartedAt = claimedStart ?? effectAt
 		const measurementKind = routeReadyMeasurementKind(
 			pathname,
 			undefined,
@@ -107,8 +107,11 @@ export function RouteReadyMarker({
 				measurementKind === 'in_page_navigation') &&
 			reportedNavigationStart.current === routeStartedAt
 		) return
-		const claimedBackgroundResumeStart =
-			measurementKind === 'background_resume' ? routeStartedAt : undefined
+		const correlatedNavigationId = navigationId ?? (
+			measurementKind === 'initial_navigation' || measurementKind === 'in_page_navigation'
+				? routeReadyNavigationId(pathname) : undefined
+		)
+		// Claim the clock with its identity before paint can yield to another navigation.
 		void (async () => {
 			const paintedAt = elementTiming
 				? await observeElementPaintTime(elementTiming, routeStartedAt)
@@ -133,7 +136,7 @@ export function RouteReadyMarker({
 				undefined,
 				readyKey,
 				readyKeyKind,
-				claimedBackgroundResumeStart
+				claimedStart
 			)
 			const value = measuredValue ?? 0
 			const missingStart = measuredValue === null
@@ -151,7 +154,7 @@ export function RouteReadyMarker({
 					metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
 					page: normalizeMetricPage(pathname),
 					audienceHint,
-					navigationId,
+					navigationId: correlatedNavigationId,
 					interactionId,
 					cacheStatus,
 					measurementKind,
