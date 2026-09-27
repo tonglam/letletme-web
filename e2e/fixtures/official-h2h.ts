@@ -6,9 +6,9 @@ import type {
 } from '../../lib/graphql/operations/tournaments'
 
 // Isolated J08 data: a real matchup plus an average/bye opponent, across two rounds.
-export function officialH2HFixture(eventId: 3 | 4, tournamentId = 6) {
+export function officialH2HFixture(eventId: 1 | 2 | 3 | 4 | 37 | 38, tournamentId = 6) {
  const stamp = '2026-09-01T00:00:00.000Z'
- const revision = String(eventId).repeat(64)
+ const revision = eventId.toString(16).padStart(64, '0')
  const revisions = {
   publicationId: `h2h-fixture-${tournamentId}-${eventId}`, generation: eventId,
   roster: revision, scoreCore: revision, fixtureIdentity: revision,
