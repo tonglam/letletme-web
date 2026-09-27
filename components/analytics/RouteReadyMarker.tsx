@@ -4,6 +4,7 @@ import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
 import type { PlayerStatsCacheStatus } from '@/lib/analytics/performance-correlation'
 import {
 	measureRouteReadyDuration,
+	routeReadyNavigationId,
 	nextPaintOpportunityTime,
 	observeElementPaintTime,
 	clearRouteReadyStart,
@@ -107,6 +108,10 @@ export function RouteReadyMarker({
 				measurementKind === 'in_page_navigation') &&
 			reportedNavigationStart.current === routeStartedAt
 		) return
+		const correlatedNavigationId = navigationId ?? (
+			measurementKind === 'initial_navigation' || measurementKind === 'in_page_navigation'
+				? routeReadyNavigationId(pathname) : undefined
+		)
 		const claimedBackgroundResumeStart =
 			measurementKind === 'background_resume' ? routeStartedAt : undefined
 		void (async () => {
@@ -151,7 +156,7 @@ export function RouteReadyMarker({
 					metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
 					page: normalizeMetricPage(pathname),
 					audienceHint,
-					navigationId,
+					navigationId: correlatedNavigationId,
 					interactionId,
 					cacheStatus,
 					measurementKind,

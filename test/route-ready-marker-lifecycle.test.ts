@@ -9,7 +9,7 @@ import ts from 'typescript'
 function harness(kind: 'initial_navigation' | 'in_page_navigation') {
  const refs: { current: unknown }[] = []
  const paints: ((value: number) => void)[] = []
- const reports: { result: string }[] = []
+ const reports: { result: string; navigationId?: string }[] = []
  let cursor = 0
  let effect: (() => (() => void) | undefined) | undefined
  let cleanup: (() => void) | undefined
@@ -28,6 +28,7 @@ function harness(kind: 'initial_navigation' | 'in_page_navigation') {
    if (name.endsWith('/client-vitals')) return { reportBrowserPerformanceMetric: (value: { result: string }) => reports.push(value) }
    if (name.endsWith('/web-vitals')) return { normalizeMetricPage: (value: string) => value }
    if (name.endsWith('/route-navigation')) return {
+    routeReadyNavigationId: () => 'nav-fixture-clock',
     routeReadyStartTime: () => 10, routeReadyMeasurementKind: () => kind,
     observeElementPaintTime: () => new Promise<number>(resolve => paints.push(resolve)),
     nextPaintOpportunityTime: async () => 110,
@@ -39,9 +40,9 @@ function harness(kind: 'initial_navigation' | 'in_page_navigation') {
  })
  return {
   paints, reports,
-  render(key: string) {
+  render(key: string, navigationId?: string) {
    cleanup?.(); cursor = 0
-   exports.RouteReadyMarker({ name: 'PLAYER_DIRECTORY_PAINT', readyKey: key, elementTiming: 'players', audienceHint: 'public' })
+   exports.RouteReadyMarker({ name: 'PLAYER_DIRECTORY_PAINT', readyKey: key, navigationId, elementTiming: 'players', audienceHint: 'public' })
    cleanup = effect?.()
   }
  }
@@ -64,3 +65,18 @@ for (const kind of ['initial_navigation', 'in_page_navigation'] as const) {
   assert.equal(h.paints.length, 2, 'completed navigation must not be counted again')
  })
 }
+
+it('preserves an explicit server request correlation instead of replacing it', async () => {
+ const h = harness('in_page_navigation')
+ h.render('revision-A', 'nav-server-request')
+ h.paints[0](120)
+ await new Promise<void>(resolve => setImmediate(resolve))
+ assert.equal(h.reports[0].navigationId, 'nav-server-request')
+})
+it('uses the captured route identity when the caller has no request identity', async () => {
+ const h = harness('initial_navigation')
+ h.render('revision-A')
+ h.paints[0](120)
+ await new Promise<void>(resolve => setImmediate(resolve))
+ assert.equal(h.reports[0].navigationId, 'nav-fixture-clock')
+})

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 
 import {
+	routeReadyNavigationId,
 	findElementPaintTime,
 	markRouteNavigationStart,
 	markBackgroundResumeStart,
@@ -239,4 +240,20 @@ describe('route ready navigation clock', () => {
 			450
 		)
 	})
+})
+
+it('shares clock identity across markers and changes it on repeat navigation', () => {
+ const hard = routeReadyNavigationId('/market', 0)
+ assert.match(hard!, /^nav-/)
+ assert.equal(routeReadyNavigationId('/market', 0), hard)
+ markRouteNavigationStart('/market', 10, 'https://example.test')
+ const first = routeReadyNavigationId('/market', 0)
+ assert.notEqual(first, hard)
+ assert.equal(routeReadyNavigationId('/market', 0), first)
+ assert.equal(routeReadyNavigationId('/other', 0), undefined)
+ markRouteNavigationStart('/market', 20, 'https://example.test')
+ assert.notEqual(routeReadyNavigationId('/market', 0), first)
+})
+it('does not manufacture a navigation identity without a clock', () => {
+ assert.equal(routeReadyNavigationId('/market', null), undefined)
 })

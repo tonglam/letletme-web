@@ -1,9 +1,12 @@
+import { createPerformanceCorrelationId } from './performance-correlation'
+
 type RouteNavigationStart = {
 	pathname: string
 	startedAt: number
+	navigationId: string
 }
 
-type BackgroundResumeStart = RouteNavigationStart
+type BackgroundResumeStart = Omit<RouteNavigationStart, 'navigationId'>
 
 export type RouteReadyMeasurementKind =
 	| 'initial_navigation'
@@ -14,6 +17,7 @@ export type RouteReadyMeasurementKind =
 
 export type RouteReadyKeyKind = 'identity' | 'interaction'
 
+let documentNavigationId: string | undefined
 let currentRouteNavigation: RouteNavigationStart | null = null
 let pendingBackgroundResume: BackgroundResumeStart | null = null
 const readyInteractionStarts = new Map<string, number>()
@@ -43,7 +47,11 @@ export function markRouteReadyStart(
 		)
 		return
 	}
-	currentRouteNavigation = { pathname: normalizedPathname, startedAt }
+	currentRouteNavigation = {
+		pathname: normalizedPathname,
+		startedAt,
+		navigationId: createPerformanceCorrelationId('nav')
+	}
 }
 
 /** Called by Next's pre-hydration client instrumentation when a route starts. */
@@ -79,6 +87,20 @@ function documentNavigationStart(): number | null {
 	const entry = performance.getEntriesByType('navigation')[0] as
 		PerformanceNavigationTiming | undefined
 	return entry?.startTime ?? null
+}
+
+/** Share an identity across markers using the same document or route clock. */
+export function routeReadyNavigationId(
+	pathname: string,
+	documentStart = documentNavigationStart()
+): string | undefined {
+	const path = normalizePathname(pathname)
+	if (currentRouteNavigation) {
+		return currentRouteNavigation.pathname === path
+			? currentRouteNavigation.navigationId : undefined
+	}
+	if (pendingBackgroundResume || documentStart === null) return undefined
+	return documentNavigationId ??= createPerformanceCorrelationId('nav')
 }
 
 /** Returns the latest browser-recorded paint time for one annotated RSC element. */
@@ -274,6 +296,7 @@ export function clearRouteReadyStart(
 }
 
 export function resetRouteNavigationStartForTests(): void {
+	documentNavigationId = undefined
 	currentRouteNavigation = null
 	pendingBackgroundResume = null
 	readyInteractionStarts.clear()
