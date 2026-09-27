@@ -169,8 +169,8 @@ export default defineConfig({
 	fullyParallel: true,
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 2 : 0,
-	// Remediation tests mutate one process-wide GraphQL fixture rule set.
-	workers: process.env.E2E_SSR_REMEDIATION === '1' ? 1 : process.env.CI ? 2 : undefined,
+	// Remediation and hydration tests mutate one process-wide GraphQL fixture rule set.
+	workers: process.env.E2E_SSR_REMEDIATION === '1' || process.env.E2E_LIVE_HYDRATION === '1' ? 1 : process.env.CI ? 2 : undefined,
 	reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
 	use: {
 		baseURL,
