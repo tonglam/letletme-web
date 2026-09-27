@@ -3885,11 +3885,12 @@ test.describe('J12 planned UTC dark mobile management states', () => {
  }
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
- test.describe(`J13 ${locale} ${width}`, () => {
- test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
- test(`J13 ${locale} creation modes keep unprepared fields hidden and leave without writes`, async ({ page }) => {
+for (const plannedMode of ['baseline', 'classic', 'h2h', 'custom'] as const) {
+for (const locale of plannedMode === 'baseline' ? ['en', 'zh-CN'] as const : ['zh-CN'] as const) {
+ for (const width of plannedMode === 'baseline' ? [1440, 390] : [390]) {
+ test.describe(`J13 planned ${plannedMode} ${locale} ${width}`, () => {
+ test.use({ viewport: { width, height: 900 }, timezoneId: plannedMode === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: plannedMode === 'baseline' ? 'light' : 'dark' })
+ test(`J13 ${locale} creation modes keep unprepared fields hidden and leave without writes`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session and intercepted API only')
   const session = await createSession({ entryId: 15702 })
   const prefix = locale === 'en' ? '' : '/zh-CN'
@@ -3903,7 +3904,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await route.abort()
    }
   })
+  const theme = plannedMode === 'baseline' ? 'system' : 'dark'
   try {
+   await page.addInitScript(value => localStorage.setItem('theme', value), theme)
    await addSessionCookie(page, session.cookie)
    await page.goto(`${prefix}/competitions/browse`)
    const create = page.locator(`a[href="${prefix}/competitions/create"]`).filter({ visible: true }).first()
@@ -3937,13 +3940,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
    await expect(page.locator('#tournament-create-form button[type="submit"]')).toBeDisabled()
    await page.locator('label[for="creation-mode-h2h"]').click()
    await expect(page.locator('#tournament-name')).toHaveCount(0)
+   if (plannedMode !== 'baseline') {
+    await page.locator(`label[for="creation-mode-${plannedMode}"]`).click()
+    await expect(page.locator(`#creation-mode-${plannedMode}`)).toHaveAttribute('aria-checked', 'true')
+    await expect(page.locator('#tournament-name')).toHaveCount(plannedMode === 'custom' ? 1 : 0)
+   }
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(plannedMode === 'baseline' ? 'Australia/Perth' : 'UTC')
+   if (plannedMode !== 'baseline') await expect(page.locator('html')).toHaveClass(/dark/)
    await page.getByRole('contentinfo').locator(`a[href="${prefix}/competitions/browse"]`).click()
    await expect(page).toHaveURL(new RegExp(`${prefix}/competitions/browse$`))
    expect(forbidden).toEqual([])
+   await testInfo.attach('J13-planned-context', { body: JSON.stringify({ variantId: plannedMode === 'baseline' ? `J13.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `J13.state.0${['classic', 'h2h', 'custom'].indexOf(plannedMode) + 1}`, locale, viewport: page.viewportSize(), theme, timezone: plannedMode === 'baseline' ? 'Australia/Perth' : 'UTC', scenario: plannedMode, forbiddenRequests: forbidden, scope: 'Actual browse/create click, all unprepared modes, name visibility, help and cancel with zero create/import/preview requests. Prepared group/knockout options are not covered.', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }), contentType: 'application/json' })
   } finally { await session.cleanup() }
  })
  })
  }
+}
+
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
