@@ -6004,3 +6004,121 @@ for (const { locale, width, theme, timezone, variantId } of sideEffectContexts) 
   }
  })
 }
+
+test.describe('S08 planned management authorization roles', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const [role, variantId] of [
+  ['anonymous', 'S08.directed.01'], ['unbound', 'S08.directed.02'],
+  ['owner', 'S08.directed.04'], ['nonowner', 'S08.directed.06']
+ ] as const) {
+  test(`${variantId} ${role} management scope`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated sessions and GraphQL authorization result fixture only')
+   const session = role === 'anonymous' ? null : await createSession(role === 'unbound' ? {} : { entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const writes: string[] = []
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.route('**/*', route => {
+    const request = route.request()
+    const pathname = new URL(request.url()).pathname
+    if ((pathname.startsWith('/api/tournaments/') || request.headers()['next-action']) && !['GET', 'HEAD'].includes(request.method())) {
+     writes.push(`${request.method()} ${pathname}`)
+     return route.abort()
+    }
+    return route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: role === 'owner' ? managedTournament : null } }
+    ] }) })).ok).toBe(true)
+    if (session) await addSessionCookie(page, session.cookie)
+    const response = await page.goto('/zh-CN/competitions/77/manage')
+    expect(response?.status()).toBe(200)
+    const marker = page.locator('[data-competition-perf-ready="manage"]')
+    if (role === 'anonymous' || role === 'unbound') {
+     const target = role === 'anonymous' ? '/zh-CN/auth/login' : '/zh-CN/onboarding/bind-entry'
+     await expect(page).toHaveURL(url => url.pathname === target && url.searchParams.get('next')?.endsWith('/competitions/77/manage') === true)
+     await expect(page.locator(role === 'anonymous' ? '#main-content input[type="password"]' : '#main-content input[name="entryId"]')).toBeEnabled()
+    } else if (role === 'owner') {
+     await expect(page).toHaveURL(/\/zh-CN\/competitions\/77\/manage$/)
+     await expect(marker).toHaveAttribute('data-competition-tournament-id', '77')
+     await expect(page.locator('#tournament-name')).toHaveValue('J12 Owned Cup')
+     await expect(page.getByRole('button', { name: '删除赛事', exact: true })).toBeVisible()
+    } else {
+     await expect(page).toHaveURL(/\/zh-CN\/competitions\/77\/manage$/)
+     await expect(page.getByRole('heading', { name: '需要管理员权限', exact: true })).toBeVisible()
+    }
+    if (role !== 'owner') {
+     await expect(marker).toHaveCount(0)
+     await expect(page.locator('#tournament-name')).toHaveCount(0)
+     await expect(page.getByRole('button', { name: '删除赛事', exact: true })).toHaveCount(0)
+     await expect(page.getByRole('heading', { name: /J12 Owned Cup/ })).toHaveCount(0)
+    }
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    const observations = await (await fetch(fixture)).json()
+    const reads = observations.requests.filter((r: { operation: string }) => r.operation === 'GetManagedTournament')
+    if (role === 'anonymous' || role === 'unbound') expect(reads).toEqual([])
+    else {
+     expect(reads).toHaveLength(1)
+     expect(reads[0].variables).toEqual({ tournamentId: 77, entryId: 909090 })
+    }
+    expect(writes).toEqual([])
+    await testInfo.attach('S08-management-role', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S08', stepId: 'S08.01', variantId, role, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', environment: 'isolated-fixture', finalUrl: page.url(), requestedTournamentId: 77, upstreamReads: reads.map((r: { variables: unknown }) => r.variables), writes, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Real Web session and RSC management boundary; upstream owner decision supplied by fixture, not proof of GraphQL authorization' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session?.cleanup()
+   }
+  })
+ }
+})
+
+test.describe('S08 planned member and platform-admin browse roles', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const [role, variantId] of [['member', 'S08.directed.03'], ['platform-admin', 'S08.directed.05']] as const) {
+  test(`${variantId} ${role} browse actions`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated platform-admin identity and GraphQL result fixture')
+   const session = await createSession({ entryId: 909090, ...(role === 'platform-admin' ? { userId: 's08-platform-admin-fixture' } : {}) })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const tournament = { ...managedTournament, adminEntryId: 808080 }
+   const writes: string[] = []
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.route('**/api/tournaments/**', route => {
+    if (!['GET', 'HEAD'].includes(route.request().method())) { writes.push(route.request().method()); return route.abort() }
+    return route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [tournament] } },
+     { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: role === 'platform-admin' ? tournament : null } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/zh-CN/competitions/browse')
+    await expect(page).toHaveURL(/\/zh-CN\/competitions\/browse$/)
+    await page.getByRole('button', { name: 'J12 Owned Cup 的操作', exact: true }).click()
+    await expect(page.getByRole('menuitem', { name: '查看实时详情', exact: true })).toBeVisible()
+    const manage = page.getByRole('menuitem', { name: '管理赛事', exact: true })
+    if (role === 'platform-admin') {
+     await expect(manage).toBeVisible()
+     await manage.click()
+     await expect(page).toHaveURL(/\/zh-CN\/competitions\/77\/manage$/)
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '77')
+     await expect(page.locator('#tournament-name')).toHaveValue(tournament.name)
+    } else {
+     await expect(manage).toHaveCount(0)
+     await page.keyboard.press('Escape')
+    }
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    const observations = await (await fetch(fixture)).json()
+    const relevant = observations.requests.filter((r: { operation: string }) => ['GetEntryTournamentsList', 'GetManagedTournament'].includes(r.operation))
+    expect(relevant.map((r: { operation: string }) => r.operation)).toEqual(role === 'platform-admin' ? ['GetEntryTournamentsList', 'GetManagedTournament'] : ['GetEntryTournamentsList'])
+    expect(relevant.every((r: { variables: { entryId?: number } }) => r.variables.entryId === 909090)).toBe(true)
+    expect(writes).toEqual([])
+    await testInfo.attach('S08-management-role', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S08', stepId: 'S08.01', variantId, role, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', environment: 'isolated-fixture', finalUrl: page.url(), requestedTournamentId: 77, upstreamReads: relevant.map((r: { operation: string; variables: unknown }) => ({ operation: r.operation, variables: r.variables })), writes, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Web member/admin presentation and actual management link; GraphQL membership/admin result supplied by fixture, not producer authorization proof' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})

@@ -208,6 +208,11 @@ export default defineConfig({
 						HOSTNAME: '127.0.0.1',
 						PORT: localWebPort,
 						BETTER_AUTH_URL: baseURL,
+						// Scope the platform-admin identity to the isolated authorization fixture.
+						...(process.env.E2E_SSR_REMEDIATION === '1' ? {
+							PLATFORM_ADMIN_USER_IDS: 's08-platform-admin-fixture',
+							PLATFORM_ADMIN_FPL_ENTRY_IDS: '909090'
+						} : {}),
 						BACKEND_PROXY_SECRET:
 							'playwright-backend-proxy-secret-at-least-32-bytes',
 						BETTER_AUTH_SECRET:
