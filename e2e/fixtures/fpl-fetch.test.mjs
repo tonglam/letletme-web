@@ -13,6 +13,7 @@ test('FPL fixture intercepts server entry reads and rejects other FPL routes', (
 		for (const input of ['https://fantasy.premierleague.com/api/entry/123/', new Request('https://fantasy.premierleague.com/api/entry/123/')]) {
 			assert.deepEqual(await (await fetch(input)).json(), { id: 123, name: 'E2E Synced United', player_first_name: 'Fixture', player_last_name: 'Manager' });
 		}
+		assert.equal((await fetch('https://fantasy.premierleague.com/api/entry/999999991/')).status, 503);
 		await assert.rejects(fetch('https://fantasy.premierleague.com/api/bootstrap-static/'));
 		await assert.rejects(fetch('https://fantasy.premierleague.com/api/entry/123/', { method: 'POST' }));
 		assert.equal(delegated, 0);
