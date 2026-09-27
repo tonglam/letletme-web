@@ -1104,6 +1104,7 @@ test('repeated shell bootstrap executes theme actions only once', async ({ page 
 
 for (const width of [1440, 390]) {
  test(`J18 shell preferences and cancelled feedback survive navigation ${width}`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture and preference changes only')
   await page.setViewportSize({ width, height: 900 })
   const submissions: string[] = []
   await page.route('**/api/bug-reports', async route => { submissions.push(route.request().method()); await route.abort() })
@@ -1120,6 +1121,15 @@ for (const width of [1440, 390]) {
   await expect(page).toHaveURL(/\/zh-CN$/)
   await page.getByRole('contentinfo').getByRole('link', { name: '市场', exact: true }).click()
   await expect(page).toHaveURL(/\/zh-CN\/explore\/market$/)
+  const availability = page.getByTestId('market-availability-disclosure')
+  await availability.locator('summary').click()
+  const palmer = availability.getByRole('link', { name: 'Palmer', exact: true })
+  await expect(palmer).toHaveCount(1)
+  await expect(palmer).toHaveAttribute('href', '/zh-CN/explore/player-stats?p1=2')
+  await palmer.click()
+  await expect(page).toHaveURL(url => url.pathname === '/zh-CN/explore/player-stats' && url.searchParams.get('p1') === '2')
+  await expect(page.getByRole('region', { name: '球员总览', exact: true })).toContainText('Palmer')
+  await expect(page.getByRole('main').locator('[aria-busy="true"]')).toHaveCount(0)
   await page.locator('summary[aria-label="切换配色主题"]').filter({ visible: true }).click()
   await page.locator('[data-theme-choice="dark"]').filter({ visible: true }).click()
   await expect(page.locator('html')).toHaveClass(/dark/)
@@ -1133,6 +1143,10 @@ for (const width of [1440, 390]) {
   const qr = page.locator('details[data-mini-program-popover]')
   await qr.locator(':scope > summary').click()
   await expect(qr.getByRole('group')).toBeVisible()
+  const qrBounds = await qr.getByRole('group').boundingBox()
+  expect(qrBounds).not.toBeNull()
+  expect(qrBounds!.x).toBeGreaterThanOrEqual(0)
+  expect(qrBounds!.x + qrBounds!.width).toBeLessThanOrEqual(width)
   await qr.locator(':scope > summary').click()
   await expect(qr).not.toHaveAttribute('open', '')
   await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: 'LetLetMe', exact: true }).click()
