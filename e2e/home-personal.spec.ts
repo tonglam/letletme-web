@@ -6077,7 +6077,11 @@ test.describe('S08 planned member and platform-admin browse roles', () => {
  for (const [role, variantId] of [['member', 'S08.directed.03'], ['platform-admin', 'S08.directed.05']] as const) {
   test(`${variantId} ${role} browse actions`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated platform-admin identity and GraphQL result fixture')
-   const session = await createSession({ entryId: 909090, ...(role === 'platform-admin' ? { userId: 's08-platform-admin-fixture' } : {}) })
+   if (role === 'platform-admin') {
+    expect(process.env.PLATFORM_ADMIN_USER_IDS, 'Run with the existing isolated browse-admin profile').toBe('e2e-browse-platform-admin')
+    expect(process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS).toBe('909090')
+   }
+   const session = await createSession({ entryId: 909090, ...(role === 'platform-admin' ? { userId: 'e2e-browse-platform-admin' } : {}) })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const tournament = { ...managedTournament, adminEntryId: 808080 }
    const writes: string[] = []
