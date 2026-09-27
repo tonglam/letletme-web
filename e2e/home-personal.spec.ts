@@ -6002,3 +6002,76 @@ test.describe('J10 planned state contexts', () => {
   })
  }
 })
+
+// R32 route assertions complement J14's actual account-menu journey.
+test.describe('R32 bound and unbound route baselines', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) for (const identity of ['U', 'B'] as const) {
+  test(`R32 profile direct reload history ${identity} ${locale} ${width}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated account and FPL fetch fixture only')
+   const session = await createSession(identity === 'B' ? { entryId: 15702 } : {})
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const path = `${prefix}/profile`
+   const start = `${prefix}/explore/gameweek`
+   const labels = (locale === 'en' ? enMessages : zhMessages).Profile
+   const writes: string[] = []
+   const pageErrors: string[] = []
+   page.on('pageerror', error => pageErrors.push(error.message))
+   page.on('request', request => {
+    const pathname = new URL(request.url()).pathname
+    if (request.headers()['next-action'] || (request.method() !== 'GET' && /^\/api\/(auth|profile\/avatar|fpl\/bind)/.test(pathname))) writes.push(pathname)
+   })
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(start)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const main = page.locator('#main-content')
+    const assertProfile = async () => {
+     await expect(page).toHaveURL(url => url.pathname === path)
+     await expect(main.getByRole('heading', { name: labels.title, exact: true })).toBeVisible()
+     await expect(main.getByRole('heading', { name: 'E2E Manager', exact: true })).toBeVisible()
+     if (identity === 'B') {
+      await expect(main).toContainText('E2E Synced United')
+      await expect(main).toContainText('Fixture Manager')
+      await expect(main.getByText('· E2E United', { exact: true })).toBeVisible()
+      await expect(main.getByRole('button', { name: locale === 'en' ? 'Unlink' : '解除关联', exact: true })).toBeEnabled()
+     } else {
+      await expect(main.locator('input[name="entryId"]')).toBeVisible()
+      await expect(main.getByText(labels.noPreviousTeamNames, { exact: true })).toBeVisible()
+      await expect(main).not.toContainText('E2E Synced United')
+      await expect(main.getByRole('button', { name: locale === 'en' ? 'Unlink' : '解除关联', exact: true })).toHaveCount(0)
+     }
+    }
+    const statuses: number[] = []
+    for (const navigate of [() => page.goto(path), () => page.reload()]) {
+     const response = await navigate()
+     expect(response?.status()).toBe(200)
+     expect(response?.request().redirectedFrom()).toBeNull()
+     statuses.push(response!.status())
+     await assertProfile()
+    }
+    await page.goBack()
+    await expect(page).toHaveURL(url => url.pathname === start)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await page.goForward()
+    await assertProfile()
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+    await expect(page.locator('html')).toHaveClass(/\blight\b/)
+    const [stored] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+    expect(stored.fpl_entry_id).toBe(session.entryId)
+    expect(Boolean(stored.fpl_entry_verified_at)).toBe(identity === 'B')
+    expect(writes).toEqual([])
+    expect(pageErrors).toEqual([])
+    await testInfo.attach('R32-route-context', { contentType: 'application/json', body: JSON.stringify({ caseId: 'R32', variantId: `R32.${identity}.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, stepIds: ['R32.01', 'R32.02', 'R32.04', 'R32.05'], identity, locale, viewport: { width, height: 900 }, theme: 'system', timezone: 'Australia/Perth', statuses, pageErrors, entryId: session.entryId, backForward: true, readyMs: null, performanceStatus: 'NOT_OBSERVED', wholeVariantComplete: false }) })
+   } finally {
+    await sql`DELETE FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId}`
+    await sql.end()
+    await session.cleanup()
+   }
+  })
+ }
+})
