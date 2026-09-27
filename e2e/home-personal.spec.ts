@@ -265,7 +265,13 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 	}
 })
 
-test('a bound squad opens a selectable gameweek range and preserves the terminal share pitch', async ({
+for (const context of [
+ ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({ locale, width, theme: 'system', timezoneId: 'Australia/Perth' }))),
+ { locale: 'zh-CN', width: 390, theme: 'dark', timezoneId: 'UTC' }
+]) {
+ test.describe(`FIX04 planned ${context.locale} ${context.width} ${context.theme}`, () => {
+  test.use({ viewport: { width: context.width, height: 900 }, timezoneId: context.timezoneId })
+test('FIX04 bound squad opens a selectable gameweek range and preserves the terminal share pitch', async ({
 	page
 }) => {
 	const session = await createSession({ entryId: 15702 })
@@ -276,15 +282,18 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 		}
 	})
 	try {
+		await page.addInitScript(theme => localStorage.setItem('theme', theme), context.theme)
 		await addSessionCookie(page, session.cookie)
-		await page.goto('/explore/fixtures')
+		await page.goto(context.locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+		expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezoneId)
+		expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(context.theme)
 
 		await expect(page.locator('[data-page-fdr-legend="true"]')).toHaveCount(1)
 		await page.locator('#my-squad summary').click()
 		const pitch = page.locator('[data-schedule-pitch="true"]:visible')
 		await expect(pitch).toBeVisible()
 		const initialRequestCount = fixtureWindowRequests.length
-		await pitch.getByRole('button', { name: /^View Player 1's fixture details;/ }).click()
+		await pitch.getByRole('button', { name: context.locale === 'en' ? /^View Player 1's fixture details;/ : /^查看 Player 1 的赛程详情/ }).click()
 
 		const dialog = page.getByRole('dialog')
 		await expect(dialog).toBeVisible()
@@ -298,15 +307,16 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 		await expect(schedule.getByText('GW38', { exact: true })).toBeVisible()
 		await expect(dialog.getByText('2–1', { exact: true })).toBeVisible()
 		await expect(dialog.getByText('Finished', { exact: true })).toHaveCount(0)
-		await expect(dialog.getByRole('button', { name: 'Image' })).toBeVisible()
+		await expect(dialog.getByRole('button', { name: context.locale === 'en' ? 'Image' : '图片' })).toBeVisible()
 		await expect
 			.poll(() => fixtureWindowRequests.length)
 			.toBe(initialRequestCount + 8)
 
-		await dialog.getByRole('button', { name: 'Close' }).click()
+		await page.keyboard.press('Escape')
 		await expect(dialog).toHaveCount(0)
+		await expect(pitch.getByRole('button', { name: context.locale === 'en' ? /^View Player 1's fixture details;/ : /^查看 Player 1 的赛程详情/ })).toBeFocused()
 
-		const sixGws = page.getByRole('button', { name: '6 GWs' })
+		const sixGws = page.getByRole('button', { name: context.locale === 'en' ? '6 GWs' : '6 轮' })
 		await sixGws.click()
 		await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
 		// The fixture seed is anchored at GW33, so the terminal horizon exposes
@@ -318,12 +328,15 @@ test('a bound squad opens a selectable gameweek range and preserves the terminal
 			pitch.locator('[data-share-preserve-width="true"]')
 		).toHaveClass(/aspect-\[/)
 		await expect(
-			page.locator('#my-squad').getByRole('button', { name: 'Image' })
+			page.locator('#my-squad').getByRole('button', { name: context.locale === 'en' ? 'Image' : '图片' })
 		).toBeVisible()
 	} finally {
 		await session.cleanup()
 	}
 })
+
+ })
+}
 
 test('the server-rendered signed navigation logs out through a same-origin POST', async ({
 	page
@@ -6246,3 +6259,43 @@ for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
   }
  }
 }
+
+test.describe('FIX04 planned unavailable and unbound', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ for (const scenario of ['unbound', 'unavailable'] as const) {
+  test(`FIX04 ${scenario} preserves public fixtures and recovers only the personal region`, async ({ page }) => {
+   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated fixture-control runtime')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession(scenario === 'unbound' ? {} : { entryId: 15702 })
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await addSessionCookie(page, session.cookie)
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: scenario === 'unavailable' ? [{ operation: 'GetEntryHistory', error: true }, { operation: 'GetEntryEventResult', error: true }] : [] }) })).ok).toBe(true)
+    await page.goto('/zh-CN/explore/fixtures#my-squad')
+    const squad = page.locator('#my-squad')
+    await expect(squad).toHaveAttribute('open', '')
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    const matrix = page.getByRole('region', { name: '球队 FDR', exact: true })
+    await expect(matrix.locator('tbody tr')).toHaveCount(3)
+    if (scenario === 'unbound') {
+     await expect(squad.getByRole('link', { name: zhMessages.Fixtures.actionsBindCta, exact: true })).toHaveAttribute('href', '/zh-CN/onboarding/bind-entry')
+     await expect(squad.getByRole('button', { name: /^查看 Player/ })).toHaveCount(0)
+     const observations = await (await fetch(fixture)).json()
+     expect(observations.requests.filter((r: { operation: string }) => ['GetEntryHistory', 'GetEntryEventResult'].includes(r.operation))).toHaveLength(0)
+    } else {
+     await expect(squad.getByRole('alert')).toHaveText(zhMessages.Fixtures.mySquadLoadFailed)
+     await expect(squad.getByRole('button', { name: /^查看 Player/ })).toHaveCount(0)
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+     await squad.getByRole('button', { name: zhMessages.Fixtures.squadRetry, exact: true }).click()
+     await expect(squad.getByRole('button', { name: /^查看 Player 1 的赛程详情/ })).toBeVisible()
+     await expect(squad.getByRole('alert')).toHaveCount(0)
+     await expect(matrix.locator('tbody tr')).toHaveCount(3)
+    }
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
