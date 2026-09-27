@@ -32,9 +32,12 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 16)
+	assert.equal(result.calls.length, 17)
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
 	assert.deepEqual(result.calls.at(-1).args, ['playwright', 'test', 'e2e/match-missing-stats.spec.ts', '--workers=1', '--trace=on', '--output=test-results/match-missing-stats'])
+	assert.deepEqual(result.calls.at(-2).args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'HOME02 planned', '--workers=1', '--trace=on', '--output=test-results/home-carousel-contexts'])
+	assert.equal(result.calls.at(-2).market, '1')
+	assert.equal(result.calls.at(-2).existingBuild, '1')
 	assert.equal(result.calls.at(-1).fixture, '1')
 	assert.equal(result.calls.at(-1).cwd, root)
 	for (const [index, status] of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'].entries()) {
