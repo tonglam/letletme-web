@@ -1,3 +1,4 @@
+import { getCurrentSeasonKey } from '../lib/season'
 import { managedTournament } from './fixtures/managed-tournament'
 import { officialH2HFixture } from './fixtures/official-h2h'
 import { createHmac, randomUUID } from 'node:crypto'
@@ -1128,14 +1129,16 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+const comparisonJourney = recoveryMode.startsWith('live-journey-pinned')
+const plannedComparison = recoveryMode === 'live-journey-pinned-ready' || recoveryMode === 'live-journey-pinned-large'
 const plannedReadyJourney = recoveryMode === 'live-journey-ready-mobile'
 const publishedJourney = recoveryMode === 'live-journey-published' || plannedReadyJourney
 const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney
-const journeyTimezone = plannedReadyJourney ? 'UTC' : 'Australia/Perth'
-const journeyTheme = plannedReadyJourney ? 'dark' : 'system'
-for (const locale of plannedReadyJourney ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of plannedReadyJourney ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney ? [1440, 390] : [0]) {
+const journeyTimezone = plannedReadyJourney || plannedComparison ? 'UTC' : 'Australia/Perth'
+const journeyTheme = plannedReadyJourney || plannedComparison ? 'dark' : 'system'
+for (const locale of plannedReadyJourney || plannedComparison ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of plannedReadyJourney || plannedComparison ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1145,12 +1148,12 @@ const isSeasonSectionOperation = (query: string | undefined) =>
 	query?.includes(pointsSectionOperation) === true ||
 	query?.includes('GetMyTournamentSeasonReviewSection') === true
 test.describe(() => {
-if (formalJourney) test.use({ timezoneId: journeyTimezone, ...(plannedReadyJourney ? { colorScheme: 'dark' as const } : {}) })
+if (formalJourney || comparisonJourney) test.use({ timezoneId: journeyTimezone, colorScheme: plannedReadyJourney || plannedComparison ? 'dark' : 'light' })
 test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
-	if (formalJourney) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
+	if (formalJourney || comparisonJourney) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
 	if (recoveryMode === 'settlement-time') {
 		phase.settledAt = '2026-09-15T18:00:00Z'
@@ -1187,8 +1190,33 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		}
 		await route.fulfill({ status: 204, body: '' })
 	})
+	const comparisonRules = []
+	if (comparisonJourney) {
+		for (const eventId of [3, 4]) for (const scoreCoreRevision of ['e2e-competition-score-v1', 'e2e-competition-score-v2']) {
+			const ref = { season: String(getCurrentSeasonKey()), eventId, scoreCoreRevision }
+			const response = await fetch(fixture.replace('/__performance', '/graphql'), {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ query: 'query GetTournamentEntrySquads { __typename }', variables: { tournamentId: 6, comparedEntryIds: [123, 15702], ref } })
+			})
+			const seed = await response.json()
+			expect(seed.errors).toBeUndefined()
+			const order = [1, 3, 4, 5, 8, 9, 10, 11, 13, 14, 15, 2, 6, 7, 12]
+			for (const entry of seed.data.tournamentEntrySquads.entries) {
+				entry.pickList = entry.pickList.map((pick: { element: number }) => {
+					const position = order.indexOf(pick.element) + 1
+					const active = position <= 11
+					const points = pick.element === 1 ? 6 : scoreCoreRevision.endsWith('-v2') ? (pick.element === 3 ? 11 : 6) : 4
+					return { ...pick, position, pickActive: active, multiplier: pick.element === 1 ? 2 : active ? 1 : 0, isCaptain: pick.element === 1, isViceCaptain: pick.element === 8, autoSub: false, totalPoints: points }
+				})
+				const active = entry.pickList.filter((pick: { pickActive: boolean }) => pick.pickActive)
+				expect(['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD'].map(type => active.filter((pick: { elementTypeName: string }) => pick.elementTypeName === type).length)).toEqual([1, 3, 4, 3])
+				expect(entry.pickList.reduce((sum: number, pick: { totalPoints: number; multiplier: number }) => sum + pick.totalPoints * pick.multiplier, 0)).toBe(entry.score.eventPoints)
+			}
+			comparisonRules.push({ operation: 'GetTournamentEntrySquads', variables: { tournamentId: 6, ref }, data: seed.data })
+		}
+	}
 	try {
-		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [...rules, ...comparisonRules] }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
@@ -1388,7 +1416,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await route.fulfill({ response, json: body })
 				})
 			}
-			if (recoveryMode === 'live-journey-pinned') {
+			if (comparisonJourney) {
 				await page.route('**/api/live/competitions/6/board', async route => {
 					const response = await route.fetch()
 					const body = await response.json()
@@ -1405,6 +1433,10 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					board.totalEntries = 2
 					board.filteredEntries = 2
 					board.pageInfo = { hasNextPage: true, endCursor: 'pinned-fixture-page-1' }
+					if (recoveryMode === 'live-journey-pinned-large') {
+						board.rows.push(...Array.from({ length: 47 }, (_, index) => ({ ...board.rows[0], entry: 8000000 + index, entryName: `Large Comparison ${index + 1}`, liveRank: index + 2 })))
+						board.totalEntries = board.filteredEntries = 49
+					}
 					await route.fulfill({ response, json: body })
 				})
 			}
@@ -1439,6 +1471,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				})
 			}
 			const unavailableRules = [
+				...comparisonRules,
 				...secondEntryRules,
 				...(publishedJourney ? [] : [{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } }]),
 				...rules
@@ -1688,7 +1721,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				if (locale === 'zh-CN') await page.keyboard.press('Escape')
 				await expect(team).toBeVisible()
 			}
-			if (recoveryMode === 'live-journey-pinned') {
+			if (comparisonJourney) {
 				await expect(page.getByRole('link', { name: /Pinned Viewer United/ }).filter({ visible: true })).toHaveCount(1)
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true }).click()
 				const selectionPrompt = page.getByText(locale === 'zh-CN' ? '勾选 2 支队伍' : 'Select 2 teams', { exact: true })
@@ -1708,6 +1741,11 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await firstSelection.check()
 				await page.getByRole('checkbox', { name: locale === 'zh-CN' ? '选择 Pinned Viewer United 进行对比' : 'Select Pinned Viewer United for comparison', exact: true }).filter({ visible: true }).check()
 				const compareOpener = page.getByRole('button', { name: locale === 'zh-CN' ? '对比（2）' : 'Compare (2)', exact: true })
+				if (recoveryMode === 'live-journey-pinned-large') {
+					await expect(page.getByRole('checkbox').filter({ visible: true })).toHaveCount(49)
+					await expect(page.getByRole('checkbox', { name: '选择 Large Comparison 1 进行对比', exact: true }).filter({ visible: true })).toBeDisabled()
+				}
+				const initialScrollLock = await page.evaluate(() => ({ overflow: document.body.style.overflow, lock: document.body.getAttribute('data-scroll-locked') }))
 				const detailResponse = page.waitForResponse(response => {
 					const url = new URL(response.url())
 					return url.pathname === '/api/live/competitions/6/compare'
@@ -1736,7 +1774,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await expect(comparison.getByText(new RegExp(`^(?:\\([CV]\\) )?Player ${playerId}(?: \\([CV]\\))?$`))).toHaveCount(2)
 				}
 				await expect(comparison.locator('.animate-pulse')).toHaveCount(0)
-				for (const [label, count] of [['GKP', 2], ['DEF', 5], ['MID', 4], ['SUB', 4]] as const) {
+				for (const [label, count] of [['GKP', 1], ['DEF', 3], ['MID', 4], ['FWD', 3], ['SUB', 4]] as const) {
 					await expect(comparison.getByText(label, { exact: true })).toHaveCount(count)
 				}
 				for (const totalScope of ['UNKNOWN', 'OVERALL'] as const) {
@@ -1770,8 +1808,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 						await route.fulfill({ response, json: payload })
 					})
 					await compareOpener.click()
-					await expect(comparison.getByText('Player 15', { exact: true })).toHaveCount(2)
-					const playerRow = comparison.getByText('Player 15', { exact: true }).first().locator('../..')
+					await expect(comparison.getByText('Player 12', { exact: true })).toHaveCount(2)
+					const playerRow = comparison.getByText('Player 12', { exact: true }).first().locator('../..')
 					const points = playerRow.locator('span.font-mono.w-6')
 					await expect(points).toHaveText([pointState === 'zero' ? '0' : '—', '5'])
 					await expect(points.filter({ hasText: /^5$/ })).toHaveClass(pointState === 'zero' ? /text-primary-ink/ : /text-muted-foreground/)
@@ -1894,6 +1932,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await page.getByRole('dialog').getByRole('button', { name: locale === 'zh-CN' ? '关闭' : 'Close', exact: true }).click()
 				await expect(page.getByRole('dialog')).toHaveCount(0)
 				await expect(compareOpener).toBeFocused()
+				await expect.poll(() => page.evaluate(() => ({ overflow: document.body.style.overflow, lock: document.body.getAttribute('data-scroll-locked') }))).toEqual(initialScrollLock)
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '取消' : 'Cancel', exact: true }).click()
 			}
 			const gameweekNavigations: string[] = []
@@ -1906,7 +1945,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=3`)
 			expect(gameweekNavigations).toEqual([])
 			page.off('request', recordGameweekNavigation)
-			if (recoveryMode === 'live-journey-pinned') {
+			if (comparisonJourney) {
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true }).click()
 				for (const teamName of ['E2E United', 'Pinned Viewer United']) {
 					await page.getByRole('checkbox', { name: locale === 'zh-CN' ? `选择 ${teamName} 进行对比` : `Select ${teamName} for comparison`, exact: true }).filter({ visible: true }).check()
@@ -2032,6 +2071,18 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					captainRawPoints: 6, captainMultiplier: 2, captainContribution: 12, activeSquadTotal: 22,
 					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
 					missingReason: 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
+				}) })
+			}
+
+			if (comparisonJourney) {
+				expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(journeyTimezone)
+				expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(journeyTheme)
+				await expect(page.locator('html')).toHaveClass(plannedComparison ? /dark/ : /light/)
+				await testInfo.attach('J07-planned-binding', { contentType: 'application/json', body: JSON.stringify({
+					variantId: plannedComparison ? `J07.state.${recoveryMode.endsWith('-large') ? '02' : '01'}` : `J07.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`,
+					locale, viewport: page.viewportSize(), theme: journeyTheme, timezone: journeyTimezone, identity: 'B', tournamentId: 6, gameweeks: [3, 4], entries: [123, 15702],
+					formation: '3-4-3', scoreTotals: [52, 77], rosterCount: recoveryMode.endsWith('-large') ? 49 : 2,
+					readyMs: null, eventToPaintMs: null, wholeVariantComplete: false, missingReason: 'Isolated functional comparison, fault recovery and navigation only; production and performance not measured.'
 				}) })
 			}
 
