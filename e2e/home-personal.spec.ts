@@ -1129,7 +1129,9 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-stale-mobile', 'live-journey-dgw-mobile', 'live-journey-auto-sub-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const scenarioMode of ['classic-mobile', 'partial-mobile', 'loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-stale-mobile', 'live-journey-dgw-mobile', 'live-journey-auto-sub-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+const plannedReview = scenarioMode === 'classic-mobile' || scenarioMode === 'partial-mobile'
+const recoveryMode = scenarioMode === 'classic-mobile' ? 'none' : scenarioMode === 'partial-mobile' ? 'partial-ssr-seed' : scenarioMode
 const comparisonJourney = recoveryMode.startsWith('live-journey-pinned')
 const plannedComparison = recoveryMode === 'live-journey-pinned-ready' || recoveryMode === 'live-journey-pinned-large'
 const plannedState = recoveryMode === 'live-journey-ready-mobile' ? 'ready' : recoveryMode === 'live-journey-stale-mobile' ? 'stale' : recoveryMode === 'live-journey-dgw-mobile' ? 'DGW' : recoveryMode === 'live-journey-auto-sub-mobile' ? 'auto-sub' : null
@@ -1139,10 +1141,10 @@ const squadPoints = plannedState === 'DGW' ? 24 : 22
 const benchPlayerId = plannedState === 'auto-sub' ? 6 : 12
 const publishedJourney = recoveryMode === 'live-journey-published' || plannedStateJourney
 const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney
-const journeyTimezone = plannedStateJourney || plannedComparison ? 'UTC' : 'Australia/Perth'
-const journeyTheme = plannedStateJourney || plannedComparison ? 'dark' : 'system'
-for (const locale of plannedStateJourney || plannedComparison ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of plannedStateJourney || plannedComparison ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
+const journeyTimezone = plannedStateJourney || plannedComparison || plannedReview ? 'UTC' : 'Australia/Perth'
+const journeyTheme = plannedStateJourney || plannedComparison || plannedReview ? 'dark' : 'system'
+for (const locale of plannedStateJourney || plannedComparison || plannedReview ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of plannedStateJourney || plannedComparison || plannedReview ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1152,12 +1154,19 @@ const isSeasonSectionOperation = (query: string | undefined) =>
 	query?.includes(pointsSectionOperation) === true ||
 	query?.includes('GetMyTournamentSeasonReviewSection') === true
 test.describe(() => {
-if (formalJourney || comparisonJourney) test.use({ timezoneId: journeyTimezone, colorScheme: plannedStateJourney || plannedComparison ? 'dark' : 'light' })
-test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
+if (formalJourney || comparisonJourney || plannedReview) test.use({ timezoneId: journeyTimezone, colorScheme: plannedStateJourney || plannedComparison || plannedReview ? 'dark' : 'light' })
+test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${plannedReview ? ` planned-${scenarioMode}` : ''}${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+	if (plannedReview) await page.setViewportSize({ width: 390, height: 900 })
+	const attachPlannedReview = async () => {
+	 if (!plannedReview) return
+	 await expect(page.locator('html')).toHaveClass(/dark/)
+	 expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+	 await testInfo.attach('J11-points-variant', { contentType: 'application/json', body: JSON.stringify({ variantId: scenarioMode === 'classic-mobile' ? 'J11.state.01' : 'J11.state.05', scenario: scenarioMode, locale, viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', tournamentId: 77, eventId: 4, revision: '1', scope: 'POINTS view section loading or partial section retry; scoped existing route assertions', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+	}
 	const session = await createSession({ entryId: 123 })
-	if (formalJourney || comparisonJourney) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
+	if (formalJourney || comparisonJourney || plannedReview) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
 	if (recoveryMode === 'settlement-time') {
 		phase.settledAt = '2026-09-15T18:00:00Z'
@@ -2431,7 +2440,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				: rule)
 			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: partialRules }) })).ok).toBe(true)
 			await page.goto(`${routePath}?tournamentId=77&gw=4`)
-			const retry = page.getByRole('button', { name: 'Retry this phase', exact: true })
+			const retry = page.getByRole('button', { name: locale === 'zh-CN' ? zhMessages.TournamentStats.reviewRetryPhase : 'Retry this phase', exact: true })
 			await expect(retry).toBeVisible()
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
@@ -2448,6 +2457,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 			await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-ready', 'true')
 			await expect.poll(() => readyReports).toBe(1)
+			await attachPlannedReview()
 			return
 		}
 		await page.goto(`${routePath}?tournamentId=77&view=gameweek&gw=4`)
@@ -2532,7 +2542,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		await expect(season).toHaveAttribute('aria-selected', 'true')
 		await expect(page).toHaveURL(url => url.pathname === routePath && !url.searchParams.has('view'))
 		await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
-		if (recoveryMode === 'none') {
+		await attachPlannedReview()
+		if (recoveryMode === 'none' && !plannedReview) {
 			await testInfo.attach(`S01-minimal-complete-${locale}`, {
 				contentType: 'application/json',
 				body: JSON.stringify({
@@ -3473,9 +3484,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
-for (const locale of ['en', 'zh-CN'] as const) {
-for (const width of [1440, 390]) {
-test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px`, async ({ page }) => {
+for (const scenario of ['baseline', 'ready', 'bye', 'first-last-gw'] as const) {
+for (const locale of (scenario === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) as ('en' | 'zh-CN')[]) {
+for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+const theme = scenario === 'baseline' ? 'system' : 'dark'
+test.describe(`J08 planned ${scenario} ${locale} ${width}`, () => {
+test.use({ timezoneId: timezone, colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px ${scenario}`, async ({ page }, testInfo) => {
+ await page.addInitScript(value => localStorage.setItem('theme', value), theme)
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
  const tableName = zh ? /对战积分榜/ : /Head-to-Head table/
@@ -3486,7 +3503,7 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
  const tournament = { id: 6, name: 'J08 Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
  const rules = [
   { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...tournament, id: 7, name: 'J08 Other H2H' }, tournament] } },
-  ...[6, 7].flatMap(tournamentId => ([3, 4] as const).flatMap(eventId => {
+  ...[6, 7].flatMap(tournamentId => (scenario === 'first-last-gw' ? [1, 2, 3, 4, 37, 38] as const : [3, 4] as const).flatMap(eventId => {
    const value = officialH2HFixture(eventId, tournamentId)
    return [
     { operation: 'GetTournamentOfficialH2H', variables: { tournamentId, eventId }, data: { tournamentOfficialH2H: value.snapshot } },
@@ -3546,12 +3563,43 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
    await expect(page).toHaveURL(returnUrl)
    await expect(page.getByRole('tab', { name: tableName })).toBeVisible()
   }
+  if (scenario === 'first-last-gw') {
+   for (const [boundary, adjacent, disabled, enabled] of [
+    [1, 2, zh ? '上一轮' : 'Previous', zh ? '下一轮' : 'Next'],
+    [38, 37, zh ? '下一轮' : 'Next', zh ? '上一轮' : 'Previous'],
+   ] as const) {
+    await page.goto(`${prefix}/live/competitions?tournamentId=6&gw=${boundary}`)
+    const overview = page.locator('section').filter({ has: page.getByRole('heading', { name: new RegExp(`^GW${boundary} `) }) })
+    await expect(overview).toHaveCount(1)
+    await expect(overview.getByRole('button', { name: disabled, exact: true })).toBeDisabled()
+    await expect(page.getByRole('link', { name: disabled, exact: true })).toHaveCount(0)
+    await page.getByRole('tab', { name: fixturesName }).click()
+    await expect(page.getByRole('tabpanel', { name: fixturesName }).locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=${boundary}"]`)).toHaveCount(1)
+    await overview.getByRole('link', { name: enabled, exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === String(adjacent))
+    await page.getByRole('link', { name: disabled, exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('gw') === String(boundary))
+    await expect(overview.getByRole('button', { name: disabled, exact: true })).toBeDisabled()
+   }
+  }
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+  await expect(page.locator('html')).toHaveClass(scenario === 'baseline' ? /light/ : /dark/)
+  await testInfo.attach('J08-planned-binding', { contentType: 'application/json', body: JSON.stringify({
+   variantId: scenario === 'baseline' ? `J08.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : `J08.state.${scenario === 'ready' ? '01' : scenario === 'bye' ? '02' : '03'}`,
+   scenario, locale, viewport: page.viewportSize(), identity: 'B', timezone, theme,
+   tournamentId: 6, gameweeks: scenario === 'first-last-gw' ? [1, 2, 3, 4, 37, 38] : [3, 4], entries: [123, 456],
+   assertions: ['tournament-menu', 'standings-fixtures', 'bye-no-invalid-link', 'previous-next', 'actual-home-away-navigation', '15-player-render', 'back-context'],
+   boundaryAssertions: scenario === 'first-last-gw', functionalStatus: 'PASS', readyMs: null, eventToPaintMs: null,
+   wholeVariantComplete: false, missingReason: 'Performance samples and formal score/squad-composition parity are not asserted; isolated fixture evidence only.'
+  }) })
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
  }
 })
-
+})
+}
 }
 }
 
@@ -3854,11 +3902,12 @@ test.describe('J12 planned UTC dark mobile management states', () => {
  }
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
- test.describe(`J13 ${locale} ${width}`, () => {
- test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
- test(`J13 ${locale} creation modes keep unprepared fields hidden and leave without writes`, async ({ page }) => {
+for (const plannedMode of ['baseline', 'classic', 'h2h', 'custom'] as const) {
+for (const locale of plannedMode === 'baseline' ? ['en', 'zh-CN'] as const : ['zh-CN'] as const) {
+ for (const width of plannedMode === 'baseline' ? [1440, 390] : [390]) {
+ test.describe(`J13 planned ${plannedMode} ${locale} ${width}`, () => {
+ test.use({ viewport: { width, height: 900 }, timezoneId: plannedMode === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: plannedMode === 'baseline' ? 'light' : 'dark' })
+ test(`J13 ${locale} creation modes keep unprepared fields hidden and leave without writes`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session and intercepted API only')
   const session = await createSession({ entryId: 15702 })
   const prefix = locale === 'en' ? '' : '/zh-CN'
@@ -3872,7 +3921,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await route.abort()
    }
   })
+  const theme = plannedMode === 'baseline' ? 'system' : 'dark'
   try {
+   await page.addInitScript(value => localStorage.setItem('theme', value), theme)
    await addSessionCookie(page, session.cookie)
    await page.goto(`${prefix}/competitions/browse`)
    const create = page.locator(`a[href="${prefix}/competitions/create"]`).filter({ visible: true }).first()
@@ -3906,13 +3957,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
    await expect(page.locator('#tournament-create-form button[type="submit"]')).toBeDisabled()
    await page.locator('label[for="creation-mode-h2h"]').click()
    await expect(page.locator('#tournament-name')).toHaveCount(0)
+   if (plannedMode !== 'baseline') {
+    await page.locator(`label[for="creation-mode-${plannedMode}"]`).click()
+    await expect(page.locator(`#creation-mode-${plannedMode}`)).toHaveAttribute('aria-checked', 'true')
+    await expect(page.locator('#tournament-name')).toHaveCount(plannedMode === 'custom' ? 1 : 0)
+   }
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(plannedMode === 'baseline' ? 'Australia/Perth' : 'UTC')
+   if (plannedMode !== 'baseline') await expect(page.locator('html')).toHaveClass(/dark/)
    await page.getByRole('contentinfo').locator(`a[href="${prefix}/competitions/browse"]`).click()
    await expect(page).toHaveURL(new RegExp(`${prefix}/competitions/browse$`))
    expect(forbidden).toEqual([])
+   await testInfo.attach('J13-planned-context', { body: JSON.stringify({ variantId: plannedMode === 'baseline' ? `J13.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `J13.state.0${['classic', 'h2h', 'custom'].indexOf(plannedMode) + 1}`, locale, viewport: page.viewportSize(), theme, timezone: plannedMode === 'baseline' ? 'Australia/Perth' : 'UTC', scenario: plannedMode, forbiddenRequests: forbidden, scope: 'Actual browse/create click, all unprepared modes, name visibility, help and cancel with zero create/import/preview requests. Prepared group/knockout options are not covered.', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }), contentType: 'application/json' })
   } finally { await session.cleanup() }
  })
  })
  }
+}
+
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
@@ -4703,22 +4765,35 @@ for (const locale of ['en', 'zh-CN'] as const) {
  }
 }
 
-for (const format of ['H2H', 'KNOCKOUT'] as const) {
- test(`SSR remediation review readiness waits for required ${format} sections`, async ({ page }) => {
+for (const profile of ['baseline', 'planned', 'group'] as const) {
+ test.describe(`J11 format ${profile}`, () => {
+ test.use({ timezoneId: profile === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: profile === 'baseline' ? 'light' : 'dark', viewport: { width: profile === 'baseline' ? 1440 : 390, height: 900 } })
+for (const format of (profile === 'group' ? ['H2H'] : ['H2H', 'KNOCKOUT']) as Array<'H2H' | 'KNOCKOUT'>) {
+ test(`SSR remediation review readiness waits for required ${format} sections`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture controls only')
+  const planned = profile !== 'baseline'
+  await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
   const session = await createSession({ entryId: 123 })
   const phase = { phaseId: 'format-phase', format, startEventId: 1, endEventId: 4, state: 'READY', revision: '9', semanticSha256: 'b'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
-  const scope = { ...phase, tournamentId: 78, eventId: 4, rowCount: 2, expectedSubjectCount: 2, readySubjectCount: 2, notApplicableSubjectCount: 0 }
+  const scope = { ...phase, tournamentId: 78, eventId: 4, rowCount: profile === 'group' ? 4 : 2, expectedSubjectCount: profile === 'group' ? 4 : 2, readySubjectCount: profile === 'group' ? 4 : 2, notApplicableSubjectCount: 0 }
   const home = { entryId: 123, entryName: 'Readiness Home', isAverage: false, grossPoints: 75, transferCost: 4, netPoints: 71, matchPoints: 3, rank: 1, goalsScored: 2, goalsConceded: 0 }
   const away = { ...home, entryId: 456, entryName: 'Readiness Away', grossPoints: 50, transferCost: 0, netPoints: 50, matchPoints: 0, rank: 2 }
   const standing = { groupId: 1, entryId: 123, entryName: home.entryName, rank: 1, played: 1, won: 1, drawn: 0, lost: 0, matchPoints: 3, pointsFor: 71, pointsAgainst: 50 }
   const h2h = { matches: [{ matchId: 'r1', groupId: 1, home, away, isBye: false }], standings: [standing], nextCursor: null, hasNextPage: false }
+  if (profile === 'group') {
+   h2h.standings.push(
+    { ...standing, entryId: 456, entryName: 'Readiness Away', rank: 2, won: 0, lost: 1, matchPoints: 0, pointsFor: 50, pointsAgainst: 71 },
+    { ...standing, groupId: 2, entryId: 789, entryName: 'Group Two Home' },
+    { ...standing, groupId: 2, entryId: 987, entryName: 'Group Two Away', rank: 2, won: 0, lost: 1, matchPoints: 0, pointsFor: 50, pointsAgainst: 71 }
+   )
+   h2h.matches.push({ matchId: 'r2', groupId: 2, home: { ...home, entryId: 789, entryName: 'Group Two Home' }, away: { ...away, entryId: 987, entryName: 'Group Two Away' }, isBye: false })
+  }
   const knockout = { matches: [{ round: 1, name: 'Readiness Final', matchId: 1, playAgainstId: 2, home, away, winnerEntryId: 123 }], nextCursor: null, hasNextPage: false }
   const pageInfo = { hasNextPage: false, endCursor: null }
   const sections = format === 'H2H' ? ['H2H_STANDINGS', 'H2H_FIXTURES'] : ['KNOCKOUT_BRACKET']
   const rules = [
-   { operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '78', node: { tournamentId: 78, name: 'Readiness Format Cup', creator: 'Fixture', leagueId: 78, leagueType: 'CLASSIC', totalTeamNum: 2, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
+   { operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '78', node: { tournamentId: 78, name: 'Readiness Format Cup', creator: 'Fixture', leagueId: 78, leagueType: 'CLASSIC', totalTeamNum: profile === 'group' ? 4 : 2, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
    { operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 78, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
    { operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: format === 'H2H' ? { format, h2h } : { format, knockout } } } },
    ...sections.map(section => ({ operation: 'GetMyTournamentSeasonReviewSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 78, throughEventId: 4, section, points: null, h2h: format === 'H2H' ? { ...h2h, matches: section === 'H2H_FIXTURES' ? h2h.matches : [], standings: section === 'H2H_STANDINGS' ? h2h.standings : [] } : null, knockout: format === 'KNOCKOUT' ? knockout : null, pageInfo } } }))
@@ -4734,11 +4809,11 @@ for (const format of ['H2H', 'KNOCKOUT'] as const) {
     if (body.query?.includes('GetMyTournamentSeasonReviewSection') && body.variables.section === sections.at(-1)) { heldRequests++; await gate }
     await route.continue()
    })
-   await page.goto('/my-fpl/competitions?tournamentId=78&view=gameweek&gw=4')
+   await page.goto(`${planned ? '/zh-CN' : ''}/my-fpl/competitions?tournamentId=78&view=gameweek&gw=4`)
    const ready = page.locator('[data-review-ready]')
    await expect(ready).toHaveAttribute('data-review-ready', 'true')
    await expect(ready).toHaveAttribute('data-review-revision', '9')
-   await page.getByRole('tab', { name: 'Season', exact: true }).click()
+   await page.getByRole('tab', { name: planned ? zhMessages.TournamentStats.viewSeason : 'Season', exact: true }).click()
    await expect.poll(() => heldRequests).toBe(1)
    await expect(ready).toHaveAttribute('data-review-ready', 'false')
    release()
@@ -4746,9 +4821,20 @@ for (const format of ['H2H', 'KNOCKOUT'] as const) {
    await expect(ready).toHaveAttribute('data-review-view', 'season')
    await expect(ready).toHaveAttribute('data-review-phase', phase.phaseId)
    await expect(ready).toHaveAttribute('data-review-hash', phase.semanticSha256)
-   await expect(page.getByText('Readiness Away', { exact: true })).toBeVisible()
+   await expect(page.getByText('Readiness Away', { exact: true }).first()).toBeVisible()
    if (format === 'H2H') await expect(page.getByRole('cell', { name: 'Readiness Home', exact: true })).toBeVisible()
    else await expect(page.getByText('Readiness Final', { exact: true })).toBeVisible()
+   if (profile === 'group') {
+    const groupRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Group Two Home', exact: true }) })
+    await expect(groupRow).toHaveCount(1)
+    await expect(groupRow.getByRole('cell', { name: '2', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'Group Two Away', exact: true })).toBeVisible()
+   }
+   if (planned) {
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await testInfo.attach('J11-format-variant', { contentType: 'application/json', body: JSON.stringify({ variantId: profile === 'group' ? 'J11.state.03' : format === 'H2H' ? 'J11.state.02' : 'J11.state.04', format, profile, locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', tournamentId: 78, eventId: 4, revision: '9', requiredSections: sections, groups: profile === 'group' ? [1, 2] : [1], scope: 'Direct GW entry and actual Season click with held required-section gate and rendered content', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+   }
   } finally {
    release()
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
@@ -4757,6 +4843,9 @@ for (const format of ['H2H', 'KNOCKOUT'] as const) {
  })
 }
 
+
+ })
+}
 
 test('J10 past-season pending prevents complete season readiness until recovery', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
