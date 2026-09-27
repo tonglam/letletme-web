@@ -3456,9 +3456,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
-for (const locale of ['en', 'zh-CN'] as const) {
-for (const width of [1440, 390]) {
-test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px`, async ({ page }) => {
+for (const scenario of ['baseline', 'ready', 'bye', 'first-last-gw'] as const) {
+for (const locale of (scenario === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) as ('en' | 'zh-CN')[]) {
+for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+const theme = scenario === 'baseline' ? 'system' : 'dark'
+test.describe(`J08 planned ${scenario} ${locale} ${width}`, () => {
+test.use({ timezoneId: timezone, colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px ${scenario}`, async ({ page }, testInfo) => {
+ await page.addInitScript(value => localStorage.setItem('theme', value), theme)
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
  const tableName = zh ? /对战积分榜/ : /Head-to-Head table/
@@ -3469,7 +3475,7 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
  const tournament = { id: 6, name: 'J08 Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
  const rules = [
   { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...tournament, id: 7, name: 'J08 Other H2H' }, tournament] } },
-  ...[6, 7].flatMap(tournamentId => ([3, 4] as const).flatMap(eventId => {
+  ...[6, 7].flatMap(tournamentId => (scenario === 'first-last-gw' ? [1, 2, 3, 4, 37, 38] as const : [3, 4] as const).flatMap(eventId => {
    const value = officialH2HFixture(eventId, tournamentId)
    return [
     { operation: 'GetTournamentOfficialH2H', variables: { tournamentId, eventId }, data: { tournamentOfficialH2H: value.snapshot } },
@@ -3529,12 +3535,43 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
    await expect(page).toHaveURL(returnUrl)
    await expect(page.getByRole('tab', { name: tableName })).toBeVisible()
   }
+  if (scenario === 'first-last-gw') {
+   for (const [boundary, adjacent, disabled, enabled] of [
+    [1, 2, zh ? '上一轮' : 'Previous', zh ? '下一轮' : 'Next'],
+    [38, 37, zh ? '下一轮' : 'Next', zh ? '上一轮' : 'Previous'],
+   ] as const) {
+    await page.goto(`${prefix}/live/competitions?tournamentId=6&gw=${boundary}`)
+    const overview = page.locator('section').filter({ has: page.getByRole('heading', { name: new RegExp(`^GW${boundary} `) }) })
+    await expect(overview).toHaveCount(1)
+    await expect(overview.getByRole('button', { name: disabled, exact: true })).toBeDisabled()
+    await expect(page.getByRole('link', { name: disabled, exact: true })).toHaveCount(0)
+    await page.getByRole('tab', { name: fixturesName }).click()
+    await expect(page.getByRole('tabpanel', { name: fixturesName }).locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=${boundary}"]`)).toHaveCount(1)
+    await overview.getByRole('link', { name: enabled, exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === String(adjacent))
+    await page.getByRole('link', { name: disabled, exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('gw') === String(boundary))
+    await expect(overview.getByRole('button', { name: disabled, exact: true })).toBeDisabled()
+   }
+  }
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+  await expect(page.locator('html')).toHaveClass(scenario === 'baseline' ? /light/ : /dark/)
+  await testInfo.attach('J08-planned-binding', { contentType: 'application/json', body: JSON.stringify({
+   variantId: scenario === 'baseline' ? `J08.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : `J08.state.${scenario === 'ready' ? '01' : scenario === 'bye' ? '02' : '03'}`,
+   scenario, locale, viewport: page.viewportSize(), identity: 'B', timezone, theme,
+   tournamentId: 6, gameweeks: scenario === 'first-last-gw' ? [1, 2, 3, 4, 37, 38] : [3, 4], entries: [123, 456],
+   assertions: ['tournament-menu', 'standings-fixtures', 'bye-no-invalid-link', 'previous-next', 'actual-home-away-navigation', '15-player-render', 'back-context'],
+   boundaryAssertions: scenario === 'first-last-gw', functionalStatus: 'PASS', readyMs: null, eventToPaintMs: null,
+   wholeVariantComplete: false, missingReason: 'Performance samples and formal score/squad-composition parity are not asserted; isolated fixture evidence only.'
+  }) })
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
  }
 })
-
+})
+}
 }
 }
 
