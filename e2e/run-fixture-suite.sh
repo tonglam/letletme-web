@@ -15,6 +15,8 @@ case "${1:-}" in
     E2E_MARKET_HISTORY=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-historical-freshness.spec.ts --workers=1 --trace=on --output=test-results/market-history
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'C09 text share' --workers=1 --trace=on --output=test-results/market-share
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'prediction pagination accessible names' --workers=1 --trace=on --output=test-results/prediction-pagination
+    # Timezone seeds must not inherit the pagination suite's server price cache.
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'market viewer timezone' --workers=1 --trace=on --output=test-results/market-timezone
     for status in READY PARTIAL STALE UNAVAILABLE; do
       E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 board states $status " --workers=1 --trace=on --output="test-results/prediction-$status"
     done
