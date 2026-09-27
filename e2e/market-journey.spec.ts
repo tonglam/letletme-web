@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const variants = [
- ...[{ id: 'J02.state.02', scenario: 'empty' }, { id: 'J02.state.04', scenario: 'slow' }].map(state => ({ ...state, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' })),
+ ...[{ id: 'J02.state.03', scenario: 'partial' }, { id: 'J02.state.02', scenario: 'empty' }, { id: 'J02.state.04', scenario: 'slow' }].map(state => ({ ...state, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' })),
  { id: 'J02.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario: 'ready' },
  ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({
   id: `J02.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth', scenario: 'baseline'
@@ -13,6 +13,8 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
  const { locale, width, theme, timezone, scenario } = variant
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
+ const selectedDate = scenario === 'partial' ? '2026-08-01' : '2026-08-02'
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
  const labels = {
   period: zh ? '持有率比较周期' : 'Ownership comparison period',
   daily: zh ? '每日' : 'Daily', gameweek: zh ? 'GW 比较' : 'GW comparison',
@@ -25,9 +27,24 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
  }
  test.use({ viewport: { width, height: 900 }, colorScheme: theme === 'dark' ? 'dark' : 'light', timezoneId: timezone, locale })
  let releaseHistory: (() => void) | undefined
- test.afterEach(() => releaseHistory?.())
+ test.afterEach(async () => {
+  releaseHistory?.()
+  if (scenario === 'partial' && process.env.E2E_MARKET_READINESS === '1') await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+ })
  test('actual links preserve historical date and player identity', async ({ page, context }, testInfo) => {
 		test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Only the isolated fixture supports this planned scenario')
+		test.skip(scenario === 'partial' && (process.env.E2E_MARKET_READINESS !== '1' || process.env.E2E_SSR_REMEDIATION !== '1'), 'Partial ownership requires an isolated cache and fixture controls')
+		if (scenario === 'partial') {
+			const rules = []
+			for (const period of ['DAILY', 'GAMEWEEK']) {
+				const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetMarketOwnershipOverview { marketOwnershipOverview { period } }', variables: { period } }) })).json()
+				const ownership = seed.data.marketOwnershipOverview
+				Object.assign(ownership.coverage, { status: 'PARTIAL', requestedDays: 4, observedDays: 3, firstDate: '2026-07-31', fromDate: '2026-07-31', missingDates: ['2026-08-02'], complete: false })
+				for (const mover of [...ownership.risers, ...ownership.fallers]) mover.fromDate = '2026-07-31'
+				rules.push({ operation: 'GetMarketOwnershipOverview', variables: { period }, data: seed.data })
+			}
+			expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+		}
 		await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
 		expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
 		const historyRequests: number[] = []
@@ -57,6 +74,11 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await marketLink.click()
 		await expect(page).toHaveURL(new RegExp(`${prefix}/explore/market$`))
 		await expect(page.locator('#market-most-selected-share li')).toHaveCount(4)
+		if (scenario === 'partial') {
+			await expect(page.locator('#market-ownership-share')).toContainText('2026年8月2日')
+			await expect(page.locator('#market-ownership-share')).toContainText('缺失')
+			await expect(page.locator('#market-ownership-share')).toContainText('Saka')
+		}
 		const periods = page.getByRole('navigation', { name: labels.period, exact: true })
 		await periods.getByRole('link', { name: labels.gameweek, exact: true }).click()
 		await expect(page).toHaveURL(/period=GAMEWEEK/)
@@ -64,10 +86,10 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await expect(page.locator('#market-ownership-share')).toContainText('GW2')
 		await periods.getByRole('link', { name: labels.daily, exact: true }).click()
 		await expect(page).toHaveURL(/period=DAILY/)
-		const historicalDate = page.getByRole('navigation', { name: labels.dates, exact: true }).locator('a[href*="date=2026-08-02"]')
+		const historicalDate = page.getByRole('navigation', { name: labels.dates, exact: true }).locator(`a[href*="date=${selectedDate}"]`)
 		await expect(historicalDate).toHaveCount(1)
 		await historicalDate.click()
-		await expect(page).toHaveURL(/period=DAILY&date=2026-08-02/)
+		await expect(page).toHaveURL(url => url.searchParams.get('period') === 'DAILY' && url.searchParams.get('date') === selectedDate)
 		await expect(historicalDate).toHaveAttribute('aria-current', 'date')
 		await expect(page.locator('#market-ownership-share')).toContainText('Saka')
 		const marketUrl = page.url()
@@ -107,9 +129,9 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		expect(historyRequests).toEqual([1])
 		await page.goBack()
 		await expect(page).toHaveURL(marketUrl)
-		await expect(page.getByRole('navigation', { name: labels.dates, exact: true }).locator('[aria-current="date"]')).toHaveAttribute('href', /date=2026-08-02/)
+		await expect(page.getByRole('navigation', { name: labels.dates, exact: true }).locator('[aria-current="date"]')).toHaveAttribute('href', new RegExp(`date=${selectedDate}`))
 		await expect(page.locator('#market-ownership-share')).toContainText('Saka')
-		await testInfo.attach(`${variant.id}-binding`, { contentType: 'application/json', body: JSON.stringify({ variantId: variant.id, persona: 'A', locale, viewport: { width, height: 900 }, theme, timezone, scenario, historicalDate: '2026-08-02', playerId: 1, returnedUrl: marketUrl, readyMs: null, performanceStatus: 'NOT_RUN', raceCoverage: 'Separate MKT02 controlled race tests; not inferred from this ready journey' }) })
+		await testInfo.attach(`${variant.id}-binding`, { contentType: 'application/json', body: JSON.stringify({ variantId: variant.id, persona: 'A', locale, viewport: { width, height: 900 }, theme, timezone, scenario, historicalDate: selectedDate, partialMissingDates: scenario === 'partial' ? ['2026-08-02'] : [], playerId: 1, returnedUrl: marketUrl, readyMs: null, performanceStatus: 'NOT_RUN', raceCoverage: 'Separate MKT02 controlled race tests; not inferred from this ready journey' }) })
 	})
 })
 }
