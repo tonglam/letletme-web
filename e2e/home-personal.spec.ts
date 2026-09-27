@@ -5896,3 +5896,96 @@ test.describe('J10 planned state contexts', () => {
   })
  }
 })
+
+const sideEffectContexts = [
+ ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({
+  locale, width, theme: 'system' as const, timezone: 'Australia/Perth',
+  variantId: `S19.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`
+ }))),
+ { locale: 'zh-CN' as const, width: 390, theme: 'dark' as const, timezone: 'UTC', variantId: null }
+]
+for (const { locale, width, theme, timezone, variantId } of sideEffectContexts) {
+ test.describe(`S19 controlled tournament writes ${locale} ${width} ${timezone}`, () => {
+  test.use({ viewport: { width, height: 900 }, colorScheme: theme === 'dark' ? 'dark' : 'light', timezoneId: timezone })
+  for (const setupStatus of ['ready', 'processing', 'failed'] as const) {
+   test(`preview and classic import recover with ${setupStatus} result`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated account and intercepted write endpoints only')
+    const session = await createSession({ entryId: 15702 })
+    const prefix = locale === 'en' ? '' : '/zh-CN'
+    const t = (locale === 'en' ? enMessages : zhMessages).TournamentCreate
+    const leagueUrl = 'https://fantasy.premierleague.com/leagues/123/standings/c'
+    let previews = 0
+    const imports: Array<Record<string, unknown>> = []
+    const unexpected: string[] = []
+    let releasePreview!: () => void
+    let releaseImport!: () => void
+    const previewGate = new Promise<void>(resolve => { releasePreview = resolve })
+    const importGate = new Promise<void>(resolve => { releaseImport = resolve })
+    try {
+     await addSessionCookie(page, session.cookie)
+     await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
+     await page.route('**/api/tournaments{,/**}', async route => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      if (path === '/api/tournaments/check-name') return route.fulfill({ json: { available: true } })
+      if (path === '/api/tournaments/preview') {
+       previews++
+       expect(request.method()).toBe('POST')
+       expect(request.postDataJSON()).toEqual({ leagueUrl })
+       if (previews === 1) {
+        await previewGate
+        return route.fulfill({ status: 503, json: { error: 'Isolated preview unavailable' } })
+       }
+       return route.fulfill({ json: { previewToken: 's19-isolated-preview', expiresAt: new Date(Date.now()+600000).toISOString(), leagueId: 123, leagueType: 'classic', leagueName: 'S19 Fixture League', startEvent: 1,
+        participants: [{id:'1',team:'S19 Team 1',manager:'Fixture 1',overallRank:1,totalPoints:100},{id:'2',team:'S19 Team 2',manager:'Fixture 2',overallRank:2,totalPoints:90}] } })
+      }
+      if (path === '/api/tournaments' && request.method() === 'POST') {
+       imports.push(request.postDataJSON())
+       if (imports.length === 1) { await importGate; return route.abort('failed') }
+       return route.fulfill({ json: { success: true, tournament: { id: 777, participantCount: 2 }, setupStatus } })
+      }
+      unexpected.push(`${request.method()} ${path}`)
+      return route.abort()
+     })
+     await page.goto(`${prefix}/competitions/create`)
+     await expect(page.locator('#tournament-create-form')).toHaveAttribute('aria-busy','false')
+     await page.locator('label[for="creation-mode-classic"]').click()
+     await page.locator('#league-url').fill(leagueUrl)
+     await page.getByRole('button',{name:t.checkLeague,exact:true}).click()
+     await expect(page.getByRole('button',{name:t.checkingLeague,exact:true})).toBeDisabled()
+     expect(previews).toBe(1)
+     releasePreview()
+     await expect(page.getByText(t.participantsLoadFailed,{exact:true})).toBeVisible()
+     await page.getByRole('button',{name:t.checkLeague,exact:true}).click()
+     await expect(page.getByText(t.participantsLoadFailed,{exact:true})).toHaveCount(0)
+     const submit = page.locator('#tournament-create-form button[type="submit"]')
+     await expect(submit).toBeEnabled()
+     expect(previews).toBe(2)
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+     await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
+     await submit.click()
+     await expect.poll(() => imports.length).toBe(1)
+     await expect(page.getByRole('button',{name:t.creating,exact:false})).toBeDisabled()
+     releaseImport()
+     await expect(page.getByText(t.createFailed,{exact:true})).toBeVisible()
+     await expect(submit).toBeEnabled()
+     await submit.click()
+     const expected = (setupStatus === 'ready' ? t.createdReady : setupStatus === 'failed' ? t.createdFailedSetup : t.createdProcessing).replace('{count}','2')
+     await expect(page.getByText(expected,{exact:true})).toBeVisible()
+     await expect(page.getByText(t.createFailed,{exact:true})).toHaveCount(0)
+     await expect(page.getByRole('link',{name:t.viewTournament,exact:true})).toHaveAttribute('href',`${prefix}/live/competitions/777?created=1`)
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/create`)
+     expect(imports).toHaveLength(2)
+     for (const body of imports) expect(body).toMatchObject({creationMode:'classic',participantSource:'official',leagueUrl,previewToken:'s19-isolated-preview',selectedParticipantIds:['1','2']})
+     expect(unexpected).toEqual([])
+     for (const action of ['preview','import'] as const) await testInfo.attach(`S19-${action}`,{contentType:'application/json',body:JSON.stringify({
+      variantId:variantId ?? (action === 'preview' ? 'S19.directed.03' : 'S19.directed.04'),caseId:'S19',stepId:'S19.01',locale,width,theme,timezone,identity:'B isolated bound account',action,setupStatus,
+      previewRequests:previews,importRequests:imports.length,interception:'All tournament requests fulfilled or aborted in Playwright; no route handler or Data write called',
+      environment:'isolated-fixture',functionalStatus:'PASS',performanceStatus:'NOT_RUN',readyMs:null,wholeVariantComplete:false,
+      scope:'Actual form actions, pending/error/retry and created-result rendering using browser substitutes; server creation and Data ingestion not exercised.'
+     })})
+    } finally { releasePreview(); releaseImport(); await session.cleanup() }
+   })
+  }
+ })
+}
