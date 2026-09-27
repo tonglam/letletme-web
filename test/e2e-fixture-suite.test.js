@@ -32,11 +32,11 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 15)
+	assert.equal(result.calls.length, 19)
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
-	assert.deepEqual(result.calls[14].args, ['playwright', 'test', 'e2e/match-missing-stats.spec.ts', '--workers=1', '--trace=on', '--output=test-results/match-missing-stats'])
-	assert.equal(result.calls[14].fixture, '1')
-	assert.equal(result.calls[14].cwd, root)
+	assert.deepEqual(result.calls.at(-1).args, ['playwright', 'test', 'e2e/match-missing-stats.spec.ts', '--workers=1', '--trace=on', '--output=test-results/match-missing-stats'])
+	assert.equal(result.calls.at(-1).fixture, '1')
+	assert.equal(result.calls.at(-1).cwd, root)
 	for (const [index, status] of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'].entries()) {
 		const call = result.calls[8 + index]
 		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', `PRED03 board states ${status} `, '--workers=1', '--trace=on', `--output=test-results/prediction-${status}`])
@@ -47,6 +47,18 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.deepEqual(result.calls[12].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'PRED03 cached board', '--workers=1', '--trace=on', '--output=test-results/prediction-cache'])
 	assert.equal(result.calls[12].market, '1')
 	assert.equal(result.calls[12].existingBuild, '1')
+
+	assert.deepEqual(result.calls[13].args, ['playwright', 'test', 'e2e/market-journey.spec.ts', '--grep', 'J02.state.03', '--workers=1', '--trace=on', '--output=test-results/market-partial-journey'])
+	for (const [index, selection] of ['J03.A.|J03.state.01', 'J03.state.02', 'J03.state.03'].entries()) {
+		const call = result.calls[14 + index]
+		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/prediction-journey.spec.ts', '--grep', selection, '--workers=1', '--trace=on', `--output=test-results/prediction-journey-${selection.replace(/[^a-zA-Z0-9]/g, '_')}`])
+	}
+	for (const call of result.calls.slice(13, 17)) {
+		assert.equal(call.market, '1')
+		assert.equal(call.existingBuild, '1')
+		assert.equal(call.fixture, '1')
+		assert.equal(call.cwd, root)
+	}
 	assert.equal(result.calls[0].fixture, '1')
 	assert.equal(result.calls[0].cwd, root)
 	assert.deepEqual(result.calls[2].args, ['playwright', 'test', 'e2e/market-readiness.spec.ts', '--workers=1', '--trace=on', '--output=test-results/market-readiness'])
@@ -142,7 +154,9 @@ test('governance uses the isolated REST fixture and serial admin session', () =>
  assert.equal(call.adminUsers, 'e2e-governance-admin')
  assert.equal(call.adminEntries, '909090')
  assert.deepEqual(call.args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'GOV REST sections', '--workers=1', '--trace=on', '--output=test-results/governance'])
- const nested = invoke('ssr').calls[13]
+ const nestedCalls = invoke('ssr').calls.filter(call => call.args.includes('--output=test-results/governance'))
+ assert.equal(nestedCalls.length, 1)
+ const nested = nestedCalls[0]
  assert.equal(nested.governance, '1')
  assert.equal(nested.existingBuild, '1')
 })
