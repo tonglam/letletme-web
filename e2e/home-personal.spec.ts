@@ -3039,7 +3039,10 @@ for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
                 }
                 expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
                 expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile === 'baseline' ? 'Australia/Perth' : 'UTC')
-                if (profile !== 'baseline') await expect(page.locator('html')).toHaveClass(/dark/)
+                if (profile === 'baseline') {
+                    await expect(page.locator('html')).toHaveClass(/\blight\b/)
+                    await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
+                } else await expect(page.locator('html')).toHaveClass(/\bdark\b/)
                 await testInfo.attach('J14-planned-context', { body: JSON.stringify({ variantId: profile === 'baseline' ? `J14.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `J14.state.${profile === 'ready' ? '01' : '02'}`, locale, viewport: page.viewportSize(), theme, timezone: profile === 'baseline' ? 'Australia/Perth' : 'UTC', scenario: profile, expiredSessionChecked: profile !== 'ready', forbiddenAuthRequests: writes, scope: 'Actual account menu, Profile, Sessions, current device, Profile return, forgot-password and login; isolated sync upstream; no email or session revoke.', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }), contentType: 'application/json' })
 			} finally {
 				await sql`DELETE FROM bauth.session WHERE id=${otherSessionId}`
