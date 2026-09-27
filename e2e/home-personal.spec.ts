@@ -1205,9 +1205,13 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				expect([1, benchPlayerId]).toContain(playerId)
 				const stats = { minutes: plannedState === 'DGW' && playerId === 1 ? 90 : 45, goalsScored: playerId === 1 ? 1 : 0, assists: 0, cleanSheets: 0, goalsConceded: playerId === 1 ? 2 : 0, defensiveContribution: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, bonus: 0 }
 				const contributions = [{ identifier: 'minutes', value: 45, points: 1 }, ...(playerId === 1 ? [{ identifier: 'goals_scored', value: 1, points: 6 }, { identifier: 'goals_conceded', value: 2, points: -1 }] : [])]
-				const explanation = plannedState === 'DGW' && playerId === 1
-					? { elementId: playerId, stats, breakdown: [{ fixtureId: 4001, stats: contributions }, { fixtureId: 4002, stats: [{ identifier: 'minutes', value: 45, points: 1 }] }] }
-					: { elementId: playerId, stats, contributions }
+				// The public operation selects aggregated contributions, not fixture
+				// breakdowns. Two 45-minute appearances contribute two points in a DGW.
+				if (plannedState === 'DGW' && playerId === 1) {
+					contributions[0] = { identifier: 'minutes', value: 90, points: 2 }
+				}
+				const explanation = { elementId: playerId, stats, contributions }
+				expect(contributions.reduce((sum, item) => sum + item.points, 0)).toBe(playerId === 1 ? captainPoints : 1)
 				return route.fulfill({ json: { data: /query PlayerLive\b/.test(payload.query) ? { playerLive: { ...stats, totalPoints: playerId === 1 ? captainPoints : 1, bps: 10 } } : { eventLiveExplain: explanation } } })
 			}
 			if (recoveryMode.startsWith('live-journey')) {
@@ -2165,7 +2169,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					controlAssertions: publishedJourney ? { captainIds: [1], chips: ['TRIPLE_CAPTAIN', 'BENCH_BOOST', 'WILDCARD', 'FREE_HIT', 'MANAGER'], sortColumns: ['TOTAL_POINTS', 'OVERALL_RANK', 'TEAM_VALUE', 'TRANSFER_COST', 'EVENT_POINTS'], sortDirections: ['ASC', 'DESC'], cursor: 'j06-page-1', appendedEntry: 9000001 } : null,
 						reviewStart: publishedJourney ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
 					formation: '3-4-3', startingCount: 11, benchCount: 4, viceCaptainId: 8, captainRawPoints: captainPoints, captainMultiplier: 2, captainContribution: captainPoints * 2, activeSquadTotal: squadPoints,
-					doubleGameweekFixtures: plannedState === 'DGW' ? [4001, 4002] : [], autoSub: plannedState === 'auto-sub' ? { playerIn: 12, playerOut: 11 } : null,
+					doubleGameweekAggregatedAppearances: plannedState === 'DGW' ? { minutes: 90, points: 2, assumedFixtures: 2, fixtureIdsObserved: false } : null, autoSub: plannedState === 'auto-sub' ? { playerIn: 12, playerOut: 11 } : null,
 					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
 					missingReason: publishedJourney ? 'Ownership/team-count option enumeration, alternate competition phases, and controlled production performance remain open; captain/chip filters, five sort columns and cursor pagination are asserted.' : 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
 				}) })
