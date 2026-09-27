@@ -51,12 +51,13 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.deepEqual(result.calls[13].args, ['playwright', 'test', 'e2e/market-journey.spec.ts', '--grep', 'J02.state.03', '--workers=1', '--trace=on', '--output=test-results/market-partial-journey'])
 	for (const [index, selection] of ['J03.A.|J03.state.01', 'J03.state.02', 'J03.state.03'].entries()) {
 		const call = result.calls[14 + index]
+		assert.equal(call.fixture, selection === 'J03.state.02' ? '0' : '1')
 		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/prediction-journey.spec.ts', '--grep', selection, '--workers=1', '--trace=on', `--output=test-results/prediction-journey-${selection.replace(/[^a-zA-Z0-9]/g, '_')}`])
 	}
+	assert.equal(result.calls[13].fixture, '1')
 	for (const call of result.calls.slice(13, 17)) {
 		assert.equal(call.market, '1')
 		assert.equal(call.existingBuild, '1')
-		assert.equal(call.fixture, '1')
 		assert.equal(call.cwd, root)
 	}
 	assert.equal(result.calls[0].fixture, '1')

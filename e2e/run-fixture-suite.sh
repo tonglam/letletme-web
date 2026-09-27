@@ -20,7 +20,9 @@ case "${1:-}" in
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 cached board" --workers=1 --trace=on --output=test-results/prediction-cache
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-journey.spec.ts --grep 'J02.state.03' --workers=1 --trace=on --output=test-results/market-partial-journey
     for selection in 'J03.A.|J03.state.01' 'J03.state.02' 'J03.state.03'; do
-      E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/prediction-journey.spec.ts --grep "$selection" --workers=1 --trace=on --output="test-results/prediction-journey-${selection//[^a-zA-Z0-9]/_}"
+      prediction_live_fixture="${E2E_LIVE_HYDRATION:-0}"
+      if [[ "$selection" == "J03.state.02" ]]; then prediction_live_fixture=0; fi
+      E2E_LIVE_HYDRATION="$prediction_live_fixture" E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/prediction-journey.spec.ts --grep "$selection" --workers=1 --trace=on --output="test-results/prediction-journey-${selection//[^a-zA-Z0-9]/_}"
     done
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh governance
     npx playwright test e2e/match-missing-stats.spec.ts --workers=1 --trace=on --output=test-results/match-missing-stats
