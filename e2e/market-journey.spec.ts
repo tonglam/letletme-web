@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const variants = [
+ ...[{ id: 'J02.state.02', scenario: 'empty' }, { id: 'J02.state.04', scenario: 'slow' }].map(state => ({ ...state, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' })),
  { id: 'J02.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario: 'ready' },
  ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({
   id: `J02.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth', scenario: 'baseline'
@@ -23,17 +24,28 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
   overall: zh ? '球员总览' : 'Player overall'
  }
  test.use({ viewport: { width, height: 900 }, colorScheme: theme === 'dark' ? 'dark' : 'light', timezoneId: timezone, locale })
+ let releaseHistory: (() => void) | undefined
+ test.afterEach(() => releaseHistory?.())
  test('actual links preserve historical date and player identity', async ({ page, context }, testInfo) => {
 		test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Only the isolated fixture supports this planned scenario')
 		await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
 		expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
 		const historyRequests: number[] = []
+		if (scenario === 'empty' || scenario === 'slow') {
+			const held = new Promise<void>(resolve => { releaseHistory = resolve })
+			await page.route('**/api/market/price-history?**', async route => {
+				expect(new URL(route.request().url()).searchParams.get('playerId')).toBe('1')
+				if (scenario === 'slow') await held
+				await route.fulfill({ json: { items: scenario === 'empty' ? [] : [{ playerId: 1, changeDate: '2026-08-03', oldValue: 99, newValue: 100, changeType: 'RISE', transfersIn: null, transfersOut: null }] } })
+			})
+		}
+
 		await page.route('**/api/graphql', async route => {
 			const body = route.request().postDataJSON()
 			if (!body?.query?.includes('query GetPlayerValueHistory(')) return route.continue()
 			const playerId = Number(body.variables.playerId)
 			historyRequests.push(playerId)
-			await route.fulfill({ json: { data: { playerValueHistory: [{ playerId, changeDate: '2026-08-03', oldValue: 99, newValue: 100, changeType: 'RISE', transfersIn: null, transfersOut: null }] } } })
+			await route.fulfill({ json: { data: { playerValueHistory: scenario === 'empty' ? [] : [{ playerId, changeDate: '2026-08-03', oldValue: 99, newValue: 100, changeType: 'RISE', transfersIn: null, transfersOut: null }] } } })
 		})
 		await page.goto(prefix || '/')
 		await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
@@ -64,7 +76,18 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await expect(saka).toHaveCount(1)
 		await saka.getByRole('button', { name: labels.history, exact: true }).click()
 		await expect(page.getByRole('heading', { level: 3, name: 'Saka', exact: true })).toBeVisible()
-		await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toContainText('£9.9m → £10.0m')
+		if (scenario === 'slow') {
+			await expect(page.getByText('正在加载球员身价历史…', { exact: true })).toBeVisible()
+			await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toHaveCount(0)
+			releaseHistory?.()
+		}
+		if (scenario === 'empty') {
+			await expect(page.getByText('Saka 尚无真实身价变化记录。', { exact: true })).toBeVisible()
+			await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toHaveCount(0)
+		} else {
+			await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toContainText('£9.9m → £10.0m')
+		}
+
 		await page.getByRole('button', { name: labels.choose, exact: true }).click()
 		await page.getByRole('searchbox', { name: labels.search, exact: true }).fill('Sa')
 		await saka.getByRole('link', { name: 'Saka', exact: true }).click()
@@ -72,9 +95,14 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await expect(page.getByRole('region', { name: labels.overall, exact: true })).toContainText('Saka')
 		await page.locator('button[aria-controls="ps-context-panel"]').click()
 		const detailHistory = page.locator('#ps-market-section ul li')
+		if (scenario === 'empty') {
+			await expect(detailHistory).toHaveCount(0)
+			await expect(page.locator('#ps-market-section')).toContainText('本赛季暂无身价变动记录。')
+		} else {
 		await expect(detailHistory).toHaveCount(1)
 		await expect(detailHistory).toContainText(new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: timezone }).format(new Date('2026-08-03T00:00:00Z')))
 		await expect(detailHistory).toContainText('£10.0m')
+		}
 		await expect(page.locator('#ps-market-section [aria-busy="true"]')).toHaveCount(0)
 		expect(historyRequests).toEqual([1])
 		await page.goBack()
