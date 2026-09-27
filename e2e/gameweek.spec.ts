@@ -95,10 +95,13 @@ for (const variant of selectorVariants) {
 for (const locale of ['en', 'zh-CN'] as const) {
 	for (const width of [1440, 390]) {
 		test.describe(`gameweek board rows ${locale} ${width}`, () => {
-			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+			test.use({ viewport: { width, height: 900 }, locale, timezoneId: 'Australia/Perth', colorScheme: 'light' })
 			test('Dream Team and 10+ boards retain independent identities and exact scores', async ({
-				page, request
+				page, request, context
 			}, testInfo) => {
+				test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Planned board contexts require isolated fixtures')
+				await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+				expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
 				testInfo.annotations.push({
 					type: 'coverage-variant',
 					description: `GW03.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base; partial board assertions only`
@@ -112,6 +115,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				expect(desk.dreamTeam.map((player: { id: number }) => player.id)).toEqual([1])
 				expect(desk.hauls.map((player: { id: number }) => player.id)).toEqual([1, 2])
 				await page.goto(locale === 'en' ? '/explore/gameweek' : '/zh-CN/explore/gameweek')
+				await expect(page.locator('html')).toHaveClass(/light/)
+				expect(await page.evaluate(() => ({ theme: localStorage.getItem('theme'), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: navigator.language }))).toEqual({ theme: 'system', timezone: 'Australia/Perth', language: locale })
+				await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+				await expect(page.locator('#gameweek-jump-input')).toHaveAttribute('aria-busy', 'false')
 				await expect(page.getByRole('heading', {
 					name: locale === 'en' ? 'GW33 Overview' : 'GW33 概览', exact: true
 				})).toBeVisible()
@@ -136,6 +143,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(rows.getByRole('button')).toHaveText(['Saka', 'Palmer'])
 				await expect(rows.nth(0).getByRole('cell').last()).toHaveText('12')
 				await expect(rows.nth(1).getByRole('cell').last()).toHaveText('11')
+				await testInfo.attach('gameweek-board-context', { contentType: 'application/json', body: JSON.stringify({
+					variantId: `GW03.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+					identity: 'A', locale, width, theme: 'system', timezone: 'Australia/Perth', eventId: 33,
+					dreamTeam: [{ id: 1, score: 12 }], hauls: [{ id: 1, score: 12 }, { id: 2, score: 11 }],
+					functionalAssertions: 'PASS', readyMs: null, wholeVariantComplete: false,
+					remaining: 'Complete formation, overview statistics, player interactions and timing assertions are outside this test.'
+				}) })
 			})
 		})
 	}
