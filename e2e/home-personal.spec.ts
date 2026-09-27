@@ -6095,3 +6095,37 @@ test.describe('R32 bound and unbound route baselines', () => {
   })
  }
 })
+for (const variant of [
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `HOME01.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth' }))),
+ { id: 'HOME01.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' }
+]) {
+ test.describe(`HOME01 anonymous context ${variant.id}`, () => {
+  test.use({ locale: variant.locale, viewport: { width: variant.width, height: 900 }, timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+  test('SSR remediation anonymous public regions do not start personal reads', async ({ page, context }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture only')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+   expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', delayMs: 3500 }] }) })).ok).toBe(true)
+    const zh = variant.locale === 'zh-CN'
+    await page.goto(zh ? '/zh-CN' : '/')
+    await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(variant.theme)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('region', { name: zh ? '本轮表现' : 'Matchday performance', exact: true })).toContainText('101')
+    await expect(page.getByRole('region', { name: zh ? '市场看板' : 'Market desk', exact: true })).toContainText('Saka')
+    const matches = page.locator('[data-home-matches]')
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await expect(matches).toContainText('ARS')
+    await matches.getByRole('button', { name: zh ? '下一轮' : 'Next gameweek', exact: true }).click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    await expect(page.locator('[data-home-personal-ready]')).toHaveCount(0)
+    const personal = (await (await fetch(fixture)).json()).requests.filter((row: { operation: string }) => row.operation === 'GetHomePersonalDesk')
+    expect(personal).toEqual([])
+    await testInfo.attach('HOME01-anonymous-context', { contentType: 'application/json', body: JSON.stringify({ ...variant, identity: 'A', personalRequests: 0, committedGW: 34, assertions: ['hero/stats/market/fixtures present', 'actual nextGW click', 'no personal desk or request'], slowPersonalBranch: 'N/A for anonymous identity', readyMs: null, performanceStatus: 'NOT_RUN' }) })
+   } finally { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) }
+  })
+ })
+}

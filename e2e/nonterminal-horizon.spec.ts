@@ -153,3 +153,49 @@ test.describe('GW01.state.02 preseason', () => {
   }) })
  })
 })
+
+const deadlineContexts = [
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `HOME05.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth' }))),
+ { id: 'HOME05.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' }
+]
+for (const variant of deadlineContexts) {
+ test.describe(variant.id, () => {
+  test.use({ locale: variant.locale, viewport: { width: variant.width, height: 900 }, timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+  test('HOME05 between rounds keeps the next deadline through hydration and locale switching', async ({ page, context }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Synthetic lifecycle is isolated only')
+   const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetHomePublicBootstrap { homePublicBootstrap { context { revision } } }' }) })).json()
+   const deadline = new Date()
+   deadline.setUTCDate(deadline.getUTCDate() + 7)
+   deadline.setUTCHours(23, 30, 0, 0)
+   const captured = deadline.toISOString()
+   Object.assign(seed.data.homePublicBootstrap.context, { currentEventId: 33, latestFinishedEventId: 33, nextEventId: 34, nextDeadlineTime: captured, revision: 'home05-between-rounds' })
+   for (const match of seed.data.homePublicBootstrap.fixtures) Object.assign(match, { kickoffTime: new Date(deadline.getTime() + 3_600_000).toISOString(), started: false, finished: false, homeScore: null, awayScore: null })
+   await control([{ operation: 'GetHomePublicBootstrap', data: seed.data }])
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+   expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   page.on('console', message => { if (message.type() === 'error' && /hydrat|did not match/i.test(message.text())) errors.push(message.text()) })
+   const format = (locale: string, timeZone: string) => new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone }).format(deadline)
+   const pathname = variant.locale === 'en' ? '/' : '/zh-CN'
+   const response = await page.goto(pathname)
+   expect(await response!.text()).toContain(format(variant.locale, 'UTC'))
+   const card = page.locator('[data-countdown-card]')
+   await expect(card.locator('[data-countdown-title]')).toHaveText(variant.locale === 'en' ? 'Gameweek 34' : '第 34 轮')
+   await expect(card.locator('time')).toHaveText(format(variant.locale, variant.timezone))
+   await expect(page.locator('[data-home-fixtures-event]')).toHaveAttribute('data-home-fixtures-event', '34')
+   await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+   const nextLocale = variant.locale === 'en' ? 'zh-CN' : 'en'
+   await page.locator('[data-locale-picker] > summary').filter({ visible: true }).click()
+   await page.locator(`[data-locale-link][lang="${nextLocale}"]`).filter({ visible: true }).click()
+   // An explicit locale switch uses the prefixed link to update NEXT_LOCALE.
+   await expect(page).toHaveURL(`/${nextLocale}`)
+   await expect(card.locator('[data-countdown-title]')).toHaveText(nextLocale === 'en' ? 'Gameweek 34' : '第 34 轮')
+   await expect(card.locator('time')).toHaveText(format(nextLocale, variant.timezone))
+   await expect(page.locator('[data-home-fixtures-event]')).toHaveAttribute('data-home-fixtures-event', '34')
+   expect(errors).toEqual([])
+   await testInfo.attach('HOME05-context', { contentType: 'application/json', body: JSON.stringify({ ...variant, currentEventId: 33, latestFinishedEventId: 33, nextEventId: 34, deadline: captured, revision: 'home05-between-rounds', switchedLocale: nextLocale, assertions: ['UTC SSR', 'local hydration', 'next GW deadline', 'next GW fixtures', 'actual locale switch preserves GW'], performanceStatus: 'NOT_RUN', readyMs: null }) })
+  })
+ })
+}

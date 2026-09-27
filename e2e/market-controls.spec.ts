@@ -518,3 +518,129 @@ for (const timeZone of ['UTC', 'Australia/Perth']) {
   }
  })
 }
+const carouselContexts = [
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `HOME02.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth' }))),
+ { id: 'HOME02.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' }
+]
+for (const variant of carouselContexts) {
+ test.describe(`HOME02 planned ${variant.id}`, () => {
+  test.use({ viewport: { width: variant.width, height: 900 }, locale: variant.locale, timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+  test('public carousel controls keep slide and focus contracts', async ({ page, context }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated cache and synthetic prediction rows')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+   const board = seed.data.priceChangeBoard
+   board.players = Array.from({ length: 25 }, (_, i) => ({ ...board.players[0], playerId: 7000 + i, playerCode: 8000 + i, webName: `Carousel ${i}`, progressPercent: 99, status: 'LIKELY_RISE', currentPrice: 100 + i, lockedUntil: null }))
+   Object.assign(board, { status: 'READY', revision: 'home02-controls', expectedPlayerCount: 25, observedPlayerCount: 25 })
+   const messages = variant.locale === 'en' ? enMessages : zhMessages
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+   expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+   await page.clock.install()
+   try {
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+    await page.goto(variant.locale === 'en' ? '/' : '/zh-CN')
+    await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+    const heading = page.getByRole('heading', { level: 1 })
+    for (const kind of ['home-market', 'home-price-changes']) {
+     const carousel = page.locator(`[data-home-carousel="${kind}"]`)
+     const tabs = carousel.getByRole('tab')
+     await expect(tabs).toHaveCount(2)
+     const first = tabs.nth(0), second = tabs.nth(1)
+     await first.click()
+     await carousel.getByRole('button', { name: kind === 'home-market' ? messages.Market.homeMarketNext : messages.Home.homePriceChangesNext, exact: true }).click()
+     await expect(second).toHaveAttribute('aria-selected', 'true')
+     await carousel.getByRole('button', { name: kind === 'home-market' ? messages.Market.homeMarketPrevious : messages.Home.homePriceChangesPrevious, exact: true }).click()
+     await expect(first).toHaveAttribute('aria-selected', 'true')
+     await second.click()
+     await expect(second).toHaveAttribute('aria-selected', 'true')
+     await first.click()
+     await carousel.getByRole('button', { name: messages.Home.homeCarouselPause, exact: true }).click()
+     await heading.click()
+     await page.clock.fastForward(14_100)
+     await expect(first).toHaveAttribute('aria-selected', 'true')
+     await carousel.getByRole('button', { name: messages.Home.homeCarouselResume, exact: true }).click()
+     await heading.click()
+     await page.clock.fastForward(7_100)
+     await expect(second).toHaveAttribute('aria-selected', 'true')
+     await first.click()
+     await heading.click()
+     await carousel.hover()
+     await page.clock.fastForward(7_100)
+     await expect(first).toHaveAttribute('aria-selected', 'true')
+     await page.mouse.move(0, 0)
+     await page.clock.fastForward(7_100)
+     await expect(second).toHaveAttribute('aria-selected', 'true')
+     await first.click()
+     await first.press('ArrowRight')
+     await expect(second).toBeFocused()
+     await page.mouse.move(0, 0)
+     await page.clock.fastForward(7_100)
+     await expect(second).toHaveAttribute('aria-selected', 'true')
+     if (kind === 'home-price-changes') {
+      const full = carousel.getByRole('button', { name: messages.Home.homePriceChangesViewAll.replace('{count}', '25'), exact: true })
+      await full.click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog.getByRole('link', { name: /^Carousel / })).toHaveCount(25)
+      await page.clock.fastForward(7_100)
+      await expect(dialog.getByRole('heading', { name: messages.Home.homePriceChangesLikely, exact: true })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(dialog).toHaveCount(0)
+      await expect(second).toHaveAttribute('aria-selected', 'true')
+      await expect(full).toBeFocused()
+     }
+     await page.emulateMedia({ reducedMotion: 'reduce' })
+     await first.click()
+     await heading.click()
+     await page.clock.fastForward(14_100)
+     await expect(first).toHaveAttribute('aria-selected', 'true')
+     await page.emulateMedia({ reducedMotion: 'no-preference' })
+    }
+    expect(errors).toEqual([])
+    await testInfo.attach('HOME02-context', { contentType: 'application/json', body: JSON.stringify({ ...variant, revision: board.revision, carousels: ['home-market', 'home-price-changes'], slidesEach: 2, fullList: { carousel: 'home-price-changes', count: 25, close: 'Escape', focusRestored: true }, marketFullList: 'N/A: HomeMarketCarousel defines no fullContent', reducedMotion: true, performanceStatus: 'NOT_RUN', readyMs: null }) })
+   } finally { await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) }) }
+  })
+ })
+}
+
+test.describe('HOME02 empty planned HOME02.state.02', () => {
+ test.use({ viewport: { width: 390, height: 900 }, locale: 'zh-CN', timezoneId: 'UTC', colorScheme: 'dark' })
+ test('empty public slides retain controls without invented rows or full lists', async ({ page, context }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_MARKET_READINESS !== '1', 'Requires a dedicated isolated empty market cache')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+  const query = async (operation: string) => (await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query ${operation} { __typename }` }) })).json()).data
+  const price = await query('GetPriceChangeBoard')
+  Object.assign(price.priceChangeBoard, { status: 'READY', revision: 'home02-empty', players: [], expectedPlayerCount: 0, observedPlayerCount: 0, latestEvent: { outcome: 'NO_CHANGE', observedAt: '2026-08-03T23:40:00.000Z', deadline: '2026-08-03T09:00:00.000Z', changeDate: '2026-08-03', changes: [] } })
+  const market = await query('GetHomeMarketDesk')
+  Object.assign(market.homeMarketDesk, { revision: 'home02-empty', ownershipState: 'EMPTY', ownership: null, priceChangesState: 'EMPTY', priceChanges: [], availabilityState: 'EMPTY', availabilityUpdates: [] })
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+  try {
+   expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: price }, { operation: 'GetHomeMarketDesk', data: market }] }) })).ok).toBe(true)
+   await page.goto('/zh-CN')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   const m = page.locator('[data-home-carousel="home-market"]')
+   const p = page.locator('[data-home-carousel="home-price-changes"]')
+   for (const [carousel, messages] of [[m, [zhMessages.Market.ownershipStatus.NO_DATA, zhMessages.Market.noAvailabilityUpdates]], [p, [zhMessages.Home.homeNoPriceChanges, zhMessages.Home.homeNoLikelyToChange]]] as const) {
+    const tabs = carousel.getByRole('tab')
+    await expect(tabs).toHaveCount(2)
+    for (const index of [0, 1]) {
+     await tabs.nth(index).click()
+     await expect(tabs.nth(index)).toHaveAttribute('aria-selected', 'true')
+     await expect(carousel.getByText(messages[index], { exact: true })).toBeVisible()
+     await expect(carousel.locator('a[href*="/player-stats?p1="]')).toHaveCount(0)
+     await expect(carousel.getByRole('button', { name: /查看全部/ })).toHaveCount(0)
+    }
+    await tabs.nth(1).press('ArrowLeft')
+    await expect(tabs.nth(0)).toBeFocused()
+   }
+   expect(errors).toEqual([])
+   await testInfo.attach('HOME02-empty-context', { contentType: 'application/json', body: JSON.stringify({ variantId: 'HOME02.state.02', identity: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', revision: 'home02-empty', slides: ['ownership-empty', 'availability-empty', 'actual-no-change', 'prediction-no-likely'], assertions: ['all four empty messages visible on actual tab selection', 'no player links', 'no full-list triggers', 'ArrowLeft focus returns first tab'], readyMs: null, performanceStatus: 'NOT_RUN' }) })
+  } finally { await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) }) }
+ })
+})
