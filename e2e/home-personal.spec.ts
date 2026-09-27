@@ -4145,12 +4145,27 @@ for (const locale of ['en', 'zh-CN'] as const) {
      expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
      expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
      await expect(page.locator('html')).toHaveClass(/light/)
+     const identityTerminalUrl = page.url()
+     const officialHelp = page.locator('#main-content a[href^="https://fantasy.premierleague.com/"]')
+     await expect(officialHelp).toHaveCount(persona === 'unbound' ? 2 : 0)
+     if (persona === 'unbound') {
+      for (const href of ['https://fantasy.premierleague.com/', 'https://fantasy.premierleague.com/en/my-team']) {
+       const target = page.locator(`#main-content a[href="${href}"]`)
+       await expect(target).toBeVisible()
+       await expect(target).toHaveAttribute('target', '_blank')
+       await expect(target).toHaveAttribute('rel', 'noopener noreferrer')
+      }
+     }
+     const home = page.getByRole('navigation', { name: (locale === 'zh-CN' ? zhMessages : enMessages).Navigation.primary, exact: true }).getByRole('link', { name: 'LetLetMe', exact: true })
+     await expect(home).toHaveAttribute('href', prefix || '/')
+     await home.click()
+     await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
      const identity = { anonymous: 'A', unbound: 'U', bound: 'B' }[persona]
      await testInfo.attach('AUTH04-exact-baseline', { contentType: 'application/json', body: JSON.stringify({
       caseId: 'AUTH04', variantId: `AUTH04.${identity}.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
       identity, locale, viewport: page.viewportSize(), theme: 'system', timezone: 'Australia/Perth',
-      finalUrl: page.url(), functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null,
-      wholeVariantComplete: false, scope: 'Identity terminal and exact baseline context; unbound invalid input preserves database identity. Full help-link and exit assertions and performance remain open.'
+      identityTerminalUrl, finalUrl: page.url(), functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null,
+      wholeVariantComplete: false, scope: 'Identity terminal, exact context, applicable official help links and actual brand-link exit; unbound invalid input preserves database identity. Performance remains unobserved.'
      }) })
     } finally { if (session) await session.cleanup() }
    })
