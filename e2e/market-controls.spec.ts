@@ -441,3 +441,41 @@ test.describe('SSR remediation PRED03 cached board', () => {
   }
  }
 })
+
+test.describe('S20.directed.04 prediction and observed price event', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('keeps an observed fall and its time separate from a newer rise prediction', async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated public price-board cache')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+  const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+  const observedAt = '2026-08-02T07:00:00.000Z'
+  seed.data.priceChangeBoard.latestEvent = {
+   outcome: 'CHANGED', observedAt, deadline: '2026-08-02T06:00:00.000Z', changeDate: '2026-08-02', changedPlayerCount: 1,
+   changes: [{ player: { playerId: 1, playerCode: 1001, webName: 'Saka', teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position: 'MIDFIELDER', price: 100, selectedByPercent: 32.5 }, changeDate: '2026-08-02', oldPrice: 101, newPrice: 100, change: -1, direction: 'FALL' }]
+  } satisfies PriceChangeObservedEvent
+  expect(seed.data.priceChangeBoard.players.find((p: { playerId: number }) => p.playerId === 1).status).toBe('LIKELY_RISE')
+  expect(seed.data.priceChangeBoard.fetchedAt).not.toBe(observedAt)
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  try {
+   expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+   await page.goto('/zh-CN/explore/market')
+   const actual = page.locator('#market-prices-share')
+   await expect(actual.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+   await expect(actual).toContainText('£10.1m → £10.0m')
+   await expect(actual).toContainText('−£0.1m')
+   await expect(actual.locator('time')).toHaveAttribute('datetime', observedAt)
+   await expect(actual.locator('time')).not.toHaveAttribute('datetime', seed.data.priceChangeBoard.fetchedAt)
+   await page.goto('/zh-CN/explore/price-predictions')
+   const prediction = page.locator('[data-price-predictions-board]')
+   await expect(prediction).toHaveAttribute('data-price-change-revision', seed.data.priceChangeBoard.revision)
+   await expect(prediction.getByRole('link', { name: 'Saka', exact: true }).filter({ visible: true })).toBeVisible()
+   const sakaCard = prediction.locator('div.divide-y > div').filter({ has: page.getByRole('link', { name: 'Saka', exact: true }) }).filter({ visible: true })
+   await expect(sakaCard).toHaveCount(1)
+   await expect(sakaCard.getByText(zhMessages.PriceChanges.statusLikelyRise, { exact: true })).toBeVisible()
+   await expect(prediction).not.toContainText('£10.1m → £10.0m')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   await testInfo.attach('S20-price-semantics', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S20', stepId: 'S20.01', variantId: 'S20.directed.04', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', identity: 'A anonymous', environment: 'isolated-fixture', observedAt, predictionFetchedAt: seed.data.priceChangeBoard.fetchedAt, currentBehavior: 'observed-fall-and-newer-likely-rise-distinct', targetOracle: 'observed-fall-and-newer-likely-rise-distinct', contractGap: false, assertion: 'Observed price, direction and datetime are independent of prediction signal and fetchedAt', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Market and prediction presentation with controlled board; no official provider parity or production timing claim' }) })
+  } finally { await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) }) }
+ })
+})

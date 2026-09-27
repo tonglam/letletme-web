@@ -264,11 +264,15 @@ test.describe(`FIX03 terminal ${locale}`, () => {
 })
 }
 
-for (const locale of ['en', 'zh-CN'] as const) {
-	for (const width of [1440, 390]) {
-		test.describe(`unknown fixture cells ${locale} ${width}`, () => {
-			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
-			test('partial fixture window preserves each team and marks unknown cells unavailable', async ({ page }) => {
+for (const context of [
+ ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({ locale, width, timezone: 'Australia/Perth', theme: 'system' as const, variantId: `S20.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` }))),
+ { locale: 'zh-CN' as const, width: 390, timezone: 'UTC', theme: 'dark' as const, variantId: 'S20.directed.02' }
+]) {
+ const { locale, width, timezone, theme, variantId } = context
+		test.describe(`${variantId} unknown fixture cells ${locale} ${width}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
+			test('partial fixture window preserves each team and marks unknown cells unavailable', async ({ page }, testInfo) => {
+                await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
 				let windowRequests = 0
 				await page.route('**/api/fixtures/window?**', route => {
 					windowRequests += 1
@@ -302,9 +306,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				}
 				await expect(matrix.locator('#fdr-team-1 [title^="GW33 ·"]')).toHaveText(originalGw33)
 				expect(windowRequests).toBe(1)
+                const gw34 = headers.findIndex(header => header.trim() === 'GW34')
+                expect(gw34).toBeGreaterThan(-1)
+                await expect(matrix.locator('#fdr-team-1').locator(':scope > td, :scope > th').nth(gw34)).toHaveText(locale === 'en' ? 'BGW' : '空白轮')
+                expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+                await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
+                await testInfo.attach('S20-unknown-vs-BGW', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S20', stepId: 'S20.01', variantId, locale, width, theme, timezone, identity: 'A anonymous', environment: 'isolated-fixture', assertion: 'All three GW38 cells are unavailable; the confirmed Arsenal GW34 blank remains BGW; prior GW33 fixtures remain intact', currentBehavior: 'unknown-distinct-from-BGW', targetOracle: 'unknown-distinct-from-BGW', contractGap: false, windowRequests, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'FDR window presentation with controlled unknown response; not all empty/missing states' }) })
 			})
 		})
-	}
 }
 
 test('failed terminal fixture window keeps the committed horizon and can be retried', async ({
