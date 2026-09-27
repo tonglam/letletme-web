@@ -182,7 +182,7 @@ describe('route ready navigation clock', () => {
 		assert.equal(measureRouteReadyDuration('/explore/market', 3_450, 0), 450)
 		assert.equal(
 			routeReadyMeasurementKind('/explore/market', 0),
-			'initial_navigation'
+			'missing_start'
 		)
 	})
 
@@ -202,7 +202,7 @@ describe('route ready navigation clock', () => {
 		)
 		assert.equal(
 			routeReadyMeasurementKind('/explore/fixtures', 0, 'revision-2'),
-			'initial_navigation'
+			'missing_start'
 		)
 	})
 
@@ -256,4 +256,29 @@ it('shares clock identity across markers and changes it on repeat navigation', (
 })
 it('does not manufacture a navigation identity without a clock', () => {
  assert.equal(routeReadyNavigationId('/market', null), undefined)
+})
+
+it('does not resurrect the document clock after an SPA background resume is consumed', () => {
+ const original = routeReadyNavigationId('/initial', 0)
+ assert.ok(original)
+ markRouteNavigationStart('/market', 100, 'https://example.test')
+ markBackgroundResumeStart('/market', 200)
+ assert.equal(measureRouteReadyDuration('/market', 250, 0), 50)
+ assert.equal(routeReadyNavigationId('/market', 0), undefined)
+ assert.equal(routeReadyStartTime('/market', 0), null)
+ assert.equal(routeReadyMeasurementKind('/market', 0), 'missing_start')
+})
+
+it('retains an explicitly missing claimed clock when a new navigation starts', () => {
+ markRouteNavigationStart('/market', 100, 'https://example.test')
+ assert.equal(measureRouteReadyDuration('/market', 200, 0, undefined, 'identity', null), null)
+ assert.equal(measureRouteReadyDuration('/market', 200, 0, undefined, 'identity', 50), 150)
+})
+
+it('finishing an old claimed navigation does not consume a newer background resume', () => {
+ markRouteNavigationStart('/market', 10, 'https://example.test')
+ markBackgroundResumeStart('/market', 80)
+ assert.equal(measureRouteReadyDuration('/market', 120, 0, undefined, 'identity', 10), 110)
+ assert.equal(routeReadyMeasurementKind('/market', 0), 'background_resume')
+ assert.equal(measureRouteReadyDuration('/market', 130, 0), 50)
 })
