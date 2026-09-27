@@ -5,7 +5,7 @@ import { createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
-import { managerReview, managerGameweek, managerSnapshot } from './fixtures/manager-review'
+import { managerReview, managerGameweek, managerSnapshot, managerStateReview, managerStateScenarios } from './fixtures/manager-review'
 import enMessages from '../messages/en.json'
 import zhMessages from '../messages/zh-CN.json'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
@@ -3207,10 +3207,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
+test.describe('J10 planned baseline contexts', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
- test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }) => {
+ test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Shared manager fixture requires the dedicated single-worker SSR suite')
+ await page.addInitScript(() => localStorage.setItem('theme', 'system'))
  const metrics: Array<{ metricName: string }> = []
  await page.route('**/api/vitals', async route => {
   metrics.push(...(route.request().postDataJSON().samples ?? []))
@@ -3272,13 +3275,29 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(transfers.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
   await transfers.locator('button[aria-expanded]').click()
   await expect(transfers.getByText('Incoming 1-1', { exact: true })).toBeVisible()
-  for (const chip of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit'])) {
-   await transfers.getByRole('button').filter({ hasText: chip }).click()
+  for (const [index, chip] of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit']).map((chip, index) => [index, chip] as const)) {
+   const opener = transfers.getByRole('button').filter({ hasText: chip })
+   await expect(opener).toHaveCount(1)
+   const overflowBefore = await page.locator('body').evaluate(body => body.style.overflow)
+   await opener.click()
    const dialog = page.getByRole('dialog')
    await expect(dialog).toBeVisible()
    await expect(dialog.getByRole('heading')).toContainText(chip)
+   const eventId = index + 2
+   await expect(dialog.locator('li')).toHaveCount(2)
+   for (const move of [1, 2]) {
+    const row = dialog.locator('li').filter({ hasText: `Incoming ${eventId}-${move}` })
+    await expect(row).toHaveCount(1)
+    await expect(row.getByText(`Incoming ${eventId}-${move}`, { exact: true })).toBeVisible()
+    await expect(row.getByText(`Outgoing ${eventId}-${move}`, { exact: true })).toBeVisible()
+    await expect(row.getByText('ARS', { exact: true })).toBeVisible()
+    await expect(row.getByText('CHE', { exact: true })).toBeVisible()
+   }
    await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
    await expect(dialog).toHaveCount(0)
+   await expect(opener).toBeFocused()
+   await expect(page.locator('body')).not.toHaveAttribute('data-scroll-locked')
+   await expect.poll(() => page.locator('body').evaluate(body => body.style.overflow)).toBe(overflowBefore)
   }
   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
   await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(0)
@@ -3353,6 +3372,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
   await openSnapshotDetail('Review Player 12 GW3', 1)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await testInfo.attach('J10-planned-baseline', { body: JSON.stringify({
+   variantId: `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+   locale, viewport: page.viewportSize(), identity: 'B', theme: 'system', timezone: 'Australia/Perth',
+   scenario: 'baseline', entryId: session.entryId, finalGw: 3, finalRevision: '103',
+   functionalAssertions: 'Homepage menu, season sections, transfer expansion, WC/FH sheets, historical GW loading and revision identity, tabs and snapshot modals',
+   wholeJourneyPass: false, performanceStatus: 'NOT_RUN', readyMs: null,
+   missing: ['cold/warm repetitions', 'event-to-paint', 'LCP/INP/CLS'],
+   notApplicable: 'FINAL snapshot has no direct live handoff; PENDING/PROVISIONAL journeys require separate evidence'
+  }), contentType: 'application/json' })
  } finally {
   releaseHistory?.()
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
@@ -3362,6 +3393,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
  }
 }
+
+})
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
@@ -3423,9 +3456,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
-for (const locale of ['en', 'zh-CN'] as const) {
-for (const width of [1440, 390]) {
-test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px`, async ({ page }) => {
+for (const scenario of ['baseline', 'ready', 'bye', 'first-last-gw'] as const) {
+for (const locale of (scenario === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) as ('en' | 'zh-CN')[]) {
+for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+const theme = scenario === 'baseline' ? 'system' : 'dark'
+test.describe(`J08 planned ${scenario} ${locale} ${width}`, () => {
+test.use({ timezoneId: timezone, colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+test(`J08 official H2H standings and fixtures preserve round identity ${locale} ${width}px ${scenario}`, async ({ page }, testInfo) => {
+ await page.addInitScript(value => localStorage.setItem('theme', value), theme)
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
  const tableName = zh ? /对战积分榜/ : /Head-to-Head table/
@@ -3436,7 +3475,7 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
  const tournament = { id: 6, name: 'J08 Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
  const rules = [
   { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...tournament, id: 7, name: 'J08 Other H2H' }, tournament] } },
-  ...[6, 7].flatMap(tournamentId => ([3, 4] as const).flatMap(eventId => {
+  ...[6, 7].flatMap(tournamentId => (scenario === 'first-last-gw' ? [1, 2, 3, 4, 37, 38] as const : [3, 4] as const).flatMap(eventId => {
    const value = officialH2HFixture(eventId, tournamentId)
    return [
     { operation: 'GetTournamentOfficialH2H', variables: { tournamentId, eventId }, data: { tournamentOfficialH2H: value.snapshot } },
@@ -3496,12 +3535,43 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
    await expect(page).toHaveURL(returnUrl)
    await expect(page.getByRole('tab', { name: tableName })).toBeVisible()
   }
+  if (scenario === 'first-last-gw') {
+   for (const [boundary, adjacent, disabled, enabled] of [
+    [1, 2, zh ? '上一轮' : 'Previous', zh ? '下一轮' : 'Next'],
+    [38, 37, zh ? '下一轮' : 'Next', zh ? '上一轮' : 'Previous'],
+   ] as const) {
+    await page.goto(`${prefix}/live/competitions?tournamentId=6&gw=${boundary}`)
+    const overview = page.locator('section').filter({ has: page.getByRole('heading', { name: new RegExp(`^GW${boundary} `) }) })
+    await expect(overview).toHaveCount(1)
+    await expect(overview.getByRole('button', { name: disabled, exact: true })).toBeDisabled()
+    await expect(page.getByRole('link', { name: disabled, exact: true })).toHaveCount(0)
+    await page.getByRole('tab', { name: fixturesName }).click()
+    await expect(page.getByRole('tabpanel', { name: fixturesName }).locator(`a[href="${prefix}/live/points/123?tournamentId=6&gw=${boundary}"]`)).toHaveCount(1)
+    await overview.getByRole('link', { name: enabled, exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === String(adjacent))
+    await page.getByRole('link', { name: disabled, exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('gw') === String(boundary))
+    await expect(overview.getByRole('button', { name: disabled, exact: true })).toBeDisabled()
+   }
+  }
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+  await expect(page.locator('html')).toHaveClass(scenario === 'baseline' ? /light/ : /dark/)
+  await testInfo.attach('J08-planned-binding', { contentType: 'application/json', body: JSON.stringify({
+   variantId: scenario === 'baseline' ? `J08.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : `J08.state.${scenario === 'ready' ? '01' : scenario === 'bye' ? '02' : '03'}`,
+   scenario, locale, viewport: page.viewportSize(), identity: 'B', timezone, theme,
+   tournamentId: 6, gameweeks: scenario === 'first-last-gw' ? [1, 2, 3, 4, 37, 38] : [3, 4], entries: [123, 456],
+   assertions: ['tournament-menu', 'standings-fixtures', 'bye-no-invalid-link', 'previous-next', 'actual-home-away-navigation', '15-player-render', 'back-context'],
+   boundaryAssertions: scenario === 'first-last-gw', functionalStatus: 'PASS', readyMs: null, eventToPaintMs: null,
+   wholeVariantComplete: false, missingReason: 'Performance samples and formal score/squad-composition parity are not asserted; isolated fixture evidence only.'
+  }) })
  } finally {
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
  }
 })
-
+})
+}
 }
 }
 
@@ -5741,5 +5811,88 @@ test.describe('R23 actual internal competition entry', () => {
     } finally { await session.cleanup() }
    })
   }
+ }
+})
+
+test.describe('J10 planned state contexts', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const scenario of managerStateScenarios) {
+  test(`manager ${scenario}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager fixture only')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const seed = managerStateReview(scenario)
+   const identity = { ...seed.entry!, id: session.entryId! }
+   const review = { ...seed, entry: identity, currentGameweek: { ...seed.currentGameweek!, entry: identity } }
+   const result = review.currentGameweek.result!
+   const expected = scenario === 'BB' ? 64 : scenario === 'TC' ? 70 : 60
+   expect(result.picks.reduce((sum, pick) => sum + pick.totalPoints * pick.multiplier, 0)).toBe(expected)
+   expect(result.eventNetPoints).toBe(expected)
+   expect(result.picks.filter(pick => pick.multiplier > 0)).toHaveLength(scenario === 'BB' ? 15 : 11)
+   expect(result.picks.find(pick => pick.isCaptain)?.multiplier).toBe(scenario === 'TC' ? 3 : 2)
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } },
+     { operation: 'GetMyFplManagerGameweek', variables: { eventId: 3 }, data: { myFplManagerGameweek: review.currentGameweek } }
+    ] }) })).ok).toBe(true)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/zh-CN')
+    const nav = page.getByRole('navigation').first()
+    await nav.locator('[data-navigation-mobile] > summary').click()
+    const link = nav.locator('a[href="/zh-CN/my-fpl/team"]').filter({ visible: true })
+    await expect(link).toHaveCount(1)
+    await link.click()
+    await expect(page).toHaveURL(url => url.pathname === '/zh-CN/my-fpl/team')
+    await page.getByRole('tab', { name: '赛季复盘', exact: true }).click()
+    const ready = page.locator('[data-manager-ready]')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-revision', '103')
+    const transfers = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '转会历史', exact: true }) })
+    await expect(transfers.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+    if (scenario === 'no-transfers') {
+     await expect(transfers.getByText(zhMessages.TeamStats.transferFilterEmpty, { exact: true })).toBeVisible()
+     await transfers.getByRole('button', { name: zhMessages.TeamStats.transferShowAllGameweeks, exact: true }).click()
+     await expect(transfers.getByRole('button', { name: zhMessages.TeamStats.transferFilterAll, exact: true })).toHaveAttribute('aria-pressed', 'true')
+     await expect(transfers.getByText(zhMessages.TeamStats.noTransfer, { exact: true })).toBeVisible()
+     await expect(transfers.locator('button[aria-expanded]')).toHaveCount(0)
+    } else if (scenario === 'WC' || scenario === 'FH') {
+     const opener = transfers.getByRole('button').filter({ hasText: scenario })
+     await expect(opener).toHaveCount(1)
+     await opener.click()
+     const dialog = page.getByRole('dialog')
+     await expect(dialog.locator('li')).toHaveCount(2)
+     for (const move of [1, 2]) {
+      await expect(dialog.getByText(`Incoming 3-${move}`, { exact: true })).toBeVisible()
+      await expect(dialog.getByText(`Outgoing 3-${move}`, { exact: true })).toBeVisible()
+     }
+     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+     await expect(dialog).toHaveCount(0)
+     await expect(opener).toBeFocused()
+    } else {
+     await expect(transfers.getByText('Incoming 3-1', { exact: true })).toBeVisible()
+     await expect(transfers.getByText('Outgoing 3-1', { exact: true })).toBeVisible()
+    }
+    const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '轮次历史', exact: true }) })
+    await history.getByRole('button', { name: '打开第 3 轮', exact: true }).click()
+    await expect(ready).toHaveAttribute('data-manager-view', 'gameweek')
+    await expect(ready).toHaveAttribute('data-manager-gw', '3')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    const scoreboard = page.locator('section[aria-labelledby="team-gw-scoreboard-title"]')
+    await expect(scoreboard.getByText(String(expected), { exact: true })).toHaveCount(2)
+    await expect(scoreboard.getByText(`Saka (${scenario === 'TC' ? 30 : 20})`, { exact: true })).toBeVisible()
+    const chipKey = ({ ready: 'chipNone', WC: 'wildcard', FH: 'freeHit', BB: 'benchBoost', TC: 'tripleCaptain', 'no-transfers': 'chipNone' } as const)[scenario]
+    await expect(scoreboard.getByText(zhMessages.TeamStats[chipKey], { exact: true })).toBeVisible()
+    const transferMetric = scoreboard.getByText(zhMessages.TeamStats.gameweekTransfers, { exact: true }).locator('..').locator('p').nth(1)
+    await expect(transferMetric).toHaveText(String(scenario === 'no-transfers' ? 0 : 2))
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await testInfo.attach('J10-planned-state', { body: JSON.stringify({ variantId: `J10.state.0${managerStateScenarios.indexOf(scenario) + 1}`, scenario, identity: 'B', locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', eventId: 3, revision: '103', expectedPoints: expected, functionalScope: 'Homepage menu to season review and selected GW3 scoreboard; fixture multiplier arithmetic', wholeJourneyPass: false, performanceStatus: 'NOT_RUN', readyMs: null }), contentType: 'application/json' })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
  }
 })
