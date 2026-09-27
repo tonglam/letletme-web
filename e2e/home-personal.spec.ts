@@ -2957,9 +2957,12 @@ for (const width of [1440, 390]) {
 }
 }
 
-for (const locale of ['en', 'zh-CN']) {
-	for (const width of [1440, 390]) {
-		test(`J14 isolated bound profile and session journey ${locale} ${width}px`, async ({ page }) => {
+for (const profile of ['baseline', 'ready', 'session-expired'] as const) {
+for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
+	for (const width of profile === 'baseline' ? [1440, 390] : [390]) {
+ test.describe(`J14 planned ${profile} ${locale} ${width}`, () => {
+ test.use({ timezoneId: profile === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: profile === 'baseline' ? 'light' : 'dark' })
+		test(`J14 isolated bound profile and session journey ${locale} ${width}px`, async ({ page }, testInfo) => {
 			test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated server FPL fixture')
 			const zh = locale === 'zh-CN'
 			const prefix = zh ? '/zh-CN' : ''
@@ -2970,7 +2973,9 @@ for (const locale of ['en', 'zh-CN']) {
 			page.on('request', request => {
 				if (request.url().includes('/api/auth/') && request.method() !== 'GET') writes.push(new URL(request.url()).pathname)
 			})
+			const theme = profile === 'baseline' ? 'system' : 'dark'
 			try {
+                await page.addInitScript(value => localStorage.setItem('theme', value), theme)
 				await sql`INSERT INTO bauth.session (id, expires_at, token, user_id, user_agent) VALUES (${otherSessionId}, ${new Date(Date.now() + 3600000)}, ${randomUUID()}, ${session.userId}, 'Mozilla/5.0 (Windows NT 10.0) Firefox/130.0')`
 				await addSessionCookie(page, session.cookie)
 				await page.setViewportSize({ width, height: 900 })
@@ -3033,6 +3038,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await main.getByRole('link', { name: zh ? '返回登录' : 'Back to login', exact: true }).click()
 				await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login`)
 				expect(writes).toEqual([])
+                if (profile !== 'ready') {
 				await sql`UPDATE bauth.session SET expires_at=${new Date(Date.now() - 60000)} WHERE user_id=${session.userId}`
 				for (const protectedPath of ['/profile', '/profile/sessions']) {
 					await page.goto(`${prefix}${protectedPath}`)
@@ -3041,6 +3047,14 @@ for (const locale of ['en', 'zh-CN']) {
 					await expect(main.getByLabel(zh ? '邮箱' : 'Email', { exact: true })).toBeVisible()
 				}
 				expect(writes).toEqual([])
+                }
+                expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+                expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile === 'baseline' ? 'Australia/Perth' : 'UTC')
+                if (profile === 'baseline') {
+                    await expect(page.locator('html')).toHaveClass(/\blight\b/)
+                    await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
+                } else await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+                await testInfo.attach('J14-planned-context', { body: JSON.stringify({ variantId: profile === 'baseline' ? `J14.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `J14.state.${profile === 'ready' ? '01' : '02'}`, locale, viewport: page.viewportSize(), theme, timezone: profile === 'baseline' ? 'Australia/Perth' : 'UTC', scenario: profile, expiredSessionChecked: profile !== 'ready', forbiddenAuthRequests: writes, scope: 'Actual account menu, Profile, Sessions, current device, Profile return, forgot-password and login; isolated sync upstream; no email or session revoke.', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }), contentType: 'application/json' })
 			} finally {
 				await sql`DELETE FROM bauth.session WHERE id=${otherSessionId}`
 				await sql`DELETE FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId}`
@@ -3048,7 +3062,10 @@ for (const locale of ['en', 'zh-CN']) {
 				await session.cleanup()
 			}
 		})
+ })
 	}
+}
+
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
