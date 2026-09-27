@@ -509,11 +509,12 @@ test('match detail retains explanation identity without inventing missing live s
 
 for (const { locale, width, theme, timezone, variantId } of [
  ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({ locale, width, theme: 'system', timezone: 'Australia/Perth', variantId: `S09.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` }))),
- { locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', variantId: 'S09.directed.01' }
+ { locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', variantId: 'S09.directed.01' },
+ { locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', variantId: 'S09.directed.03' }
 ]) {
 test.describe(`${variantId} match-detail race`, () => {
  test.use({ viewport: { width, height: 900 }, timezoneId: timezone })
-for (const reopen of variantId === 'S09.directed.01' ? [true] : [false, true]) {
+for (const reopen of variantId.startsWith('S09.directed.') ? [true] : [false, true]) {
  test(`match detail ignores closed late responses with reopen ${reopen}`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated race injection only')
   const zh = locale === 'zh-CN'
@@ -542,6 +543,13 @@ for (const reopen of variantId === 'S09.directed.01' ? [true] : [false, true]) {
    await page.getByRole('combobox', { name: zh ? '选择轮次' : 'Select gameweek', exact: true }).click()
    await page.getByRole('option', { name: zh ? '第 33 轮（当前）' : 'Gameweek 33 (Current)', exact: true }).click()
    await expect(page.getByRole('heading', { name: zh ? 'GW33 概览' : 'GW33 Overview', exact: true })).toBeVisible()
+   if (variantId === 'S09.directed.03') {
+    await page.locator('tbody').getByRole('button', { name: 'Saka', exact: true }).click()
+    await expect(page.getByRole('dialog').getByRole('heading', { name: 'Saka current result', exact: true })).toBeVisible()
+    await expect(page.getByRole('dialog').getByText('42', { exact: true })).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+   }
    await page.locator('tbody').getByRole('button', { name: 'Palmer', exact: true }).click()
    await expect.poll(() => held).toBe(2)
    const dialog = page.getByRole('dialog')
@@ -564,7 +572,7 @@ for (const reopen of variantId === 'S09.directed.01' ? [true] : [false, true]) {
    } else await expect(dialog).toHaveCount(0)
    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
    if (theme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/)
-   await testInfo.attach('S09-match-detail-race', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S09', stepId: 'S09.01', variantId, locale, width, theme, timezone, identity: 'A anonymous', environment: 'isolated-fixture', assertion: reopen ? 'A slow, B fast, A late leaves only B heading and statistics; loading settled' : 'Closing while A is pending prevents late A reopening or content mutation', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Gameweek match-detail hook only; controlled responses, not all async consumers or production timing' }) })
+   await testInfo.attach('S09-match-detail-race', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S09', stepId: 'S09.01', variantId, locale, width, theme, timezone, identity: 'A anonymous', environment: 'isolated-fixture', assertion: variantId === 'S09.directed.03' ? 'Open A, open pending B, return to A before B settles; late B cannot replace A identity, statistics or loading' : reopen ? 'A slow, B fast, A late leaves only B heading and statistics; loading settled' : 'Closing while A is pending prevents late A reopening or content mutation', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Gameweek match-detail hook only; controlled responses, not all async consumers or production timing' }) })
   } finally { release() }
  })
 }
