@@ -2,34 +2,52 @@ import { expect, test } from '@playwright/test'
 
 // Run against a fresh standalone process so a prior successful bootstrap cache
 // cannot hide the deliberately malformed fixture response.
+test.describe('J20 planned route-error states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
 test('J20 route error retries into a usable player directory', async ({ page }, testInfo) => {
- test.skip(process.env.E2E_ROUTE_ERROR_RECOVERY !== '1', 'Run alone before successful bootstrap cache fills')
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_ROUTE_ERROR_RECOVERY !== '1', 'Run alone before successful bootstrap cache fills')
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
  const control = async (rules: unknown[]) => {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
  }
+ await page.addInitScript(() => { if (localStorage.getItem('theme') === null) localStorage.setItem('theme', 'dark') })
  await control([{ operation: 'GetPlayerStatsBootstrap', data: { playerStatsBootstrap: null } }])
  try {
-  await page.goto('/acceptance-missing-route')
-  await expect(page.getByRole('heading', { name: 'Page not found', exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'Back to dashboard', exact: true }).click()
-  await page.getByRole('contentinfo').getByRole('link', { name: 'Players', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'This page could not be loaded', exact: true })).toBeVisible()
+  await page.goto('/zh-CN/acceptance-missing-route')
+  await expect(page.getByRole('heading', { name: '找不到页面', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: '返回首页', exact: true }).click()
+  await page.getByRole('contentinfo').getByRole('link', { name: '球员', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '无法加载此页面', exact: true })).toBeVisible()
+  const beforeFailedRetry = await (await fetch(fixture)).json()
+  const countBootstrap = (body: { requests: { operation: string; finishedAt: number | null }[] }) => body.requests.filter(r => r.operation === 'GetPlayerStatsBootstrap' && r.finishedAt !== null).length
+  const failedResponse = page.waitForResponse(response => response.request().headers()['rsc'] === '1' && new URL(response.url()).pathname.endsWith('/explore/player-stats'))
+  await page.getByRole('button', { name: '重试', exact: true }).click()
+  await failedResponse
+  await expect.poll(async () => countBootstrap(await (await fetch(fixture)).json())).toBeGreaterThan(countBootstrap(beforeFailedRetry))
+  await expect(page.getByRole('heading', { name: '无法加载此页面', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('region', { name: '球员', exact: true })).toHaveCount(0)
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  await testInfo.attach('J20-failed-retry', { contentType: 'application/json', body: JSON.stringify({ variantId: 'J20.state.02', scenario: '500', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', functionalStatus: 'PASS', wholeVariantComplete: false, readyMs: null, eventToPaintMs: null, scope: 'Localized route error and failed Retry; not global error or asserted HTTP 500.' }) })
   await control([])
   const retryRequests: string[] = []
   page.on('request', request => { if (request.headers()['rsc'] === '1') retryRequests.push(request.url()) })
-  await page.getByRole('button', { name: 'Try again', exact: true }).click()
-  const players = page.getByRole('region', { name: 'Players', exact: true })
+  await page.getByRole('button', { name: '重试', exact: true }).click()
+  const players = page.getByRole('region', { name: '球员', exact: true })
   await expect(players).toBeVisible()
   expect(retryRequests.length).toBeGreaterThan(0)
   const retried = await (await fetch(fixture)).json()
   expect(retried.requests.some((request: { operation: string }) => request.operation === 'GetPlayerStatsBootstrap')).toBe(true)
   await players.getByRole('button', { name: /^Saka/ }).click()
   await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1')
-  await expect(page.getByRole('region', { name: 'Player overall', exact: true })).toContainText('Saka')
+  await expect(page.getByRole('region', { name: '球员总览', exact: true })).toContainText('Saka')
+  await expect(page.getByRole('heading', { name: '无法加载此页面', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('main')).toHaveCount(1)
   await testInfo.attach('C13-states', { body: JSON.stringify({
-   caseId: 'C13',
-   stepIds: ['C13.01'],
+   caseId: 'J20',
+   variantId: 'J20.state.03',
+   locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC',
+   stepIds: ['J20.05', 'J20.06', 'J20.07', 'J20.08', 'J20.09', 'J20.10'],
    state: 'route-error-to-ready',
    fixture: 'GetPlayerStatsBootstrap null after route not-found, then Try again reloads the player directory',
    assertions: ['route not-found recovery link reaches player route', 'localized route error Retry is visible; global error is not covered', 'actual Retry restores Players and Saka detail'],
@@ -39,6 +57,8 @@ test('J20 route error retries into a usable player directory', async ({ page }, 
    wholeCaseComplete: false
   }), contentType: 'application/json' })
  } finally { await control([]) }
+})
+
 })
 
 for (const scenario of ['baseline', '404'] as const) {
