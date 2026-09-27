@@ -32,9 +32,15 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 17)
+	assert.equal(result.calls.length, 23)
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
 	assert.deepEqual(result.calls.at(-1).args, ['playwright', 'test', 'e2e/match-missing-stats.spec.ts', '--workers=1', '--trace=on', '--output=test-results/match-missing-stats'])
+	assert.deepEqual(result.calls.at(-3).args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'HOME02 planned', '--workers=1', '--trace=on', '--output=test-results/home-carousel-contexts'])
+	assert.equal(result.calls.at(-3).market, '1')
+	assert.equal(result.calls.at(-3).existingBuild, '1')
+	assert.deepEqual(result.calls.at(-2).args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'HOME02 empty planned', '--workers=1', '--trace=on', '--output=test-results/home-carousel-empty'])
+	assert.equal(result.calls.at(-2).fixture, '0')
+	assert.equal(result.calls.at(-2).market, '1')
 	assert.equal(result.calls.at(-1).fixture, '1')
 	assert.equal(result.calls.at(-1).cwd, root)
 	for (const [index, status] of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'].entries()) {
@@ -48,6 +54,18 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.equal(result.calls[14].market, '1')
 	assert.equal(result.calls[14].existingBuild, '1')
 
+	assert.deepEqual(result.calls[15].args, ['playwright', 'test', 'e2e/market-journey.spec.ts', '--grep', 'J02.state.03', '--workers=1', '--trace=on', '--output=test-results/market-partial-journey'])
+	for (const [index, selection] of ['J03.A.|J03.state.01', 'J03.state.02', 'J03.state.03'].entries()) {
+		const call = result.calls[16 + index]
+		assert.equal(call.fixture, selection === 'J03.state.02' ? '0' : '1')
+		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/prediction-journey.spec.ts', '--grep', selection, '--workers=1', '--trace=on', `--output=test-results/prediction-journey-${selection.replace(/[^a-zA-Z0-9]/g, '_')}`])
+	}
+	assert.equal(result.calls[15].fixture, '1')
+	for (const call of result.calls.slice(15, 19)) {
+		assert.equal(call.market, '1')
+		assert.equal(call.existingBuild, '1')
+		assert.equal(call.cwd, root)
+	}
 	assert.deepEqual(result.calls[8].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'prediction pagination accessible names', '--workers=1', '--trace=on', '--output=test-results/prediction-pagination'])
 	assert.equal(result.calls[8].market, '1')
 	assert.equal(result.calls[8].existingBuild, '1')
