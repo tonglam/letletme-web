@@ -4085,15 +4085,19 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
  }
 }
 
+test.describe('AUTH04 exact baseline contexts', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
   for (const persona of ['anonymous', 'unbound', 'bound'] as const) {
-   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }) => {
+   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated identity fixtures')
     const prefix = locale === 'en' ? '' : '/zh-CN'
-    const session = persona === 'anonymous' ? null : await createSession(persona === 'bound' ? { entryId: 909090 } : {})
+    const boundEntryId = 909091 + (locale === 'zh-CN' ? 2 : 0) + (width === 390 ? 1 : 0)
+    const session = persona === 'anonymous' ? null : await createSession(persona === 'bound' ? { entryId: boundEntryId } : {})
     try {
      await page.setViewportSize({ width, height: 900 })
+     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
      if (session) await addSessionCookie(page, session.cookie)
      await page.goto(`${prefix}/onboarding/bind-entry?next=${encodeURIComponent('/auth/forgot-password')}`)
      if (persona === 'anonymous') {
@@ -4137,11 +4141,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
        expect(row).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
       } finally { await sql.end() }
      }
+     expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual({ width, height: 900 })
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+     await expect(page.locator('html')).toHaveClass(/light/)
+     const identity = { anonymous: 'A', unbound: 'U', bound: 'B' }[persona]
+     await testInfo.attach('AUTH04-exact-baseline', { contentType: 'application/json', body: JSON.stringify({
+      caseId: 'AUTH04', variantId: `AUTH04.${identity}.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+      identity, locale, viewport: page.viewportSize(), theme: 'system', timezone: 'Australia/Perth',
+      finalUrl: page.url(), functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null,
+      wholeVariantComplete: false, scope: 'Identity terminal and exact baseline context; unbound invalid input preserves database identity. Full help-link and exit assertions and performance remain open.'
+     }) })
     } finally { if (session) await session.cleanup() }
    })
   }
  }
 }
+
+})
 
 for (const profile of [
  { name: 'baseline', timezoneId: 'Australia/Perth', theme: 'system' },
