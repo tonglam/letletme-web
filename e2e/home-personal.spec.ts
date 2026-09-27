@@ -686,9 +686,16 @@ test.describe('SSR remediation', () => {
 		})
 	}
 
-	for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
-	 test(`prediction squad isolates A B A session reads ${locale} ${width}px`, async ({ page }, testInfo) => {
+	for (const context of [
+	 ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({ locale, width, timezone: 'Australia/Perth', theme: 'system' as const, variantId: `S08.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` }))),
+	 { locale: 'zh-CN' as const, width: 390, timezone: 'UTC', theme: 'dark' as const, variantId: 'S08.directed.08' }
+	]) {
+	 const { locale, width, timezone, theme, variantId } = context
+	 test.describe(`${variantId} prediction account isolation`, () => {
+	 test.use({ viewport: { width, height: 900 }, timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
+	 test(`prediction squad isolates A B A with warm display session cache ${locale} ${width}px`, async ({ page }, testInfo) => {
 	  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session switching only')
+	  await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
 	  const a = await createSession({ entryId: 15702 })
 	  const b = await createSession({ entryId: 15702 })
 	  const accounts = [a, b]
@@ -699,8 +706,13 @@ test.describe('SSR remediation', () => {
 	   const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/explore/price-predictions#my-squad`
 	   let navigationCount = 0
 	   for (const index of [0, 1, 0]) {
-	    await page.context().clearCookies()
+	    // Change only the isolated session token. Keep the prior display cache so
+	    // fresh authorization, not cookie deletion, must isolate private reads.
 	    await addSessionCookie(page, accounts[index].cookie)
+	    if (navigationCount === 0) {
+	     expect((await page.request.get('/api/auth/get-session')).ok()).toBe(true)
+	    }
+	    expect((await page.context().cookies()).some(cookie => cookie.name.includes('session_data'))).toBe(true)
 	    const documentResponse = navigationCount++ === 0 ? await page.goto(path) : await page.reload()
 	    expect(documentResponse?.status()).toBe(200)
 	    const squad = page.locator('#my-squad')
@@ -709,6 +721,8 @@ test.describe('SSR remediation', () => {
 	    for (let player = 1; player <= 15; player++) await expect(squad.getByText(`Account${index} Player${player}`, { exact: true })).toBeVisible()
 	    await expect(squad).not.toContainText(`Account${1 - index} Player`)
 	   }
+	   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+	   await expect(page.locator('html')).toHaveClass(new RegExp(`(?:^|\\s)${theme === 'dark' ? 'dark' : 'light'}(?:\\s|$)`))
 	   const reads = (await observations()).filter(row => row.operation === 'GetEntryEventResult').map(row => row.variables.entryId)
 	   expect(reads).toEqual([a.entryId, b.entryId, a.entryId])
 	   await control(rules)
@@ -717,8 +731,9 @@ test.describe('SSR remediation', () => {
 	   await expect(page.locator('#my-squad')).not.toContainText('Account0 Player')
 	   await expect(page.locator('#my-squad')).not.toContainText('Account1 Player')
 	   expect((await observations()).filter(row => ['GetEntryHistory', 'GetEntryEventResult'].includes(row.operation))).toEqual([])
-	   await testInfo.attach('prediction-account-isolation', { body: JSON.stringify({ locale, width, entrySequence: reads, anonymousPrivateReads: 0, readyMs: null, environment: 'isolated fixture' }), contentType: 'application/json' })
+	   await testInfo.attach('prediction-account-isolation', { body: JSON.stringify({ caseId: 'S08', stepId: 'S08.01', variantId, locale, width, timezone, theme, entrySequence: reads, displayCacheRetained: true, anonymousPrivateReads: 0, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Prediction personal squad only; distinct bound A/B/A identities and anonymous state, not all private endpoints', environment: 'isolated-fixture' }), contentType: 'application/json' })
 	  } finally { await a.cleanup(); await b.cleanup() }
+	 })
 	 })
 	}
 
