@@ -4175,6 +4175,60 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
 })
 
+test.describe('AUTH04 planned state role resolution', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const scenario of ['unbound', 'invalid'] as const) {
+  test(`AUTH04 planned ${scenario} proves anonymous gate and unbound form`, async ({ page, context }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated identity state only')
+   const session = await createSession({})
+   const writes: string[] = []
+   page.on('request', request => { if (request.headers()['next-action']) writes.push(request.url()) })
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   try {
+    expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+    await page.goto('/zh-CN/onboarding/bind-entry?next=%2Fauth%2Fforgot-password')
+    await expect(page).toHaveURL(url => url.pathname === '/zh-CN/auth/login')
+    await expect(page.locator('#main-content input[type="password"]')).toBeEnabled()
+    await expect(page.locator('#main-content input[name="entryId"]')).toHaveCount(0)
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/zh-CN/onboarding/bind-entry?next=%2Fauth%2Fforgot-password')
+    await expect(page).toHaveURL(url => url.pathname === '/zh-CN/onboarding/bind-entry')
+    const input = page.locator('#main-content input[name="entryId"]')
+    await expect(input).toBeEnabled()
+    if (scenario === 'invalid') {
+     const searches: string[] = []
+     await page.route('**/api/graphql', async route => {
+      const body = route.request().postDataJSON()
+      if (body?.operationName !== 'SearchEntries') return route.fallback()
+      searches.push(body.variables.query)
+      await route.fulfill({ json: { data: { searchEntries: [] } } })
+     })
+     const submit = page.locator('#main-content button[type="submit"]')
+     for (const value of ['-1', '1.5']) {
+      await input.fill(value)
+      await submit.click()
+      await expect(page.getByText(zhMessages.FplEntryLookup.errors.none, { exact: true })).toBeVisible()
+     }
+     await input.fill('')
+     await submit.click()
+     expect(await input.evaluate(element => (element as HTMLInputElement).validity.valueMissing)).toBe(true)
+     expect(searches).toEqual(['-1', '1.5'])
+    }
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual({ width: 390, height: 900 })
+    const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+    try {
+     const [row] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+     expect(row).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
+    } finally { await sql.end() }
+    expect(writes).toEqual([])
+    await testInfo.attach('AUTH04-state-role-resolution', { contentType: 'application/json', body: JSON.stringify({ variantId: `AUTH04.state.0${scenario === 'unbound' ? 1 : 2}`, originalPersona: 'A', executedPersonas: ['A', 'U'], roleResolution: 'A proves login boundary; U is required to exercise the named form state', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', scenario, readyMs: null, performanceStatus: 'N/A', wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  })
+ }
+})
+
 for (const profile of [
  { name: 'baseline', timezoneId: 'Australia/Perth', theme: 'system' },
  { name: 'state-probe', timezoneId: 'UTC', theme: 'dark' }
