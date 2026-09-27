@@ -1732,8 +1732,12 @@ test('stale and degraded match publications show a timestamped delay notice', as
 	}
 })
 
-test('match requests are cancelled when actual navigation unmounts the page', async ({ page }) => {
+for (const directed of [false, true]) {
+test.describe(directed ? 'S09.directed.02' : 'existing match unmount baseline', () => {
+ test.use({ viewport: { width: directed ? 390 : 1440, height: 900 }, timezoneId: directed ? 'UTC' : 'Australia/Perth' })
+test('match requests are cancelled when actual navigation unmounts the page', async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fault injection')
+ if (directed) await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
  await page.clock.install({ time: new Date('2026-08-04T18:00:00.000Z') })
  let releaseResponse: (() => void) | undefined
  const responseGate = new Promise<void>(resolve => { releaseResponse = resolve })
@@ -1746,14 +1750,14 @@ test('match requests are cancelled when actual navigation unmounts the page', as
   await route.fulfill({ status: 503, json: { error: 'Delayed isolated response' } }).catch(() => {})
  })
  try {
-  await page.goto('/live/matches')
-  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  await page.goto(directed ? '/zh-CN/live/matches' : '/live/matches')
+  await expect(page.getByRole('heading', { name: directed ? '实时比赛' : 'Live Matches', exact: true })).toBeVisible()
   const requestStarted = page.waitForRequest(request => new URL(request.url()).pathname === '/api/live/matches')
-  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  await page.getByRole('button', { name: directed ? '刷新比赛' : 'Refresh matches', exact: true }).filter({ visible: true }).click()
   await requestStarted
-  await page.getByRole('contentinfo').getByRole('link', { name: 'Market', exact: true }).click()
+  await page.getByRole('contentinfo').getByRole('link', { name: directed ? '市场' : 'Market', exact: true }).click()
   await expect(page).toHaveURL(/\/explore\/market$/)
-  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: directed ? '实时比赛' : 'Live Matches', exact: true })).toHaveCount(0)
   await expect.poll(() => failed.length).toBe(1)
   expect(failed[0]).toMatch(/abort|cancel/i)
   releaseResponse?.()
@@ -1761,20 +1765,28 @@ test('match requests are cancelled when actual navigation unmounts the page', as
   await page.unroute('**/api/live/matches?*')
   await page.goBack()
   await expect(page).toHaveURL(/\/live\/matches$/)
-  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: directed ? '实时比赛' : 'Live Matches', exact: true })).toBeVisible()
   const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
-  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  await page.getByRole('button', { name: directed ? '刷新比赛' : 'Refresh matches', exact: true }).filter({ visible: true }).click()
   const response = await refreshed
   expect(response.status()).toBe(200)
   const snapshot = (await response.json()).liveMatchday.snapshot
   expect(snapshot.eventId).toBe(33)
-  await expect(page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: directed ? '刷新比赛' : 'Refresh matches', exact: true }).filter({ visible: true })).toBeEnabled()
   await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
 
+  if (directed) {
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   await testInfo.attach('S09-unmount', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S09', stepId: 'S09.01', variantId: 'S09.directed.02', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', identity: 'A anonymous', environment: 'isolated-fixture', assertion: 'Actual Market navigation cancels pending match request; late failure does not replace destination; Back and refresh recover current GW33 data', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Live Matches FULL request lifecycle only; fixture clock and held response, not all async consumers' }) })
+  }
  } finally {
   releaseResponse?.()
  }
 })
+
+})
+}
 
 test('match head requests are cancelled when actual navigation unmounts the page', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fault injection')
