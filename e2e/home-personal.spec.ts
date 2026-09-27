@@ -6246,3 +6246,46 @@ for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
   }
  }
 }
+
+
+test.describe('HOME01 anonymous public partial failure', () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('SSR remediation HOME01.state.02 preserves other public regions during fixture failure and recovery', async ({ page, context }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture only')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const control = async (failed: boolean) => {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: failed ? [{ operation: 'GetHomeEventFixtures', variables: { eventId: 34 }, error: true }] : [] }) })).ok).toBe(true)
+  }
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+  try {
+   await control(true)
+   await page.goto('/zh-CN')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   const matches = page.locator('#main-content [data-home-matches]')
+   const assertPublic = async () => {
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('region', { name: '本轮表现', exact: true })).toContainText('101')
+    await expect(page.getByRole('region', { name: '市场看板', exact: true })).toContainText('Saka')
+    await expect(page.locator('[data-home-personal-ready]')).toHaveCount(0)
+   }
+   await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+   await assertPublic()
+   await matches.getByRole('button', { name: '下一轮', exact: true }).click()
+   await expect(matches.getByRole('alert')).toBeVisible()
+   await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+   await expect(matches).toContainText('ARS')
+   await assertPublic()
+   const failedReads = (await (await fetch(fixture)).json()).requests
+   expect(failedReads.some((row: { operation: string; variables: { eventId?: number } }) => row.operation === 'GetHomeEventFixtures' && row.variables.eventId === 34)).toBe(true)
+   expect(failedReads.filter((row: { operation: string }) => row.operation === 'GetHomePersonalDesk')).toHaveLength(0)
+   await control(false)
+   await matches.getByRole('button', { name: '下一轮', exact: true }).click()
+   await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+   await expect(matches.getByRole('alert')).toHaveCount(0)
+   await assertPublic()
+   await testInfo.attach('HOME01-state02-public-partial', { contentType: 'application/json', body: JSON.stringify({ variantId: 'HOME01.state.02', identity: 'A', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', failedEvent: 34, retainedEvent: 33, recoveredEvent: 34, personalRequests: 0, readyMs: null, performanceStatus: 'N/A', scope: 'Public fixture switch failure preserves other regions; personal failure branch inapplicable to anonymous identity' }) })
+  } finally { await control(false) }
+ })
+})
