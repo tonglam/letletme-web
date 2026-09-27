@@ -48,7 +48,7 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.equal(result.calls[13].market, '1')
 	assert.equal(result.calls[13].existingBuild, '1')
 
-	assert.deepEqual(result.calls[8].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'prediction pagination accessible names', '--workers=1', '--trace=on', '--output=test-results/prediction-pagination'])
+	assert.deepEqual(result.calls[8].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'prediction pagination accessible names|market viewer timezone', '--workers=1', '--trace=on', '--output=test-results/prediction-pagination'])
 	assert.equal(result.calls[8].market, '1')
 	assert.equal(result.calls[8].existingBuild, '1')
 	assert.equal(result.calls[8].fixture, '1')

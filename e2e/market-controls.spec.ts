@@ -480,3 +480,41 @@ for (const locale of ['en', 'zh-CN']) {
   })
  }
 }
+
+for (const timeZone of ['UTC', 'Australia/Perth']) {
+ test.describe(`market viewer timezone ${timeZone}`, () => {
+  test.use({ timezoneId: timeZone })
+  for (const locale of ['en', 'zh-CN'] as const) {
+   test(`renders date and capture time after hydration ${locale}`, async ({ page }) => {
+    test.skip(process.env.E2E_MARKET_READINESS !== '1', 'Requires standalone clone with isolated price-board cache')
+    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+    const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+    seed.data.priceChangeBoard.latestEvent = { outcome: 'NO_CHANGE', observedAt: '2026-08-03T23:40:00.000Z', deadline: '2026-08-03T09:00:00.000Z', changeDate: '2026-08-03', changes: [] }
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+    try {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    page.on('console', message => {
+     if (message.type() === 'error' && /hydrat|did not match/i.test(message.text())) errors.push(message.text())
+    })
+    await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/explore/market`)
+    const times = page.locator('main time[datetime]')
+    await expect(times).toHaveCount(2)
+    for (const index of [0, 1]) {
+     const dateOnly = index === 0
+     const time = times.nth(index)
+     const capturedAt = await time.getAttribute('datetime')
+     expect(capturedAt).toBeTruthy()
+     const options: Intl.DateTimeFormatOptions = { timeZone, day: 'numeric', month: 'short' }
+     if (!dateOnly) Object.assign(options, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })
+     const expected = new Intl.DateTimeFormat(locale, options).format(new Date(capturedAt!))
+     await expect(time).toHaveText(`${locale === 'en' ? 'Updated ' : '更新于 '}${expected}`)
+    }
+    expect(errors).toEqual([])
+    } finally {
+     await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    }
+   })
+  }
+ })
+}

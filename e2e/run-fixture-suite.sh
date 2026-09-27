@@ -14,7 +14,7 @@ case "${1:-}" in
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh trends-unpublished
     E2E_MARKET_HISTORY=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-historical-freshness.spec.ts --workers=1 --trace=on --output=test-results/market-history
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'C09 text share' --workers=1 --trace=on --output=test-results/market-share
-    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'prediction pagination accessible names' --workers=1 --trace=on --output=test-results/prediction-pagination
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'prediction pagination accessible names|market viewer timezone' --workers=1 --trace=on --output=test-results/prediction-pagination
     for status in READY PARTIAL STALE UNAVAILABLE; do
       E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 board states $status " --workers=1 --trace=on --output="test-results/prediction-$status"
     done
