@@ -1128,10 +1128,14 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
-const formalJourney = recoveryMode === 'live-journey-second-entry' || recoveryMode === 'live-journey-published'
-for (const locale of recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney ? [1440, 390] : [0]) {
+for (const recoveryMode of ['loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-pinned', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+const plannedReadyJourney = recoveryMode === 'live-journey-ready-mobile'
+const publishedJourney = recoveryMode === 'live-journey-published' || plannedReadyJourney
+const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney
+const journeyTimezone = plannedReadyJourney ? 'UTC' : 'Australia/Perth'
+const journeyTheme = plannedReadyJourney ? 'dark' : 'system'
+for (const locale of plannedReadyJourney ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of plannedReadyJourney ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1141,12 +1145,12 @@ const isSeasonSectionOperation = (query: string | undefined) =>
 	query?.includes(pointsSectionOperation) === true ||
 	query?.includes('GetMyTournamentSeasonReviewSection') === true
 test.describe(() => {
-if (formalJourney) test.use({ timezoneId: 'Australia/Perth' })
+if (formalJourney) test.use({ timezoneId: journeyTimezone, ...(plannedReadyJourney ? { colorScheme: 'dark' as const } : {}) })
 test(`SSR remediation tournament season sections load on demand without a false missing-publication state [${locale}]${recoveryMode !== 'none' ? ` and recover via ${recoveryMode}${catalogWidth ? ` ${catalogWidth}px` : ''}` : ''}`, async ({ page }, testInfo) => {
 	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Uses serial isolated fixture controls')
 	const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
 	const session = await createSession({ entryId: 123 })
-	if (formalJourney) await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+	if (formalJourney) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
 	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
 	if (recoveryMode === 'settlement-time') {
 		phase.settledAt = '2026-09-15T18:00:00Z'
@@ -1436,17 +1440,17 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			const unavailableRules = [
 				...secondEntryRules,
-				...(recoveryMode === 'live-journey-published' ? [] : [{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } }]),
+				...(publishedJourney ? [] : [{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } }]),
 				...rules
 			]
 			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: unavailableRules }) })).ok).toBe(true)
 			await page.goto(`${routePath}?tournamentId=6&view=gameweek&gw=4`)
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
 			const unsettledLink = page.getByRole('link', { name: locale === 'zh-CN' ? '未结算数据请前往 Live' : 'Open Live for unsettled data', exact: true })
-			const live = recoveryMode === 'live-journey-published'
+			const live = publishedJourney
 				? page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '实时赛事' : 'Live Competitions', exact: true })
 				: unsettledLink
-			if (recoveryMode === 'live-journey-published') {
+			if (publishedJourney) {
 				const review = page.locator('[data-review-ready="true"]')
 				await expect(review).toHaveAttribute('data-review-tournament', '6')
 				await expect(review).toHaveAttribute('data-review-gw', '4')
@@ -1459,7 +1463,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(unsettledLink).toHaveCount(0)
 			}
 			await expect(live).toBeVisible()
-			await expect(live).toHaveAttribute('href', recoveryMode === 'live-journey-published' ? `${prefix}/live/competitions` : `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			await expect(live).toHaveAttribute('href', publishedJourney ? `${prefix}/live/competitions` : `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			let recoveryBoardRequests = 0
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
 				await page.route('**/api/live/competitions/6/board', async route => {
@@ -1492,7 +1496,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			const selectionResponse = page.waitForResponse(response =>
 				response.url().includes('/api/live/competitions/6/selection-index?') && new URL(response.url()).searchParams.get('eventId') === '4' && response.status() === 200)
 			await live.click()
-			if (recoveryMode === 'live-journey-published') {
+			if (publishedJourney) {
 				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions`)
 				await page.getByRole('combobox', { name: locale === 'zh-CN' ? '选择轮次' : 'Select gameweek', exact: true }).click()
 				await page.getByRole('option', { name: locale === 'zh-CN' ? '第 4 轮' : 'Gameweek 4', exact: true }).click()
@@ -1922,7 +1926,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await page.getByRole('button', { name: locale === 'zh-CN' ? '下一轮' : 'Next gameweek', exact: true }).click()
 			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
 			await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=4`)
-			if (formalJourney) expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+			if (formalJourney) expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(journeyTimezone)
 			const originalBoardUrl = page.url()
 			await team.click()
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/15702` && url.searchParams.get('gw') === '4' && url.searchParams.get('tournamentId') === '6')
@@ -2015,12 +2019,16 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await page.goForward()
 				await expect(secondReady).toHaveCount(1)
 				await expect(pitch.getByRole('button', { name: /Second Player/ })).toHaveCount(15)
-				expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+				expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(journeyTheme)
+				if (plannedReadyJourney) {
+					await expect(page.locator('html')).toHaveClass(/dark/)
+					expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang }))).toEqual({ width: 390, language: 'zh-CN' })
+				}
 				await testInfo.attach('J06-J11-formal-journey-binding', { contentType: 'application/json', body: JSON.stringify({
-					variantIds: ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
-					locale, viewport: { width: catalogWidth, height: 900 }, theme: 'system', timezone: 'Australia/Perth',
+					variantIds: plannedReadyJourney ? ['J06.state.01'] : ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
+					locale, viewport: { width: catalogWidth, height: 900 }, theme: journeyTheme, timezone: journeyTimezone, scenario: plannedReadyJourney ? 'ready' : 'baseline',
 					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, 12], searchAssertions: ['hit', 'empty', 'clear-restores-both'],
-						reviewStart: recoveryMode === 'live-journey-published' ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
+						reviewStart: publishedJourney ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
 					captainRawPoints: 6, captainMultiplier: 2, captainContribution: 12, activeSquadTotal: 22,
 					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
 					missingReason: 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
