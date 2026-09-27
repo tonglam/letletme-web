@@ -29,3 +29,27 @@ export const managerReview: MyFplManagerReview = {
  holdings: [], transfers: timeline.map(row => ({ eventId: row.eventId, eventTransfers: row.eventTransfers, eventTransfersCost: 0, transfers: Array.from({ length: row.eventTransfers }, (_, index) => ({ eventId: row.eventId, elementIn: 101 + index, elementInWebName: `Incoming ${row.eventId}-${index + 1}`, elementInTypeName: 'MIDFIELDER', elementInTeamShortName: 'ARS', elementInCost: 60, elementInPoints: 6, elementInPlayed: true, elementOut: 201 + index, elementOutWebName: `Outgoing ${row.eventId}-${index + 1}`, elementOutTypeName: 'MIDFIELDER', elementOutTeamShortName: 'CHE', elementOutCost: 60, elementOutPoints: 2, sameGameweekGain: 4, threeGameweekGain: null, fiveGameweekGain: null, evaluatedThroughEventId: row.eventId, time: stamp })) })),
  pastSeasons: [{ season: '2025/26', totalPoints: 2400, overallRank: 12000 }], pastSeasonsState: 'READY', currentGameweek: managerGameweek(3), rules: null, snapshotMeta: managerSnapshot(3)
 }
+
+export const managerStateScenarios = ['ready', 'WC', 'FH', 'BB', 'TC', 'no-transfers'] as const
+export function managerStateReview(scenario: typeof managerStateScenarios[number]): MyFplManagerReview {
+ const seed = managerGameweek(3)
+ const chip = ({ ready: 'NONE', WC: 'WILDCARD', FH: 'FREE_HIT', BB: 'BENCH_BOOST', TC: 'TRIPLE_CAPTAIN', 'no-transfers': 'NONE' } as const)[scenario]
+ const selectedPicks = seed.result!.picks.map(pick => ({ ...pick, multiplier: pick.isCaptain ? (scenario === 'TC' ? 3 : 2) : pick.position > 11 ? (scenario === 'BB' ? 1 : 0) : 1 }))
+ const points = selectedPicks.reduce((sum, pick) => sum + pick.totalPoints * pick.multiplier, 0)
+ const captainContribution = scenario === 'TC' ? 30 : 20
+ const transferCount = scenario === 'no-transfers' ? 0 : 2
+ const positionPoints = { ...decision.positionPoints }
+ if (scenario === 'BB') {
+  for (const key of ['goalkeeper', 'defender', 'midfielder', 'forward'] as const) positionPoints[key] += 1
+  positionPoints.total += 4
+ }
+ const review = { ...decision, lineupBasePoints: scenario === 'BB' ? 54 : 50, positionPoints, captain: { ...decision.captain, captainContribution } }
+ const row = { ...timeline[2], eventPoints: points, eventNetPoints: points, overallPoints: points, eventChip: chip, eventCaptainPoints: captainContribution, eventTransfers: transferCount, review }
+ const identity = { ...entry, startedEvent: 3, overallPoints: points, totalTransfers: transferCount }
+ return {
+  ...managerReview, entry: identity, timeline: [row], pastSeasons: [], pastSeasonsState: 'EMPTY',
+  currentGameweek: { ...seed, entry: identity, result: { ...seed.result!, ...row, picks: selectedPicks }, review },
+  summary: { ...managerReview.summary!, gameweeksReviewed: 1, totalNetPoints: points, averageNetPoints: points, medianNetPoints: points, bestGameweekId: 3, bestNetPoints: points, worstGameweekId: 3, worstNetPoints: points, totalBenchPoints: 4, averageBenchPoints: 4, totalCaptainPoints: captainContribution, topCaptainGameweeks: 1, bestOverallRank: 900, worstOverallRank: 900, overallRankChange: 0, currentImprovementStreak: 0, longestImprovementStreak: 0, formations: [{ formation: '4-4-2', gameweeks: 1 }], positionPoints, chips: chip === 'NONE' ? [] : [{ chip, eventId: 3, status: 'FINAL', eventNetPoints: points, otherGameweeksAverageNetPoints: null, differenceFromOtherGameweeks: null, overallRankDelta: 100 }] },
+  transfers: [{ ...managerReview.transfers[2], eventTransfers: transferCount, transfers: transferCount ? managerReview.transfers[2].transfers : [] }]
+ }
+}
