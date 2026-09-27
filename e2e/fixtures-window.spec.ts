@@ -461,6 +461,9 @@ for (const context of dialogContexts) {
 			await page.goto(zh ? '/zh-CN/explore/fixtures' : '/explore/fixtures')
 			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezoneId)
 			if (context.colorScheme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/)
+			const matrixRows = page.locator('tr[id^="fdr-team-"]')
+			const rowOrder = await matrixRows.evaluateAll(rows => rows.map(row => row.id))
+			expect(rowOrder.length).toBeGreaterThan(0)
 			let fail = context.scenario === 'error'
 			const windows: number[] = []
 			await page.route('**/api/fixtures/window?**', async route => {
@@ -498,12 +501,15 @@ for (const context of dialogContexts) {
 			} else {
 				await expect(dialog.getByText('2–1', { exact: true })).toBeVisible()
 			}
+			await dialog.getByText('GW38', { exact: true }).scrollIntoViewIfNeeded()
+			await expect(dialog.getByText('GW38', { exact: true })).toBeVisible()
 			const expectedRequests = context.scenario === 'error' ? 16 : 8
 			expect(windows).toHaveLength(expectedRequests)
 			expect(windows.slice(0, 8).sort((a, b) => a - b)).toEqual([1, 6, 11, 16, 21, 26, 31, 36])
 			await page.keyboard.press('Escape')
 			await expect(dialog).toHaveCount(0)
 			await expect(trigger).toBeFocused()
+			expect(await matrixRows.evaluateAll(rows => rows.map(row => row.id))).toEqual(rowOrder)
 			await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden')
 			await trigger.click()
 			await expect(dialog.getByText('GW38', { exact: true })).toBeAttached()
