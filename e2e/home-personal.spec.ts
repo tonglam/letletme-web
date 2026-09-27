@@ -6010,8 +6010,25 @@ for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
       const desk = seed.data.homePersonalDesk
       desk.rankState = 'READY'
       desk.leagueRanks.forEach((row: { rankState: string }) => { row.rankState = 'READY' })
+
+	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	const points = {
+		headlineMetric: 'GROSS_POINTS', grossPointsTotal: 75, grossPointsAverage: 75, netPointsTotal: 71,
+		seasonGrossPointsTotal: 300, seasonGrossPointsAverage: 300, seasonNetPointsTotal: 296,
+		nextCursor: null, hasNextPage: false,
+		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
+	}
+	const pageInfo = { hasNextPage: false, endCursor: null }
+	const scope = { ...phase, tournamentId: 77, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
+	const reviewRules = [
+		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '77', node: { tournamentId: 77, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
+		{ operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 77, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
+		{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: { format: 'POINTS', points } } } },
+		...['POINTS_STANDINGS', 'POINTS_TRAJECTORIES'].map(section => ({ operation: 'GetMyTournamentSeasonReviewPointsSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 77, throughEventId: 4, section, points, h2h: null, knockout: null, pageInfo } } }))
+	]
+
       const install = async (unavailable: boolean) => {
-       expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', data: { homePersonalDesk: unavailable ? { ...desk, state: 'UNAVAILABLE', leagueRanks: [] } : desk } }] }) })).ok).toBe(true)
+       expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', data: { homePersonalDesk: unavailable ? { ...desk, state: 'UNAVAILABLE', leagueRanks: [] } : desk } }, ...reviewRules] }) })).ok).toBe(true)
       }
       await install(scenario === 'unavailable')
       await page.addInitScript(value => localStorage.setItem('theme', value), theme)
@@ -6058,7 +6075,25 @@ for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
       await expect(page).toHaveURL(url => url.pathname === homeUrl)
       await expect(page.locator('#main-content [data-home-personal-ready="true"]')).toBeVisible()
       await expect(carousel).toBeVisible()
-      await testInfo.attach('HOME03-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId, caseId: 'HOME03', stepIds: ['HOME03.01', 'HOME03.02'], locale, viewport: page.viewportSize(), timezone, theme, scenario, identity: 'B', leagueCount: desk.leagueRanks.length, customHref, h2hHref, unavailableRecovery: scenario === 'unavailable', scope: 'Classic non-navigable row, custom href, actual H2H navigation to tournament 6 GW1 and browser Back to ready homepage, no home H2H polling; unavailable desk recovery. Custom destination and performance remain unverified.', wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+      await carousel.getByRole('tab', { name: zh ? /积分联赛/ : /Classic/ }).click()
+      await custom.click()
+      const assertCustomReview = async () => {
+       await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/my-fpl/competitions` && url.searchParams.get('tournamentId') === '77' && url.searchParams.get('view') === null)
+       const ready = page.locator('[data-review-ready="true"]')
+       await expect(ready).toHaveAttribute('data-review-tournament', '77')
+       await expect(ready).toHaveAttribute('data-review-view', 'season')
+       await expect(ready).toHaveAttribute('data-review-gw', '4')
+       await expect(ready).toHaveAttribute('data-review-revision', '1')
+       await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+       await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: /Season Fixture United/ }) }).getByRole('cell', { name: '300', exact: true })).toHaveCount(2)
+      }
+      await assertCustomReview()
+      await page.goBack()
+      await expect(page).toHaveURL(url => url.pathname === homeUrl)
+      await expect(page.locator('#main-content [data-home-personal-ready="true"]')).toBeVisible()
+      await page.goForward()
+      await assertCustomReview()
+      await testInfo.attach('HOME03-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId, caseId: 'HOME03', stepIds: ['HOME03.01', 'HOME03.02'], locale, viewport: page.viewportSize(), timezone, theme, scenario, identity: 'B', leagueCount: desk.leagueRanks.length, customHref, h2hHref, unavailableRecovery: scenario === 'unavailable', scope: 'Classic non-navigable row; actual H2H navigation tournament6/GW1 and Back; actual custom tournament77 season review with 300 points and Back/Forward; no home H2H polling; unavailable desk recovery. Performance remains unverified.', wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
      } finally {
       await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
       await session.cleanup()
