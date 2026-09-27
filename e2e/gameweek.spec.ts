@@ -377,18 +377,23 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const zh = locale === 'zh-CN'
 			const prefix = zh ? '/zh-CN' : ''
 			const detailRequests: string[] = []
+			const deskRequests: string[] = []
+			page.on('request', request => {
+				const url = new URL(request.url())
+				if (url.pathname === '/api/gameweek/desk') deskRequests.push(url.searchParams.get('eventId') ?? '')
+			})
 			await page.route('**/api/graphql', async route => {
 				const body = route.request().postDataJSON()
 				const explain = /query EventLiveExplainPlayer\b/.test(body.query ?? '')
 				const live = /query PlayerLive\b/.test(body.query ?? '')
 				if (!explain && !live) return route.continue()
-				expect(body.variables).toEqual(explain ? { eventId: 33, elementId: 2 } : { eventId: 33, playerId: 2 })
+				expect(body.variables).toEqual(explain ? { eventId: 32, elementId: 2 } : { eventId: 32, playerId: 2 })
 				detailRequests.push(explain ? 'explain' : 'live')
 				const stats = { minutes: 90, goalsScored: 1, assists: 0, cleanSheets: 1, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 3, bps: 38, totalPoints: 11 }
 				await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: explain ? { eventLiveExplain: { elementId: 2, selectedBy: 10, stats, contributions: [{ identifier: 'minutes', value: 90, points: 2 }, { identifier: 'goals_scored', value: 1, points: 5 }, { identifier: 'clean_sheets', value: 1, points: 1 }, { identifier: 'bonus', value: 3, points: 3 }], player: { id: 2, webName: 'Palmer', team: { id: 1, shortName: 'ARS' } } } } : { playerLive: stats } }) })
 			})
 			await page.setViewportSize({ width, height: 900 })
-			testInfo.annotations.push({ type: 'coverage-case', description: 'J04 actual gameweek journey; comparison steps .07-.09 are inapplicable to match-detail modal; performance unmeasured' })
+			testInfo.annotations.push({ type: 'coverage-case', description: 'J04 historical GW32 selection and player2 modal; no player-comparison coverage inferred; performance unmeasured' })
 			await page.goto(prefix || '/')
 			await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
 			const nav = page.getByRole('navigation').first()
@@ -400,11 +405,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await link.click()
 			await expect(page).toHaveURL(url => url.pathname === href)
 			await page.getByRole('combobox', { name: zh ? '选择轮次' : 'Select gameweek', exact: true }).click()
-			await page.getByRole('option', { name: zh ? '第 33 轮（当前）' : 'Gameweek 33 (Current)', exact: true }).click()
-			await expect(page.getByRole('heading', { name: zh ? 'GW33 概览' : 'GW33 Overview', exact: true })).toBeVisible()
+			await page.getByRole('option', { name: zh ? '第 32 轮' : 'Gameweek 32', exact: true }).click()
+			await expect(page.getByRole('heading', { name: zh ? 'GW32 概览' : 'GW32 Overview', exact: true })).toBeVisible()
 			const dream = page.locator('[aria-labelledby="home-team-of-week-title"]')
 			await expect(dream.locator('li button')).toHaveCount(1)
 			await expect(dream).toContainText('Saka')
+			await expect(dream.locator('#home-team-of-week-title')).toHaveText(zh ? /^GW32\s*梦之队$/ : /^GW32\s*Dream Team$/)
+			await expect(page.locator('#gameweek-jump-input')).toHaveAttribute('aria-busy', 'false')
 			const rows = page.locator('tbody tr')
 			await expect(rows.getByRole('button')).toHaveText(['Saka', 'Palmer'])
 			await expect(rows.nth(0).getByRole('cell').last()).toHaveText('12')
@@ -420,6 +427,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
 			await expect(dialog).toHaveCount(0)
 			await expect(opener).toBeFocused()
+			await expect(page.locator('#gameweek-jump-input')).toHaveValue('32')
+			expect(deskRequests).toEqual(['32'])
 			await page.goBack()
 			await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
 			await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
