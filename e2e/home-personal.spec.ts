@@ -6129,3 +6129,120 @@ for (const variant of [
   })
  })
 }
+
+for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
+ for (const locale of scenario === 'baseline' ? ['en', 'zh-CN'] as const : ['zh-CN'] as const) {
+  for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+   test.describe(`HOME03 planned ${scenario} ${locale} ${width}`, () => {
+    const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+    const theme = scenario === 'baseline' ? 'system' : 'dark'
+    test.use({ viewport: { width, height: 900 }, timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
+    test('SSR remediation binds personal league types and unavailable recovery', async ({ page }, testInfo) => {
+     test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated fixture controls')
+     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+     const session = await createSession({ entryId: 15702 })
+     const zh = locale === 'zh-CN'
+     const homeUrl = zh ? '/zh-CN' : '/en'
+     const homeOperations: string[] = []
+     page.on('request', request => { if (request.url().includes('/api/graphql')) homeOperations.push(request.postData() ?? '') })
+     const variantId = scenario === 'baseline' ? `HOME03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `HOME03.state.${scenario === 'ready' ? '01' : '02'}`
+     try {
+      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+      const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetHomePersonalDesk { __typename }' }) })).json()
+      expect(seed.errors).toBeUndefined()
+      const desk = seed.data.homePersonalDesk
+      desk.rankState = 'READY'
+      desk.leagueRanks.forEach((row: { rankState: string }) => { row.rankState = 'READY' })
+
+	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	const points = {
+		headlineMetric: 'GROSS_POINTS', grossPointsTotal: 75, grossPointsAverage: 75, netPointsTotal: 71,
+		seasonGrossPointsTotal: 300, seasonGrossPointsAverage: 300, seasonNetPointsTotal: 296,
+		nextCursor: null, hasNextPage: false,
+		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
+	}
+	const pageInfo = { hasNextPage: false, endCursor: null }
+	const scope = { ...phase, tournamentId: 77, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
+	const reviewRules = [
+		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: false, pageInfo, edges: [{ cursor: '77', node: { tournamentId: 77, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
+		{ operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 77, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
+		{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: { format: 'POINTS', points } } } },
+		...['POINTS_STANDINGS', 'POINTS_TRAJECTORIES'].map(section => ({ operation: 'GetMyTournamentSeasonReviewPointsSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 77, throughEventId: 4, section, points, h2h: null, knockout: null, pageInfo } } }))
+	]
+
+      const install = async (unavailable: boolean) => {
+       expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', data: { homePersonalDesk: unavailable ? { ...desk, state: 'UNAVAILABLE', leagueRanks: [] } : desk } }, ...reviewRules] }) })).ok).toBe(true)
+      }
+      await install(scenario === 'unavailable')
+      await page.addInitScript(value => localStorage.setItem('theme', value), theme)
+      await addSessionCookie(page, session.cookie)
+      await page.goto(zh ? '/zh-CN' : '/en')
+      expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+      expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+      await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
+      if (scenario === 'unavailable') {
+       await expect(page.locator('#main-content [data-home-personal-ready="unavailable"]')).toBeVisible()
+       await expect(page.getByText(zh ? '球队数据暂时无法加载。' : 'Team data is temporarily unavailable.', { exact: true })).toBeVisible()
+       await expect(page.locator('#main-content [data-home-carousel="personal-league"]')).toHaveCount(0)
+       await install(false)
+       await page.reload()
+      }
+      await expect(page.locator('#main-content [data-home-personal-ready]')).toBeVisible()
+      const carousel = page.locator('#main-content [data-home-carousel="personal-league"]')
+      const classic = carousel.getByRole('tab', { name: zh ? /积分联赛/ : /Classic/ })
+      const h2h = carousel.getByRole('tab', { name: zh ? /对战联赛/ : /H2H/ })
+      await expect(classic).toHaveAttribute('aria-selected', 'true')
+      await expect(carousel.getByText('E2E Classic', { exact: true })).toBeVisible()
+      const custom = carousel.getByRole('link', { name: /E2E League 2/ })
+      const customHref = await custom.getAttribute('href')
+      expect(customHref).toContain('tournamentId=77')
+      await h2h.click()
+      await expect(h2h).toHaveAttribute('aria-selected', 'true')
+      const matchup = carousel.locator('[data-home-h2h-matchup="2071743"]')
+      await expect(matchup.getByText('24', { exact: true })).toBeVisible()
+      await expect(matchup.getByText('43', { exact: true })).toBeVisible()
+      const h2hHref = await carousel.getByRole('link', { name: /E2E H2H/ }).getAttribute('href')
+      expect(h2hHref).toMatch(/\/live\/competitions\/6\?gw=1$/)
+      await classic.click()
+      await expect(classic).toHaveAttribute('aria-selected', 'true')
+      await expect(custom).toBeVisible()
+      await expect(carousel.getByText('E2E Classic', { exact: true }).locator('xpath=ancestor::li[1]').locator('a')).toHaveCount(0)
+      expect(homeOperations.some(operation => operation.includes('tournamentOfficialH2H'))).toBe(false)
+      await h2h.click()
+      await carousel.getByRole('link', { name: /E2E H2H/ }).click()
+      await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '1')
+      const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+      await expect(board).toBeVisible()
+      await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).filter({ visible: true })).toHaveCount(1)
+      await page.goBack()
+      await expect(page).toHaveURL(url => url.pathname === homeUrl)
+      await expect(page.locator('#main-content [data-home-personal-ready="true"]')).toBeVisible()
+      await expect(carousel).toBeVisible()
+      await carousel.getByRole('tab', { name: zh ? /积分联赛/ : /Classic/ }).click()
+      await custom.click()
+      const assertCustomReview = async () => {
+       await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/my-fpl/competitions` && url.searchParams.get('tournamentId') === '77' && url.searchParams.get('view') === null)
+       const ready = page.locator('[data-review-ready="true"]')
+       await expect(ready).toHaveAttribute('data-review-tournament', '77')
+       await expect(ready).toHaveAttribute('data-review-view', 'season')
+       await expect(ready).toHaveAttribute('data-review-gw', '4')
+       await expect(ready).toHaveAttribute('data-review-revision', '1')
+       await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+       await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: /Season Fixture United/ }) }).getByRole('cell', { name: '300', exact: true })).toHaveCount(2)
+      }
+      await assertCustomReview()
+      await page.goBack()
+      await expect(page).toHaveURL(url => url.pathname === homeUrl)
+      await expect(page.locator('#main-content [data-home-personal-ready="true"]')).toBeVisible()
+      await page.goForward()
+      await assertCustomReview()
+      await testInfo.attach('HOME03-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId, caseId: 'HOME03', stepIds: ['HOME03.01', 'HOME03.02'], locale, viewport: page.viewportSize(), timezone, theme, scenario, identity: 'B', leagueCount: desk.leagueRanks.length, customHref, h2hHref, unavailableRecovery: scenario === 'unavailable', scope: 'Classic non-navigable row; actual H2H navigation tournament6/GW1 and Back; actual custom tournament77 season review with 300 points and Back/Forward; no home H2H polling; unavailable desk recovery. Performance remains unverified.', wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+     } finally {
+      await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+      await session.cleanup()
+     }
+    })
+   })
+  }
+ }
+}
