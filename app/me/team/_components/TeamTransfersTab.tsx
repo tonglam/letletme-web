@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { ArrowRight, ChevronDown, ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { formatPlayerValue, type TeamStatsViewModel } from '../_lib/team-stats-model'
 import { TeamGameweekLink } from './TeamGameweekLink'
@@ -218,10 +218,12 @@ function TransferSheet({
 	row,
 	open,
 	onOpenChange,
+	onCloseAutoFocus,
 }: {
 	row: TransferRow | null
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	onCloseAutoFocus: (event: Event) => void
 }) {
 	const t = useTranslations('TeamStats')
 	if (!row) return null
@@ -236,6 +238,7 @@ function TransferSheet({
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent
+				onCloseAutoFocus={onCloseAutoFocus}
 				side="right"
 				className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
 			>
@@ -275,7 +278,7 @@ function TransferRowCard({
 }: {
 	row: TransferRow
 	defaultOpen: boolean
-	onOpenSheet: (row: TransferRow) => void
+	onOpenSheet: (row: TransferRow, trigger: HTMLButtonElement) => void
 }) {
 	const t = useTranslations('TeamStats')
 	const [open, setOpen] = useState(defaultOpen)
@@ -314,7 +317,7 @@ function TransferRowCard({
 				<button
 					type="button"
 					className="flex min-w-0 flex-1 items-center gap-3 text-left hover:bg-muted/30"
-					onClick={() => onOpenSheet(row)}
+					onClick={event => onOpenSheet(row, event.currentTarget)}
 				>
 					<span className="min-w-0 flex-1">
 						<TransferWeekSummary row={row} chipName={chipName} />
@@ -399,6 +402,7 @@ export function TeamTransfersTab({
 	const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
 	const [sheetRow, setSheetRow] = useState<TransferRow | null>(null)
 	const [sheetOpen, setSheetOpen] = useState(false)
+	const sheetTrigger = useRef<HTMLButtonElement | null>(null)
 
 	const summary = useMemo(() => {
 		const withTransfers = rows.filter(r => r.transfers > 0)
@@ -425,7 +429,8 @@ export function TeamTransfersTab({
 	const remaining = Math.max(0, filteredRows.length - visibleCount)
 	const canShowMore = remaining > 0
 
-	const openSheet = (row: TransferRow) => {
+	const openSheet = (row: TransferRow, trigger: HTMLButtonElement) => {
+		sheetTrigger.current = trigger
 		setSheetRow(row)
 		setSheetOpen(true)
 	}
@@ -576,6 +581,12 @@ export function TeamTransfersTab({
 			)}
 
 			<TransferSheet
+				onCloseAutoFocus={event => {
+					if (sheetTrigger.current?.isConnected) {
+						event.preventDefault()
+						sheetTrigger.current.focus()
+					}
+				}}
 				row={sheetRow}
 				open={sheetOpen}
 				onOpenChange={open => {

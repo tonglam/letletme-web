@@ -3207,10 +3207,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
+test.describe('J10 planned baseline contexts', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
- test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }) => {
+ test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Shared manager fixture requires the dedicated single-worker SSR suite')
+ await page.addInitScript(() => localStorage.setItem('theme', 'system'))
  const metrics: Array<{ metricName: string }> = []
  await page.route('**/api/vitals', async route => {
   metrics.push(...(route.request().postDataJSON().samples ?? []))
@@ -3272,13 +3275,29 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(transfers.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
   await transfers.locator('button[aria-expanded]').click()
   await expect(transfers.getByText('Incoming 1-1', { exact: true })).toBeVisible()
-  for (const chip of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit'])) {
-   await transfers.getByRole('button').filter({ hasText: chip }).click()
+  for (const [index, chip] of (zh ? ['WC', 'FH'] : ['Wildcard', 'Free Hit']).map((chip, index) => [index, chip] as const)) {
+   const opener = transfers.getByRole('button').filter({ hasText: chip })
+   await expect(opener).toHaveCount(1)
+   const overflowBefore = await page.locator('body').evaluate(body => body.style.overflow)
+   await opener.click()
    const dialog = page.getByRole('dialog')
    await expect(dialog).toBeVisible()
    await expect(dialog.getByRole('heading')).toContainText(chip)
+   const eventId = index + 2
+   await expect(dialog.locator('li')).toHaveCount(2)
+   for (const move of [1, 2]) {
+    const row = dialog.locator('li').filter({ hasText: `Incoming ${eventId}-${move}` })
+    await expect(row).toHaveCount(1)
+    await expect(row.getByText(`Incoming ${eventId}-${move}`, { exact: true })).toBeVisible()
+    await expect(row.getByText(`Outgoing ${eventId}-${move}`, { exact: true })).toBeVisible()
+    await expect(row.getByText('ARS', { exact: true })).toBeVisible()
+    await expect(row.getByText('CHE', { exact: true })).toBeVisible()
+   }
    await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
    await expect(dialog).toHaveCount(0)
+   await expect(opener).toBeFocused()
+   await expect(page.locator('body')).not.toHaveAttribute('data-scroll-locked')
+   await expect.poll(() => page.locator('body').evaluate(body => body.style.overflow)).toBe(overflowBefore)
   }
   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
   await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(0)
@@ -3353,6 +3372,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
   await openSnapshotDetail('Review Player 12 GW3', 1)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await testInfo.attach('J10-planned-baseline', { body: JSON.stringify({
+   variantId: `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+   locale, viewport: page.viewportSize(), identity: 'B', theme: 'system', timezone: 'Australia/Perth',
+   scenario: 'baseline', entryId: session.entryId, finalGw: 3, finalRevision: '103',
+   functionalAssertions: 'Homepage menu, season sections, transfer expansion, WC/FH sheets, historical GW loading and revision identity, tabs and snapshot modals',
+   wholeJourneyPass: false, performanceStatus: 'NOT_RUN', readyMs: null,
+   missing: ['cold/warm repetitions', 'event-to-paint', 'LCP/INP/CLS'],
+   notApplicable: 'FINAL snapshot has no direct live handoff; PENDING/PROVISIONAL journeys require separate evidence'
+  }), contentType: 'application/json' })
  } finally {
   releaseHistory?.()
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
@@ -3362,6 +3393,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
  }
 }
+
+})
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
