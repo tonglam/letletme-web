@@ -36,7 +36,7 @@ const ZERO_TIME_LEFT: TimeLeft = {
 	seconds: 0
 }
 
-function formatLocalDeadline(value: string, locale: string): string {
+function formatDeadline(value: string, locale: string, timeZone?: string): string {
 	const timestamp = Date.parse(value)
 	if (!Number.isFinite(timestamp)) return ''
 
@@ -47,7 +47,8 @@ function formatLocalDeadline(value: string, locale: string): string {
 		year: 'numeric',
 		hour: '2-digit',
 		minute: '2-digit',
-		timeZoneName: 'short'
+		timeZoneName: 'short',
+		timeZone
 	}).format(new Date(timestamp))
 }
 
@@ -80,7 +81,9 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 			initialTimeLeft ?? ZERO_TIME_LEFT
 		)
 		const [deadlinePassed, setDeadlinePassed] = useState(false)
-		const [formattedDeadline, setFormattedDeadline] = useState('')
+		const [formattedDeadline, setFormattedDeadline] = useState(() =>
+			deadlineTime ? formatDeadline(deadlineTime, locale, 'UTC') : ''
+		)
 		const dark = variant === 'dark'
 		const expiredInfo = expiredTone === 'info'
 
@@ -99,7 +102,7 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 			}
 
 			update()
-			setFormattedDeadline(formatLocalDeadline(deadlineTime!, locale))
+			setFormattedDeadline(formatDeadline(deadlineTime!, locale))
 			const timer = window.setInterval(update, 1_000)
 			return () => window.clearInterval(timer)
 		}, [deadlineMs, deadlineTime, hasDeadline, locale])
