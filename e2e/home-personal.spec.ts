@@ -5985,3 +5985,86 @@ test.describe('J10 planned state contexts', () => {
   })
  }
 })
+
+
+for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
+ for (const locale of scenario === 'baseline' ? ['en', 'zh-CN'] as const : ['zh-CN'] as const) {
+  for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+   test.describe(`HOME03 planned ${scenario} ${locale} ${width}`, () => {
+    const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+    const theme = scenario === 'baseline' ? 'system' : 'dark'
+    test.use({ viewport: { width, height: 900 }, timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
+    test('SSR remediation binds personal league types and unavailable recovery', async ({ page }, testInfo) => {
+     test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated fixture controls')
+     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+     const session = await createSession({ entryId: 15702 })
+     const zh = locale === 'zh-CN'
+     const homeUrl = zh ? '/zh-CN' : '/en'
+     const homeOperations: string[] = []
+     page.on('request', request => { if (request.url().includes('/api/graphql')) homeOperations.push(request.postData() ?? '') })
+     const variantId = scenario === 'baseline' ? `HOME03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `HOME03.state.${scenario === 'ready' ? '01' : '02'}`
+     try {
+      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+      const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetHomePersonalDesk { __typename }' }) })).json()
+      expect(seed.errors).toBeUndefined()
+      const desk = seed.data.homePersonalDesk
+      desk.rankState = 'READY'
+      desk.leagueRanks.forEach((row: { rankState: string }) => { row.rankState = 'READY' })
+      const install = async (unavailable: boolean) => {
+       expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomePersonalDesk', data: { homePersonalDesk: unavailable ? { ...desk, state: 'UNAVAILABLE', leagueRanks: [] } : desk } }] }) })).ok).toBe(true)
+      }
+      await install(scenario === 'unavailable')
+      await page.addInitScript(value => localStorage.setItem('theme', value), theme)
+      await addSessionCookie(page, session.cookie)
+      await page.goto(zh ? '/zh-CN' : '/en')
+      expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+      expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+      await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
+      if (scenario === 'unavailable') {
+       await expect(page.locator('#main-content [data-home-personal-ready="unavailable"]')).toBeVisible()
+       await expect(page.getByText(zh ? '球队数据暂时无法加载。' : 'Team data is temporarily unavailable.', { exact: true })).toBeVisible()
+       await expect(page.locator('#main-content [data-home-carousel="personal-league"]')).toHaveCount(0)
+       await install(false)
+       await page.reload()
+      }
+      await expect(page.locator('#main-content [data-home-personal-ready]')).toBeVisible()
+      const carousel = page.locator('#main-content [data-home-carousel="personal-league"]')
+      const classic = carousel.getByRole('tab', { name: zh ? /积分联赛/ : /Classic/ })
+      const h2h = carousel.getByRole('tab', { name: zh ? /对战联赛/ : /H2H/ })
+      await expect(classic).toHaveAttribute('aria-selected', 'true')
+      await expect(carousel.getByText('E2E Classic', { exact: true })).toBeVisible()
+      const custom = carousel.getByRole('link', { name: /E2E League 2/ })
+      const customHref = await custom.getAttribute('href')
+      expect(customHref).toContain('tournamentId=77')
+      await h2h.click()
+      await expect(h2h).toHaveAttribute('aria-selected', 'true')
+      const matchup = carousel.locator('[data-home-h2h-matchup="2071743"]')
+      await expect(matchup.getByText('24', { exact: true })).toBeVisible()
+      await expect(matchup.getByText('43', { exact: true })).toBeVisible()
+      const h2hHref = await carousel.getByRole('link', { name: /E2E H2H/ }).getAttribute('href')
+      expect(h2hHref).toMatch(/\/live\/competitions\/6\?gw=1$/)
+      await classic.click()
+      await expect(classic).toHaveAttribute('aria-selected', 'true')
+      await expect(custom).toBeVisible()
+      await expect(carousel.getByText('E2E Classic', { exact: true }).locator('xpath=ancestor::li[1]').locator('a')).toHaveCount(0)
+      expect(homeOperations.some(operation => operation.includes('tournamentOfficialH2H'))).toBe(false)
+      await h2h.click()
+      await carousel.getByRole('link', { name: /E2E H2H/ }).click()
+      await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '1')
+      const board = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="1"]')
+      await expect(board).toBeVisible()
+      await expect(board.getByRole('link', { name: 'E2E United Test Manager' }).filter({ visible: true })).toHaveCount(1)
+      await page.goBack()
+      await expect(page).toHaveURL(url => url.pathname === homeUrl)
+      await expect(page.locator('#main-content [data-home-personal-ready="true"]')).toBeVisible()
+      await expect(carousel).toBeVisible()
+      await testInfo.attach('HOME03-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId, caseId: 'HOME03', stepIds: ['HOME03.01', 'HOME03.02'], locale, viewport: page.viewportSize(), timezone, theme, scenario, identity: 'B', leagueCount: desk.leagueRanks.length, customHref, h2hHref, unavailableRecovery: scenario === 'unavailable', scope: 'Classic non-navigable row, custom href, actual H2H navigation to tournament 6 GW1 and browser Back to ready homepage, no home H2H polling; unavailable desk recovery. Custom destination and performance remain unverified.', wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+     } finally {
+      await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+      await session.cleanup()
+     }
+    })
+   })
+  }
+ }
+}
