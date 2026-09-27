@@ -1102,25 +1102,56 @@ test('repeated shell bootstrap executes theme actions only once', async ({ page 
  await expect(summary.locator('..')).not.toHaveAttribute('open', '')
 })
 
-for (const width of [1440, 390]) {
- test(`J18 shell preferences and cancelled feedback survive navigation ${width}`, async ({ page }) => {
-  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture and preference changes only')
+for (const scenario of ['baseline', 'ready'] as const) {
+ for (const locale of scenario === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
+  for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+   const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+   const theme = scenario === 'baseline' ? 'system' : 'dark'
+   test.describe(`J18 planned ${scenario} ${locale} ${width}`, () => {
+    test.use({ timezoneId: timezone, colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+ test(`J18 shell preferences and cancelled feedback survive navigation ${width}`, async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Requires serial isolated fixture controls')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetPriceChangeBoard { priceChangeBoard { revision } }' }) })).json()
+  expect(seed.errors).toBeUndefined()
+  seed.data.priceChangeBoard.latestEvent = { outcome: 'NO_CHANGE', observedAt: '2026-08-03T09:40:00.000Z', deadline: '2026-08-03T09:00:00.000Z', changeDate: '2026-08-03', changes: [] }
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
+  try {
   await page.setViewportSize({ width, height: 900 })
   const submissions: string[] = []
   await page.route('**/api/bug-reports', async route => { submissions.push(route.request().method()); await route.abort() })
-  await page.goto('/')
-  await expect(page).toHaveURL(url => url.pathname === '/')
+  await page.addInitScript(preference => { if (localStorage.getItem('theme') === null) localStorage.setItem('theme', preference) }, theme)
+  let marketReady = false
+  await page.route('**/api/vitals', async route => {
+   const body = route.request().postDataJSON()
+   if (body.samples?.some((sample: { metricName: string }) => sample.metricName === 'MARKET_CONTENT_READY')) marketReady = true
+   await route.fulfill({ status: 204, body: '' })
+  })
+  await page.goto(locale === 'en' ? '/' : '/zh-CN')
+  await expect(page).toHaveURL(url => url.pathname === (locale === 'en' ? '/' : '/zh-CN'))
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+  await expect(page.locator('html')).toHaveClass(scenario === 'baseline' ? /\blight\b/ : /\bdark\b/)
   await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
   const homeMatches = page.locator('[data-home-matches]')
   await expect(homeMatches).toHaveAttribute('data-home-fixtures-event', '33')
   await expect(homeMatches.getByText('GW33', { exact: true })).toBeVisible()
   await expect(homeMatches.locator('[aria-busy="true"]')).toHaveCount(0)
-  await expect(page.locator('[data-countdown-card="dark"]')).toContainText('Gameweek 34')
+  if (locale === 'en') await expect(page.locator('[data-countdown-card="dark"]')).toContainText('Gameweek 34')
+  if (locale === 'zh-CN') {
+   await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
+   await page.getByRole('radio', { name: 'English', exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === '/' || url.pathname === '/en')
+   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  }
   await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
   await page.getByRole('radio', { name: '简体中文', exact: true }).click()
   await expect(page).toHaveURL(/\/zh-CN$/)
   await page.getByRole('contentinfo').getByRole('link', { name: '市场', exact: true }).click()
   await expect(page).toHaveURL(/\/zh-CN\/explore\/market$/)
+  await expect.poll(() => marketReady).toBe(true)
+  await expect(page.locator('[data-price-change-revision]')).toHaveAttribute('data-price-change-revision', 'price-changes-7')
+  await expect(page.locator('#market-glance-share')).toBeVisible()
   const availability = page.getByTestId('market-availability-disclosure')
   await availability.locator('summary').click()
   const palmer = availability.getByRole('link', { name: 'Palmer', exact: true })
@@ -1153,5 +1184,12 @@ for (const width of [1440, 390]) {
   await expect(page).toHaveURL(/\/zh-CN$/)
   await expect(page.locator('html')).toHaveClass(/dark/)
   expect(submissions).toEqual([])
+  await testInfo.attach('J18-planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: scenario === 'baseline' ? `J18.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : 'J18.state.01', initialLocale: locale, finalLocale: 'zh-CN', initialTheme: theme, finalTheme: 'dark', timezone, viewport: page.viewportSize(), playerId: 2, marketRevision: 'price-changes-7', marketReadyObserved: marketReady, feedbackSubmissions: submissions, functionalStatus: 'PASS', wholeVariantComplete: false, readyMs: null, eventToPaintMs: null, performanceStatus: 'NOT_RUN' }) })
+  } finally {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+  }
  })
+   })
+  }
+ }
 }
