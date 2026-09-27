@@ -5812,6 +5812,31 @@ test.describe('J10 planned state contexts', () => {
     await expect(ready).toHaveAttribute('data-manager-ready', 'true')
     await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
     await expect(ready).toHaveAttribute('data-manager-revision', '103')
+    const transfers = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '转会历史', exact: true }) })
+    await expect(transfers.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+    if (scenario === 'no-transfers') {
+     await expect(transfers.getByText(zhMessages.TeamStats.transferFilterEmpty, { exact: true })).toBeVisible()
+     await transfers.getByRole('button', { name: zhMessages.TeamStats.transferShowAllGameweeks, exact: true }).click()
+     await expect(transfers.getByRole('button', { name: zhMessages.TeamStats.transferFilterAll, exact: true })).toHaveAttribute('aria-pressed', 'true')
+     await expect(transfers.getByText(zhMessages.TeamStats.noTransfer, { exact: true })).toBeVisible()
+     await expect(transfers.locator('button[aria-expanded]')).toHaveCount(0)
+    } else if (scenario === 'WC' || scenario === 'FH') {
+     const opener = transfers.getByRole('button').filter({ hasText: scenario })
+     await expect(opener).toHaveCount(1)
+     await opener.click()
+     const dialog = page.getByRole('dialog')
+     await expect(dialog.locator('li')).toHaveCount(2)
+     for (const move of [1, 2]) {
+      await expect(dialog.getByText(`Incoming 3-${move}`, { exact: true })).toBeVisible()
+      await expect(dialog.getByText(`Outgoing 3-${move}`, { exact: true })).toBeVisible()
+     }
+     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+     await expect(dialog).toHaveCount(0)
+     await expect(opener).toBeFocused()
+    } else {
+     await expect(transfers.getByText('Incoming 3-1', { exact: true })).toBeVisible()
+     await expect(transfers.getByText('Outgoing 3-1', { exact: true })).toBeVisible()
+    }
     const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '轮次历史', exact: true }) })
     await history.getByRole('button', { name: '打开第 3 轮', exact: true }).click()
     await expect(ready).toHaveAttribute('data-manager-view', 'gameweek')
@@ -5822,8 +5847,8 @@ test.describe('J10 planned state contexts', () => {
     await expect(scoreboard.getByText(`Saka (${scenario === 'TC' ? 30 : 20})`, { exact: true })).toBeVisible()
     const chipKey = ({ ready: 'chipNone', WC: 'wildcard', FH: 'freeHit', BB: 'benchBoost', TC: 'tripleCaptain', 'no-transfers': 'chipNone' } as const)[scenario]
     await expect(scoreboard.getByText(zhMessages.TeamStats[chipKey], { exact: true })).toBeVisible()
-    const transferMetric = scoreboard.locator('div').filter({ has: page.getByText(zhMessages.TeamStats.gameweekTransfers, { exact: true }) }).filter({ has: page.locator('p') }).last()
-    await expect(transferMetric).toContainText(String(scenario === 'no-transfers' ? 0 : 2))
+    const transferMetric = scoreboard.getByText(zhMessages.TeamStats.gameweekTransfers, { exact: true }).locator('..').locator('p').nth(1)
+    await expect(transferMetric).toHaveText(String(scenario === 'no-transfers' ? 0 : 2))
     await expect(page.locator('html')).toHaveClass(/dark/)
     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
     await testInfo.attach('J10-planned-state', { body: JSON.stringify({ variantId: `J10.state.0${managerStateScenarios.indexOf(scenario) + 1}`, scenario, identity: 'B', locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', eventId: 3, revision: '103', expectedPoints: expected, functionalScope: 'Homepage menu to season review and selected GW3 scoreboard; fixture multiplier arithmetic', wholeJourneyPass: false, performanceStatus: 'NOT_RUN', readyMs: null }), contentType: 'application/json' })
