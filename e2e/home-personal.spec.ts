@@ -6246,3 +6246,68 @@ for (const scenario of ['baseline', 'ready', 'unavailable'] as const) {
   }
  }
 }
+
+
+test.describe('LP02 planned chip contexts', () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ for (const chip of ['3xc', 'bboost'] as const) {
+  test(`SSR remediation LP02 ${chip} keeps bound identity and raw detail scores`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture only')
+   const session = await createSession({ entryId: 123 })
+   const variantId = chip === '3xc' ? 'LP02.state.03' : 'LP02.state.02'
+   const expectedTeamPoints = chip === '3xc' ? 28 : 26
+   let chipReads = 0
+   try {
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.route('**/api/graphql', async route => {
+     const request = route.request().postDataJSON() as { query?: string }
+     if (!request.query?.includes('GetLiveCalcPoints')) { await route.continue(); return }
+     const response = await route.fetch()
+     const body = await response.json()
+     const live = body.data.calcLivePointsByEntry
+     expect(live.entry).toBe(session.entryId)
+     expect(live.event).toBe(33)
+     live.chip = chip
+     live.score.eventPoints = expectedTeamPoints
+     live.score.netEventPoints = expectedTeamPoints
+     for (const pick of live.pickList) {
+      pick.multiplier = pick.element === 1 ? (chip === '3xc' ? 3 : 2) : (pick.position <= 11 || chip === 'bboost' ? 1 : 0)
+      pick.pickActive = pick.position <= 11 || chip === 'bboost'
+     }
+     chipReads++
+     await route.fulfill({ response, json: body })
+    })
+    await page.goto(`/zh-CN/live/points/${session.entryId}?gw=33`)
+    const auth = await page.request.get('/api/auth/get-session')
+    const identity = await auth.json()
+    expect(identity.user.id).toBe(session.userId)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await page.getByRole('button', { name: '刷新', exact: true }).click()
+    await expect.poll(() => chipReads).toBeGreaterThan(0)
+    const ready = page.locator('[data-live-entry]')
+    await expect(ready).toHaveAttribute('data-live-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-live-gw', '33')
+    const pitch = page.getByRole('region', { name: /阵型/ })
+    await expect(pitch.getByRole('button', { name: /查看 Player/ })).toHaveCount(15)
+    await expect(pitch.getByText(chip === '3xc' ? 'TC' : 'BB', { exact: true }).first()).toBeVisible()
+    await expect(pitch.getByText(String(expectedTeamPoints), { exact: true }).first()).toBeVisible()
+    for (const [id, rawPoints] of [[1, 6], [15, 1]] as const) {
+     const opener = pitch.getByRole('button', { name: `查看 Player ${id} 的详情`, exact: true })
+     await opener.click()
+     const dialog = page.getByRole('dialog')
+     await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+     await expect(dialog.getByLabel(`${rawPoints} 得分`, { exact: true })).toBeVisible()
+     await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+     await expect(dialog.getByText('估算', { exact: true })).toHaveCount(0)
+     await expect(dialog.getByText(`+${rawPoints}`, { exact: true }).last()).toBeVisible()
+     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+     await expect(dialog).toHaveCount(0)
+     await expect(opener).toBeFocused()
+    }
+    await testInfo.attach('LP02-chip-context', { contentType: 'application/json', body: JSON.stringify({ variantId, identity: 'B', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', entryId: session.entryId, eventId: 33, chip, expectedTeamPoints, rawCaptainPoints: 6, rawBenchPoints: 1, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  })
+ }
+})
