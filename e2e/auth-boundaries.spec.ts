@@ -4,6 +4,33 @@ import postgres from 'postgres'
 import en from '../messages/en.json'
 import zh from '../messages/zh-CN.json'
 
+// Baseline variants require system theme in Perth. Nested state suites retain
+// their explicit dark/UTC overrides; evidence records the effective context.
+test.use({ colorScheme: 'light', timezoneId: 'Australia/Perth' })
+test.beforeEach(async ({ page }) => {
+ await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+})
+test.afterEach(async ({ page, timezoneId, colorScheme }, testInfo) => {
+ if (testInfo.status !== 'passed') return
+ const actual = await page.evaluate(() => ({
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  width: innerWidth,
+  height: innerHeight,
+  dark: matchMedia('(prefers-color-scheme: dark)').matches,
+  theme: localStorage.getItem('theme'),
+  url: location.href
+ }))
+ expect(actual.timezone).toBe(timezoneId)
+ expect(actual.dark).toBe(colorScheme === 'dark')
+ expect(actual.theme).toBe('system')
+ expect({ width: actual.width, height: actual.height }).toEqual(page.viewportSize())
+ await testInfo.attach('auth-effective-context', {
+  contentType: 'application/json',
+  body: JSON.stringify({ ...actual, persona: 'A', environment: 'isolated-fixture',
+   performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false })
+ })
+})
+
 // AUTH03: anonymous fixture-only token states and redirect boundaries.
 // No real token, email delivery, or account mutation is used here.
 for (const locale of ['en', 'zh-CN'] as const) {
