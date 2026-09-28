@@ -63,20 +63,17 @@ function LivePointsTransferContent({
 			GET_ENTRY_TRANSFER_HISTORY,
 			{ entryId },
 			{ signal: controller.signal, cache: 'no-store' }
-		).then(
-			data => {
-				if (!controller.signal.aborted) {
-					setMoves(
-						data.entryTransferHistory.find(week => week.eventId === eventId)
-							?.transfers ?? []
-					)
-				}
-			},
-			() => {
-				if (controller.signal.aborted) return
-				setFailed(true)
+		).then(data => {
+			if (!controller.signal.aborted) {
+				setMoves(
+					data.entryTransferHistory.find(week => week.eventId === eventId)
+						?.transfers ?? []
+				)
 			}
-		)
+		}).catch(() => {
+			if (controller.signal.aborted) return
+			setFailed(true)
+		})
 		return () => controller.abort()
 	}, [entryId, eventId, retry, initialMoves, pendingSeed])
 
