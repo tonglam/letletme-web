@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 import { AlertCircle, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
-import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ManagerReviewInsights } from './_components/ManagerReviewInsights'
 import { TeamSeasonCharts } from './_components/TeamSeasonCharts'
 import { TeamSeasonOverall } from './_components/TeamSeasonOverall'
@@ -42,15 +42,17 @@ import {
 	type TeamStatsPageView
 } from './_lib/team-stats-url'
 
-const TeamGameweekOverall = lazy(() =>
-	import('./_components/TeamGameweekOverall').then(module => ({ default: module.TeamGameweekOverall }))
-)
-const TeamSquadSection = lazy(() =>
-	import('./_components/TeamSquadSection').then(module => ({ default: module.TeamSquadSection }))
-)
-const TeamSquadPitch = lazy(() =>
-	import('./_components/TeamSquadPitch').then(module => ({ default: module.TeamSquadPitch }))
-)
+const loadGameweekOverall = () => import('./_components/TeamGameweekOverall').then(module => ({ default: module.TeamGameweekOverall }))
+const loadSquadSection = () => import('./_components/TeamSquadSection').then(module => ({ default: module.TeamSquadSection }))
+const loadSquadPitch = () => import('./_components/TeamSquadPitch').then(module => ({ default: module.TeamSquadPitch }))
+const TeamGameweekOverall = lazy(loadGameweekOverall)
+const TeamSquadSection = lazy(loadSquadSection)
+const TeamSquadPitch = lazy(loadSquadPitch)
+
+function GameweekContentReady({ onReady }: { onReady: () => void }) {
+ useEffect(onReady, [onReady])
+ return null
+}
 
 interface TeamStatsClientProps {
 	entryId: number
@@ -92,6 +94,15 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		() => parseTeamStatsView(searchParams.get('view')),
 		[searchParams]
 	)
+
+ const [gameweekContentReady, setGameweekContentReady] = useState(false)
+ const markGameweekContentReady = useCallback(() => setGameweekContentReady(true), [])
+ useEffect(() => {
+  if (view !== 'gameweek') return
+  // Start UI downloads independently of the historical data request.
+  // React.lazy owns surfacing a failed import to the existing error boundary.
+  void Promise.all([loadGameweekOverall(), loadSquadSection(), loadSquadPitch()]).catch(() => {})
+ }, [view])
 
 	const {
 		currentGameweek,
@@ -185,7 +196,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	const managerReady = Boolean(!isLoading && !error && readySnapshot?.revision &&
 		readySnapshot.eventId === readyEvent && managerReview?.entry?.id === props.entryId &&
 		(view === 'gameweek'
-			? gameweekState === 'READY' && teamStats?.eventId === selectedGameweek && teamStats.reviewSnapshot?.entryId === props.entryId
+			? gameweekContentReady && gameweekState === 'READY' && teamStats?.eventId === selectedGameweek && teamStats.reviewSnapshot?.entryId === props.entryId
 			: reviewState === 'READY' && (pastSeasonsState === 'READY' || pastSeasonsState === 'EMPTY') && seasonOverall && seasonLogs && !isTransfersLoading))
 
 	return (
@@ -226,6 +237,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 						onActiveGameweekChange={handleActiveGameweekChange}
 					>
 						<TeamStatsViews
+       onGameweekContentReady={markGameweekContentReady}
 							view={view}
 							onNavigateSeason={() =>
 								replaceQuery({
@@ -271,6 +283,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 }
 
 interface TeamStatsViewsProps {
+ onGameweekContentReady: () => void
 	view: TeamStatsPageView
 	onNavigateSeason: () => void
 	selectedGameweek: number
@@ -295,6 +308,7 @@ interface TeamStatsViewsProps {
 }
 
 function TeamStatsViews({
+ onGameweekContentReady,
 	view,
 	onNavigateSeason,
 	selectedGameweek,
@@ -519,11 +533,12 @@ function TeamStatsViews({
 					)}
 
 					{teamStats ? (
-						<>
+						<Suspense fallback={<Card className="p-6 shadow-sm" aria-busy="true" role="status">{t('loading')}</Card>}>
 							<TeamSquadPitch stats={teamStats} />
 							<TeamGameweekOverall stats={teamStats} />
 							<TeamSquadSection picks={teamStats.eventPicks} />
-						</>
+       <GameweekContentReady onReady={onGameweekContentReady} />
+						</Suspense>
 					) : (
 						<Card
 							className="p-6 shadow-sm"
