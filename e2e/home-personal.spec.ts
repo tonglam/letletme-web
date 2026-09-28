@@ -10,6 +10,68 @@ import enMessages from '../messages/en.json'
 import zhMessages from '../messages/zh-CN.json'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
+test.describe('HOME04 planned fixture states', () => {
+ test.use({ viewport: { width: 390, height: 900 }, colorScheme: 'dark', timezoneId: 'UTC' })
+ for (const [index, scenario] of [[0, 'DGW'], [1, 'BGW'], [2, 'settled']] as const) {
+  test(`SSR remediation HOME04 planned ${scenario} dates and round boundaries`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture controls only')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const teams = [{ id: 1, name: 'Arsenal', shortName: 'ARS' }, { id: 2, name: 'Chelsea', shortName: 'CHE' }, { id: 3, name: 'Everton', shortName: 'EVE' }]
+   const fixtures = scenario === 'BGW' ? [] : [0, 1].map(day => ({ id: 3401 + day, code: 3401 + day, event: { id: 34, name: 'Gameweek 34' }, kickoffTime: `2026-08-${day ? '10' : '09'}T12:00:00.000Z`, finished: scenario === 'settled', started: scenario === 'settled', homeTeam: teams[0], awayTeam: teams[day + 1], homeScore: scenario === 'settled' ? day + 2 : null, awayScore: scenario === 'settled' ? day : null, homeTeamDifficulty: 2, awayTeamDifficulty: 3 }))
+   const requests: number[] = []
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomeEventFixtures', variables: { eventId: 34 }, data: { coreEventContext: { season: '2627', revision: `home04-${scenario}`, sourceCheckedAt: '2026-08-13T09:40:00.000Z', currentEventId: 33 }, eventFixtures: fixtures } }] }) })).ok).toBe(true)
+    await page.goto('/zh-CN')
+    page.on('request', request => { const url = new URL(request.url()); if (url.pathname === '/api/home/fixtures') requests.push(Number(url.searchParams.get('eventId'))) })
+    const matches = page.locator('#main-content [data-home-matches]')
+    const previous = matches.getByRole('button', { name: '上一轮', exact: true })
+    const next = matches.getByRole('button', { name: '下一轮', exact: true })
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await next.click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const tabs = matches.getByRole('tab')
+    if (scenario === 'BGW') {
+     await expect(tabs).toHaveCount(0)
+     await expect(matches.getByText('第 34 轮暂无比赛安排。', { exact: true })).toBeVisible()
+     await expect(matches.getByRole('tabpanel')).toHaveCount(0)
+    } else {
+     await expect(tabs).toHaveCount(2)
+     for (const day of [0, 1]) {
+      await tabs.nth(day).click()
+      await expect(tabs.nth(day)).toHaveAttribute('aria-selected', 'true')
+      const panel = matches.getByRole('tabpanel')
+      await expect(panel).toHaveAttribute('id', `home-fixture-panel-2026-08-${day ? '10' : '09'}`)
+      await expect(panel).toContainText('ARS')
+      await expect(panel).toContainText(day ? 'EVE' : 'CHE')
+      await expect(panel).not.toContainText(day ? 'CHE' : 'EVE')
+      if (scenario === 'settled') await expect(panel.getByText(day ? '3 - 1' : '2 - 0', { exact: true })).toBeVisible()
+     }
+    }
+    expect(requests).toEqual([34])
+    for (let event = 33; event >= 1; event--) {
+     await previous.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+    }
+    await expect(previous).toBeDisabled()
+    for (let event = 2; event <= 38; event++) {
+     await next.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+    }
+    await expect(next).toBeDisabled()
+    expect(requests.every(event => event >= 1 && event <= 38)).toBe(true)
+    expect(requests.filter(event => event === 34)).toHaveLength(1)
+    expect(requests.filter(event => event === 33)).toHaveLength(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await testInfo.attach('home04-planned-state', { contentType: 'application/json', body: JSON.stringify({ variantId: `HOME04.state.0${index + 1}`, scenario, identity: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', fixtureCount: fixtures.length, requests, functionalStatus: 'PASS', readyMs: null, performanceStatus: 'N/A', scope: 'Isolated scenario assertions only; not production performance' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+})
+
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
 
 async function createSession(
