@@ -87,3 +87,53 @@ test('MKT03.state.03 partial availability retains rows and retries the missing p
   await expect(board.locator('li')).toHaveCount(4)
   await testInfo.attach('planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MKT03.state.03', persona: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', scenario: 'partial', calls, scope: 'Partial page failure retains main ownership list and distinguishes incomplete search from no matches; explicit retry completes remaining page, clearing restores six rows without duplicates.', readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
 })
+
+
+for (const empty of [true]) test(`MKT03.state.${empty ? '02' : '01'} ownership and availability ${empty ? 'empty' : 'ready'}`, async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated market cache control')
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+  const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetMarketPulseSummary { __typename }' }) })).json()
+  if (empty) Object.assign(seed.data.marketPulse, { mostSelected: [], availabilityUpdateCount: 0, availabilityHighlights: [], availabilityUpdates: [] })
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  try {
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMarketPulseSummary', data: seed.data }] }) })).ok).toBe(true)
+    await page.goto('/zh-CN/explore/market')
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    const board = page.locator('#market-most-selected-share')
+    const options = ['ALL', 'GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD']
+    expect(await board.locator('[data-market-position-filter]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-market-position-filter')).sort())).toEqual([...options].sort())
+    for (const option of options) {
+      const button = board.locator(`[data-market-position-filter="${option}"]`)
+      await button.click()
+      await expect(button).toHaveAttribute('aria-pressed', 'true')
+      await expect(board.locator('li')).toHaveCount(empty ? 0 : option === 'ALL' ? 4 : 1)
+      if (empty) await expect(board.getByRole('status')).toHaveText('当前周期暂无数据。')
+      else if (option !== 'ALL') await expect(board.locator('li')).toContainText(`Market ${option}`)
+    }
+    await board.locator('[data-market-position-filter="ALL"]').click()
+    const disclosure = page.getByTestId('market-availability-disclosure')
+    if (empty) {
+      await expect(page.locator('#market-squad-status-share')).toHaveCount(0)
+      await expect(disclosure).toHaveCount(0)
+      await expect(page.locator('#market-availability-search')).toHaveCount(0)
+    } else {
+      await disclosure.locator('summary').click()
+      await expect(disclosure.locator('li')).toHaveCount(6)
+      await page.locator('#market-availability-search').fill('NoSuchFixturePlayer')
+      await expect(page.locator('#market-availability-search-status')).toHaveText('没有匹配的出场状态更新。')
+      await expect(disclosure.locator('li')).toHaveCount(0)
+      await disclosure.getByRole('button', { name: '清除球员搜索', exact: true }).click()
+      await expect(disclosure.locator('li')).toHaveCount(6)
+      await disclosure.locator('summary').click()
+      await expect(disclosure).not.toHaveAttribute('open', '')
+      await expect(board.locator('li')).toHaveCount(4)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+    await testInfo.attach('planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `MKT03.state.${empty ? '02' : '01'}`, persona: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', scenario: empty ? 'empty' : 'ready', options, pageErrors: errors, scope: empty ? 'Authoritative empty summary; every position remains empty; availability section, disclosure and search absent by hasAvailabilityEvidence condition.' : 'Exact position option set; correct rows; availability expansion, empty search, clear and collapse preserve main list.', readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
+  } finally {
+    expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+  }
+})
