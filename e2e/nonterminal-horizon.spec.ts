@@ -199,3 +199,39 @@ for (const variant of deadlineContexts) {
   })
  })
 }
+
+
+for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+ const variantId = `FIX03.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`
+ test.describe(`FIX03 baseline ${variantId}`, () => {
+  test.use({ locale, viewport: { width, height: 900 }, timezoneId: 'Australia/Perth', colorScheme: 'light' })
+  test('normal horizon changes commit exact columns and reuse completed windows', async ({ page, context }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture only')
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+   expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+   await control([{ operation: 'GetCoreEventContext', data: { coreEventContext: { season: '2627', revision: 'horizon-baseline30', sourceCheckedAt: '2026-08-13T09:40:00.000Z', currentEventId: 30, nextEventId: 31, latestFinishedEventId: 29, nextDeadlineTime: '2026-08-14T17:30:00.000Z' } } }])
+   const requests: string[] = []
+   page.on('request', request => { if (new URL(request.url()).pathname === '/api/fixtures/window') requests.push(request.url()) })
+   await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+   await expect(page.locator('html')).toHaveClass(/light/)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+   const button = (count: number) => page.getByRole('button', { name: locale === 'en' ? `${count} GWs` : `${count} 轮`, exact: true })
+   const assertWindow = async (count: number) => {
+    await expect(button(count)).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('columnheader', { name: /^GW\d+$/ })).toHaveCount(count)
+    for (let gw = 30; gw < 30 + count; gw++) await expect(page.getByRole('columnheader', { name: `GW${gw}`, exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: locale === 'en' ? 'Team FDR' : '球队 FDR', exact: true }).locator('tbody tr')).toHaveCount(3)
+   }
+   await assertWindow(5)
+   const before = requests.length
+   await button(8).click(); await assertWindow(8)
+   expect(requests.length).toBe(before + 1)
+   await button(3).click(); await assertWindow(3)
+   await button(5).click(); await assertWindow(5)
+   await button(8).click(); await assertWindow(8)
+   expect(requests.length).toBe(before + 1)
+   await testInfo.attach('FIX03-baseline-context', { contentType: 'application/json', body: JSON.stringify({ variantId, identity: 'A', locale, width, theme: 'system', timezone: 'Australia/Perth', fromGw: 30, sequence: [5,8,3,5,8], windowRequests: requests.length - before, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
+  })
+ })
+}
