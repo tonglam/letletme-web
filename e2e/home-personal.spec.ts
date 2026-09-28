@@ -10,6 +10,68 @@ import enMessages from '../messages/en.json'
 import zhMessages from '../messages/zh-CN.json'
 import { GET_LIVE_POINTS } from '../lib/graphql/operations/live'
 
+test.describe('HOME04 planned fixture states', () => {
+ test.use({ viewport: { width: 390, height: 900 }, colorScheme: 'dark', timezoneId: 'UTC' })
+ for (const [index, scenario] of [[0, 'DGW'], [1, 'BGW'], [2, 'settled']] as const) {
+  test(`SSR remediation HOME04 planned ${scenario} dates and round boundaries`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture controls only')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const teams = [{ id: 1, name: 'Arsenal', shortName: 'ARS' }, { id: 2, name: 'Chelsea', shortName: 'CHE' }, { id: 3, name: 'Everton', shortName: 'EVE' }]
+   const fixtures = scenario === 'BGW' ? [] : [0, 1].map(day => ({ id: 3401 + day, code: 3401 + day, event: { id: 34, name: 'Gameweek 34' }, kickoffTime: `2026-08-${day ? '10' : '09'}T12:00:00.000Z`, finished: scenario === 'settled', started: scenario === 'settled', homeTeam: teams[0], awayTeam: teams[day + 1], homeScore: scenario === 'settled' ? day + 2 : null, awayScore: scenario === 'settled' ? day : null, homeTeamDifficulty: 2, awayTeamDifficulty: 3 }))
+   const requests: number[] = []
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetHomeEventFixtures', variables: { eventId: 34 }, data: { coreEventContext: { season: '2627', revision: `home04-${scenario}`, sourceCheckedAt: '2026-08-13T09:40:00.000Z', currentEventId: 33 }, eventFixtures: fixtures } }] }) })).ok).toBe(true)
+    await page.goto('/zh-CN')
+    page.on('request', request => { const url = new URL(request.url()); if (url.pathname === '/api/home/fixtures') requests.push(Number(url.searchParams.get('eventId'))) })
+    const matches = page.locator('#main-content [data-home-matches]')
+    const previous = matches.getByRole('button', { name: '上一轮', exact: true })
+    const next = matches.getByRole('button', { name: '下一轮', exact: true })
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+    await next.click()
+    await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+    const tabs = matches.getByRole('tab')
+    if (scenario === 'BGW') {
+     await expect(tabs).toHaveCount(0)
+     await expect(matches.getByText('第 34 轮暂无比赛安排。', { exact: true })).toBeVisible()
+     await expect(matches.getByRole('tabpanel')).toHaveCount(0)
+    } else {
+     await expect(tabs).toHaveCount(2)
+     for (const day of [0, 1]) {
+      await tabs.nth(day).click()
+      await expect(tabs.nth(day)).toHaveAttribute('aria-selected', 'true')
+      const panel = matches.getByRole('tabpanel')
+      await expect(panel).toHaveAttribute('id', `home-fixture-panel-2026-08-${day ? '10' : '09'}`)
+      await expect(panel).toContainText('ARS')
+      await expect(panel).toContainText(day ? 'EVE' : 'CHE')
+      await expect(panel).not.toContainText(day ? 'CHE' : 'EVE')
+      if (scenario === 'settled') await expect(panel.getByText(day ? '3 - 1' : '2 - 0', { exact: true })).toBeVisible()
+     }
+    }
+    expect(requests).toEqual([34])
+    for (let event = 33; event >= 1; event--) {
+     await previous.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+    }
+    await expect(previous).toBeDisabled()
+    for (let event = 2; event <= 38; event++) {
+     await next.click()
+     await expect(matches).toHaveAttribute('data-home-fixtures-event', String(event))
+    }
+    await expect(next).toBeDisabled()
+    expect(requests.every(event => event >= 1 && event <= 38)).toBe(true)
+    expect(requests.filter(event => event === 34)).toHaveLength(1)
+    expect(requests.filter(event => event === 33)).toHaveLength(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await testInfo.attach('home04-planned-state', { contentType: 'application/json', body: JSON.stringify({ variantId: `HOME04.state.0${index + 1}`, scenario, identity: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', fixtureCount: fixtures.length, requests, functionalStatus: 'PASS', readyMs: null, performanceStatus: 'N/A', scope: 'Isolated scenario assertions only; not production performance' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+})
+
 const authSecret = 'playwright-better-auth-secret-at-least-32-bytes'
 
 async function createSession(
@@ -3290,13 +3352,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
-test.describe('J10 planned baseline contexts', () => {
- test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
+for (const planned of [false, true]) {
+ test.describe(planned ? 'TEAM01 planned many-GW context' : 'J10 planned baseline contexts', () => {
+ test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
+ for (const width of (planned ? [390] : [1440, 390])) {
  test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Shared manager fixture requires the dedicated single-worker SSR suite')
- await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+ await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
  const metrics: Array<{ metricName: string }> = []
  await page.route('**/api/vitals', async route => {
   metrics.push(...(route.request().postDataJSON().samples ?? []))
@@ -3455,13 +3518,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
   await openSnapshotDetail('Review Player 12 GW3', 1)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
-  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
-  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
-  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(planned ? 'UTC' : 'Australia/Perth')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(planned ? 'dark' : 'system')
+  if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+  else await expect(page.locator('html')).not.toHaveClass(/dark/)
   await testInfo.attach('J10-planned-baseline', { body: JSON.stringify({
-   variantId: `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
-   locale, viewport: page.viewportSize(), identity: 'B', theme: 'system', timezone: 'Australia/Perth',
-   scenario: 'baseline', entryId: session.entryId, finalGw: 3, finalRevision: '103',
+   variantId: planned ? 'TEAM01.state.02' : `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+   overlappingVariantIds: planned ? ['TEAM01.state.01'] : [],
+   locale, viewport: page.viewportSize(), identity: 'B', theme: planned ? 'dark' : 'system', timezone: planned ? 'UTC' : 'Australia/Perth',
+   scenario: planned ? 'many-gw' : 'baseline', entryId: session.entryId, finalGw: 3, finalRevision: '103',
    functionalAssertions: 'Homepage menu, season sections, transfer expansion, WC/FH sheets, historical GW loading and revision identity, tabs and snapshot modals',
    wholeJourneyPass: false, performanceStatus: 'NOT_RUN', readyMs: null,
    missing: ['cold/warm repetitions', 'event-to-paint', 'LCP/INP/CLS'],
@@ -3478,6 +3543,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 })
+}
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
@@ -3851,9 +3917,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
 })
 
+test.describe('management access baseline contexts', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem('theme', 'system')) })
 for (const locale of ['en', 'zh-CN'] as const) {
 for (const width of [1440, 390]) {
- test(`J12 non-owner cannot access management ${locale} ${width}px`, async ({ page }) => {
+ test(`J12 non-owner cannot access management ${locale} ${width}px`, async ({ page }, testInfo) => {
   const zh = locale === 'zh-CN'
   const prefix = zh ? '/zh-CN' : ''
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated non-owner fixture')
@@ -3886,6 +3955,14 @@ for (const width of [1440, 390]) {
    const observations = await (await fetch(fixture)).json()
    expect(observations.requests.some((request: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => request.operation === 'GetManagedTournament' && request.variables.tournamentId === 77 && request.variables.entryId === 909090)).toBe(true)
    expect(mutations).toEqual([])
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+   await expect(page.locator('html')).not.toHaveClass(/dark/)
+   await testInfo.attach('manage-access-baseline', { contentType: 'application/json', body: JSON.stringify({
+    variantIds: [`MANAGE02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, `MANAGE02.F.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, `R12.F.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`],
+    identity: 'verified bound non-owner (B with F access outcome)', locale, viewport: page.viewportSize(), theme: 'system/light', timezone: 'Australia/Perth',
+    terminal: 'administrator-access-required', mutations, performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false
+   }) })
+
   } finally {
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
@@ -3894,6 +3971,67 @@ for (const width of [1440, 390]) {
 }
 
 }
+
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`R12 X expired session rejects actual management link ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fresh-session boundary')
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const zh = locale === 'zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   const session = await createSession({ entryId: 909090 })
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${prefix}/competitions/browse`)
+    await page.getByRole('button', { name: zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup', exact: true }).click()
+    const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
+    await expect(manage).toBeVisible()
+    await sql`UPDATE bauth.session SET expires_at = ${new Date(Date.now() - 60000)} WHERE user_id = ${session.userId}`
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ reset: true, rules: [] }) })).ok).toBe(true)
+    await manage.click()
+    const assertLogin = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === `${prefix}/competitions/77/manage`)
+     await expect(page.getByLabel(zh ? zhMessages.Auth.email : enMessages.Auth.email, { exact: true })).toBeEnabled()
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+     await expect(page.locator('#tournament-name')).toHaveCount(0)
+     await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toHaveCount(0)
+    }
+    await assertLogin()
+    await page.reload()
+    await assertLogin()
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.filter((r: { operation: string }) => r.operation === 'GetManagedTournament')).toEqual([])
+    expect(mutations).toEqual([])
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    await expect(page.locator('html')).not.toHaveClass(/dark/)
+    await testInfo.attach('manage-expired-baseline', { contentType: 'application/json', body: JSON.stringify({
+     variantIds: [`MANAGE02.X.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, `R12.X.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`],
+     identity: 'X isolated expired database session', locale, viewport: page.viewportSize(), theme: 'system/light', timezone: 'Australia/Perth',
+     actualClick: true, loginNext: `${prefix}/competitions/77/manage`, managementReadsAfterExpiry: 0, mutations,
+     performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false
+    }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await sql.end()
+    await session.cleanup()
+   }
+  })
+ }
+}
+})
 
 test.describe('J12 planned UTC dark mobile management states', () => {
  test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
@@ -4377,10 +4515,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
    const session = await createSession({ entryId: 909090, userId: 'e2e-browse-platform-admin' })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const other = { ...managedTournament, id: 88, adminEntryId: 808080, name: 'Other Owner Cup' }
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
    try {
     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
      { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
-     { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: [managedTournament, other] } }
+     { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: [managedTournament, other] } },
+     { operation: 'GetManagedTournament', variables: { tournamentId: 88, entryId: 909090 }, data: { managedTournament: other } }
     ] }) })).ok).toBe(true)
     await page.setViewportSize({ width, height: 900 })
     await addSessionCookie(page, session.cookie)
@@ -4399,9 +4545,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(otherRow).toHaveCount(1)
     await expect(otherRow.getByText(zh ? '可管理 · 未参赛' : 'Manageable · not participating', { exact: true })).toBeVisible()
     await expect(page.getByRole('row').filter({ hasText: 'J12 Owned Cup' }).getByText(zh ? '可管理 · 已参赛' : 'Manageable · participating', { exact: true })).toBeVisible()
+    const prefix = zh ? '/zh-CN' : ''
+    const assertManage = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/88/manage`)
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '88')
+     await expect(page.locator('#tournament-name')).toHaveValue('Other Owner Cup')
+     await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toBeVisible()
+    }
+    await otherRow.getByRole('button', { name: zh ? 'Other Owner Cup 的操作' : 'Actions for Other Owner Cup', exact: true }).click()
+    await page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true }).click()
+    await assertManage()
+    await page.reload()
+    await assertManage()
+    await page.goBack()
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/browse` && url.searchParams.get('mine') === 'true')
+    await expect(page.getByText('Other Owner Cup', { exact: true })).toBeVisible()
+    await page.goForward()
+    await assertManage()
+    await page.goBack()
+    await expect(mine).toBeVisible()
     await mine.click()
     await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
     await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
+    const direct = await page.goto(`${prefix}/competitions/88/manage`)
+    expect(direct?.status()).toBe(200)
+    expect(direct?.request().redirectedFrom()).toBeNull()
+    await assertManage()
+    expect(mutations).toEqual([])
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.some((r: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => r.operation === 'GetManagedTournament' && r.variables.tournamentId === 88 && r.variables.entryId === 909090)).toBe(true)
+    await testInfo.attach('R12-admin-management', { contentType: 'application/json', body: JSON.stringify({
+     variantId: `R12.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, identity: 'PA dedicated dual allowlist', locale,
+     viewport: page.viewportSize(), theme: 'system/light', timezone: 'Australia/Perth', tournamentId: 88, ownerEntryId: 808080, viewerEntryId: 909090,
+     actualManageClick: true, directStatus: direct!.status(), redirects: [], reload: true, backForward: true, mutations,
+     functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false,
+     scope: 'Web consumption of authorized fixture response; no real GraphQL authorization claim'
+    }) })
    } finally {
     try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
    }
@@ -4776,16 +4955,21 @@ test.describe('LP01 signed-in known entry input journey', () => {
 	}
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
-  test(`SSR remediation TEAM03 transfer filters and progressive reveal ${locale} ${width}px`, async ({ page }) => {
+for (const { locale, width, planned } of [
+ { locale: 'en', width: 1440, planned: false }, { locale: 'en', width: 390, planned: false },
+ { locale: 'zh-CN', width: 1440, planned: false }, { locale: 'zh-CN', width: 390, planned: false },
+ { locale: 'zh-CN', width: 390, planned: true }
+]) {
+ test.describe(`TEAM03 context ${locale} ${width} ${planned ? 'many-moves' : 'baseline'}`, () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+  test(`SSR remediation TEAM03 transfer filters and progressive reveal ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated manager fixture')
    const zh = locale === 'zh-CN'
    const session = await createSession({ entryId: 15702 })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const timeline = Array.from({ length: 25 }, (_, index) => ({
     ...managerReview.timeline[0], eventId: index + 1, eventChip: 'NONE',
-    eventTransfers: index === 24 ? 0 : 1, overallPoints: (index + 1) * 60
+    eventTransfers: index === 24 ? 0 : planned && index === 23 ? 8 : 1, overallPoints: (index + 1) * 60
    }))
    const review = {
     ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! },
@@ -4795,7 +4979,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
     context: { ...managerReview.context, currentEventId: 25, nextEventId: 26, latestFinalizedEventId: 25, latestPublishedEventId: 25 },
     transfers: timeline.map(row => ({
      ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers,
-     transfers: row.eventTransfers ? [{ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}`, elementOutWebName: `Transfer Out GW${row.eventId}`, evaluatedThroughEventId: row.eventId }] : []
+     transfers: Array.from({ length: row.eventTransfers }, (_, move) => ({ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}-${move + 1}`, elementOutWebName: `Transfer Out GW${row.eventId}-${move + 1}`, evaluatedThroughEventId: row.eventId }))
     }))
    }
    const readCount = async () => {
@@ -4805,6 +4989,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
    try {
     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
     await addSessionCookie(page, session.cookie)
+    await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
     await page.setViewportSize({ width, height: 900 })
     await page.goto(`${zh ? '/zh-CN' : ''}/my-fpl/team?view=season`)
     await page.getByRole('tab', { name: zh ? '赛季复盘' : 'Season Review', exact: true }).click()
@@ -4820,6 +5005,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expectWeeks(descending(24, 6))
     const before = await readCount()
     expect(before).toBeGreaterThan(0)
+    if (planned) {
+     const opener = section.getByRole('button', { name: /查看 8 次转会/ })
+     await expect(opener).toHaveCount(1)
+     for (let visit = 0; visit < 2; visit += 1) {
+      await opener.click()
+      const sheet = page.getByRole('dialog')
+      await expect(sheet.getByRole('heading', { name: 'GW24 转会明细', exact: true })).toBeVisible()
+      await expect(sheet.locator('li')).toHaveCount(8)
+      for (let move = 1; move <= 8; move += 1) {
+       await expect(sheet.getByText(`Transfer In GW24-${move}`, { exact: true })).toBeVisible()
+       await expect(sheet.getByText(`Transfer Out GW24-${move}`, { exact: true })).toBeVisible()
+      }
+      await sheet.getByRole('button', { name: '关闭', exact: true }).click()
+      await expect(sheet).toHaveCount(0)
+      await expect(opener).toBeFocused()
+     }
+     expect(await readCount()).toBe(before)
+    }
     await section.getByRole('button', { name: zh ? '再显示 8 条' : 'Show 8 more', exact: true }).click()
     await expectWeeks(descending(24, 14))
     await section.getByRole('button', { name: zh ? '显示全部剩余（10）' : 'Show all remaining (10)', exact: true }).click()
@@ -4832,12 +5035,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await section.getByRole('button', { name: zh ? '有转会' : 'Active weeks', exact: true }).click()
     await expectWeeks(descending(24, 6))
     expect(await readCount()).toBe(before)
+    const variantId = planned ? 'TEAM03.state.04' : `TEAM03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme') }))).toEqual({ width, timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system' })
+    if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+    await testInfo.attach(variantId, { contentType: 'application/json', body: JSON.stringify({ variantId, identity: 'B', locale, viewport: { width, height: 900 }, timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system', scenario: planned ? 'many-moves' : 'baseline', checkedWeeks: 25, activeWeeks: 24, sheetMoveCount: planned ? 8 : null, sheetVisits: planned ? 2 : 0, initialReads: before, finalReads: await readCount(), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: 'Actual active/all filtering, six/fourteen/all/collapsed weeks; no repeated manager reads; planned state additionally opens eight-move Sheet twice and restores focus' }) })
    } finally {
     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
     await session.cleanup()
    }
   })
- }
+ })
 }
 
 for (const profile of ['baseline', 'planned', 'group'] as const) {
@@ -4971,6 +5180,51 @@ for (const state of ['UNAVAILABLE', 'EMPTY'] as const) {
   }
  })
 }
+
+test.describe('TEAM04 planned past-season boundaries', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const state of ['UNAVAILABLE', 'EMPTY', 'READY'] as const) {
+  test(`SSR remediation TEAM04 planned past-season ${state}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager fixture only')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   try {
+    const pastSeasons = state === 'READY' ? [{ season: '2024/25', totalPoints: 2100, overallRank: 18000 }] : []
+    const review = { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, pastSeasons, pastSeasonsState: state }
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto('/zh-CN/my-fpl/team')
+    await expect(page.getByRole('tab', { name: zhMessages.TeamStats.viewSeason, exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('heading', { name: 'E2E Review United', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '轮次历史', exact: true })).toBeVisible()
+    const ready = page.locator('[data-manager-ready]')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-revision', '103')
+    await expect(ready).toHaveAttribute('data-manager-ready', state === 'UNAVAILABLE' ? 'false' : 'true')
+    const warning = page.getByText(zhMessages.TeamStats.pastSeasonsUnavailable, { exact: true })
+    if (state === 'UNAVAILABLE') await expect(warning).toBeVisible()
+    else await expect(warning).toHaveCount(0)
+    if (state === 'READY') {
+     const row = page.getByRole('listitem').filter({ has: page.getByText('2024/25', { exact: true }) })
+     await expect(row).toHaveCount(1)
+     await expect(row).toContainText('2,100')
+     await expect(row.getByText(zhMessages.TeamStats.seasonCurrent, { exact: true })).toHaveCount(0)
+     await expect(row.locator('a, button, [role="button"]')).toHaveCount(0)
+     await expect(ready).toHaveAttribute('data-manager-revision', '103')
+    } else {
+     await expect(page.getByText('2024/25', { exact: true })).toHaveCount(0)
+    }
+    expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), width: innerWidth }))).toEqual({ timezone: 'UTC', theme: 'dark', width: 390 })
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    await testInfo.attach('TEAM04-boundary', { contentType: 'application/json', body: JSON.stringify({ variantId: state === 'UNAVAILABLE' ? 'TEAM04.state.02' : state === 'READY' ? 'TEAM04.state.03' : null, state, entryId: session.entryId, revision: '103', locale: 'zh-CN', timezone: 'UTC', theme: 'dark', viewport: page.viewportSize(), scope: 'Past-season availability and display-only reference rows preserve current-season identity and readiness semantics', wholeVariantPass: false, performanceStatus: 'NOT_RUN', readyMs: null }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
 
 test('manager snapshot status survives a late historical read and failed selection', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
@@ -5149,8 +5403,13 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
  }
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
+for (const { locale, width, planned, noHistory } of [
+ { locale: 'en', width: 1440, planned: false, noHistory: false }, { locale: 'en', width: 390, planned: false, noHistory: false },
+ { locale: 'zh-CN', width: 1440, planned: false, noHistory: false }, { locale: 'zh-CN', width: 390, planned: false, noHistory: false },
+ { locale: 'zh-CN', width: 390, planned: true, noHistory: false }, { locale: 'zh-CN', width: 390, planned: true, noHistory: true }
+]) {
+ test.describe(`TEAM02 context ${locale} ${width} ${planned ? noHistory ? 'no-history' : 'ready' : 'baseline'}`, () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
   test(`SSR remediation manager chart integer ticks ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager chart fixture')
    const session = await createSession({ entryId: 15702 })
@@ -5158,17 +5417,33 @@ for (const locale of ['en', 'zh-CN'] as const) {
    const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
    try {
     await addSessionCookie(page, session.cookie)
+    await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
     await page.setViewportSize({ width, height: 900 })
-    for (const counts of [[0, 1, 3], [0, 0, 0], [1]]) {
+    for (const counts of (noHistory ? [[]] : [[0, 1, 3], [0, 0, 0], [1]])) {
      const timeline = managerReview.timeline.slice(0, counts.length).map((row, index) => ({ ...row, eventTransfers: counts[index], eventNetPoints: index === 0 ? -1 : index }))
      const review = { ...managerReview, pastSeasons: [{ season: '2024/25', totalPoints: 2100, overallRank: 18000 }, { season: '2025/26', totalPoints: 2400, overallRank: 12000 }], entry: { ...managerReview.entry!, id: session.entryId! }, timeline, transfers: timeline.map(row => ({ ...managerReview.transfers[row.eventId - 1], eventTransfers: row.eventTransfers })) }
      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
      await page.goto(`${prefix}/my-fpl/team`)
      await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
      const chart = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: locale === 'zh-CN' ? '赛季走势' : 'Season charts', exact: true }) })
+     expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme') }))).toEqual({ width, timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system' })
+     if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+     await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-entry', String(session.entryId))
+     if (noHistory) {
+      await expect(chart).toHaveCount(0)
+      const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '轮次历史', exact: true }) })
+      await expect(history.getByText(zhMessages.TeamStats.noStats, { exact: true })).toBeVisible()
+      await expect(history.getByRole('table')).toHaveCount(0)
+      await expect(history.getByRole('button', { name: /^打开第/ })).toHaveCount(0)
+      continue
+     }
      await expect(chart).toHaveCount(1)
+     const expectedModes = locale === 'zh-CN' ? ['总排名', '总得分', '净积分', '队长', '板凳', '转会'] : ['Overall rank', 'Total points', 'Net points', 'Captain', 'Bench', 'Transfers']
+     await expect(chart.getByRole('button')).toHaveText(expectedModes)
      for (const mode of [locale === 'zh-CN' ? '转会' : 'Transfers', locale === 'zh-CN' ? '净积分' : 'Net points']) {
       await chart.getByRole('button', { name: mode, exact: true }).click()
+      await expect(chart.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'true')
+      await expect(chart.locator('[aria-live="polite"]')).not.toContainText('GW3')
       const ticks = chart.locator('.recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value')
       await expect(ticks.first()).toBeVisible()
       const labels = await ticks.allTextContents()
@@ -5207,6 +5482,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
       await expect(history.locator('[aria-live="polite"]')).toHaveCount(0)
       for (const mode of (locale === 'zh-CN' ? ['总排名', '总得分', '队长', '板凳'] : ['Overall rank', 'Total points', 'Captain', 'Bench'])) {
        await chart.getByRole('button', { name: mode, exact: true }).click()
+      await expect(chart.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'true')
+      await expect(chart.locator('[aria-live="polite"]')).not.toContainText('GW3')
        const summary = chart.locator('[aria-live="polite"]')
        await chart.locator('.recharts-bar-rectangle path').last().hover()
        await expect(summary).toContainText('GW3')
@@ -5232,12 +5509,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
       })
      }
     }
+    const variantId = planned ? noHistory ? 'TEAM02.state.02' : 'TEAM02.state.01' : `TEAM02.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`
+    await testInfo.attach(variantId, { contentType: 'application/json', body: JSON.stringify({ variantId, identity: 'B', locale, viewport: { width, height: 900 }, theme: planned ? 'dark' : 'system', timezone: planned ? 'UTC' : 'Australia/Perth', scenario: noHistory ? 'no-history' : planned ? 'ready' : 'baseline', modes: noHistory ? [] : ['rank', 'totalPoints', 'netPoints', 'captain', 'bench', 'transfers'], functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: noHistory ? 'Empty current-season history has textual empty state, no fake chart/table/GW action' : 'Six actual modes, selected buttons, unique integer ticks including negative/zero/single-point ranges, native pointer tooltip GW3/Saka and leave clearing; past-season tooltip clearing', notApplicable: 'Chart itself has no GW navigation control; navigation is in history section and separately tested' }) })
    } finally {
     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
     await session.cleanup()
    }
   })
- }
+ })
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
@@ -6385,6 +6664,95 @@ test.describe('HOME01 anonymous public partial failure', () => {
  })
 })
 
+
+// Original LP03 variants; real isolated bound sessions, no production mutation.
+for (const scenario of ['baseline', 'empty', 'error', '401'] as const) {
+ const contexts = scenario === 'baseline'
+  ? [{ locale: 'en', width: 1440 }, { locale: 'en', width: 390 }, { locale: 'zh-CN', width: 1440 }, { locale: 'zh-CN', width: 390 }]
+  : [{ locale: 'zh-CN', width: 390 }]
+ for (const { locale, width } of contexts) {
+  const stateIndex = { empty: '01', error: '02', '401': '03' }[scenario as 'empty' | 'error' | '401']
+  const variantId = scenario === 'baseline' ? `LP03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `LP03.state.${stateIndex}`
+  test.describe(`LP03 bound context ${variantId}`, () => {
+   test.use({ viewport: { width, height: 900 }, timezoneId: scenario === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+   test('transfer terminal and explicit recovery preserve bound identity', async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated bound-session fixtures only')
+    const session = await createSession({ entryId: 15702 })
+    const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+    const chinese = locale === 'zh-CN'
+    let inject = false
+    let recovered = false
+    let reads = 0
+    const liveFixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`
+    try {
+     await addSessionCookie(page, session.cookie)
+     if (scenario === 'error') await page.clock.install()
+     await page.addInitScript(theme => localStorage.setItem('theme', theme), scenario === 'baseline' ? 'system' : 'dark')
+     const auth = await page.request.get('/api/auth/get-session')
+     expect(auth.ok()).toBe(true)
+     expect((await auth.json()).user.id).toBe(session.userId)
+     const [identity] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+     expect(identity.fpl_entry_id).toBe(session.entryId)
+     expect(identity.fpl_entry_verified_at).not.toBeNull()
+     await page.route('**/api/graphql', async route => {
+      const payload = route.request().postDataJSON() as { query?: string; variables?: { entryId?: number } }
+      if (!payload.query?.includes('GetEntryTransferHistory')) { await route.continue({ url: liveFixture }); return }
+      if (!inject) { await route.fulfill({ json: { data: { entryTransferHistory: [] } } }); return }
+      reads += 1
+      expect(payload.variables?.entryId).toBe(session.entryId)
+      if (!recovered && (scenario === 'error' || scenario === '401')) {
+       await route.fulfill({ status: scenario === '401' ? 401 : 503, json: { errors: [{ message: 'Controlled transfer failure', extensions: { code: scenario === '401' ? 'UNAUTHENTICATED' : 'SERVICE_UNAVAILABLE' } }] } })
+       return
+      }
+      await route.fulfill({ json: { data: { entryTransferHistory: scenario === 'empty' || recovered ? [] : [{ eventId: 33, transfers: [{ event: 33, elementOutWebName: 'Bound Out', elementOutTeamShortName: 'OUT', elementOutTypeName: 'MID', elementOutCost: 5.5, elementInWebName: 'Bound In', elementInTeamShortName: 'IN', elementInTypeName: 'MID', elementInCost: 6.2, time: '2026-08-04T10:00:00Z' }] }] } } })
+     })
+     await page.goto(`/${locale}/live/points/${session.entryId}?gw=33&tournamentId=3`)
+     const ready = page.locator('[data-live-points-ready="true"]')
+     await expect(ready).toHaveAttribute('data-live-entry', String(session.entryId))
+     await expect(ready).toHaveAttribute('data-live-gw', '33')
+     const section = page.getByRole('region', { name: chinese ? /本周转会\s*GW33/ : /Gameweek transfers\s*GW33/ })
+     const refresh = section.getByRole('button', { name: chinese ? '刷新转会' : 'Refresh transfers', exact: true })
+     await expect(refresh).toBeEnabled()
+     expect(await page.evaluate(() => ({ width: innerWidth, locale: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width, locale, timezone: scenario === 'baseline' ? 'Australia/Perth' : 'UTC' })
+     if (scenario !== 'baseline') await expect(page.locator('html')).toHaveClass(/dark/)
+     inject = true
+     await refresh.click()
+     if (scenario === 'error' || scenario === '401') {
+      await expect(section.getByRole('alert')).toBeVisible()
+      await expect(section).not.toContainText(chinese ? '本轮暂无已同步的转会记录。' : 'No synced transfer records')
+      await expect(section.getByRole('link')).toHaveCount(0)
+      await expect(ready).toHaveAttribute('data-live-gw', '33')
+      expect(reads).toBe(1)
+      recovered = true
+      await refresh.click()
+      if (scenario === 'error') {
+       // A 503 activates the existing 30-second dependency fence.
+       await expect(section.getByRole('alert')).toBeVisible()
+       expect(reads).toBe(1)
+       await page.clock.fastForward(30_000)
+       await refresh.click()
+      }
+     }
+     if (scenario === 'baseline') {
+      await expect(section).toContainText('Bound In')
+      await expect(section).toContainText('Bound Out')
+      await expect(section).toContainText('£5.5m')
+      await expect(section).toContainText('£6.2m')
+     } else await expect(section).toContainText(chinese ? '本轮暂无已同步的转会记录。' : 'No synced transfer records for this gameweek.')
+     await expect(section.getByRole('alert')).toHaveCount(0)
+     await expect(section.getByRole('status')).toHaveCount(0)
+     await expect(refresh).toBeEnabled()
+     expect(reads).toBe(scenario === 'error' || scenario === '401' ? 2 : 1)
+     const finalAuth = await page.request.get('/api/auth/get-session')
+     expect((await finalAuth.json()).user.id).toBe(session.userId)
+     expect(new URL(page.url()).pathname).toBe(`/${locale}/live/points/${session.entryId}`)
+     expect(new URL(page.url()).searchParams.get('gw')).toBe('33')
+     await testInfo.attach(variantId, { contentType: 'application/json', body: JSON.stringify({ variantId, persona: 'B', locale, width, theme: scenario === 'baseline' ? 'system' : 'dark', timezone: scenario === 'baseline' ? 'Australia/Perth' : 'UTC', scenario, authenticatedBeforeAndAfter: true, verifiedBinding: true, reads, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: 'Transfer records or confirmed empty, failure distinct from empty, explicit recovery with unchanged bound session; removed reauthorization link is not applicable to public transfer contract.' }) })
+    } finally { await sql.end(); await session.cleanup() }
+   })
+  })
+ }
+}
 
 for (const large of [false, true]) {
 test.describe(`LC02 planned state ${large ? 'large' : 'empty'} canonical board`, () => {
