@@ -4909,16 +4909,21 @@ test.describe('LP01 signed-in known entry input journey', () => {
 	}
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
-  test(`SSR remediation TEAM03 transfer filters and progressive reveal ${locale} ${width}px`, async ({ page }) => {
+for (const { locale, width, planned } of [
+ { locale: 'en', width: 1440, planned: false }, { locale: 'en', width: 390, planned: false },
+ { locale: 'zh-CN', width: 1440, planned: false }, { locale: 'zh-CN', width: 390, planned: false },
+ { locale: 'zh-CN', width: 390, planned: true }
+]) {
+ test.describe(`TEAM03 context ${locale} ${width} ${planned ? 'many-moves' : 'baseline'}`, () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+  test(`SSR remediation TEAM03 transfer filters and progressive reveal ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Dedicated isolated manager fixture')
    const zh = locale === 'zh-CN'
    const session = await createSession({ entryId: 15702 })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const timeline = Array.from({ length: 25 }, (_, index) => ({
     ...managerReview.timeline[0], eventId: index + 1, eventChip: 'NONE',
-    eventTransfers: index === 24 ? 0 : 1, overallPoints: (index + 1) * 60
+    eventTransfers: index === 24 ? 0 : planned && index === 23 ? 8 : 1, overallPoints: (index + 1) * 60
    }))
    const review = {
     ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! },
@@ -4928,7 +4933,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
     context: { ...managerReview.context, currentEventId: 25, nextEventId: 26, latestFinalizedEventId: 25, latestPublishedEventId: 25 },
     transfers: timeline.map(row => ({
      ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers,
-     transfers: row.eventTransfers ? [{ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}`, elementOutWebName: `Transfer Out GW${row.eventId}`, evaluatedThroughEventId: row.eventId }] : []
+     transfers: Array.from({ length: row.eventTransfers }, (_, move) => ({ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}-${move + 1}`, elementOutWebName: `Transfer Out GW${row.eventId}-${move + 1}`, evaluatedThroughEventId: row.eventId }))
     }))
    }
    const readCount = async () => {
@@ -4938,6 +4943,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
    try {
     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
     await addSessionCookie(page, session.cookie)
+    await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
     await page.setViewportSize({ width, height: 900 })
     await page.goto(`${zh ? '/zh-CN' : ''}/my-fpl/team?view=season`)
     await page.getByRole('tab', { name: zh ? '赛季复盘' : 'Season Review', exact: true }).click()
@@ -4953,6 +4959,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expectWeeks(descending(24, 6))
     const before = await readCount()
     expect(before).toBeGreaterThan(0)
+    if (planned) {
+     const opener = section.getByRole('button', { name: /查看 8 次转会/ })
+     await expect(opener).toHaveCount(1)
+     for (let visit = 0; visit < 2; visit += 1) {
+      await opener.click()
+      const sheet = page.getByRole('dialog')
+      await expect(sheet.getByRole('heading', { name: 'GW24 转会明细', exact: true })).toBeVisible()
+      await expect(sheet.locator('li')).toHaveCount(8)
+      for (let move = 1; move <= 8; move += 1) {
+       await expect(sheet.getByText(`Transfer In GW24-${move}`, { exact: true })).toBeVisible()
+       await expect(sheet.getByText(`Transfer Out GW24-${move}`, { exact: true })).toBeVisible()
+      }
+      await sheet.getByRole('button', { name: '关闭', exact: true }).click()
+      await expect(sheet).toHaveCount(0)
+      await expect(opener).toBeFocused()
+     }
+     expect(await readCount()).toBe(before)
+    }
     await section.getByRole('button', { name: zh ? '再显示 8 条' : 'Show 8 more', exact: true }).click()
     await expectWeeks(descending(24, 14))
     await section.getByRole('button', { name: zh ? '显示全部剩余（10）' : 'Show all remaining (10)', exact: true }).click()
@@ -4965,12 +4989,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await section.getByRole('button', { name: zh ? '有转会' : 'Active weeks', exact: true }).click()
     await expectWeeks(descending(24, 6))
     expect(await readCount()).toBe(before)
+    const variantId = planned ? 'TEAM03.state.04' : `TEAM03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme') }))).toEqual({ width, timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system' })
+    if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+    await testInfo.attach(variantId, { contentType: 'application/json', body: JSON.stringify({ variantId, identity: 'B', locale, viewport: { width, height: 900 }, timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system', scenario: planned ? 'many-moves' : 'baseline', checkedWeeks: 25, activeWeeks: 24, sheetMoveCount: planned ? 8 : null, sheetVisits: planned ? 2 : 0, initialReads: before, finalReads: await readCount(), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: 'Actual active/all filtering, six/fourteen/all/collapsed weeks; no repeated manager reads; planned state additionally opens eight-move Sheet twice and restores focus' }) })
    } finally {
     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
     await session.cleanup()
    }
   })
- }
+ })
 }
 
 for (const profile of ['baseline', 'planned', 'group'] as const) {
