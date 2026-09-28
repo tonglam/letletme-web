@@ -15,8 +15,9 @@ import type {
 import { Link } from '@/i18n/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LivePointsDashboard } from '../_components/LivePointsDashboard'
+import type { LivePointsTransferSeed } from '../_components/LivePointsTransfers'
 import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
 import { useEntryOverall } from '../_hooks/useEntryOverall'
@@ -30,6 +31,7 @@ interface TeamPointsClientProps {
 	from?: 'home'
 	initialEventId: number
 	initialSelectedGameweek?: number
+	initialTransferSeed?: LivePointsTransferSeed
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialOverall?: EntryOverallSnapshot
@@ -46,6 +48,7 @@ export default function TeamPointsClient({
 	initialEventId,
 	initialSelectedGameweek,
 	initialLiveData,
+	initialTransferSeed,
 	initialSnapshot,
 	initialOverall,
 	initialEntryLookupStatus,
@@ -66,6 +69,15 @@ export default function TeamPointsClient({
 		initialSnapshot,
 		isOfficialUpdating
 	})
+	const [transferSeed, setTransferSeed] = useState(initialTransferSeed)
+	// Once the user leaves the initial selection, later visits read fresh data.
+	if (transferSeed && (
+		transferSeed.entryId !== entryId ||
+		transferSeed.eventId !== livePoints.selectedGameweek ||
+		livePoints.currentSeason !== initialSeason
+	)) {
+		setTransferSeed(undefined)
+	}
 	const reconcileGameweek = livePoints.changeGameweek
 	const reconcileGameweekRef = useRef(reconcileGameweek)
 	const refreshCurrentGameweek = livePoints.refreshCurrentGameweek
@@ -293,6 +305,7 @@ export default function TeamPointsClient({
 	} else {
 		content = (
 			<LivePointsDashboard
+				initialTransferSeed={transferSeed}
 				readyRecoveryAttempt={livePoints.readyRecoveryAttempt}
 				readyMeasurementEnabled={livePoints.readyMeasurementEnabled}
 				activeEntryId={entryId}

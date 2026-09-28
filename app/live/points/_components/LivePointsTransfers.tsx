@@ -10,21 +10,52 @@ import {
 } from '@/lib/graphql/operations/entries'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useState } from 'react'
+import { Suspense, use, useEffect, useState } from 'react'
 
-export function LivePointsTransfers({
+export type LivePointsTransferSeed = {
+	entryId: number
+	eventId: number
+	result: Promise<EntryTransferMove[] | null>
+}
+
+export function LivePointsTransfers({ entryId, eventId, initialSeed }: {
+	entryId: number
+	eventId: number
+	initialSeed?: LivePointsTransferSeed
+}) {
+	if (initialSeed?.entryId === entryId && initialSeed.eventId === eventId) {
+		return (
+			<Suspense fallback={<LivePointsTransferContent entryId={entryId} eventId={eventId} pendingSeed />}>
+				<SeededLivePointsTransfers seed={initialSeed} />
+			</Suspense>
+		)
+	}
+	return <LivePointsTransferContent entryId={entryId} eventId={eventId} />
+}
+
+function SeededLivePointsTransfers({ seed }: { seed: LivePointsTransferSeed }) {
+	const moves = use(seed.result)
+	return <LivePointsTransferContent entryId={seed.entryId} eventId={seed.eventId} initialMoves={moves} />
+}
+
+function LivePointsTransferContent({
 	entryId,
-	eventId
+	eventId,
+	initialMoves,
+	pendingSeed = false
 }: {
 	entryId: number
 	eventId: number
+	initialMoves?: EntryTransferMove[] | null
+	pendingSeed?: boolean
 }) {
 	const t = useTranslations('LivePoints')
-	const [moves, setMoves] = useState<EntryTransferMove[] | null>(null)
-	const [failed, setFailed] = useState(false)
+	const [moves, setMoves] = useState<EntryTransferMove[] | null>(initialMoves ?? null)
+	const [failed, setFailed] = useState(initialMoves === null)
 	const [retry, setRetry] = useState(0)
 
 	useEffect(() => {
+		if (pendingSeed || (retry === 0 && initialMoves !== undefined)) return
 		setMoves(null)
 		setFailed(false)
 		const controller = new AbortController()
@@ -47,7 +78,7 @@ export function LivePointsTransfers({
 			}
 		)
 		return () => controller.abort()
-	}, [entryId, eventId, retry])
+	}, [entryId, eventId, retry, initialMoves, pendingSeed])
 
 	// entryTransferHistory already converts FPL tenths to millions.
 	const money = (value: number) => `£${value.toFixed(1)}m`
