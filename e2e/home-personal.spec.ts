@@ -2766,10 +2766,17 @@ for (const locale of ['en', 'zh-CN']) {
 	})
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
+test.describe(`LC02 planned ${locale}`, () => {
+ test.use({ locale, timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const width of [1440, 390]) {
  for (const failure of [false, true]) {
- test(`canonical competition board sort and pagination preserve request scope at ${width}px${failure ? ' with next-page failure recovery' : ''}`, async ({ page }) => {
+ test(`canonical competition board sort and pagination preserve request scope at ${width}px${failure ? ' with next-page failure recovery' : ''}`, async ({ page }, testInfo) => {
   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated board fixtures')
+  const zh = locale === 'zh-CN'
+  const variantId = `LC02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`
+  testInfo.annotations.push({ type: 'coverage-variant', description: variantId })
+  await page.addInitScript(() => localStorage.setItem('theme', 'system'))
   const session = await createSession({ entryId: 123 })
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
   let failedNextPage = 0
@@ -2818,20 +2825,23 @@ for (const width of [1440, 390]) {
     await route.fulfill({ response, json: body })
    })
    await page.clock.install()
-   await page.goto('/live/competitions?tournamentId=6&gw=4')
+   await page.goto(`${zh ? '/zh-CN' : ''}/live/competitions?tournamentId=6&gw=4`)
+   await expect(page.locator('html')).toHaveClass(/light/)
+   expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: navigator.language }))).toEqual({ timezone: 'Australia/Perth', theme: 'system', language: locale })
+   expect(page.viewportSize()?.width).toBe(width)
    const teams = page.getByRole('link', { name: /(?:Alpha|Beta|Gamma) Coverage/ }).filter({ visible: true })
    await expect(teams).toHaveCount(2)
    await expect(teams.nth(0)).toContainText('Alpha Coverage')
-   await page.getByRole('button', { name: 'Compare', exact: true }).click()
-   const selectedAlpha = page.getByRole('checkbox', { name: 'Select Alpha Coverage for comparison', exact: true }).filter({ visible: true })
+   await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
+   const selectedAlpha = page.getByRole('checkbox', { name: (zh ? '选择 Alpha Coverage 进行对比' : 'Select Alpha Coverage for comparison'), exact: true }).filter({ visible: true })
    await selectedAlpha.check()
    if (failure) await page.clock.pauseAt(new Date(Date.now() + 1_000))
-   await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '再显示 1 条' : 'Show 1 more'), exact: true }).click()
    if (failure) {
     await expect.poll(() => failedNextPage).toBe(1)
     await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1')) > Date.now())).toBe(true)
     await page.clock.runFor(1_100)
-    const warning = page.getByText('Refresh failed. The last available standings are still shown.', { exact: true })
+    const warning = page.getByText((zh ? '刷新失败，继续显示上一次可用的积分榜。' : 'Refresh failed. The last available standings are still shown.'), { exact: true })
     await expect(warning).toBeVisible()
     await expect(teams).toHaveText([/Alpha Coverage/, /Beta Coverage/])
     await test.info().attach('pagination-retry-clock', { body: JSON.stringify(await page.evaluate(() => ({ now: Date.now(), cooldownUntil: sessionStorage.getItem('letletme:dependency-cooldown-until-v1'), failureAt: sessionStorage.getItem('letletme:dependency-cooldown-failure-at-v1') }))), contentType: 'application/json' })
@@ -2839,7 +2849,7 @@ for (const width of [1440, 390]) {
     // Advance the same browser clock used by Retry-After and the cooldown fence.
     await page.clock.runFor(1_100)
     await page.clock.resume()
-    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+    await page.getByRole('button', { name: (zh ? '再显示 1 条' : 'Show 1 more'), exact: true }).click()
     await expect(warning).toHaveCount(0)
     expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(3)
    }
@@ -2847,8 +2857,8 @@ for (const width of [1440, 390]) {
    await expect(teams.nth(2)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ after: 'coverage-page-2' })
    await expect(selectedAlpha).toBeChecked()
-   await page.getByRole('checkbox', { name: 'Select Gamma Coverage for comparison', exact: true }).filter({ visible: true }).check()
-   await expect(page.getByRole('checkbox', { name: 'Select Beta Coverage for comparison', exact: true }).filter({ visible: true })).toBeDisabled()
+   await page.getByRole('checkbox', { name: (zh ? '选择 Gamma Coverage 进行对比' : 'Select Gamma Coverage for comparison'), exact: true }).filter({ visible: true }).check()
+   await expect(page.getByRole('checkbox', { name: (zh ? '选择 Beta Coverage 进行对比' : 'Select Beta Coverage for comparison'), exact: true }).filter({ visible: true })).toBeDisabled()
    let comparisonAttempts = 0
    await page.route('**/api/live/competitions/6/compare?*', async route => {
     comparisonAttempts += 1
@@ -2864,13 +2874,13 @@ for (const width of [1440, 390]) {
     }
    })
    const refreshedBoard = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/6/board' && !response.request().postDataJSON()?.input?.after)
-   await page.getByRole('button', { name: 'Compare (2)', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '对比（2）' : 'Compare (2)'), exact: true }).click()
    expect((await refreshedBoard).status()).toBe(200)
    await expect(page.getByRole('dialog')).toBeVisible()
    await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible()
    expect(comparisonAttempts).toBe(1)
    const compared = page.waitForResponse(response => response.url().includes('/api/live/competitions/6/compare?'))
-   await page.getByRole('dialog').getByRole('button', { name: 'Refresh', exact: true }).click()
+   await page.getByRole('dialog').getByRole('button', { name: (zh ? '刷新' : 'Refresh'), exact: true }).click()
    const comparisonResponse = await compared
    expect(comparisonAttempts).toBe(2)
    expect(comparisonResponse.status()).toBe(200)
@@ -2921,7 +2931,7 @@ for (const width of [1440, 390]) {
      await route.fulfill({ response, json: body })
     }
    })
-   await page.getByRole('button', { name: 'Compare (2)', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '对比（2）' : 'Compare (2)'), exact: true }).click()
    await expect(sheet.getByRole('heading')).toContainText('Updated Gamma')
    await expect(sheet.getByRole('heading')).not.toContainText('Gamma Coverage')
    await expect(sheet.getByText('77', { exact: true })).toHaveCount(4)
@@ -2933,23 +2943,23 @@ for (const width of [1440, 390]) {
    expect(revisions).toEqual(['e2e-competition-score-v1', 'e2e-competition-score-v2'])
    await sheet.press('Escape')
    await expect(sheet).toHaveCount(0)
-   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-   await page.getByRole('combobox', { name: 'Sort competition standings', exact: true }).click()
-   await page.getByRole('option', { name: 'Total Pts', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '取消' : 'Cancel'), exact: true }).click()
+   await page.getByRole('combobox', { name: (zh ? '积分榜排序方式' : 'Sort competition standings'), exact: true }).click()
+   await page.getByRole('option', { name: (zh ? '总积分' : 'Total Pts'), exact: true }).click()
    await expect(teams).toHaveCount(2)
    await expect(teams.nth(0)).toContainText('Beta Coverage')
    await expect(teams.nth(1)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'DESC' })
    expect(inputs.at(-1)?.after ?? null).toBeNull()
-   await page.getByRole('button', { name: 'Desc', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '降序' : 'Desc'), exact: true }).click()
    await expect(teams.nth(0)).toContainText('Alpha Coverage')
    await expect(teams.nth(1)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'ASC' })
    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
-   await page.getByRole('button', { name: 'Compare', exact: true }).click()
-   await page.getByRole('checkbox', { name: 'Select Gamma Coverage for comparison', exact: true }).filter({ visible: true }).check()
-   await expect(page.getByText('Select 1 more to compare', { exact: true })).toBeVisible()
-   await page.getByRole('button', { name: 'Classic', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
+   await page.getByRole('checkbox', { name: (zh ? '选择 Gamma Coverage 进行对比' : 'Select Gamma Coverage for comparison'), exact: true }).filter({ visible: true }).check()
+   await expect(page.getByText((zh ? '再选 1 支球队' : 'Select 1 more to compare'), { exact: true })).toBeVisible()
+   await page.getByRole('button', { name: (zh ? '经典联赛' : 'Classic'), exact: true }).click()
    const switched = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/7/board')
    await page.getByRole('menuitem', { name: 'Coverage League 7', exact: true }).click()
    const switchedResponse = await switched
@@ -2957,17 +2967,21 @@ for (const width of [1440, 390]) {
    expect((await switchedResponse.json()).entryLiveCompetitionBoard.head).toMatchObject({ tournamentId: 7, eventId: 4 })
    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '7' && url.searchParams.get('gw') === '4')
    await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
-   await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeVisible()
-   await expect(page.getByText('Select 1 more to compare', { exact: true })).toHaveCount(0)
-   await page.getByRole('button', { name: 'Compare', exact: true }).click()
-   await expect(page.getByText('Select 2 teams', { exact: true })).toBeVisible()
-   await expect(page.getByRole('checkbox', { name: 'Select E2E United for comparison', exact: true }).filter({ visible: true })).not.toBeChecked()
+   await expect(page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true })).toBeVisible()
+   await expect(page.getByText((zh ? '再选 1 支球队' : 'Select 1 more to compare'), { exact: true })).toHaveCount(0)
+   await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
+   await expect(page.getByText((zh ? '勾选 2 支队伍' : 'Select 2 teams'), { exact: true })).toBeVisible()
+   await expect(page.getByRole('checkbox', { name: (zh ? '选择 E2E United 进行对比' : 'Select E2E United for comparison'), exact: true }).filter({ visible: true })).not.toBeChecked()
+   await testInfo.attach('LC02-scoped-context', { contentType: 'application/json', body: JSON.stringify({ variantId, locale, width, timezone: 'Australia/Perth', theme: 'system', identity: 'bound fixture user', boundEntryId: session.entryId, failureInjection: failure, functionalAssertions: 'PASS', readyMs: null, wholeVariantComplete: false, remaining: 'All sort options, large roster, empty state and performance remain open.' }) })
   } finally {
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
   }
  })
 }
+}
+
+})
 }
 
 for (const profile of ['baseline', 'ready', 'session-expired'] as const) {
