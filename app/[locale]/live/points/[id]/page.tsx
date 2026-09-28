@@ -6,6 +6,8 @@ import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
+	GET_ENTRY_TRANSFER_HISTORY,
+	type EntryTransferHistoryResponse,
 	type EntryOverallSnapshot,
 	type EntryLookupStatus,
 	type EntryPersistenceState,
@@ -114,6 +116,18 @@ export default async function Page({ params, searchParams }: PageProps) {
 		)
 	}
 	const initialEventId = requestedGameweek ?? currentEventId
+	// Stream optional transfer data independently of the score seed.
+	const initialTransferSeed = {
+		entryId,
+		eventId: initialEventId,
+		result: executeServerQuery<EntryTransferHistoryResponse>(
+			GET_ENTRY_TRANSFER_HISTORY,
+			{ entryId },
+			{ cache: 'no-store', suppressErrorLog: true }
+		).then(
+			data => data.entryTransferHistory.find(week => week.eventId === initialEventId)?.transfers ?? []
+		).catch(() => null)
+	}
 	const isOfficialUpdating =
 		initialEventId === currentEventId &&
 		isOfficialLiveUpdatingContext(liveContext)
@@ -197,6 +211,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialEventId={currentEventId}
 			initialSelectedGameweek={requestedGameweek ?? undefined}
 			initialLiveData={initialLiveData}
+			initialTransferSeed={initialTransferSeed}
 			initialSnapshot={initialSnapshot}
 			initialOverall={initialOverall}
 			initialEntryLookupStatus={initialEntryLookupStatus}
