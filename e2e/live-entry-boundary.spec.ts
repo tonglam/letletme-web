@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test'
+import enMessages from '../messages/en.json'
+import zhMessages from '../messages/zh-CN.json'
 
 test.describe.configure({ mode: 'serial' })
 test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 test.beforeEach(async ({ page }) => {
- await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+ await page.addInitScript(() => localStorage.setItem('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'system'))
 })
 
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated local GraphQL fixture')
@@ -215,6 +217,86 @@ for (const locale of ['en', 'zh-CN']) {
    }
   })
  }
+}
+
+const persistenceContexts = [
+ ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({
+  locale, width, timezone: 'Australia/Perth', dark: false,
+  variantId: `S19.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`
+ }))),
+ { locale: 'zh-CN', width: 390, timezone: 'UTC', dark: true, variantId: 'S19.directed.02' }
+]
+for (const { locale, width, timezone, dark, variantId } of persistenceContexts) {
+ test.describe(`${variantId} entry persistence`, () => {
+  test.use({ timezoneId: timezone, colorScheme: dark ? 'dark' : 'light', viewport: { width, height: 900 } })
+  test('queued and failed persistence retain the team and recover through actual retry', async ({ page }, testInfo) => {
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const entry = 884422
+   const gw = 33
+   const seedResponse = await fetch(`${fixture}/graphql`, { method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:'query GetEntry { fixture }',variables:{id:entry}}) })
+   expect(seedResponse.ok).toBe(true)
+   const seed = (await seedResponse.json()).data
+   expect(seed.entryLookup.entry.id).toBe(entry)
+   const configure = async (state: 'QUEUED' | 'FAILED_RETRYABLE' | 'NOT_REQUIRED') => {
+    const response = await fetch(`${fixture}/__performance`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset:false,rules:[{
+     operation:'GetEntry',variables:{id:entry},data:{entryLookup:{...seed.entryLookup,source:state==='NOT_REQUIRED'?'DATABASE':'FPL',persistenceState:state}}
+    }]})})
+    expect(response.ok).toBe(true)
+   }
+   const count = async () => {
+    const data = await (await fetch(`${fixture}/__performance`)).json()
+    return data.requests.filter((r:{operation:string;variables:{id?:number}}) => r.operation==='GetEntry' && r.variables.id===entry).length
+   }
+   const baseline = await count()
+   const url = `${locale==='en'?'':'/zh-CN'}/live/points/${entry}?gw=${gw}`
+   const status = page.getByTestId('entry-persistence-status')
+   const messages = (locale === 'en' ? enMessages : zhMessages).LivePoints
+   const queued = messages.entryPersistenceQueued
+   const assertTeam = async () => {
+    await expect(page).toHaveURL(value => value.pathname===`${locale==='en'?'':'/zh-CN'}/live/points/${entry}` && value.searchParams.get('gw')===String(gw))
+    await expect(page.locator(`[data-live-points-ready="true"][data-live-entry="${entry}"][data-live-gw="${gw}"][data-selected-gw="${gw}"]`)).toBeAttached()
+    const pitch = page.getByRole('region',{name:locale==='en'?'E2E United formation':'E2E United 阵型',exact:true})
+    await expect(pitch).toBeVisible()
+    await expect(pitch.getByRole('button')).toHaveCount(15)
+   }
+   try {
+    await configure('QUEUED')
+    await page.goto(url)
+    await assertTeam()
+    await expect(status).toHaveAttribute('role','status')
+    await expect(status).toContainText(queued)
+    await expect(status.getByRole('button')).toHaveCount(0)
+    await expect.poll(count).toBe(baseline+1)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+    await expect(page.locator('html')).toHaveClass(dark?/dark/:/light/)
+    await configure('FAILED_RETRYABLE')
+    await page.reload()
+    await assertTeam()
+    await expect(status).toHaveAttribute('role','alert')
+    await expect(status).toContainText(messages.entryPersistenceFailed)
+    await expect.poll(count).toBe(baseline+2)
+    await configure('QUEUED')
+    await status.getByRole('button',{name:messages.refresh,exact:true}).click()
+    await expect(status).toHaveAttribute('role','status')
+    await expect(status).toContainText(queued)
+    await assertTeam()
+    await expect.poll(count).toBe(baseline+3)
+    await configure('NOT_REQUIRED')
+    await page.reload()
+    await assertTeam()
+    await expect(status).toHaveCount(0)
+    await expect.poll(count).toBe(baseline+4)
+    await testInfo.attach('S19-entry-persistence',{contentType:'application/json',body:JSON.stringify({
+     variantId,caseId:'S19',stepId:'S19.01',locale,width,timezone,theme:dark?'dark':'system',entry,gw,
+     states:['QUEUED','FAILED_RETRYABLE','QUEUED','NOT_REQUIRED'],entryQueries:4,
+     environment:'isolated-fixture',functionalStatus:'PASS',performanceStatus:'NOT_RUN',readyMs:null,wholeVariantComplete:false,
+     scope:'Web consumes controlled GraphQL persistence states; Data enqueue is not executed by this browser fixture and has separate unit evidence.'
+    })})
+   } finally {
+    expect((await fetch(`${fixture}/__performance`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules:[]})})).ok).toBe(true)
+   }
+  })
+ })
 }
 
 // Original S13 directed IDs; this owner accepts one path ID, not a list.

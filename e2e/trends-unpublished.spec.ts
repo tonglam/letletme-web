@@ -31,3 +31,26 @@ test('TR03 unpublished public catalog is distinct from unavailable data', async 
 		await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
 	}
 })
+
+test.describe('S20.directed.03 unpublished is not a zero ranking', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('renders publication closure without synthetic ranking rows', async ({ page }, testInfo) => {
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'TrendCohorts', variables: { access: 'PUBLIC' }, data: {
+    trendCohorts: { season: '2627', revision: 'unpublished-fixture', state: 'NOT_PUBLISHED', sourceCheckedAt: null, cohorts: [] }
+   } }] }) })).ok).toBe(true)
+   await page.goto('/zh-CN/explore/selections?scope=public')
+   await expect(page.getByRole('heading', { name: '本赛季公共趋势尚未发布。', exact: true })).toBeVisible()
+   await expect(page.getByRole('tabpanel')).toHaveCount(0)
+   await expect(page.locator('tbody tr')).toHaveCount(0)
+   await expect(page.getByRole('button', { name: '重试', exact: true })).toHaveCount(0)
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   const observations = await (await fetch(fixture)).json()
+   expect(observations.requests.filter((r: { operation: string }) => r.operation === 'TrendCohortSnapshot')).toEqual([])
+   await testInfo.attach('S20-unpublished', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S20', stepId: 'S20.01', variantId: 'S20.directed.03', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', identity: 'A anonymous', environment: 'isolated-fixture', currentBehavior: 'not-published-without-ranking', targetOracle: 'not-published-without-ranking', contractGap: false, assertion: 'Closed public catalog displays not-published; no ranking rows, tabpanel, retry or dependent snapshot request', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Trends public catalog only, not every publication consumer' }) })
+  } finally { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) }
+ })
+})

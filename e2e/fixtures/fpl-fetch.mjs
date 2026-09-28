@@ -14,5 +14,7 @@ globalThis.fetch = async (input, init) => {
 	}
 	const id = Number(match[1])
 	if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid fixture entry ID')
+	// Reserved isolated entry for the profile read-side-effect failure assertion.
+	if (id === 999999991) return new Response('Isolated FPL unavailable', { status: 503 })
 	return Response.json({ id, name: 'E2E Synced United', player_first_name: 'Fixture', player_last_name: 'Manager' })
 }

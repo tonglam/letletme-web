@@ -31,6 +31,9 @@ case "${1:-}" in
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'HOME02 planned' --workers=1 --trace=on --output=test-results/home-carousel-contexts
     E2E_LIVE_HYDRATION=0 E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'HOME02 empty planned' --workers=1 --trace=on --output=test-results/home-carousel-empty
     npx playwright test e2e/match-missing-stats.spec.ts --workers=1 --trace=on --output=test-results/match-missing-stats
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "S20.directed.04" --workers=1 --trace=on --output=test-results/price-semantics
+    E2E_SSR_REMEDIATION=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/home-personal.spec.ts --grep "S08 planned" --grep-invert "S08.directed.05" --workers=1 --trace=on --output=test-results/authorization-roles
+    E2E_SSR_REMEDIATION=1 PLATFORM_ADMIN_USER_IDS=e2e-browse-platform-admin PLATFORM_ADMIN_FPL_ENTRY_IDS=909090 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/home-personal.spec.ts --grep "S08.directed.05" --workers=1 --trace=on --output=test-results/authorization-admin
     ;;
   governance)
     E2E_GOVERNANCE=1 LETLETME_DATA_URL="http://127.0.0.1:${E2E_GRAPHQL_PORT:-4100}" LETLETME_DATA_API_KEY=isolated-governance-test-key PLATFORM_ADMIN_USER_IDS=e2e-governance-admin PLATFORM_ADMIN_FPL_ENTRY_IDS=909090 npx playwright test e2e/home-personal.spec.ts --grep "GOV REST sections" --workers=1 --trace=on --output=test-results/governance

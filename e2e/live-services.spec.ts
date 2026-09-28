@@ -719,15 +719,21 @@ test('live points restores transfer details and distinguishes failure from empty
 	})
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
-	for (const width of [1440, 390]) {
+for (const context of [
+ ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].map(width => ({ locale, width, timezone: 'Australia/Perth', theme: 'system' as const, variantId: `S20.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` }))),
+ { locale: 'zh-CN' as const, width: 390, timezone: 'UTC', theme: 'dark' as const, variantId: 'S20.directed.01' }
+]) {
+ const { locale, width, timezone, theme, variantId } = context
+ test.describe(`${variantId} public transfers`, () => {
+  test.use({ viewport: { width, height: 900 }, timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
 		test(`public live points displays transfer details for anonymous visitors ${locale} ${width}px`, async ({
 			page
-		}) => {
+		}, testInfo) => {
 			test.skip(
 				Boolean(process.env.PLAYWRIGHT_BASE_URL),
 				'Uses the deterministic local GraphQL fixture'
 			)
+			await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
 			await page.setViewportSize({ width, height: 900 })
 			let transferRequests = 0
 			await page.route('**/api/graphql', async route => {
@@ -783,8 +789,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			).toBeVisible()
 			await expect.poll(() => section.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
 			expect(transferRequests).toBe(1)
+            expect((await page.context().cookies()).some(cookie => cookie.name.includes('session_token'))).toBe(false)
+            await expect(page).toHaveURL(url => url.pathname.endsWith('/live/points/123') && url.searchParams.get('gw') === '33')
+            expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
+            await testInfo.attach('S20-public-transfers', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S20', stepId: 'S20.01', variantId, locale, width, theme, timezone, identity: 'A anonymous', environment: 'isolated-fixture', assertion: 'Public entry transfer details render without login gate; selected entry/GW and both players/costs match the controlled response', currentBehavior: 'public-read', targetOracle: 'public-read', contractGap: false, transferRequests, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Web public transfer UI only; GraphQL upstream data supplied by browser fixture' }) })
 		})
-	}
+ })
 }
 
 test('public live transfers expose request failures and allow retry without a login gate', async ({
@@ -1726,8 +1737,12 @@ test('stale and degraded match publications show a timestamped delay notice', as
 	}
 })
 
-test('match requests are cancelled when actual navigation unmounts the page', async ({ page }) => {
+for (const directed of [false, true]) {
+test.describe(directed ? 'S09.directed.02' : 'existing match unmount baseline', () => {
+ test.use({ viewport: { width: directed ? 390 : 1440, height: 900 }, timezoneId: directed ? 'UTC' : 'Australia/Perth' })
+test('match requests are cancelled when actual navigation unmounts the page', async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fault injection')
+ if (directed) await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
  await page.clock.install({ time: new Date('2026-08-04T18:00:00.000Z') })
  let releaseResponse: (() => void) | undefined
  const responseGate = new Promise<void>(resolve => { releaseResponse = resolve })
@@ -1740,14 +1755,14 @@ test('match requests are cancelled when actual navigation unmounts the page', as
   await route.fulfill({ status: 503, json: { error: 'Delayed isolated response' } }).catch(() => {})
  })
  try {
-  await page.goto('/live/matches')
-  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  await page.goto(directed ? '/zh-CN/live/matches' : '/live/matches')
+  await expect(page.getByRole('heading', { name: directed ? '实时比赛' : 'Live Matches', exact: true })).toBeVisible()
   const requestStarted = page.waitForRequest(request => new URL(request.url()).pathname === '/api/live/matches')
-  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  await page.getByRole('button', { name: directed ? '刷新比赛' : 'Refresh matches', exact: true }).filter({ visible: true }).click()
   await requestStarted
-  await page.getByRole('contentinfo').getByRole('link', { name: 'Market', exact: true }).click()
+  await page.getByRole('contentinfo').getByRole('link', { name: directed ? '市场' : 'Market', exact: true }).click()
   await expect(page).toHaveURL(/\/explore\/market$/)
-  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: directed ? '实时比赛' : 'Live Matches', exact: true })).toHaveCount(0)
   await expect.poll(() => failed.length).toBe(1)
   expect(failed[0]).toMatch(/abort|cancel/i)
   releaseResponse?.()
@@ -1755,20 +1770,28 @@ test('match requests are cancelled when actual navigation unmounts the page', as
   await page.unroute('**/api/live/matches?*')
   await page.goBack()
   await expect(page).toHaveURL(/\/live\/matches$/)
-  await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: directed ? '实时比赛' : 'Live Matches', exact: true })).toBeVisible()
   const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
-  await page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true }).click()
+  await page.getByRole('button', { name: directed ? '刷新比赛' : 'Refresh matches', exact: true }).filter({ visible: true }).click()
   const response = await refreshed
   expect(response.status()).toBe(200)
   const snapshot = (await response.json()).liveMatchday.snapshot
   expect(snapshot.eventId).toBe(33)
-  await expect(page.getByRole('button', { name: 'Refresh matches', exact: true }).filter({ visible: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: directed ? '刷新比赛' : 'Refresh matches', exact: true }).filter({ visible: true })).toBeEnabled()
   await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
 
+  if (directed) {
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   await testInfo.attach('S09-unmount', { contentType: 'application/json', body: JSON.stringify({ caseId: 'S09', stepId: 'S09.01', variantId: 'S09.directed.02', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', identity: 'A anonymous', environment: 'isolated-fixture', assertion: 'Actual Market navigation cancels pending match request; late failure does not replace destination; Back and refresh recover current GW33 data', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Live Matches FULL request lifecycle only; fixture clock and held response, not all async consumers' }) })
+  }
  } finally {
   releaseResponse?.()
  }
 })
+
+})
+}
 
 test('match head requests are cancelled when actual navigation unmounts the page', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated fault injection')
