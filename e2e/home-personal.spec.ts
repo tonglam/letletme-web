@@ -4407,10 +4407,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
    const session = await createSession({ entryId: 909090, userId: 'e2e-browse-platform-admin' })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const other = { ...managedTournament, id: 88, adminEntryId: 808080, name: 'Other Owner Cup' }
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
    try {
     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
      { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } },
-     { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: [managedTournament, other] } }
+     { operation: 'GetManageableTournamentsList', variables: { entryId: 909090 }, data: { manageableTournaments: [managedTournament, other] } },
+     { operation: 'GetManagedTournament', variables: { tournamentId: 88, entryId: 909090 }, data: { managedTournament: other } }
     ] }) })).ok).toBe(true)
     await page.setViewportSize({ width, height: 900 })
     await addSessionCookie(page, session.cookie)
@@ -4429,9 +4437,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(otherRow).toHaveCount(1)
     await expect(otherRow.getByText(zh ? '可管理 · 未参赛' : 'Manageable · not participating', { exact: true })).toBeVisible()
     await expect(page.getByRole('row').filter({ hasText: 'J12 Owned Cup' }).getByText(zh ? '可管理 · 已参赛' : 'Manageable · participating', { exact: true })).toBeVisible()
+    const prefix = zh ? '/zh-CN' : ''
+    const assertManage = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/88/manage`)
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id', '88')
+     await expect(page.locator('#tournament-name')).toHaveValue('Other Owner Cup')
+     await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toBeVisible()
+    }
+    await otherRow.getByRole('button', { name: zh ? 'Other Owner Cup 的操作' : 'Actions for Other Owner Cup', exact: true }).click()
+    await page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true }).click()
+    await assertManage()
+    await page.reload()
+    await assertManage()
+    await page.goBack()
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/competitions/browse` && url.searchParams.get('mine') === 'true')
+    await expect(page.getByText('Other Owner Cup', { exact: true })).toBeVisible()
+    await page.goForward()
+    await assertManage()
+    await page.goBack()
+    await expect(mine).toBeVisible()
     await mine.click()
     await expect(page).toHaveURL(url => !url.searchParams.has('mine'))
     await expect(page.getByText('Other Owner Cup', { exact: true })).toHaveCount(0)
+    const direct = await page.goto(`${prefix}/competitions/88/manage`)
+    expect(direct?.status()).toBe(200)
+    expect(direct?.request().redirectedFrom()).toBeNull()
+    await assertManage()
+    expect(mutations).toEqual([])
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.some((r: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => r.operation === 'GetManagedTournament' && r.variables.tournamentId === 88 && r.variables.entryId === 909090)).toBe(true)
+    await testInfo.attach('R12-admin-management', { contentType: 'application/json', body: JSON.stringify({
+     variantId: `R12.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, identity: 'PA dedicated dual allowlist', locale,
+     viewport: page.viewportSize(), theme: 'system/light', timezone: 'Australia/Perth', tournamentId: 88, ownerEntryId: 808080, viewerEntryId: 909090,
+     actualManageClick: true, directStatus: direct!.status(), redirects: [], reload: true, backForward: true, mutations,
+     functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false,
+     scope: 'Web consumption of authorized fixture response; no real GraphQL authorization claim'
+    }) })
    } finally {
     try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
    }
