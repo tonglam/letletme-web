@@ -552,10 +552,17 @@ test.describe('process evidence availability', () => {
  }
 })
 
-for (const locale of ['en', 'zh-CN']) {
- for (const width of [1440, 390]) {
-  test(`PS05 failed selection reselection and cached return ${locale} ${width}`, async ({ page }) => {
+for (const { locale, width, planned } of [
+ { locale: 'en', width: 1440, planned: false }, { locale: 'en', width: 390, planned: false },
+ { locale: 'zh-CN', width: 1440, planned: false }, { locale: 'zh-CN', width: 390, planned: false },
+ { locale: 'zh-CN', width: 390, planned: true }
+]) {
+ test.describe(`PS05 context ${locale} ${width} ${planned ? 'planned' : 'baseline'}`, () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+  test(`PS05 failed selection reselection and cached return ${locale} ${width}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Error injection and anonymous context are isolated-only')
    const zh = locale === 'zh-CN'
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
    await page.setViewportSize({ width, height: 900 })
    let requests = 0
    await page.route('**/api/player-stats/desk?**', async route => {
@@ -587,8 +594,14 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(overall).toContainText('Palmer')
    await expect(overall).not.toContainText('Saka')
    expect(requests).toBe(2)
+   await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/explore/player-stats` && url.searchParams.get('p1') === '2')
+   expect((await page.context().cookies()).some(cookie => cookie.name.endsWith('session_token'))).toBe(false)
+   const context = await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), width: innerWidth }))
+   expect(context).toEqual({ timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system', width })
+   if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+   await testInfo.attach('PS05-context-proof', { contentType: 'application/json', body: JSON.stringify({ variantIds: planned ? ['PS05.state.01', 'PS05.state.02', 'PS05.state.03'] : [`PS05.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`], locale, viewport: page.viewportSize(), ...context, identity: 'A', phases: ['503 retains Saka', 'reselection fetches Palmer', 'return to seeded Saka', 'cached Palmer with no third read'], requests, finalPlayerId: 2, wholeVariantComplete: false, performanceStatus: 'NOT_RUN', readyMs: null }) })
   })
- }
+ })
 }
 
 for (const sectionName of ['recent', 'process'] as const) {
