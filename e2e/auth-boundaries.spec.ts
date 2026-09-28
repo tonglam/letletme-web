@@ -215,7 +215,7 @@ test.describe('AUTH02 planned error states', () => {
   for (const scenario of ['invalid', '429', 'error'] as const) {
    test(`AUTH02 ${scenario} ${form.path} ends pending and allows another attempt`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated intercepted authentication only')
-    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
     const intercepted: string[] = []
     const unexpected: string[] = []
     let attempt = 0
