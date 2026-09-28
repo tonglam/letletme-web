@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const variants = [
+ ...[{ id: 'J02.state.03', scenario: 'partial' }, { id: 'J02.state.02', scenario: 'empty' }, { id: 'J02.state.04', scenario: 'slow' }].map(state => ({ ...state, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' })),
  { id: 'J02.state.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario: 'ready' },
  ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({
   id: `J02.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth', scenario: 'baseline'
@@ -12,6 +13,8 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
  const { locale, width, theme, timezone, scenario } = variant
  const zh = locale === 'zh-CN'
  const prefix = zh ? '/zh-CN' : ''
+ const selectedDate = scenario === 'partial' ? '2026-08-01' : '2026-08-02'
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
  const labels = {
   period: zh ? '持有率比较周期' : 'Ownership comparison period',
   daily: zh ? '每日' : 'Daily', gameweek: zh ? 'GW 比较' : 'GW comparison',
@@ -23,17 +26,43 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
   overall: zh ? '球员总览' : 'Player overall'
  }
  test.use({ viewport: { width, height: 900 }, colorScheme: theme === 'dark' ? 'dark' : 'light', timezoneId: timezone, locale })
+ let releaseHistory: (() => void) | undefined
+ test.afterEach(async () => {
+  releaseHistory?.()
+  if (scenario === 'partial' && process.env.E2E_MARKET_READINESS === '1') await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+ })
  test('actual links preserve historical date and player identity', async ({ page, context }, testInfo) => {
 		test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Only the isolated fixture supports this planned scenario')
+		test.skip(scenario === 'partial' && (process.env.E2E_MARKET_READINESS !== '1' || process.env.E2E_SSR_REMEDIATION !== '1'), 'Partial ownership requires an isolated cache and fixture controls')
+		if (scenario === 'partial') {
+			const rules = []
+			for (const period of ['DAILY', 'GAMEWEEK']) {
+				const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetMarketOwnershipOverview { marketOwnershipOverview { period } }', variables: { period } }) })).json()
+				const ownership = seed.data.marketOwnershipOverview
+				Object.assign(ownership.coverage, { status: 'PARTIAL', requestedDays: 4, observedDays: 3, firstDate: '2026-07-31', fromDate: '2026-07-31', missingDates: ['2026-08-02'], complete: false })
+				for (const mover of [...ownership.risers, ...ownership.fallers]) mover.fromDate = '2026-07-31'
+				rules.push({ operation: 'GetMarketOwnershipOverview', variables: { period }, data: seed.data })
+			}
+			expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+		}
 		await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
 		expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
 		const historyRequests: number[] = []
+		if (scenario === 'empty' || scenario === 'slow') {
+			const held = new Promise<void>(resolve => { releaseHistory = resolve })
+			await page.route('**/api/market/price-history?**', async route => {
+				expect(new URL(route.request().url()).searchParams.get('playerId')).toBe('1')
+				if (scenario === 'slow') await held
+				await route.fulfill({ json: { items: scenario === 'empty' ? [] : [{ playerId: 1, changeDate: '2026-08-03', oldValue: 99, newValue: 100, changeType: 'RISE', transfersIn: null, transfersOut: null }] } })
+			})
+		}
+
 		await page.route('**/api/graphql', async route => {
 			const body = route.request().postDataJSON()
 			if (!body?.query?.includes('query GetPlayerValueHistory(')) return route.continue()
 			const playerId = Number(body.variables.playerId)
 			historyRequests.push(playerId)
-			await route.fulfill({ json: { data: { playerValueHistory: [{ playerId, changeDate: '2026-08-03', oldValue: 99, newValue: 100, changeType: 'RISE', transfersIn: null, transfersOut: null }] } } })
+			await route.fulfill({ json: { data: { playerValueHistory: scenario === 'empty' ? [] : [{ playerId, changeDate: '2026-08-03', oldValue: 99, newValue: 100, changeType: 'RISE', transfersIn: null, transfersOut: null }] } } })
 		})
 		await page.goto(prefix || '/')
 		await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/)
@@ -45,6 +74,11 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await marketLink.click()
 		await expect(page).toHaveURL(new RegExp(`${prefix}/explore/market$`))
 		await expect(page.locator('#market-most-selected-share li')).toHaveCount(4)
+		if (scenario === 'partial') {
+			await expect(page.locator('#market-ownership-share')).toContainText('2026年8月2日')
+			await expect(page.locator('#market-ownership-share')).toContainText('缺失')
+			await expect(page.locator('#market-ownership-share')).toContainText('Saka')
+		}
 		const periods = page.getByRole('navigation', { name: labels.period, exact: true })
 		await periods.getByRole('link', { name: labels.gameweek, exact: true }).click()
 		await expect(page).toHaveURL(/period=GAMEWEEK/)
@@ -52,10 +86,10 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await expect(page.locator('#market-ownership-share')).toContainText('GW2')
 		await periods.getByRole('link', { name: labels.daily, exact: true }).click()
 		await expect(page).toHaveURL(/period=DAILY/)
-		const historicalDate = page.getByRole('navigation', { name: labels.dates, exact: true }).locator('a[href*="date=2026-08-02"]')
+		const historicalDate = page.getByRole('navigation', { name: labels.dates, exact: true }).locator(`a[href*="date=${selectedDate}"]`)
 		await expect(historicalDate).toHaveCount(1)
 		await historicalDate.click()
-		await expect(page).toHaveURL(/period=DAILY&date=2026-08-02/)
+		await expect(page).toHaveURL(url => url.searchParams.get('period') === 'DAILY' && url.searchParams.get('date') === selectedDate)
 		await expect(historicalDate).toHaveAttribute('aria-current', 'date')
 		await expect(page.locator('#market-ownership-share')).toContainText('Saka')
 		const marketUrl = page.url()
@@ -64,7 +98,18 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await expect(saka).toHaveCount(1)
 		await saka.getByRole('button', { name: labels.history, exact: true }).click()
 		await expect(page.getByRole('heading', { level: 3, name: 'Saka', exact: true })).toBeVisible()
-		await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toContainText('£9.9m → £10.0m')
+		if (scenario === 'slow') {
+			await expect(page.getByText('正在加载球员身价历史…', { exact: true })).toBeVisible()
+			await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toHaveCount(0)
+			releaseHistory?.()
+		}
+		if (scenario === 'empty') {
+			await expect(page.getByText('Saka 尚无真实身价变化记录。', { exact: true })).toBeVisible()
+			await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toHaveCount(0)
+		} else {
+			await expect(page.getByRole('list', { name: labels.priceHistory, exact: true })).toContainText('£9.9m → £10.0m')
+		}
+
 		await page.getByRole('button', { name: labels.choose, exact: true }).click()
 		await page.getByRole('searchbox', { name: labels.search, exact: true }).fill('Sa')
 		await saka.getByRole('link', { name: 'Saka', exact: true }).click()
@@ -72,16 +117,21 @@ test.describe(`J02 planned market journey ${variant.id}`, () => {
 		await expect(page.getByRole('region', { name: labels.overall, exact: true })).toContainText('Saka')
 		await page.locator('button[aria-controls="ps-context-panel"]').click()
 		const detailHistory = page.locator('#ps-market-section ul li')
+		if (scenario === 'empty') {
+			await expect(detailHistory).toHaveCount(0)
+			await expect(page.locator('#ps-market-section')).toContainText('本赛季暂无身价变动记录。')
+		} else {
 		await expect(detailHistory).toHaveCount(1)
 		await expect(detailHistory).toContainText(new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: timezone }).format(new Date('2026-08-03T00:00:00Z')))
 		await expect(detailHistory).toContainText('£10.0m')
+		}
 		await expect(page.locator('#ps-market-section [aria-busy="true"]')).toHaveCount(0)
 		expect(historyRequests).toEqual([1])
 		await page.goBack()
 		await expect(page).toHaveURL(marketUrl)
-		await expect(page.getByRole('navigation', { name: labels.dates, exact: true }).locator('[aria-current="date"]')).toHaveAttribute('href', /date=2026-08-02/)
+		await expect(page.getByRole('navigation', { name: labels.dates, exact: true }).locator('[aria-current="date"]')).toHaveAttribute('href', new RegExp(`date=${selectedDate}`))
 		await expect(page.locator('#market-ownership-share')).toContainText('Saka')
-		await testInfo.attach(`${variant.id}-binding`, { contentType: 'application/json', body: JSON.stringify({ variantId: variant.id, persona: 'A', locale, viewport: { width, height: 900 }, theme, timezone, scenario, historicalDate: '2026-08-02', playerId: 1, returnedUrl: marketUrl, readyMs: null, performanceStatus: 'NOT_RUN', raceCoverage: 'Separate MKT02 controlled race tests; not inferred from this ready journey' }) })
+		await testInfo.attach(`${variant.id}-binding`, { contentType: 'application/json', body: JSON.stringify({ variantId: variant.id, persona: 'A', locale, viewport: { width, height: 900 }, theme, timezone, scenario, historicalDate: selectedDate, partialMissingDates: scenario === 'partial' ? ['2026-08-02'] : [], playerId: 1, returnedUrl: marketUrl, readyMs: null, performanceStatus: 'NOT_RUN', raceCoverage: 'Separate MKT02 controlled race tests; not inferred from this ready journey' }) })
 	})
 })
 }
