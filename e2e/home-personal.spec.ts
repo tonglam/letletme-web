@@ -2814,7 +2814,13 @@ for (const width of [1440, 390]) {
      { ...template, entry: 15703, entryName: 'Beta Coverage', score: { ...template.score, eventPoints: 20, totalPoints: 300 } },
      { ...template, entry: 15704, entryName: 'Gamma Coverage', chip: 'TRIPLE_CAPTAIN', played: 9, overallRank: 999, score: { ...template.score, eventPoints: 10, totalPoints: 200 } }
     ]
-    if (input.sort === 'TOTAL_POINTS') rows.sort((a, b) => input.direction === 'ASC' ? a.score.totalPoints - b.score.totalPoints : b.score.totalPoints - a.score.totalPoints)
+    const fixtureValues: Record<string, number[]> = {
+     EVENT_POINTS: [30, 20, 10], TOTAL_POINTS: [100, 300, 200],
+     OVERALL_RANK: [100, 500, 999], TEAM_VALUE: [1000, 1020, 1010], TRANSFER_COST: [0, 8, 4]
+    }
+    const values = fixtureValues[input.sort ?? 'EVENT_POINTS']
+    expect(values).toBeDefined()
+    rows.sort((a, b) => (values[a.entry - 15702] - values[b.entry - 15702]) * (input.direction === 'ASC' ? 1 : -1))
     const after = input.after != null
     if (after) expect(input.after).toBe('coverage-page-2')
     board.rows = after ? rows.slice(2) : rows.slice(0, 2)
@@ -2956,6 +2962,28 @@ for (const width of [1440, 390]) {
    await expect(teams.nth(1)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'ASC' })
    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+   const sortCases = [
+    { label: zh ? '本轮积分' : 'GW Pts', sort: 'EVENT_POINTS', direction: 'DESC', expected: ['Alpha Coverage', 'Beta Coverage', 'Gamma Coverage'] },
+    { label: zh ? '总积分' : 'Total Pts', sort: 'TOTAL_POINTS', direction: 'DESC', expected: ['Beta Coverage', 'Gamma Coverage', 'Alpha Coverage'] },
+    { label: zh ? '总排名' : 'OR', sort: 'OVERALL_RANK', direction: 'ASC', expected: ['Alpha Coverage', 'Beta Coverage', 'Gamma Coverage'] },
+    { label: zh ? '阵容身价' : 'TV', sort: 'TEAM_VALUE', direction: 'DESC', expected: ['Beta Coverage', 'Gamma Coverage', 'Alpha Coverage'] },
+    { label: zh ? '扣分' : 'Cost', sort: 'TRANSFER_COST', direction: 'DESC', expected: ['Beta Coverage', 'Gamma Coverage', 'Alpha Coverage'] }
+   ]
+   const sortControl = page.getByRole('combobox', { name: zh ? '积分榜排序方式' : 'Sort competition standings', exact: true })
+   for (const [index, item] of Array.from(sortCases.entries())) {
+    await sortControl.click()
+    if (index === 0) await expect(page.getByRole('option')).toHaveText(sortCases.map(option => option.label))
+    await page.getByRole('option', { name: item.label, exact: true }).click()
+    await expect(teams).toHaveCount(2)
+    for (const [position, name] of Array.from(item.expected.slice(0, 2).entries())) await expect(teams.nth(position)).toContainText(name)
+    expect(inputs.at(-1)).toMatchObject({ sort: item.sort, direction: item.direction })
+    expect(inputs.at(-1)?.after ?? null).toBeNull()
+    await expect(sortControl).toHaveText(item.label)
+    await page.getByRole('button', { name: item.direction === 'ASC' ? (zh ? '升序' : 'Asc') : (zh ? '降序' : 'Desc'), exact: true }).click()
+    for (const [position, name] of Array.from([...item.expected].reverse().slice(0, 2).entries())) await expect(teams.nth(position)).toContainText(name)
+    expect(inputs.at(-1)).toMatchObject({ sort: item.sort, direction: item.direction === 'ASC' ? 'DESC' : 'ASC' })
+    expect(inputs.at(-1)?.after ?? null).toBeNull()
+   }
    await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
    await page.getByRole('checkbox', { name: (zh ? '选择 Gamma Coverage 进行对比' : 'Select Gamma Coverage for comparison'), exact: true }).filter({ visible: true }).check()
    await expect(page.getByText((zh ? '再选 1 支球队' : 'Select 1 more to compare'), { exact: true })).toBeVisible()
@@ -2972,7 +3000,7 @@ for (const width of [1440, 390]) {
    await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
    await expect(page.getByText((zh ? '勾选 2 支队伍' : 'Select 2 teams'), { exact: true })).toBeVisible()
    await expect(page.getByRole('checkbox', { name: (zh ? '选择 E2E United 进行对比' : 'Select E2E United for comparison'), exact: true }).filter({ visible: true })).not.toBeChecked()
-   await testInfo.attach('LC02-scoped-context', { contentType: 'application/json', body: JSON.stringify({ variantId, locale, width, timezone: 'Australia/Perth', theme: 'system', identity: 'bound fixture user', boundEntryId: session.entryId, failureInjection: failure, functionalAssertions: 'PASS', readyMs: null, wholeVariantComplete: false, remaining: 'All sort options, large roster, empty state and performance remain open.' }) })
+   await testInfo.attach('LC02-scoped-context', { contentType: 'application/json', body: JSON.stringify({ variantId, locale, width, timezone: 'Australia/Perth', theme: 'system', identity: 'bound fixture user', boundEntryId: session.entryId, failureInjection: failure, functionalAssertions: 'PASS', readyMs: null, wholeVariantComplete: false, remaining: 'Large roster, empty state, server sorting algorithm and performance remain open.' }) })
   } finally {
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
