@@ -36,6 +36,7 @@ for (const variant of selectorVariants) {
 			const assertDesk = async (gw: number) => {
 				await expect(page).toHaveURL(url => url.pathname === `${prefix}/explore/gameweek` && url.search === '')
 				await expect(input).toHaveValue(String(gw))
+				await expect(selector).toHaveText(zh ? `第 ${gw} 轮${gw === 33 ? '（当前）' : ''}` : `Gameweek ${gw}${gw === 33 ? ' (Current)' : ''}`)
 				await expect(input).toHaveAttribute('aria-busy', 'false')
 				await expect(page.getByRole('heading', { name: zh ? `GW${gw} 概览` : `GW${gw} Overview`, exact: true })).toBeVisible()
 				const dreamTeam = page.locator('[aria-labelledby="home-team-of-week-title"]')
@@ -51,7 +52,20 @@ for (const variant of selectorVariants) {
 			await expect(input).toHaveAttribute('min', '1')
 			await expect(input).toHaveAttribute('max', '33')
 			await expect(next).toBeDisabled()
+			const dreamPlayer = page.locator('[aria-labelledby="home-team-of-week-title"] li button')
+			await dreamPlayer.click()
+			const detailTitle = zh ? 'Saka — 球员详情' : 'Saka — Player Details'
+			const detail = page.getByRole('dialog', { name: detailTitle, exact: true })
+			await expect(detail).toBeVisible()
+			await expect(detail.getByRole('heading', { name: detailTitle, exact: true })).toHaveCount(1)
+			await page.keyboard.press('Escape')
+			await expect(detail).toHaveCount(0)
+			await expect(dreamPlayer).toBeFocused()
+			await expect(selector).toHaveAttribute('aria-expanded', 'false')
 			await selector.click()
+			// Radix hides the trigger from the accessibility tree while its modal list is open.
+			await expect(page.locator(`[role="combobox"][aria-label="${zh ? '选择轮次' : 'Select gameweek'}"]`)).toHaveAttribute('aria-expanded', 'true')
+			await expect(page.getByRole('listbox')).toBeVisible()
 			const options = Array.from({ length: 33 }, (_, index) => {
 				const gw = 33 - index
 				return zh ? `第 ${gw} 轮${gw === 33 ? '（当前）' : ''}` : `Gameweek ${gw}${gw === 33 ? ' (Current)' : ''}`
@@ -59,13 +73,15 @@ for (const variant of selectorVariants) {
 			await expect(page.getByRole('option')).toHaveText(options)
 			await page.getByRole('option', { name: options[32], exact: true }).click()
 			await assertDesk(1)
+			await expect(page.getByRole('listbox')).toHaveCount(0)
+			await expect(selector).toHaveAttribute('aria-expanded', 'false')
 			await expect(previous).toBeDisabled()
 			await next.click()
 			await assertDesk(2)
 			await previous.click()
 			await assertDesk(1)
 			await input.fill('32')
-			await input.press('Enter')
+			await page.getByRole('button', { name: zh ? '跳转到指定轮次' : 'Jump to gameweek', exact: true }).click()
 			await assertDesk(32)
 			// Blur applies the published clamping contract; native form validation
 			// may prevent out-of-range Enter from submitting.

@@ -2828,10 +2828,17 @@ for (const locale of ['en', 'zh-CN']) {
 	})
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
+test.describe(`LC02 planned ${locale}`, () => {
+ test.use({ locale, timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const width of [1440, 390]) {
  for (const failure of [false, true]) {
- test(`canonical competition board sort and pagination preserve request scope at ${width}px${failure ? ' with next-page failure recovery' : ''}`, async ({ page }) => {
+ test(`canonical competition board sort and pagination preserve request scope at ${width}px${failure ? ' with next-page failure recovery' : ''}`, async ({ page }, testInfo) => {
   test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Uses isolated board fixtures')
+  const zh = locale === 'zh-CN'
+  const variantId = `LC02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`
+  testInfo.annotations.push({ type: 'coverage-variant', description: variantId })
+  await page.addInitScript(() => localStorage.setItem('theme', 'system'))
   const session = await createSession({ entryId: 123 })
   const inputs: Array<{ sort?: string; direction?: string; after?: string | null }> = []
   let failedNextPage = 0
@@ -2869,7 +2876,13 @@ for (const width of [1440, 390]) {
      { ...template, entry: 15703, entryName: 'Beta Coverage', score: { ...template.score, eventPoints: 20, totalPoints: 300 } },
      { ...template, entry: 15704, entryName: 'Gamma Coverage', chip: 'TRIPLE_CAPTAIN', played: 9, overallRank: 999, score: { ...template.score, eventPoints: 10, totalPoints: 200 } }
     ]
-    if (input.sort === 'TOTAL_POINTS') rows.sort((a, b) => input.direction === 'ASC' ? a.score.totalPoints - b.score.totalPoints : b.score.totalPoints - a.score.totalPoints)
+    const fixtureValues: Record<string, number[]> = {
+     EVENT_POINTS: [30, 20, 10], TOTAL_POINTS: [100, 300, 200],
+     OVERALL_RANK: [100, 500, 999], TEAM_VALUE: [1000, 1020, 1010], TRANSFER_COST: [0, 8, 4]
+    }
+    const values = fixtureValues[input.sort ?? 'EVENT_POINTS']
+    expect(values).toBeDefined()
+    rows.sort((a, b) => (values[a.entry - 15702] - values[b.entry - 15702]) * (input.direction === 'ASC' ? 1 : -1))
     const after = input.after != null
     if (after) expect(input.after).toBe('coverage-page-2')
     board.rows = after ? rows.slice(2) : rows.slice(0, 2)
@@ -2880,20 +2893,23 @@ for (const width of [1440, 390]) {
     await route.fulfill({ response, json: body })
    })
    await page.clock.install()
-   await page.goto('/live/competitions?tournamentId=6&gw=4')
+   await page.goto(`${zh ? '/zh-CN' : ''}/live/competitions?tournamentId=6&gw=4`)
+   await expect(page.locator('html')).toHaveClass(/light/)
+   expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: navigator.language }))).toEqual({ timezone: 'Australia/Perth', theme: 'system', language: locale })
+   expect(page.viewportSize()?.width).toBe(width)
    const teams = page.getByRole('link', { name: /(?:Alpha|Beta|Gamma) Coverage/ }).filter({ visible: true })
    await expect(teams).toHaveCount(2)
    await expect(teams.nth(0)).toContainText('Alpha Coverage')
-   await page.getByRole('button', { name: 'Compare', exact: true }).click()
-   const selectedAlpha = page.getByRole('checkbox', { name: 'Select Alpha Coverage for comparison', exact: true }).filter({ visible: true })
+   await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
+   const selectedAlpha = page.getByRole('checkbox', { name: (zh ? '选择 Alpha Coverage 进行对比' : 'Select Alpha Coverage for comparison'), exact: true }).filter({ visible: true })
    await selectedAlpha.check()
    if (failure) await page.clock.pauseAt(new Date(Date.now() + 1_000))
-   await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '再显示 1 条' : 'Show 1 more'), exact: true }).click()
    if (failure) {
     await expect.poll(() => failedNextPage).toBe(1)
     await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1')) > Date.now())).toBe(true)
     await page.clock.runFor(1_100)
-    const warning = page.getByText('Refresh failed. The last available standings are still shown.', { exact: true })
+    const warning = page.getByText((zh ? '刷新失败，继续显示上一次可用的积分榜。' : 'Refresh failed. The last available standings are still shown.'), { exact: true })
     await expect(warning).toBeVisible()
     await expect(teams).toHaveText([/Alpha Coverage/, /Beta Coverage/])
     await test.info().attach('pagination-retry-clock', { body: JSON.stringify(await page.evaluate(() => ({ now: Date.now(), cooldownUntil: sessionStorage.getItem('letletme:dependency-cooldown-until-v1'), failureAt: sessionStorage.getItem('letletme:dependency-cooldown-failure-at-v1') }))), contentType: 'application/json' })
@@ -2901,7 +2917,7 @@ for (const width of [1440, 390]) {
     // Advance the same browser clock used by Retry-After and the cooldown fence.
     await page.clock.runFor(1_100)
     await page.clock.resume()
-    await page.getByRole('button', { name: 'Show 1 more', exact: true }).click()
+    await page.getByRole('button', { name: (zh ? '再显示 1 条' : 'Show 1 more'), exact: true }).click()
     await expect(warning).toHaveCount(0)
     expect(inputs.filter(input => input.after === 'coverage-page-2')).toHaveLength(3)
    }
@@ -2909,8 +2925,8 @@ for (const width of [1440, 390]) {
    await expect(teams.nth(2)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ after: 'coverage-page-2' })
    await expect(selectedAlpha).toBeChecked()
-   await page.getByRole('checkbox', { name: 'Select Gamma Coverage for comparison', exact: true }).filter({ visible: true }).check()
-   await expect(page.getByRole('checkbox', { name: 'Select Beta Coverage for comparison', exact: true }).filter({ visible: true })).toBeDisabled()
+   await page.getByRole('checkbox', { name: (zh ? '选择 Gamma Coverage 进行对比' : 'Select Gamma Coverage for comparison'), exact: true }).filter({ visible: true }).check()
+   await expect(page.getByRole('checkbox', { name: (zh ? '选择 Beta Coverage 进行对比' : 'Select Beta Coverage for comparison'), exact: true }).filter({ visible: true })).toBeDisabled()
    let comparisonAttempts = 0
    await page.route('**/api/live/competitions/6/compare?*', async route => {
     comparisonAttempts += 1
@@ -2926,13 +2942,13 @@ for (const width of [1440, 390]) {
     }
    })
    const refreshedBoard = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/6/board' && !response.request().postDataJSON()?.input?.after)
-   await page.getByRole('button', { name: 'Compare (2)', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '对比（2）' : 'Compare (2)'), exact: true }).click()
    expect((await refreshedBoard).status()).toBe(200)
    await expect(page.getByRole('dialog')).toBeVisible()
    await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible()
    expect(comparisonAttempts).toBe(1)
    const compared = page.waitForResponse(response => response.url().includes('/api/live/competitions/6/compare?'))
-   await page.getByRole('dialog').getByRole('button', { name: 'Refresh', exact: true }).click()
+   await page.getByRole('dialog').getByRole('button', { name: (zh ? '刷新' : 'Refresh'), exact: true }).click()
    const comparisonResponse = await compared
    expect(comparisonAttempts).toBe(2)
    expect(comparisonResponse.status()).toBe(200)
@@ -2983,7 +2999,7 @@ for (const width of [1440, 390]) {
      await route.fulfill({ response, json: body })
     }
    })
-   await page.getByRole('button', { name: 'Compare (2)', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '对比（2）' : 'Compare (2)'), exact: true }).click()
    await expect(sheet.getByRole('heading')).toContainText('Updated Gamma')
    await expect(sheet.getByRole('heading')).not.toContainText('Gamma Coverage')
    await expect(sheet.getByText('77', { exact: true })).toHaveCount(4)
@@ -2995,23 +3011,45 @@ for (const width of [1440, 390]) {
    expect(revisions).toEqual(['e2e-competition-score-v1', 'e2e-competition-score-v2'])
    await sheet.press('Escape')
    await expect(sheet).toHaveCount(0)
-   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-   await page.getByRole('combobox', { name: 'Sort competition standings', exact: true }).click()
-   await page.getByRole('option', { name: 'Total Pts', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '取消' : 'Cancel'), exact: true }).click()
+   await page.getByRole('combobox', { name: (zh ? '积分榜排序方式' : 'Sort competition standings'), exact: true }).click()
+   await page.getByRole('option', { name: (zh ? '总积分' : 'Total Pts'), exact: true }).click()
    await expect(teams).toHaveCount(2)
    await expect(teams.nth(0)).toContainText('Beta Coverage')
    await expect(teams.nth(1)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'DESC' })
    expect(inputs.at(-1)?.after ?? null).toBeNull()
-   await page.getByRole('button', { name: 'Desc', exact: true }).click()
+   await page.getByRole('button', { name: (zh ? '降序' : 'Desc'), exact: true }).click()
    await expect(teams.nth(0)).toContainText('Alpha Coverage')
    await expect(teams.nth(1)).toContainText('Gamma Coverage')
    expect(inputs.at(-1)).toMatchObject({ sort: 'TOTAL_POINTS', direction: 'ASC' })
    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
-   await page.getByRole('button', { name: 'Compare', exact: true }).click()
-   await page.getByRole('checkbox', { name: 'Select Gamma Coverage for comparison', exact: true }).filter({ visible: true }).check()
-   await expect(page.getByText('Select 1 more to compare', { exact: true })).toBeVisible()
-   await page.getByRole('button', { name: 'Classic', exact: true }).click()
+   const sortCases = [
+    { label: zh ? '本轮积分' : 'GW Pts', sort: 'EVENT_POINTS', direction: 'DESC', expected: ['Alpha Coverage', 'Beta Coverage', 'Gamma Coverage'] },
+    { label: zh ? '总积分' : 'Total Pts', sort: 'TOTAL_POINTS', direction: 'DESC', expected: ['Beta Coverage', 'Gamma Coverage', 'Alpha Coverage'] },
+    { label: zh ? '总排名' : 'OR', sort: 'OVERALL_RANK', direction: 'ASC', expected: ['Alpha Coverage', 'Beta Coverage', 'Gamma Coverage'] },
+    { label: zh ? '阵容身价' : 'TV', sort: 'TEAM_VALUE', direction: 'DESC', expected: ['Beta Coverage', 'Gamma Coverage', 'Alpha Coverage'] },
+    { label: zh ? '扣分' : 'Cost', sort: 'TRANSFER_COST', direction: 'DESC', expected: ['Beta Coverage', 'Gamma Coverage', 'Alpha Coverage'] }
+   ]
+   const sortControl = page.getByRole('combobox', { name: zh ? '积分榜排序方式' : 'Sort competition standings', exact: true })
+   for (const [index, item] of Array.from(sortCases.entries())) {
+    await sortControl.click()
+    if (index === 0) await expect(page.getByRole('option')).toHaveText(sortCases.map(option => option.label))
+    await page.getByRole('option', { name: item.label, exact: true }).click()
+    await expect(teams).toHaveCount(2)
+    for (const [position, name] of Array.from(item.expected.slice(0, 2).entries())) await expect(teams.nth(position)).toContainText(name)
+    expect(inputs.at(-1)).toMatchObject({ sort: item.sort, direction: item.direction })
+    expect(inputs.at(-1)?.after ?? null).toBeNull()
+    await expect(sortControl).toHaveText(item.label)
+    await page.getByRole('button', { name: item.direction === 'ASC' ? (zh ? '升序' : 'Asc') : (zh ? '降序' : 'Desc'), exact: true }).click()
+    for (const [position, name] of Array.from([...item.expected].reverse().slice(0, 2).entries())) await expect(teams.nth(position)).toContainText(name)
+    expect(inputs.at(-1)).toMatchObject({ sort: item.sort, direction: item.direction === 'ASC' ? 'DESC' : 'ASC' })
+    expect(inputs.at(-1)?.after ?? null).toBeNull()
+   }
+   await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
+   await page.getByRole('checkbox', { name: (zh ? '选择 Gamma Coverage 进行对比' : 'Select Gamma Coverage for comparison'), exact: true }).filter({ visible: true }).check()
+   await expect(page.getByText((zh ? '再选 1 支球队' : 'Select 1 more to compare'), { exact: true })).toBeVisible()
+   await page.getByRole('button', { name: (zh ? '经典联赛' : 'Classic'), exact: true }).click()
    const switched = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/competitions/7/board')
    await page.getByRole('menuitem', { name: 'Coverage League 7', exact: true }).click()
    const switchedResponse = await switched
@@ -3019,17 +3057,21 @@ for (const width of [1440, 390]) {
    expect((await switchedResponse.json()).entryLiveCompetitionBoard.head).toMatchObject({ tournamentId: 7, eventId: 4 })
    await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '7' && url.searchParams.get('gw') === '4')
    await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
-   await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeVisible()
-   await expect(page.getByText('Select 1 more to compare', { exact: true })).toHaveCount(0)
-   await page.getByRole('button', { name: 'Compare', exact: true }).click()
-   await expect(page.getByText('Select 2 teams', { exact: true })).toBeVisible()
-   await expect(page.getByRole('checkbox', { name: 'Select E2E United for comparison', exact: true }).filter({ visible: true })).not.toBeChecked()
+   await expect(page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true })).toBeVisible()
+   await expect(page.getByText((zh ? '再选 1 支球队' : 'Select 1 more to compare'), { exact: true })).toHaveCount(0)
+   await page.getByRole('button', { name: (zh ? '对比' : 'Compare'), exact: true }).click()
+   await expect(page.getByText((zh ? '勾选 2 支队伍' : 'Select 2 teams'), { exact: true })).toBeVisible()
+   await expect(page.getByRole('checkbox', { name: (zh ? '选择 E2E United 进行对比' : 'Select E2E United for comparison'), exact: true }).filter({ visible: true })).not.toBeChecked()
+   await testInfo.attach('LC02-scoped-context', { contentType: 'application/json', body: JSON.stringify({ variantId, locale, width, timezone: 'Australia/Perth', theme: 'system', identity: 'bound fixture user', boundEntryId: session.entryId, failureInjection: failure, functionalAssertions: 'PASS', readyMs: null, wholeVariantComplete: false, remaining: 'Large roster, empty state, server sorting algorithm and performance remain open.' }) })
   } finally {
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
   }
  })
 }
+}
+
+})
 }
 
 for (const profile of ['baseline', 'ready', 'session-expired'] as const) {
@@ -6710,4 +6752,87 @@ for (const scenario of ['baseline', 'empty', 'error', '401'] as const) {
    })
   })
  }
+}
+
+for (const large of [false, true]) {
+test.describe(`LC02 planned state ${large ? 'large' : 'empty'} canonical board`, () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('retains the requested identity without fabricated standings', async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated board fixtures')
+  const session = await createSession({ entryId: 123 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  let boardRequests = 0
+  const variantId = large ? 'LC02.state.01' : 'LC02.state.02'
+  const cursors: Array<string | null> = []
+  try {
+   const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveContext { __typename }' }) })).json()
+   expect(seed.errors).toBeUndefined()
+   Object.assign(seed.data.coreEventContext, { currentEventId: 4, nextEventId: 5, latestFinishedEventId: 3 })
+   Object.assign(seed.data.liveContext, { eventId: 4, nextEventId: 5, anchorEventId: 4, latestFinalizedEventId: 3 })
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetLiveContext', data: seed.data },
+    { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...managedTournament, id: 6, name: 'Empty Coverage League', adminEntryId: 15702 }] } }
+   ] }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.route('**/api/live/competitions/6/board', async route => {
+    expect(route.request().postDataJSON().eventId).toBe(4)
+    boardRequests++
+    const response = await route.fetch()
+    expect(response.ok()).toBe(true)
+    const body = await response.json()
+    const board = body.entryLiveCompetitionBoard
+    const cursor = route.request().postDataJSON().input?.after ?? null
+    cursors.push(cursor)
+    const offset = cursor === null ? 0 : Number(cursor.replace('coverage-offset-', ''))
+    expect([0, 50, 100]).toContain(offset)
+    const template = board.rows[0]
+    const allRows = Array.from({ length: large ? 125 : 0 }, (_, index) => ({ ...template, entry: 15702 + index, entryName: `Coverage ${String(index + 1).padStart(3, '0')}`, score: { ...template.score, eventPoints: 200 - index, totalPoints: 1000 - index } }))
+    board.rows = allRows.slice(offset, offset + 50)
+    board.viewerRow = null
+    board.totalEntries = allRows.length
+    board.filteredEntries = allRows.length
+    board.pageInfo = { hasNextPage: large && offset < 100, endCursor: large && offset < 100 ? `coverage-offset-${offset + 50}` : null }
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/zh-CN/live/competitions?tournamentId=6&gw=4')
+   const ready = page.locator('[data-competition-perf-ready="detail"]')
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '6')
+   await expect(ready).toHaveAttribute('data-competition-gameweek', '4')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: navigator.language, width: innerWidth }))).toEqual({ timezone: 'UTC', theme: 'dark', language: 'zh-CN', width: 390 })
+   if (large) {
+    const teams = ready.getByRole('link', { name: /Coverage \d{3}/ }).filter({ visible: true })
+    await expect(teams).toHaveCount(50)
+    await page.getByRole('button', { name: '对比', exact: true }).click()
+    const first = page.getByRole('checkbox', { name: '选择 Coverage 001 进行对比', exact: true }).filter({ visible: true })
+    await first.check()
+    await page.getByRole('button', { name: /再显示/ }).click()
+    await expect(teams).toHaveCount(100)
+    await expect(first).toBeChecked()
+    await page.getByRole('button', { name: /再显示/ }).click()
+    await expect(teams).toHaveCount(125)
+    await expect(first).toBeChecked()
+    const names = await teams.allTextContents()
+    expect(names.map(name => name.match(/Coverage \d{3}/)?.[0])).toEqual(Array.from({ length: 125 }, (_, i) => `Coverage ${String(i + 1).padStart(3, '0')}`))
+    const hrefs = await teams.evaluateAll(links => links.map(link => link.getAttribute('href')))
+    expect(new Set(hrefs).size).toBe(125)
+    expect(cursors).toEqual([null, 'coverage-offset-50', 'coverage-offset-100'])
+    await page.getByRole('checkbox', { name: '选择 Coverage 125 进行对比', exact: true }).filter({ visible: true }).check()
+    await expect(page.getByRole('button', { name: '对比（2）', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: '取消', exact: true }).click()
+   } else {
+    await expect(page.getByText('没有球队符合搜索条件。', { exact: true }).filter({ visible: true })).toBeVisible()
+    await expect(ready.locator('a[href*="/live/points/"]').filter({ visible: true })).toHaveCount(0)
+   }
+   await expect(page.getByRole('button', { name: /再显示|显示全部|收起/ }).filter({ visible: true })).toHaveCount(0)
+   expect(boardRequests).toBeGreaterThan(0)
+   await testInfo.attach(`${variantId}-context`, { contentType: 'application/json', body: JSON.stringify({ variantId, boundEntryId: session.entryId, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', tournamentId: 6, gameweek: 4, boardRequests, readyMs: null, performanceStatus: 'NOT_OBSERVED', wholeCaseComplete: false }) })
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+})
+
 }

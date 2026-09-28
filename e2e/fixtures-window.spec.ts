@@ -1,11 +1,24 @@
 import { expect, test } from '@playwright/test'
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	for (const width of [1440, 390]) {
-		test.describe(`fixture row identity ${locale} ${width}`, () => {
-			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
-			test('DGW and BGW belong to the correct team and gameweek cells', async ({ page }) => {
+	for (const profile of [
+		{ width: 1440, planned: false },
+		{ width: 390, planned: false },
+		...(locale === 'zh-CN' ? [{ width: 390, planned: true }] : [])
+	]) {
+		const { width, planned } = profile
+		test.describe(`fixture row identity ${locale} ${width}${planned ? ' FIX01 planned UTC dark' : ''}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: planned ? 'UTC' : 'Australia/Perth', ...(planned ? { colorScheme: 'dark' as const, storageState: { cookies: [], origins: [] } } : {}) })
+			test('DGW and BGW belong to the correct team and gameweek cells', async ({ page }, testInfo) => {
+				if (planned) await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
 				await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+				if (planned) {
+					expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+					await expect(page.locator('html')).toHaveClass(/dark/)
+					expect(page.viewportSize()?.width).toBe(390)
+					expect((await page.context().cookies()).some(cookie => /session_token/.test(cookie.name))).toBe(false)
+					testInfo.annotations.push({ type: 'coverage-variant', description: 'FIX01.state.01; FIX01.state.02; anonymous zh-CN mobile390 dark UTC; DGW/BGW cell semantics only' })
+				}
 				const matrix = page.getByRole('region', {
 					name: locale === 'en' ? 'Team FDR' : '球队 FDR', exact: true
 				})
@@ -265,10 +278,16 @@ test.describe(`FIX03 terminal ${locale}`, () => {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	for (const width of [1440, 390]) {
-		test.describe(`unknown fixture cells ${locale} ${width}`, () => {
-			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
-			test('partial fixture window preserves each team and marks unknown cells unavailable', async ({ page }) => {
+	for (const profile of [
+		{ width: 1440, planned: false },
+		{ width: 390, planned: false },
+		...(locale === 'zh-CN' ? [{ width: 390, planned: true }] : [])
+	]) {
+		const { width, planned } = profile
+		test.describe(`unknown fixture cells ${locale} ${width}${planned ? ' FIX01 partial planned UTC dark' : ''}`, () => {
+			test.use({ viewport: { width, height: 900 }, timezoneId: planned ? 'UTC' : 'Australia/Perth', ...(planned ? { colorScheme: 'dark' as const, storageState: { cookies: [], origins: [] } } : {}) })
+			test('partial fixture window preserves each team and marks unknown cells unavailable', async ({ page }, testInfo) => {
+				if (planned) await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
 				let windowRequests = 0
 				await page.route('**/api/fixtures/window?**', route => {
 					windowRequests += 1
@@ -282,6 +301,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					})
 				})
 				await page.goto(locale === 'en' ? '/explore/fixtures' : '/zh-CN/explore/fixtures')
+				if (planned) {
+					expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+					await expect(page.locator('html')).toHaveClass(/dark/)
+					expect(page.viewportSize()?.width).toBe(390)
+					expect((await page.context().cookies()).some(cookie => /session_token/.test(cookie.name))).toBe(false)
+					testInfo.annotations.push({ type: 'coverage-variant', description: 'FIX01.state.03; anonymous zh-CN mobile390 dark UTC; partial window preserves known cells' })
+				}
 				const matrix = page.getByRole('region', {
 					name: locale === 'en' ? 'Team FDR' : '球队 FDR', exact: true
 				})
