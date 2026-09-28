@@ -14,6 +14,7 @@ import {
 } from '@/lib/live-context-server'
 import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 import { loadPersonalSquadSeed } from '@/lib/load-entry-squad-picks'
 import { PriceChangesPersonalSeedProvider, PriceChangesPersonalSeedCommit } from '@/app/data/price-changes/PriceChangesPersonalSeedContext'
 import { Suspense } from 'react'
@@ -100,12 +101,13 @@ function PriceChangesContractMarker({
 }
 
 async function renderPriceChangesPage({ params, searchParams }: PageProps) {
-	const { locale } = await getPageLocale(params)
-	const t = await getTranslations('PriceChanges')
+	const timing = new RouteLoaderTiming('/explore/price-predictions')
+	const { locale } = await timing.measure('locale', () => getPageLocale(params))
+	const t = await timing.measure('translations', () => getTranslations('PriceChanges'))
 	const query = await searchParams
 	const initialScope = requestedScope(query.scope)
 	const initialMovement = requestedMovement(query.movement)
-	const boardPromise = loadPriceChangeBoard()
+	const boardPromise = timing.measure('board', () => loadPriceChangeBoard())
 		.then(response => ({ response, error: null as unknown }))
 		.catch(error => ({
 			response: { priceChangeBoard: EMPTY_PRICE_CHANGE_BOARD },
@@ -119,7 +121,9 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 	const priceChangesReady =
 		board.status !== 'UNAVAILABLE' && board.players.length > 0
 	const optionalLivePageContext =
-		board.status === 'READY' ? null : await getOptionalLivePageContext()
+		board.status === 'READY'
+			? null
+			: await timing.measure('optional-context', () => getOptionalLivePageContext())
 	const isOfficialUpdating =
 		board.status !== 'READY' &&
 		isOfficialLiveUpdatingContext(optionalLivePageContext?.liveContext)
@@ -140,6 +144,8 @@ async function renderPriceChangesPage({ params, searchParams }: PageProps) {
 				: board.status === 'STALE'
 					? t('stale')
 					: t('unavailable')
+
+	timing.finish(board.status === 'READY' ? 'ready' : board.status === 'UNAVAILABLE' ? 'unavailable' : 'partial')
 
 	return (
 		<PriceChangesPersonalSeedProvider navigationId={navigationId}>
