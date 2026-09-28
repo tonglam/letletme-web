@@ -5139,6 +5139,51 @@ for (const state of ['UNAVAILABLE', 'EMPTY'] as const) {
  })
 }
 
+test.describe('TEAM04 planned past-season boundaries', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ for (const state of ['UNAVAILABLE', 'EMPTY', 'READY'] as const) {
+  test(`SSR remediation TEAM04 planned past-season ${state}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager fixture only')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   try {
+    const pastSeasons = state === 'READY' ? [{ season: '2024/25', totalPoints: 2100, overallRank: 18000 }] : []
+    const review = { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! }, pastSeasons, pastSeasonsState: state }
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto('/zh-CN/my-fpl/team')
+    await expect(page.getByRole('tab', { name: zhMessages.TeamStats.viewSeason, exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('heading', { name: 'E2E Review United', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '轮次历史', exact: true })).toBeVisible()
+    const ready = page.locator('[data-manager-ready]')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-revision', '103')
+    await expect(ready).toHaveAttribute('data-manager-ready', state === 'UNAVAILABLE' ? 'false' : 'true')
+    const warning = page.getByText(zhMessages.TeamStats.pastSeasonsUnavailable, { exact: true })
+    if (state === 'UNAVAILABLE') await expect(warning).toBeVisible()
+    else await expect(warning).toHaveCount(0)
+    if (state === 'READY') {
+     const row = page.getByRole('listitem').filter({ has: page.getByText('2024/25', { exact: true }) })
+     await expect(row).toHaveCount(1)
+     await expect(row).toContainText('2,100')
+     await expect(row.getByText(zhMessages.TeamStats.seasonCurrent, { exact: true })).toHaveCount(0)
+     await expect(row.locator('a, button, [role="button"]')).toHaveCount(0)
+     await expect(ready).toHaveAttribute('data-manager-revision', '103')
+    } else {
+     await expect(page.getByText('2024/25', { exact: true })).toHaveCount(0)
+    }
+    expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), width: innerWidth }))).toEqual({ timezone: 'UTC', theme: 'dark', width: 390 })
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    await testInfo.attach('TEAM04-boundary', { contentType: 'application/json', body: JSON.stringify({ variantId: state === 'UNAVAILABLE' ? 'TEAM04.state.02' : state === 'READY' ? 'TEAM04.state.03' : null, state, entryId: session.entryId, revision: '103', locale: 'zh-CN', timezone: 'UTC', theme: 'dark', viewport: page.viewportSize(), scope: 'Past-season availability and display-only reference rows preserve current-season identity and readiness semantics', wholeVariantPass: false, performanceStatus: 'NOT_RUN', readyMs: null }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
+
 test('manager snapshot status survives a late historical read and failed selection', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated serial manager fixture')
  const session = await createSession({ entryId: 15702 })
