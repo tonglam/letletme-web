@@ -6384,3 +6384,87 @@ test.describe('HOME01 anonymous public partial failure', () => {
   } finally { await control(false) }
  })
 })
+
+
+for (const large of [false, true]) {
+test.describe(`LC02 planned state ${large ? 'large' : 'empty'} canonical board`, () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('retains the requested identity without fabricated standings', async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated board fixtures')
+  const session = await createSession({ entryId: 123 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  let boardRequests = 0
+  const variantId = large ? 'LC02.state.01' : 'LC02.state.02'
+  const cursors: Array<string | null> = []
+  try {
+   const seed = await (await fetch(fixture.replace('/__performance', '/graphql'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveContext { __typename }' }) })).json()
+   expect(seed.errors).toBeUndefined()
+   Object.assign(seed.data.coreEventContext, { currentEventId: 4, nextEventId: 5, latestFinishedEventId: 3 })
+   Object.assign(seed.data.liveContext, { eventId: 4, nextEventId: 5, anchorEventId: 4, latestFinalizedEventId: 3 })
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetLiveContext', data: seed.data },
+    { operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...managedTournament, id: 6, name: 'Empty Coverage League', adminEntryId: 15702 }] } }
+   ] }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.route('**/api/live/competitions/6/board', async route => {
+    expect(route.request().postDataJSON().eventId).toBe(4)
+    boardRequests++
+    const response = await route.fetch()
+    expect(response.ok()).toBe(true)
+    const body = await response.json()
+    const board = body.entryLiveCompetitionBoard
+    const cursor = route.request().postDataJSON().input?.after ?? null
+    cursors.push(cursor)
+    const offset = cursor === null ? 0 : Number(cursor.replace('coverage-offset-', ''))
+    expect([0, 50, 100]).toContain(offset)
+    const template = board.rows[0]
+    const allRows = Array.from({ length: large ? 125 : 0 }, (_, index) => ({ ...template, entry: 15702 + index, entryName: `Coverage ${String(index + 1).padStart(3, '0')}`, score: { ...template.score, eventPoints: 200 - index, totalPoints: 1000 - index } }))
+    board.rows = allRows.slice(offset, offset + 50)
+    board.viewerRow = null
+    board.totalEntries = allRows.length
+    board.filteredEntries = allRows.length
+    board.pageInfo = { hasNextPage: large && offset < 100, endCursor: large && offset < 100 ? `coverage-offset-${offset + 50}` : null }
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/zh-CN/live/competitions?tournamentId=6&gw=4')
+   const ready = page.locator('[data-competition-perf-ready="detail"]')
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '6')
+   await expect(ready).toHaveAttribute('data-competition-gameweek', '4')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: navigator.language, width: innerWidth }))).toEqual({ timezone: 'UTC', theme: 'dark', language: 'zh-CN', width: 390 })
+   if (large) {
+    const teams = ready.getByRole('link', { name: /Coverage \d{3}/ }).filter({ visible: true })
+    await expect(teams).toHaveCount(50)
+    await page.getByRole('button', { name: '对比', exact: true }).click()
+    const first = page.getByRole('checkbox', { name: '选择 Coverage 001 进行对比', exact: true }).filter({ visible: true })
+    await first.check()
+    await page.getByRole('button', { name: /再显示/ }).click()
+    await expect(teams).toHaveCount(100)
+    await expect(first).toBeChecked()
+    await page.getByRole('button', { name: /再显示/ }).click()
+    await expect(teams).toHaveCount(125)
+    await expect(first).toBeChecked()
+    const names = await teams.allTextContents()
+    expect(names.map(name => name.match(/Coverage \d{3}/)?.[0])).toEqual(Array.from({ length: 125 }, (_, i) => `Coverage ${String(i + 1).padStart(3, '0')}`))
+    const hrefs = await teams.evaluateAll(links => links.map(link => link.getAttribute('href')))
+    expect(new Set(hrefs).size).toBe(125)
+    expect(cursors).toEqual([null, 'coverage-offset-50', 'coverage-offset-100'])
+    await page.getByRole('checkbox', { name: '选择 Coverage 125 进行对比', exact: true }).filter({ visible: true }).check()
+    await expect(page.getByRole('button', { name: '对比（2）', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: '取消', exact: true }).click()
+   } else {
+    await expect(page.getByText('没有球队符合搜索条件。', { exact: true }).filter({ visible: true })).toBeVisible()
+    await expect(ready.locator('a[href*="/live/points/"]').filter({ visible: true })).toHaveCount(0)
+   }
+   await expect(page.getByRole('button', { name: /再显示|显示全部|收起/ }).filter({ visible: true })).toHaveCount(0)
+   expect(boardRequests).toBeGreaterThan(0)
+   await testInfo.attach(`${variantId}-context`, { contentType: 'application/json', body: JSON.stringify({ variantId, boundEntryId: session.entryId, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', tournamentId: 6, gameweek: 4, boardRequests, readyMs: null, performanceStatus: 'NOT_OBSERVED', wholeCaseComplete: false }) })
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+})
+
+}
