@@ -3809,9 +3809,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
 })
 
+test.describe('management access baseline contexts', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem('theme', 'system')) })
 for (const locale of ['en', 'zh-CN'] as const) {
 for (const width of [1440, 390]) {
- test(`J12 non-owner cannot access management ${locale} ${width}px`, async ({ page }) => {
+ test(`J12 non-owner cannot access management ${locale} ${width}px`, async ({ page }, testInfo) => {
   const zh = locale === 'zh-CN'
   const prefix = zh ? '/zh-CN' : ''
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated non-owner fixture')
@@ -3844,6 +3847,14 @@ for (const width of [1440, 390]) {
    const observations = await (await fetch(fixture)).json()
    expect(observations.requests.some((request: { operation: string; variables: { tournamentId?: number; entryId?: number } }) => request.operation === 'GetManagedTournament' && request.variables.tournamentId === 77 && request.variables.entryId === 909090)).toBe(true)
    expect(mutations).toEqual([])
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+   await expect(page.locator('html')).not.toHaveClass(/dark/)
+   await testInfo.attach('manage-access-baseline', { contentType: 'application/json', body: JSON.stringify({
+    variantIds: [`MANAGE02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, `MANAGE02.F.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, `R12.F.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`],
+    identity: 'verified bound non-owner (B with F access outcome)', locale, viewport: page.viewportSize(), theme: 'system/light', timezone: 'Australia/Perth',
+    terminal: 'administrator-access-required', mutations, performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false
+   }) })
+
   } finally {
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
@@ -3852,6 +3863,67 @@ for (const width of [1440, 390]) {
 }
 
 }
+
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+  test(`R12 X expired session rejects actual management link ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fresh-session boundary')
+   const prefix = locale === 'en' ? '' : '/zh-CN'
+   const zh = locale === 'zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   const session = await createSession({ entryId: 909090 })
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${prefix}/competitions/browse`)
+    await page.getByRole('button', { name: zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup', exact: true }).click()
+    const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
+    await expect(manage).toBeVisible()
+    await sql`UPDATE bauth.session SET expires_at = ${new Date(Date.now() - 60000)} WHERE user_id = ${session.userId}`
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ reset: true, rules: [] }) })).ok).toBe(true)
+    await manage.click()
+    const assertLogin = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === `${prefix}/competitions/77/manage`)
+     await expect(page.getByLabel(zh ? zhMessages.Auth.email : enMessages.Auth.email, { exact: true })).toBeEnabled()
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+     await expect(page.locator('#tournament-name')).toHaveCount(0)
+     await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toHaveCount(0)
+    }
+    await assertLogin()
+    await page.reload()
+    await assertLogin()
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.filter((r: { operation: string }) => r.operation === 'GetManagedTournament')).toEqual([])
+    expect(mutations).toEqual([])
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    await expect(page.locator('html')).not.toHaveClass(/dark/)
+    await testInfo.attach('manage-expired-baseline', { contentType: 'application/json', body: JSON.stringify({
+     variantIds: [`MANAGE02.X.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, `R12.X.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`],
+     identity: 'X isolated expired database session', locale, viewport: page.viewportSize(), theme: 'system/light', timezone: 'Australia/Perth',
+     actualClick: true, loginNext: `${prefix}/competitions/77/manage`, managementReadsAfterExpiry: 0, mutations,
+     performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false
+    }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await sql.end()
+    await session.cleanup()
+   }
+  })
+ }
+}
+})
 
 test.describe('J12 planned UTC dark mobile management states', () => {
  test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
