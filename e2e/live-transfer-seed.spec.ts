@@ -26,6 +26,10 @@ test.describe('live transfer server seed', () => {
   page.on('request', request => { if (request.url().endsWith('/api/graphql') && request.postData()?.includes(operation)) browserReads++ })
   await page.goto('/live/points/123?gw=33')
   const section = page.locator('section[aria-labelledby="live-transfers-heading"]')
+  // React may briefly retain both the fallback and streamed section before commit.
+  // Require a unique visible section; persistent duplicates must still fail.
+  await expect(section).toHaveCount(1)
+  await expect(section).toBeVisible()
   await expect(section).toContainText('Seeded incoming GW33')
   await expect(section).toContainText('£5.5m')
   await expect(section).toContainText('£6.2m')
