@@ -42,10 +42,11 @@ import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import { formatLivePointsShareText } from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
-import { LivePointsTransfers } from './LivePointsTransfers'
+import { LivePointsTransfers, type LivePointsTransferSeed } from './LivePointsTransfers'
 import { useLivePlayerDetail } from '../_hooks/useLivePlayerDetail'
 
 export function LivePointsDashboard({
+	initialTransferSeed,
 	readyRecoveryAttempt,
 	readyMeasurementEnabled,
 	activeEntryId,
@@ -70,6 +71,7 @@ export function LivePointsDashboard({
 	onEntryLookupRetry,
 	nextRefreshAt
 }: {
+	initialTransferSeed?: LivePointsTransferSeed
 	readyRecoveryAttempt: number
 	readyMeasurementEnabled: boolean
 	activeEntryId: number
@@ -513,6 +515,7 @@ export function LivePointsDashboard({
 							key={`${liveData.entry}:${gameweek}`}
 							entryId={liveData.entry}
 							eventId={gameweek}
+							initialSeed={initialTransferSeed}
 						/>
 					) : null}
 				</>

@@ -298,3 +298,49 @@ for (const { locale, width, timezone, dark, variantId } of persistenceContexts) 
   })
  })
 }
+
+// Original S13 directed IDs; this owner accepts one path ID, not a list.
+test.describe('S13 directed live entry boundary', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ const inputs = [
+  ['S13.directed.02', '   '],
+  ['S13.directed.03', '-1'],
+  ['S13.directed.04', '1.5'],
+  ['S13.directed.05', '2147483648'],
+  ['S13.directed.07', '球队'.repeat(128)],
+  ['S13.directed.08', '<img src=x onerror=alert(1)>']
+ ] as const
+ for (const [variantId, input] of inputs) {
+  test(`${variantId} rejects invalid path text in dark UTC mobile context`, async ({ page, context }, testInfo) => {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   expect((await context.cookies()).filter(cookie => /session_token/.test(cookie.name))).toHaveLength(0)
+   const errors: string[] = []
+   const dialogs: string[] = []
+   const reads: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.dismiss() })
+   page.on('request', request => {
+    if (new URL(request.url()).pathname !== '/api/graphql') return
+    const operation = request.postDataJSON()?.operationName ?? ''
+    if (/^(GetEntry|GetLiveCalcPoints)$/.test(operation)) reads.push(operation)
+   })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const before = await (await fetch(fixture)).json()
+   const path = `/zh-CN/live/points/${encodeURIComponent(input)}?gw=3`
+   const response = await page.goto(path)
+   expect([200, 404]).toContain(response?.status())
+   await expect(page.getByRole('heading', { name: '找不到页面', exact: true })).toBeVisible()
+   await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached()
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, width: innerWidth, height: innerHeight, theme: localStorage.getItem('theme') }))).toEqual({ timezone: 'UTC', width: 390, height: 900, theme: 'dark' })
+   const after = await (await fetch(fixture)).json()
+   expect(after.requests.slice(before.requests.length).filter((request: { operation: string }) => /^(GetEntry|GetLiveCalcPoints)$/.test(request.operation))).toEqual([])
+   expect(reads).toEqual([])
+   expect(dialogs).toEqual([])
+   expect(errors).toEqual([])
+   await page.getByRole('link', { name: '返回首页', exact: true }).click()
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN' || url.pathname === '/zh-CN/')
+   await testInfo.attach('S13-directed-owner', { contentType: 'application/json', body: JSON.stringify({ variantId, caseId: 'S13', stepId: 'S13.01', owner: 'live/points/[id]', identity: 'anonymous', locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezone: 'UTC', theme: 'dark', input, path, assertions: ['not-found/noindex', 'no entry business reads', 'no script dialog or page error', 'actual home return'], readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
+  })
+ }
+})

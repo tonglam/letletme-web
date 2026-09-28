@@ -455,3 +455,77 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		})
 	}
 }
+
+const dialogContexts = [
+	...(['en', 'zh-CN'] as const).flatMap(locale =>
+		[1440, 390].map(width => ({ locale, width, scenario: 'baseline', timezoneId: 'Australia/Perth', colorScheme: 'light' as const }))
+	),
+	...['ready', 'empty', 'error'].map(scenario => ({ locale: 'zh-CN' as const, width: 390, scenario, timezoneId: 'UTC', colorScheme: 'dark' as const }))
+]
+for (const context of dialogContexts) {
+	test.describe(`FIX02 planned dialog ${context.locale} ${context.width} ${context.scenario}`, () => {
+		test.use({ viewport: { width: context.width, height: 900 }, timezoneId: context.timezoneId, colorScheme: context.colorScheme })
+		test('loads the selected team schedule and restores focus after recovery and close', async ({ page }) => {
+			const zh = context.locale === 'zh-CN'
+			await page.goto(zh ? '/zh-CN/explore/fixtures' : '/explore/fixtures')
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezoneId)
+			if (context.colorScheme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/)
+			const matrixRows = page.locator('tr[id^="fdr-team-"]')
+			const rowOrder = await matrixRows.evaluateAll(rows => rows.map(row => row.id))
+			expect(rowOrder.length).toBeGreaterThan(0)
+			let fail = context.scenario === 'error'
+			const windows: number[] = []
+			await page.route('**/api/fixtures/window?**', async route => {
+				const url = new URL(route.request().url())
+				const fromGw = Number(url.searchParams.get('fromGw'))
+				const count = Number(url.searchParams.get('count'))
+				windows.push(fromGw)
+				if (fail) return route.fulfill({ status: 503, json: { error: 'isolated schedule failure' } })
+				if (context.scenario === 'empty') {
+					return route.fulfill({ json: {
+						fromGw, toGw: fromGw + count - 1, unknownEventIds: [],
+						fixturesByEvent: Object.fromEntries(Array.from({ length: count }, (_, offset) => [String(fromGw + offset), []]))
+					} })
+				}
+				await route.continue()
+			})
+			const trigger = page.getByRole('button', { name: zh ? '查看 Arsenal 的整个赛季赛程' : "View Arsenal's full-season fixtures", exact: true })
+			await trigger.click()
+			const dialog = page.getByRole('dialog')
+			await expect(dialog.getByRole('heading', { name: /Arsenal/ })).toBeVisible()
+			if (fail) {
+				await expect(dialog.getByRole('alert')).toHaveText('GW1–GW38 赛程暂时无法加载，请重试。重试')
+				expect(windows.slice().sort((a, b) => a - b)).toEqual([1, 6, 11, 16, 21, 26, 31, 36])
+				await expect(dialog.getByText('2–1', { exact: true })).toHaveCount(0)
+				fail = false
+				await dialog.getByRole('button', { name: '重试', exact: true }).click()
+			}
+			await expect(dialog.getByRole('status')).toHaveCount(0)
+			await expect(dialog.getByRole('alert')).toHaveCount(0)
+			await expect(dialog.getByText('GW1', { exact: true })).toBeVisible()
+			await expect(dialog.getByText('GW38', { exact: true })).toBeAttached()
+			if (context.scenario === 'empty') {
+				await expect(dialog.getByText('空白轮', { exact: true })).toHaveCount(38)
+				await expect(dialog.getByText('2–1', { exact: true })).toHaveCount(0)
+			} else {
+				await expect(dialog.getByText('2–1', { exact: true })).toBeVisible()
+			}
+			await dialog.getByText('GW38', { exact: true }).scrollIntoViewIfNeeded()
+			await expect(dialog.getByText('GW38', { exact: true })).toBeVisible()
+			const expectedRequests = context.scenario === 'error' ? 16 : 8
+			expect(windows).toHaveLength(expectedRequests)
+			expect(windows.slice(0, 8).sort((a, b) => a - b)).toEqual([1, 6, 11, 16, 21, 26, 31, 36])
+			await page.keyboard.press('Escape')
+			await expect(dialog).toHaveCount(0)
+			await expect(trigger).toBeFocused()
+			expect(await matrixRows.evaluateAll(rows => rows.map(row => row.id))).toEqual(rowOrder)
+			await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden')
+			await trigger.click()
+			await expect(dialog.getByText('GW38', { exact: true })).toBeAttached()
+			expect(windows).toHaveLength(expectedRequests)
+			expect(windows.slice(0, 8).sort((a, b) => a - b)).toEqual([1, 6, 11, 16, 21, 26, 31, 36])
+			await page.keyboard.press('Escape')
+			await expect(trigger).toBeFocused()
+		})
+	})
+}

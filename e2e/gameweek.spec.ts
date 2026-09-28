@@ -95,10 +95,13 @@ for (const variant of selectorVariants) {
 for (const locale of ['en', 'zh-CN'] as const) {
 	for (const width of [1440, 390]) {
 		test.describe(`gameweek board rows ${locale} ${width}`, () => {
-			test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+			test.use({ viewport: { width, height: 900 }, locale, timezoneId: 'Australia/Perth', colorScheme: 'light' })
 			test('Dream Team and 10+ boards retain independent identities and exact scores', async ({
-				page, request
+				page, request, context
 			}, testInfo) => {
+				test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Planned board contexts require isolated fixtures')
+				await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+				expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
 				testInfo.annotations.push({
 					type: 'coverage-variant',
 					description: `GW03.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base; partial board assertions only`
@@ -112,6 +115,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				expect(desk.dreamTeam.map((player: { id: number }) => player.id)).toEqual([1])
 				expect(desk.hauls.map((player: { id: number }) => player.id)).toEqual([1, 2])
 				await page.goto(locale === 'en' ? '/explore/gameweek' : '/zh-CN/explore/gameweek')
+				await expect(page.locator('html')).toHaveClass(/light/)
+				expect(await page.evaluate(() => ({ theme: localStorage.getItem('theme'), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: navigator.language }))).toEqual({ theme: 'system', timezone: 'Australia/Perth', language: locale })
+				await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+				await expect(page.locator('#gameweek-jump-input')).toHaveAttribute('aria-busy', 'false')
 				await expect(page.getByRole('heading', {
 					name: locale === 'en' ? 'GW33 Overview' : 'GW33 概览', exact: true
 				})).toBeVisible()
@@ -136,6 +143,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(rows.getByRole('button')).toHaveText(['Saka', 'Palmer'])
 				await expect(rows.nth(0).getByRole('cell').last()).toHaveText('12')
 				await expect(rows.nth(1).getByRole('cell').last()).toHaveText('11')
+				await testInfo.attach('gameweek-board-context', { contentType: 'application/json', body: JSON.stringify({
+					variantId: `GW03.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+					identity: 'A', locale, width, theme: 'system', timezone: 'Australia/Perth', eventId: 33,
+					dreamTeam: [{ id: 1, score: 12 }], hauls: [{ id: 1, score: 12 }, { id: 2, score: 11 }],
+					functionalAssertions: 'PASS', readyMs: null, wholeVariantComplete: false,
+					remaining: 'Complete formation, overview statistics, player interactions and timing assertions are outside this test.'
+				}) })
 			})
 		})
 	}
@@ -371,24 +385,45 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	})
 }
 
-for (const locale of ['en', 'zh-CN'] as const) {
-	for (const width of [1440, 390]) {
-		test(`J04 home to gameweek detail and history ${locale} ${width}px`, async ({ page }, testInfo) => {
+const gameweekJourneyVariants = [
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `J04.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth', scenario: 'baseline' }))),
+ ...['ready', 'live', 'settled'].map((scenario, index) => ({ id: `J04.state.0${index + 1}`, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario }))
+]
+for (const variant of gameweekJourneyVariants) {
+ const { locale, width } = variant
+ test.describe(`gameweek journey ${variant.id}`, () => {
+  test.use({ viewport: { width, height: 900 }, timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+  test(`J04 home to gameweek detail and history ${variant.id}`, async ({ page, context }, testInfo) => {
+			test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'J04 state injection is isolated only')
+			await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+			expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+			if (variant.scenario !== 'baseline') await page.route('**/api/gameweek/desk?eventId=32', async route => {
+				const response = await route.fetch()
+				expect(response.ok()).toBe(true)
+				const desk = await response.json()
+				expect(desk.eventId).toBe(32)
+				await route.fulfill({ response, json: { ...desk, lifecycle: variant.scenario === 'settled' ? 'SETTLED' : 'PROVISIONAL' } })
+			})
 			const zh = locale === 'zh-CN'
 			const prefix = zh ? '/zh-CN' : ''
 			const detailRequests: string[] = []
+			const deskRequests: string[] = []
+			page.on('request', request => {
+				const url = new URL(request.url())
+				if (url.pathname === '/api/gameweek/desk') deskRequests.push(url.searchParams.get('eventId') ?? '')
+			})
 			await page.route('**/api/graphql', async route => {
 				const body = route.request().postDataJSON()
 				const explain = /query EventLiveExplainPlayer\b/.test(body.query ?? '')
 				const live = /query PlayerLive\b/.test(body.query ?? '')
 				if (!explain && !live) return route.continue()
-				expect(body.variables).toEqual(explain ? { eventId: 33, elementId: 2 } : { eventId: 33, playerId: 2 })
+				expect(body.variables).toEqual(explain ? { eventId: 32, elementId: 2 } : { eventId: 32, playerId: 2 })
 				detailRequests.push(explain ? 'explain' : 'live')
 				const stats = { minutes: 90, goalsScored: 1, assists: 0, cleanSheets: 1, goalsConceded: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, defensiveContribution: 0, bonus: 3, bps: 38, totalPoints: 11 }
 				await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: explain ? { eventLiveExplain: { elementId: 2, selectedBy: 10, stats, contributions: [{ identifier: 'minutes', value: 90, points: 2 }, { identifier: 'goals_scored', value: 1, points: 5 }, { identifier: 'clean_sheets', value: 1, points: 1 }, { identifier: 'bonus', value: 3, points: 3 }], player: { id: 2, webName: 'Palmer', team: { id: 1, shortName: 'ARS' } } } } : { playerLive: stats } }) })
 			})
 			await page.setViewportSize({ width, height: 900 })
-			testInfo.annotations.push({ type: 'coverage-case', description: 'J04 actual gameweek journey; comparison steps .07-.09 are inapplicable to match-detail modal; performance unmeasured' })
+			testInfo.annotations.push({ type: 'coverage-case', description: 'J04 historical GW32 selection and player2 modal; no player-comparison coverage inferred; performance unmeasured' })
 			await page.goto(prefix || '/')
 			await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
 			const nav = page.getByRole('navigation').first()
@@ -400,11 +435,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await link.click()
 			await expect(page).toHaveURL(url => url.pathname === href)
 			await page.getByRole('combobox', { name: zh ? '选择轮次' : 'Select gameweek', exact: true }).click()
-			await page.getByRole('option', { name: zh ? '第 33 轮（当前）' : 'Gameweek 33 (Current)', exact: true }).click()
-			await expect(page.getByRole('heading', { name: zh ? 'GW33 概览' : 'GW33 Overview', exact: true })).toBeVisible()
+			await page.getByRole('option', { name: zh ? '第 32 轮' : 'Gameweek 32', exact: true }).click()
+			await expect(page.getByRole('heading', { name: zh ? 'GW32 概览' : 'GW32 Overview', exact: true })).toBeVisible()
 			const dream = page.locator('[aria-labelledby="home-team-of-week-title"]')
 			await expect(dream.locator('li button')).toHaveCount(1)
 			await expect(dream).toContainText('Saka')
+			await expect(dream.locator('#home-team-of-week-title')).toHaveText(zh ? /^GW32\s*梦之队$/ : /^GW32\s*Dream Team$/)
+			await expect(page.locator('#gameweek-jump-input')).toHaveAttribute('aria-busy', 'false')
+			await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+			await expect(page.getByText(variant.scenario === 'settled' ? (zh ? '已结算' : 'Settled') : (zh ? '暂定' : 'Provisional'), { exact: true })).toBeVisible()
 			const rows = page.locator('tbody tr')
 			await expect(rows.getByRole('button')).toHaveText(['Saka', 'Palmer'])
 			await expect(rows.nth(0).getByRole('cell').last()).toHaveText('12')
@@ -420,14 +460,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
 			await expect(dialog).toHaveCount(0)
 			await expect(opener).toBeFocused()
+			await expect(page.locator('#gameweek-jump-input')).toHaveValue('32')
+			expect(deskRequests).toEqual(['32'])
 			await page.goBack()
 			await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
 			await expect(page.getByRole('button', { name: zh ? '最高分球员: Saka (12)' : 'Top Scorer: Saka (12)', exact: true })).toBeVisible()
 			await page.goForward()
 			await expect(page).toHaveURL(url => url.pathname === href)
 			await expect(page.getByRole('heading', { name: zh ? 'GW33 概览' : 'GW33 Overview', exact: true })).toBeVisible()
+			await testInfo.attach('j04-context', { contentType: 'application/json', body: JSON.stringify({ ...variant, eventId: 32, playerId: 2, deskRequests, detailRequests, functionalAssertions: 'PASS', wholeVariantComplete: false, readyMs: null, remaining: 'comparison/detail sections and complete metric assertions; live denotes PROVISIONAL desk, not fixture kickoff proof' }) })
 		})
-	}
+	})
 }
 
 test('match detail retains live statistics when explanation read fails', async ({ page }) => {
