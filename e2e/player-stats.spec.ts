@@ -1,3 +1,4 @@
+import zhCN from '../messages/zh-CN.json'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { GET_PLAYER_STATS_BOOTSTRAP } from '../lib/graphql/operations/players'
@@ -251,25 +252,42 @@ test.describe('SSR detail stream', () => {
 		}
 	}
 
-	test('directory is interactive before a slow initial overview, and a new choice wins', async ({ page }, testInfo) => {
+
+    for (const profile of [
+        ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ locale, width, theme: 'system', timezone: 'Australia/Perth', variantIds: [`PS04.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`] }))),
+        { locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', variantIds: ['PS04.state.01'] }
+    ]) {
+      test.describe(`PS04 planned ${profile.locale} ${profile.width} ${profile.theme}`, () => {
+        test.use({ timezoneId: profile.timezone, colorScheme: 'light' })
+	test(`PS04 slow seed new choice wins ${profile.locale} ${profile.width} ${profile.theme}`, async ({ page, context }, testInfo) => {
+        await page.setViewportSize({ width: profile.width, height: 900 })
+        await page.addInitScript(theme => localStorage.setItem('theme', theme), profile.theme)
 		const initialPlayerId = runPlayerId(1)
 		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, delayMs: 3500 }])
 		const browserRequests: string[] = []
 		page.on('request', request => { if (request.url().includes('/api/player-stats/desk?')) browserRequests.push(request.url()) })
-		await page.goto(`/explore/player-stats?p1=${initialPlayerId}`, { waitUntil: 'commit' })
-		const players = page.getByRole('region', { name: 'Players', exact: true })
+		await page.goto(`${profile.locale === 'en' ? '' : '/zh-CN'}/explore/player-stats?p1=${initialPlayerId}`, { waitUntil: 'commit' })
+		const players = page.getByRole('region', { name: profile.locale === 'en' ? 'Players' : '球员', exact: true })
 		await expect(players).toBeVisible()
 		const initial = (await (await fetch(fixture)).json()).requests.find((row: { operation: string; variables: { playerIds?: number[] } }) => row.operation === 'GetPlayerStatsDeskOverview' && row.variables.playerIds?.[0] === initialPlayerId)
 		expect(initial?.finishedAt).toBeNull()
 		await players.getByRole('button', { name: /^Palmer/ }).and(page.locator('[data-player-stats-directory-result="true"]')).click()
-		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Palmer')
+		await expect(page.getByRole('region', { name: profile.locale === 'en' ? 'Player overall' : zhCN.PlayerStats.overallTitle })).toContainText('Palmer')
 		await expect(page).toHaveURL(/p1=2/)
 		await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { variables: { playerIds?: number[] } }) => row.variables.playerIds?.[0] === initialPlayerId)?.finishedAt).toBeTruthy()
-		await expect(page.getByRole('region', { name: 'Player overall' })).not.toContainText('Saka')
+		await expect(page.getByRole('region', { name: profile.locale === 'en' ? 'Player overall' : zhCN.PlayerStats.overallTitle })).not.toContainText('Saka')
 		await expect(page).toHaveURL(/p1=2/)
 		expect(browserRequests.filter(url => new URL(url).searchParams.get('playerIds') === String(initialPlayerId))).toHaveLength(0)
+        expect((await context.cookies()).some(cookie => cookie.name.includes('session_token'))).toBe(false)
+        expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile.timezone)
+        expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(profile.theme)
+        if (profile.theme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/)
+        await testInfo.attach('PS04-context-proof', { body: JSON.stringify({ ...profile, initialPlayerId, finalPlayerId: 2, assertionScope: 'Slow SSR seed does not block directory; actual new choice survives late seed; no browser refetch of stale initial player', wholeVariantComplete: false, performanceStatus: 'NOT_RUN', readyMs: null }), contentType: 'application/json' })
 		await testInfo.attach('detail-stream-requests', { body: JSON.stringify((await (await fetch(fixture)).json()), null, 2), contentType: 'application/json' })
 	})
+
+      })
+    }
 
 	test('serves real overview HTML in a later response chunk without browser JavaScript', async ({ browser, baseURL }, testInfo) => {
 		const initialPlayerId = runPlayerId(2)
