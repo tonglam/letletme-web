@@ -1,0 +1,44 @@
+diff --git a/node_modules/next/dist/esm/server/web/spec-extension/unstable-cache.js b/node_modules/next/dist/esm/server/web/spec-extension/unstable-cache.js
+index e4675e8..c245182 100644
+--- a/node_modules/next/dist/esm/server/web/spec-extension/unstable-cache.js
++++ b/node_modules/next/dist/esm/server/web/spec-extension/unstable-cache.js
+@@ -196,6 +196,9 @@ async function cacheNewResult(result, incrementalCache, cacheKey, tags, revalida
+                                         revalidationPromise.catch(()=>{});
+                                     }
+                                     workStore.pendingRevalidates[invocationKey] = revalidationPromise;
++                                    // Streaming may discover this work after app-render snapshots revalidates.
++                                    // Own the entire refresh, including cacheNewResult, until it settles.
++                                    workStore.afterContext.after(revalidationPromise, innerCacheStore);
+                                 }
+                                 // Check if we need to do foreground revalidation
+                                 if (workStore.isStaticGeneration) {
+@@ -224,6 +227,7 @@ async function cacheNewResult(result, incrementalCache, cacheKey, tags, revalida
+                     // revalidates otherwise it won't be awaited and is just
+                     // dangling
+                     workStore.pendingRevalidates[invocationKey] = cacheNewResult(result, incrementalCache, cacheKey, tags, revalidate, fetchIdx, fetchUrl);
++                    workStore.afterContext.after(workStore.pendingRevalidates[invocationKey], innerCacheStore);
+                 }
+                 return result;
+             } else {
+diff --git a/node_modules/next/dist/server/web/spec-extension/unstable-cache.js b/node_modules/next/dist/server/web/spec-extension/unstable-cache.js
+index 7c71803..d9b9d3d 100644
+--- a/node_modules/next/dist/server/web/spec-extension/unstable-cache.js
++++ b/node_modules/next/dist/server/web/spec-extension/unstable-cache.js
+@@ -202,6 +202,9 @@ function unstable_cache(cb, keyParts, options = {}) {
+                                         revalidationPromise.catch(()=>{});
+                                     }
+                                     workStore.pendingRevalidates[invocationKey] = revalidationPromise;
++                                    // Streaming may discover this work after app-render snapshots revalidates.
++                                    // Own the entire refresh, including cacheNewResult, until it settles.
++                                    workStore.afterContext.after(revalidationPromise, innerCacheStore);
+                                 }
+                                 // Check if we need to do foreground revalidation
+                                 if (workStore.isStaticGeneration) {
+@@ -230,6 +233,7 @@ function unstable_cache(cb, keyParts, options = {}) {
+                     // revalidates otherwise it won't be awaited and is just
+                     // dangling
+                     workStore.pendingRevalidates[invocationKey] = cacheNewResult(result, incrementalCache, cacheKey, tags, revalidate, fetchIdx, fetchUrl);
++                    workStore.afterContext.after(workStore.pendingRevalidates[invocationKey], innerCacheStore);
+                 }
+                 return result;
+             } else {
