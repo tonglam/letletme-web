@@ -202,3 +202,72 @@ for (const locale of ['en', 'zh-CN'] as const) {
   }
  }
 }
+
+test.describe('AUTH02 planned error states', () => {
+ test.use({ viewport: { width: 390, height: 900 }, colorScheme: 'dark', timezoneId: 'UTC' })
+ const forms = [
+  { path: '/auth/login', endpoint: '/api/auth/sign-in/email', fields: ['email', 'password'] as const, button: 'signIn' as const, fallback: 'loginFailed' as const },
+  { path: '/auth/signup', endpoint: '/api/auth/sign-up/email', fields: ['name', 'email', 'password', 'confirmPassword'] as const, button: 'createAccount' as const, fallback: 'signupFailed' as const },
+  { path: '/auth/forgot-password', endpoint: '/api/auth/request-password-reset', fields: ['email'] as const, button: 'sendResetLink' as const, fallback: 'resetEmailFailed' as const },
+  { path: '/auth/reset-password?token=isolated-unsubmitted-token', endpoint: '/api/auth/reset-password', fields: ['password', 'confirmPassword'] as const, button: 'setNewPassword' as const, fallback: 'resetFailed' as const }
+ ]
+ for (const form of forms) {
+  for (const scenario of ['invalid', '429', 'error'] as const) {
+   test(`AUTH02 ${scenario} ${form.path} ends pending and allows another attempt`, async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated intercepted authentication only')
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    const intercepted: string[] = []
+    const unexpected: string[] = []
+    let attempt = 0
+    await page.route('**/api/auth/**', async route => {
+     if (route.request().method() === 'GET') return route.continue()
+     const path = new URL(route.request().url()).pathname
+     intercepted.push(path)
+     if (path !== form.endpoint) unexpected.push(path)
+     attempt++
+     const rateLimited = scenario === '429' && attempt === 1
+     await route.fulfill({ status: rateLimited ? 429 : 503, contentType: 'application/json', body: JSON.stringify({ code: rateLimited ? 'TOO_MANY_REQUESTS' : 'ISOLATED_SERVICE_ERROR', message: 'Internal fixture detail must not be rendered' }) })
+    })
+    await page.goto(`/zh-CN${form.path}`)
+    for (const field of form.fields) {
+     await page.getByLabel(zh.Auth[field], { exact: true }).fill(field === 'email' ? 'fixture@example.invalid' : field === 'name' ? 'Isolated Fixture' : 'IsolatedPassword-42')
+    }
+    const submit = page.getByRole('button', { name: zh.Auth[form.button], exact: true })
+    if (scenario === 'invalid') {
+     if (form.fields.some(field => field === 'email')) {
+      const email = page.getByLabel(zh.Auth.email, { exact: true })
+      await email.fill('invalid-email')
+      await submit.click()
+      expect(await email.evaluate(node => (node as HTMLInputElement).validity.typeMismatch)).toBe(true)
+      await email.fill('fixture@example.invalid')
+     } else {
+      await page.getByLabel(zh.Auth.confirmPassword, { exact: true }).fill('DifferentPassword-42')
+      await submit.click()
+      await expect(page.getByRole('main').getByRole('alert')).toHaveText(zh.Auth.errors.passwordMismatch)
+      await page.getByLabel(zh.Auth.confirmPassword, { exact: true }).fill('IsolatedPassword-42')
+     }
+     expect(intercepted).toEqual([])
+    }
+    for (let round = 0; round < 2; round++) {
+     await submit.click()
+     const expected = scenario === '429' && round === 0 ? zh.Auth.errors.tooManyRequests : zh.Auth.errors[form.fallback]
+     await expect(page.getByRole('main').getByRole('alert')).toHaveText(expected)
+     await expect(submit).toBeEnabled()
+     await expect(page.locator('form')).toHaveAttribute('aria-busy', 'false')
+     await expect(page).toHaveURL(url => `${url.pathname}${url.search}` === `/zh-CN${form.path}`)
+    }
+    expect(intercepted).toEqual([form.endpoint, form.endpoint])
+    expect(unexpected).toEqual([])
+    await expect(page.getByText('Internal fixture detail must not be rendered', { exact: false })).toHaveCount(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await testInfo.attach('auth02-state', { contentType: 'application/json', body: JSON.stringify({
+     variantId: `AUTH02.state.${scenario === 'invalid' ? '01' : scenario === '429' ? '02' : '03'}`, scenario, form: form.path, endpoint: form.endpoint,
+     identity: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', interceptedAttempts: intercepted.length,
+     upstreamAuthWrites: 0, functionalStatus: 'PASS', performanceStatus: 'N/A', readyMs: null,
+     scope: 'Client validation/error/pending/retry boundary only; provider success and production recovery remain separate'
+    }) })
+   })
+  }
+ }
+})
