@@ -1,3 +1,4 @@
+import zhCN from '../messages/zh-CN.json'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { GET_PLAYER_STATS_BOOTSTRAP } from '../lib/graphql/operations/players'
@@ -251,25 +252,42 @@ test.describe('SSR detail stream', () => {
 		}
 	}
 
-	test('directory is interactive before a slow initial overview, and a new choice wins', async ({ page }, testInfo) => {
+
+    for (const profile of [
+        ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ locale, width, theme: 'system', timezone: 'Australia/Perth', variantIds: [`PS04.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`] }))),
+        { locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', variantIds: ['PS04.state.01'] }
+    ]) {
+      test.describe(`PS04 planned ${profile.locale} ${profile.width} ${profile.theme}`, () => {
+        test.use({ timezoneId: profile.timezone, colorScheme: 'light' })
+	test(`PS04 slow seed new choice wins ${profile.locale} ${profile.width} ${profile.theme}`, async ({ page, context }, testInfo) => {
+        await page.setViewportSize({ width: profile.width, height: 900 })
+        await page.addInitScript(theme => localStorage.setItem('theme', theme), profile.theme)
 		const initialPlayerId = runPlayerId(1)
 		await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, delayMs: 3500 }])
 		const browserRequests: string[] = []
 		page.on('request', request => { if (request.url().includes('/api/player-stats/desk?')) browserRequests.push(request.url()) })
-		await page.goto(`/explore/player-stats?p1=${initialPlayerId}`, { waitUntil: 'commit' })
-		const players = page.getByRole('region', { name: 'Players', exact: true })
+		await page.goto(`${profile.locale === 'en' ? '' : '/zh-CN'}/explore/player-stats?p1=${initialPlayerId}`, { waitUntil: 'commit' })
+		const players = page.getByRole('region', { name: profile.locale === 'en' ? 'Players' : '球员', exact: true })
 		await expect(players).toBeVisible()
 		const initial = (await (await fetch(fixture)).json()).requests.find((row: { operation: string; variables: { playerIds?: number[] } }) => row.operation === 'GetPlayerStatsDeskOverview' && row.variables.playerIds?.[0] === initialPlayerId)
 		expect(initial?.finishedAt).toBeNull()
 		await players.getByRole('button', { name: /^Palmer/ }).and(page.locator('[data-player-stats-directory-result="true"]')).click()
-		await expect(page.getByRole('region', { name: 'Player overall' })).toContainText('Palmer')
+		await expect(page.getByRole('region', { name: profile.locale === 'en' ? 'Player overall' : zhCN.PlayerStats.overallTitle })).toContainText('Palmer')
 		await expect(page).toHaveURL(/p1=2/)
 		await expect.poll(async () => (await (await fetch(fixture)).json()).requests.find((row: { variables: { playerIds?: number[] } }) => row.variables.playerIds?.[0] === initialPlayerId)?.finishedAt).toBeTruthy()
-		await expect(page.getByRole('region', { name: 'Player overall' })).not.toContainText('Saka')
+		await expect(page.getByRole('region', { name: profile.locale === 'en' ? 'Player overall' : zhCN.PlayerStats.overallTitle })).not.toContainText('Saka')
 		await expect(page).toHaveURL(/p1=2/)
 		expect(browserRequests.filter(url => new URL(url).searchParams.get('playerIds') === String(initialPlayerId))).toHaveLength(0)
+        expect((await context.cookies()).some(cookie => cookie.name.includes('session_token'))).toBe(false)
+        expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile.timezone)
+        expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(profile.theme)
+        if (profile.theme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/)
+        await testInfo.attach('PS04-context-proof', { body: JSON.stringify({ ...profile, initialPlayerId, finalPlayerId: 2, assertionScope: 'Slow SSR seed does not block directory; actual new choice survives late seed; no browser refetch of stale initial player', wholeVariantComplete: false, performanceStatus: 'NOT_RUN', readyMs: null }), contentType: 'application/json' })
 		await testInfo.attach('detail-stream-requests', { body: JSON.stringify((await (await fetch(fixture)).json()), null, 2), contentType: 'application/json' })
 	})
+
+      })
+    }
 
 	test('serves real overview HTML in a later response chunk without browser JavaScript', async ({ browser, baseURL }, testInfo) => {
 		const initialPlayerId = runPlayerId(2)
@@ -357,6 +375,62 @@ test.describe('SSR detail stream', () => {
 			await noJsContext.close()
 		}
 	})
+
+    test.describe('PS04 planned terminal states zh-CN mobile', () => {
+      test.use({ timezoneId: 'UTC', viewport: { width: 390, height: 900 }, colorScheme: 'dark' })
+      test('PS04 error terminal retries once and preserves selected identity', async ({ page, context }, testInfo) => {
+        const initialPlayerId = runPlayerId(9)
+        await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+        await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, error: true }])
+        const requests: string[] = []
+        page.on('request', request => { if (request.url().includes('/api/player-stats/desk?')) requests.push(request.url()) })
+        await page.goto(`/zh-CN/explore/player-stats?p1=${initialPlayerId}`)
+        const retry = page.getByRole('button', { name: '重试', exact: true })
+        await expect(retry).toBeVisible()
+        await expect(page.locator('html')).toHaveClass(/dark/)
+        await expect(page).toHaveURL(new RegExp(`p1=${initialPlayerId}`))
+        expect(requests).toHaveLength(0)
+        expect((await context.cookies()).some(cookie => cookie.name.includes('session_token'))).toBe(false)
+        expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+        await control()
+        await retry.click()
+        await expect(page.getByRole('region', { name: zhCN.PlayerStats.overallTitle })).toContainText('Saka')
+        await expect(retry).toHaveCount(0)
+        await expect(page).toHaveURL(new RegExp(`p1=${initialPlayerId}`))
+        expect(requests).toHaveLength(1)
+        expect(new URL(requests[0]).searchParams.get('playerIds')).toBe(String(initialPlayerId))
+        await testInfo.attach('PS04-terminal-proof', { body: JSON.stringify({ variantId: 'PS04.state.03', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', initialPlayerId, requests, assertionScope: 'Error terminal settles without browser retry loop; actual Retry issues one matching request and recovers current identity', performanceStatus: 'NOT_RUN', readyMs: null }), contentType: 'application/json' })
+      })
+      test('PS04 no JavaScript retry preserves honest server summary', async ({ browser, baseURL }, testInfo) => {
+        const initialPlayerId = runPlayerId(10)
+        const noJsContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+        try {
+          const page = await noJsContext.newPage()
+          await control([{ operation: 'GetPlayerStatsDeskOverview', variables: { playerIds: [initialPlayerId] }, error: true }])
+          await page.goto(`${baseURL}/zh-CN/explore/player-stats?p1=${initialPlayerId}`)
+          const terminal = page.locator('[data-player-stats-noscript-result="true"]')
+          const retry = page.getByRole('link', { name: '重试', exact: true })
+          await expect(terminal).toBeVisible()
+          await expect(retry).toBeVisible()
+          await expect(terminal).not.toContainText('Saka')
+          const fallback = page.locator('[data-player-stats-ssr-fallback]')
+          expect(await fallback.count()).toBeGreaterThan(0)
+          for (const item of await fallback.all()) await expect(item).toBeHidden()
+          await control()
+          const navigation = page.waitForResponse(response => response.request().isNavigationRequest() && response.url().includes(`/zh-CN/explore/player-stats?p1=${initialPlayerId}`))
+          await retry.click()
+          expect((await navigation).status()).toBe(200)
+          await expect(terminal.getByRole('region', { name: zhCN.PlayerStats.overallTitle })).toContainText(`#${initialPlayerId}`)
+          await expect(terminal).toContainText('互动式球员详情需要启用 JavaScript')
+          await expect(terminal).not.toContainText('Saka')
+          await expect(terminal.locator('[data-player-stats-noscript-section]')).toHaveCount(7)
+          await expect(retry).toBeVisible()
+          await expect(page).toHaveURL(new RegExp(`p1=${initialPlayerId}`))
+          expect((await noJsContext.cookies()).some(cookie => cookie.name.includes('session_token'))).toBe(false)
+          await testInfo.attach('PS04-noscript-proof', { body: JSON.stringify({ candidateVariantId: 'PS04.state.02', locale: 'zh-CN', width: 390, timezone: 'UTC', preferredColorScheme: 'dark', actualHtmlClass: await page.locator('html').getAttribute('class'), themePreferenceApplied: false, initialPlayerId, assertionScope: 'No JavaScript: actual retry performs document navigation, preserves selected identity and explicit JS limitation, renders seven summary sections without fabricated player detail', missingReason: 'Dark theme preference in localStorage cannot be applied by disabled JavaScript; do not claim exact dark-theme completion', performanceStatus: 'NOT_RUN', readyMs: null }), contentType: 'application/json' })
+        } finally { await noJsContext.close() }
+      })
+    })
 
 	test('clearing a comparison before its seed arrives keeps p2 cleared', async ({ page }) => {
 		const initialPlayerId = runPlayerId(4)
@@ -552,10 +626,17 @@ test.describe('process evidence availability', () => {
  }
 })
 
-for (const locale of ['en', 'zh-CN']) {
- for (const width of [1440, 390]) {
-  test(`PS05 failed selection reselection and cached return ${locale} ${width}`, async ({ page }) => {
+for (const { locale, width, planned } of [
+ { locale: 'en', width: 1440, planned: false }, { locale: 'en', width: 390, planned: false },
+ { locale: 'zh-CN', width: 1440, planned: false }, { locale: 'zh-CN', width: 390, planned: false },
+ { locale: 'zh-CN', width: 390, planned: true }
+]) {
+ test.describe(`PS05 context ${locale} ${width} ${planned ? 'planned' : 'baseline'}`, () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+  test(`PS05 failed selection reselection and cached return ${locale} ${width}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Error injection and anonymous context are isolated-only')
    const zh = locale === 'zh-CN'
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
    await page.setViewportSize({ width, height: 900 })
    let requests = 0
    await page.route('**/api/player-stats/desk?**', async route => {
@@ -587,8 +668,14 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(overall).toContainText('Palmer')
    await expect(overall).not.toContainText('Saka')
    expect(requests).toBe(2)
+   await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/explore/player-stats` && url.searchParams.get('p1') === '2')
+   expect((await page.context().cookies()).some(cookie => cookie.name.endsWith('session_token'))).toBe(false)
+   const context = await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), width: innerWidth }))
+   expect(context).toEqual({ timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system', width })
+   if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+   await testInfo.attach('PS05-context-proof', { contentType: 'application/json', body: JSON.stringify({ variantIds: planned ? ['PS05.state.01', 'PS05.state.02', 'PS05.state.03'] : [`PS05.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`], locale, viewport: page.viewportSize(), ...context, identity: 'A', phases: ['503 retains Saka', 'reselection fetches Palmer', 'return to seeded Saka', 'cached Palmer with no third read'], requests, finalPlayerId: 2, wholeVariantComplete: false, performanceStatus: 'NOT_RUN', readyMs: null }) })
   })
- }
+ })
 }
 
 for (const sectionName of ['recent', 'process'] as const) {
