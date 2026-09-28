@@ -5316,8 +5316,13 @@ test.describe('J12 MANAGE02 unavailable management scope', () => {
  }
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
+for (const { locale, width, planned, noHistory } of [
+ { locale: 'en', width: 1440, planned: false, noHistory: false }, { locale: 'en', width: 390, planned: false, noHistory: false },
+ { locale: 'zh-CN', width: 1440, planned: false, noHistory: false }, { locale: 'zh-CN', width: 390, planned: false, noHistory: false },
+ { locale: 'zh-CN', width: 390, planned: true, noHistory: false }, { locale: 'zh-CN', width: 390, planned: true, noHistory: true }
+]) {
+ test.describe(`TEAM02 context ${locale} ${width} ${planned ? noHistory ? 'no-history' : 'ready' : 'baseline'}`, () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
   test(`SSR remediation manager chart integer ticks ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager chart fixture')
    const session = await createSession({ entryId: 15702 })
@@ -5325,17 +5330,33 @@ for (const locale of ['en', 'zh-CN'] as const) {
    const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
    try {
     await addSessionCookie(page, session.cookie)
+    await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
     await page.setViewportSize({ width, height: 900 })
-    for (const counts of [[0, 1, 3], [0, 0, 0], [1]]) {
+    for (const counts of (noHistory ? [[]] : [[0, 1, 3], [0, 0, 0], [1]])) {
      const timeline = managerReview.timeline.slice(0, counts.length).map((row, index) => ({ ...row, eventTransfers: counts[index], eventNetPoints: index === 0 ? -1 : index }))
      const review = { ...managerReview, pastSeasons: [{ season: '2024/25', totalPoints: 2100, overallRank: 18000 }, { season: '2025/26', totalPoints: 2400, overallRank: 12000 }], entry: { ...managerReview.entry!, id: session.entryId! }, timeline, transfers: timeline.map(row => ({ ...managerReview.transfers[row.eventId - 1], eventTransfers: row.eventTransfers })) }
      expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
      await page.goto(`${prefix}/my-fpl/team`)
      await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
      const chart = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: locale === 'zh-CN' ? '赛季走势' : 'Season charts', exact: true }) })
+     expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme') }))).toEqual({ width, timezone: planned ? 'UTC' : 'Australia/Perth', theme: planned ? 'dark' : 'system' })
+     if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+     await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-entry', String(session.entryId))
+     if (noHistory) {
+      await expect(chart).toHaveCount(0)
+      const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '轮次历史', exact: true }) })
+      await expect(history.getByText(zhMessages.TeamStats.noStats, { exact: true })).toBeVisible()
+      await expect(history.getByRole('table')).toHaveCount(0)
+      await expect(history.getByRole('button', { name: /^打开第/ })).toHaveCount(0)
+      continue
+     }
      await expect(chart).toHaveCount(1)
+     const expectedModes = locale === 'zh-CN' ? ['总排名', '总得分', '净积分', '队长', '板凳', '转会'] : ['Overall rank', 'Total points', 'Net points', 'Captain', 'Bench', 'Transfers']
+     await expect(chart.getByRole('button')).toHaveText(expectedModes)
      for (const mode of [locale === 'zh-CN' ? '转会' : 'Transfers', locale === 'zh-CN' ? '净积分' : 'Net points']) {
       await chart.getByRole('button', { name: mode, exact: true }).click()
+      await expect(chart.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'true')
+      await expect(chart.locator('[aria-live="polite"]')).not.toContainText('GW3')
       const ticks = chart.locator('.recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value')
       await expect(ticks.first()).toBeVisible()
       const labels = await ticks.allTextContents()
@@ -5374,6 +5395,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
       await expect(history.locator('[aria-live="polite"]')).toHaveCount(0)
       for (const mode of (locale === 'zh-CN' ? ['总排名', '总得分', '队长', '板凳'] : ['Overall rank', 'Total points', 'Captain', 'Bench'])) {
        await chart.getByRole('button', { name: mode, exact: true }).click()
+      await expect(chart.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'true')
+      await expect(chart.locator('[aria-live="polite"]')).not.toContainText('GW3')
        const summary = chart.locator('[aria-live="polite"]')
        await chart.locator('.recharts-bar-rectangle path').last().hover()
        await expect(summary).toContainText('GW3')
@@ -5399,12 +5422,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
       })
      }
     }
+    const variantId = planned ? noHistory ? 'TEAM02.state.02' : 'TEAM02.state.01' : `TEAM02.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`
+    await testInfo.attach(variantId, { contentType: 'application/json', body: JSON.stringify({ variantId, identity: 'B', locale, viewport: { width, height: 900 }, theme: planned ? 'dark' : 'system', timezone: planned ? 'UTC' : 'Australia/Perth', scenario: noHistory ? 'no-history' : planned ? 'ready' : 'baseline', modes: noHistory ? [] : ['rank', 'totalPoints', 'netPoints', 'captain', 'bench', 'transfers'], functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: noHistory ? 'Empty current-season history has textual empty state, no fake chart/table/GW action' : 'Six actual modes, selected buttons, unique integer ticks including negative/zero/single-point ranges, native pointer tooltip GW3/Saka and leave clearing; past-season tooltip clearing', notApplicable: 'Chart itself has no GW navigation control; navigation is in history section and separately tested' }) })
    } finally {
     await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
     await session.cleanup()
    }
   })
- }
+ })
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
