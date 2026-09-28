@@ -655,6 +655,8 @@ test('live points restores transfer details and distinguishes failure from empty
 	const section = page.getByRole('region', {
 		name: /Gameweek transfers\s*GW33/
 	})
+	// Initial data now streams from the server. Exercise the intercepted browser refresh path.
+	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
 	await expect(section.getByRole('alert')).toContainText(
 		'Unable to load transfers'
 	)
@@ -771,6 +773,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			})
 			await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/live/points/123?gw=33&tournamentId=3&from=home`)
 			const section = page.getByRole('region', { name: locale === 'en' ? /Gameweek transfers/ : /本周转会/ })
+			await section.getByRole('button', { name: locale === 'en' ? 'Refresh transfers' : '刷新转会', exact: true }).click()
 			await expect(section).toContainText('Incoming Player')
 			await expect(section).toContainText('Outgoing Player')
 			await expect(section).toContainText('£5.5m')
@@ -833,6 +836,8 @@ test('public live transfers expose request failures and allow retry without a lo
 	})
 	await page.goto('/live/points/123?gw=33&tournamentId=3')
 	const section = page.getByRole('region', { name: /Gameweek transfers/ })
+	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
+	await expect.poll(() => transferRequests).toBe(1)
 	await expect(section.getByRole('alert')).toBeVisible()
 	await expect(section.getByRole('link')).toHaveCount(0)
 	await section.getByRole('button', { name: 'Refresh transfers', exact: true }).click()
