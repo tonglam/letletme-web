@@ -3273,6 +3273,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...distinctGameweek(eventId), entry: { ...managerReview.entry!, id: session.entryId! } } } }))
  ]
  let releaseHistory: (() => void) | undefined
+ let releaseChunks: (() => void) | undefined
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
@@ -3343,6 +3344,23 @@ for (const locale of ['en', 'zh-CN'] as const) {
   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
   await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(0)
   const initialReadySamples = metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length
+  const chunkGate = new Promise<void>(resolve => { releaseChunks = resolve })
+  const heldChunks: string[] = []
+  await page.route('**/_next/static/chunks/*.js*', async route => {
+   heldChunks.push(route.request().url())
+   await chunkGate
+   await route.continue()
+  })
+  await history.getByRole('button', { name: zh ? '打开第 3 轮' : 'Open gameweek 3', exact: true }).click()
+  await expect.poll(() => heldChunks.length).toBeGreaterThan(0)
+  await expect(page.locator('[data-manager-view="gameweek"][data-manager-ready="true"]').filter({ visible: true })).toHaveCount(0)
+  expect(metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY')).toHaveLength(initialReadySamples)
+  releaseChunks!()
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-view', 'gameweek')
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+  await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
   const historyGate = new Promise<void>(resolve => { releaseHistory = resolve })
   const historyRequest = page.waitForRequest(request => request.url().endsWith('/api/graphql') && request.postDataJSON()?.query?.includes('GetMyFplManagerGameweek') && request.postDataJSON()?.variables?.eventId === 1)
   await page.route('**/api/graphql', async route => {
@@ -3357,6 +3375,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
   await expect(page.locator('[data-manager-ready]').getByRole('alert').filter({ hasText: /200[123]|2026/ })).toHaveCount(0)
   releaseHistory!()
+  await expect.poll(() => heldChunks.length).toBeGreaterThan(0)
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
@@ -3426,6 +3445,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
    notApplicable: 'FINAL snapshot has no direct live handoff; PENDING/PROVISIONAL journeys require separate evidence'
   }), contentType: 'application/json' })
  } finally {
+  releaseChunks?.()
   releaseHistory?.()
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()

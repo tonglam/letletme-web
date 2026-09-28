@@ -24,13 +24,10 @@ import { cn } from '@/lib/utils'
 import { AlertCircle, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TeamGameweekOverall } from './_components/TeamGameweekOverall'
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ManagerReviewInsights } from './_components/ManagerReviewInsights'
 import { TeamSeasonCharts } from './_components/TeamSeasonCharts'
 import { TeamSeasonOverall } from './_components/TeamSeasonOverall'
-import { TeamSquadSection } from './_components/TeamSquadSection'
-import { TeamSquadPitch } from './_components/TeamSquadPitch'
 import { TeamStatsDeepDive } from './_components/TeamStatsDeepDive'
 import { MyFplSnapshotStatus } from '../_components/MyFplSnapshotStatus'
 import { useTeamStats, type InitialEntryHistory } from './_hooks/useTeamStats'
@@ -44,6 +41,16 @@ import {
 	parseTeamStatsView,
 	type TeamStatsPageView
 } from './_lib/team-stats-url'
+
+const TeamGameweekOverall = lazy(() =>
+	import('./_components/TeamGameweekOverall').then(module => ({ default: module.TeamGameweekOverall }))
+)
+const TeamSquadSection = lazy(() =>
+	import('./_components/TeamSquadSection').then(module => ({ default: module.TeamSquadSection }))
+)
+const TeamSquadPitch = lazy(() =>
+	import('./_components/TeamSquadPitch').then(module => ({ default: module.TeamSquadPitch }))
+)
 
 interface TeamStatsClientProps {
 	entryId: number
