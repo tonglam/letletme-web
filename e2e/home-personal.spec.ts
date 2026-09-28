@@ -3198,9 +3198,12 @@ test.describe('J19 planned UTC dark mobile states', () => {
  })
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
-  test(`J16 unbound navigation leaves identity unchanged ${locale} ${width}px`, async ({ page }) => {
+for (const plannedState of [false, true]) {
+for (const locale of plannedState ? ['zh-CN'] as const : ['en', 'zh-CN'] as const) {
+ for (const width of plannedState ? [390] : [1440, 390]) {
+ test.describe(`J16 ${plannedState ? 'planned unbound state' : 'existing baseline'} ${locale} ${width}`, () => {
+ test.use(plannedState ? { timezoneId: 'UTC', colorScheme: 'dark' } : {})
+  test(`J16 unbound navigation leaves identity unchanged ${locale} ${width}px`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated unbound identity')
    const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
    const session = await createSession()
@@ -3210,6 +3213,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
     if (request.headers()['next-action'] || (request.method() !== 'GET' && /\/api\/(auth|fpl)/.test(new URL(request.url()).pathname))) mutations.push(new URL(request.url()).pathname)
    })
    try {
+    if (plannedState) await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
     await page.setViewportSize({ width, height: 900 })
     await addSessionCookie(page, session.cookie)
     await page.goto(prefix || '/')
@@ -3242,11 +3246,19 @@ for (const locale of ['en', 'zh-CN'] as const) {
     const [identity] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
     expect(identity).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
     expect(mutations).toEqual([])
+    if (plannedState) {
+     await expect(page.locator('html')).toHaveClass(/dark/)
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+     await testInfo.attach('J16-planned-state', { body: JSON.stringify({ variantId: 'J16.state.01', locale, viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', scenario: 'unbound', identityUnchanged: identity, mutations, scope: 'Actual My FPL to onboarding, invalid input and clear, static help, browser Back and Profile; no binding writes.', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }), contentType: 'application/json' })
+    }
    } finally { await sql.end(); await session.cleanup() }
   })
+ })
  }
 }
 
+
+}
 
 test.describe('J10 planned baseline contexts', () => {
  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
