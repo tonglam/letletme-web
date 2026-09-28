@@ -3310,13 +3310,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 
-test.describe('J10 planned baseline contexts', () => {
- test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
+for (const planned of [false, true]) {
+ test.describe(planned ? 'TEAM01 planned many-GW context' : 'J10 planned baseline contexts', () => {
+ test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
+ for (const width of (planned ? [390] : [1440, 390])) {
  test(`J10 manager season history and transfer sheets ${locale} ${width}px`, async ({ page }, testInfo) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Shared manager fixture requires the dedicated single-worker SSR suite')
- await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+ await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
  const metrics: Array<{ metricName: string }> = []
  await page.route('**/api/vitals', async route => {
   metrics.push(...(route.request().postDataJSON().samples ?? []))
@@ -3475,13 +3476,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
   await expect(page.getByText('Review Player 1 GW2', { exact: true }).filter({ visible: true })).toHaveCount(0)
   await openSnapshotDetail('Review Player 12 GW3', 1)
   await expect(page.getByRole('button', { name: zh ? '关闭第 3 轮' : 'Close gameweek 3', exact: true })).toHaveCount(0)
-  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
-  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
-  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(planned ? 'UTC' : 'Australia/Perth')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(planned ? 'dark' : 'system')
+  if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
+  else await expect(page.locator('html')).not.toHaveClass(/dark/)
   await testInfo.attach('J10-planned-baseline', { body: JSON.stringify({
-   variantId: `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
-   locale, viewport: page.viewportSize(), identity: 'B', theme: 'system', timezone: 'Australia/Perth',
-   scenario: 'baseline', entryId: session.entryId, finalGw: 3, finalRevision: '103',
+   variantId: planned ? 'TEAM01.state.02' : `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
+   overlappingVariantIds: planned ? ['TEAM01.state.01'] : [],
+   locale, viewport: page.viewportSize(), identity: 'B', theme: planned ? 'dark' : 'system', timezone: planned ? 'UTC' : 'Australia/Perth',
+   scenario: planned ? 'many-gw' : 'baseline', entryId: session.entryId, finalGw: 3, finalRevision: '103',
    functionalAssertions: 'Homepage menu, season sections, transfer expansion, WC/FH sheets, historical GW loading and revision identity, tabs and snapshot modals',
    wholeJourneyPass: false, performanceStatus: 'NOT_RUN', readyMs: null,
    missing: ['cold/warm repetitions', 'event-to-paint', 'LCP/INP/CLS'],
@@ -3498,6 +3501,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 })
+}
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
