@@ -5,10 +5,19 @@ import type { PriceChangeObservedEvent } from '../lib/graphql/operations/price-c
 
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
-  test(`MKT03 position and availability controls ${locale} ${width}`, async ({ page }) => {
+  test.describe(`MKT03 baseline ${locale} ${width}`, () => {
+  test.use({ locale, timezoneId: 'Australia/Perth', colorScheme: 'light' })
+  test(`MKT03 position and availability controls ${locale} ${width}`, async ({ page, context }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture assertions only')
+   expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
    const zh = locale === 'zh-CN'
    await page.setViewportSize({ width, height: 900 })
    await page.goto(`${zh ? '/zh-CN' : ''}/explore/market`)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
    const board = page.locator('#market-most-selected-share')
    await expect(board.locator('li')).toHaveCount(4)
    for (const position of ['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD']) {
@@ -33,6 +42,12 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(search).toHaveValue('')
    await expect(disclosure.locator('li')).toHaveCount(6)
    await expect(page.locator('#market-availability-search-status')).toHaveText(zh ? '输入至少 2 个字符，在全部更新中查找球员。' : 'Enter at least 2 characters to search all updates.')
+   await disclosure.locator('summary').click()
+   await expect(disclosure).not.toHaveAttribute('open', '')
+   await expect(board.locator('li')).toHaveCount(4)
+   await disclosure.locator('summary').click()
+   await expect(disclosure.locator('li')).toHaveCount(6)
+   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
    await disclosure.getByRole('link', { name: 'Palmer', exact: true }).click()
    await expect(page).toHaveURL(new RegExp(`${zh ? '/zh-CN' : ''}/explore/player-stats\\?p1=2$`))
    await expect(page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })).toContainText('Palmer')
@@ -68,6 +83,9 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(page.getByText(zh ? 'Palmer 尚无真实身价变化记录。' : 'No genuine price changes have been recorded for Palmer.', { exact: true })).toBeVisible()
    await expect(page.getByText('£9.9m → £10.0m')).toHaveCount(0)
    await expect(page.getByRole('list', { name: zh ? 'Palmer 的身价历史' : 'Price history for Palmer', exact: true })).toHaveCount(0)
+   expect(errors).toEqual([])
+   await testInfo.attach('MKT03-baseline-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `MKT03.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, persona: 'A', locale, viewport: page.viewportSize(), timezone: 'Australia/Perth', theme: 'system', scenario: 'baseline', positions: ['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD', 'ALL'], pageErrors: errors, scope: 'All position filters, availability expand/search empty/clear/collapse, retained main list, no horizontal overflow, actual player link and Back, repeated history selection. Performance and full publication identity remain unverified.', readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
+  })
   })
  }
 }
