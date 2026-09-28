@@ -6517,3 +6517,93 @@ test.describe('HOME01 anonymous public partial failure', () => {
   } finally { await control(false) }
  })
 })
+
+
+// Original LP03 variants; real isolated bound sessions, no production mutation.
+for (const scenario of ['baseline', 'empty', 'error', '401'] as const) {
+ const contexts = scenario === 'baseline'
+  ? [{ locale: 'en', width: 1440 }, { locale: 'en', width: 390 }, { locale: 'zh-CN', width: 1440 }, { locale: 'zh-CN', width: 390 }]
+  : [{ locale: 'zh-CN', width: 390 }]
+ for (const { locale, width } of contexts) {
+  const stateIndex = { empty: '01', error: '02', '401': '03' }[scenario as 'empty' | 'error' | '401']
+  const variantId = scenario === 'baseline' ? `LP03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : `LP03.state.${stateIndex}`
+  test.describe(`LP03 bound context ${variantId}`, () => {
+   test.use({ viewport: { width, height: 900 }, timezoneId: scenario === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+   test('transfer terminal and explicit recovery preserve bound identity', async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated bound-session fixtures only')
+    const session = await createSession({ entryId: 15702 })
+    const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+    const chinese = locale === 'zh-CN'
+    let inject = false
+    let recovered = false
+    let reads = 0
+    const liveFixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`
+    try {
+     await addSessionCookie(page, session.cookie)
+     if (scenario === 'error') await page.clock.install()
+     await page.addInitScript(theme => localStorage.setItem('theme', theme), scenario === 'baseline' ? 'system' : 'dark')
+     const auth = await page.request.get('/api/auth/get-session')
+     expect(auth.ok()).toBe(true)
+     expect((await auth.json()).user.id).toBe(session.userId)
+     const [identity] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+     expect(identity.fpl_entry_id).toBe(session.entryId)
+     expect(identity.fpl_entry_verified_at).not.toBeNull()
+     await page.route('**/api/graphql', async route => {
+      const payload = route.request().postDataJSON() as { query?: string; variables?: { entryId?: number } }
+      if (!payload.query?.includes('GetEntryTransferHistory')) { await route.continue({ url: liveFixture }); return }
+      if (!inject) { await route.fulfill({ json: { data: { entryTransferHistory: [] } } }); return }
+      reads += 1
+      expect(payload.variables?.entryId).toBe(session.entryId)
+      if (!recovered && (scenario === 'error' || scenario === '401')) {
+       await route.fulfill({ status: scenario === '401' ? 401 : 503, json: { errors: [{ message: 'Controlled transfer failure', extensions: { code: scenario === '401' ? 'UNAUTHENTICATED' : 'SERVICE_UNAVAILABLE' } }] } })
+       return
+      }
+      await route.fulfill({ json: { data: { entryTransferHistory: scenario === 'empty' || recovered ? [] : [{ eventId: 33, transfers: [{ event: 33, elementOutWebName: 'Bound Out', elementOutTeamShortName: 'OUT', elementOutTypeName: 'MID', elementOutCost: 5.5, elementInWebName: 'Bound In', elementInTeamShortName: 'IN', elementInTypeName: 'MID', elementInCost: 6.2, time: '2026-08-04T10:00:00Z' }] }] } } })
+     })
+     await page.goto(`/${locale}/live/points/${session.entryId}?gw=33&tournamentId=3`)
+     const ready = page.locator('[data-live-points-ready="true"]')
+     await expect(ready).toHaveAttribute('data-live-entry', String(session.entryId))
+     await expect(ready).toHaveAttribute('data-live-gw', '33')
+     const section = page.getByRole('region', { name: chinese ? /本周转会\s*GW33/ : /Gameweek transfers\s*GW33/ })
+     const refresh = section.getByRole('button', { name: chinese ? '刷新转会' : 'Refresh transfers', exact: true })
+     await expect(refresh).toBeEnabled()
+     expect(await page.evaluate(() => ({ width: innerWidth, locale: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width, locale, timezone: scenario === 'baseline' ? 'Australia/Perth' : 'UTC' })
+     if (scenario !== 'baseline') await expect(page.locator('html')).toHaveClass(/dark/)
+     inject = true
+     await refresh.click()
+     if (scenario === 'error' || scenario === '401') {
+      await expect(section.getByRole('alert')).toBeVisible()
+      await expect(section).not.toContainText(chinese ? '本轮暂无已同步的转会记录。' : 'No synced transfer records')
+      await expect(section.getByRole('link')).toHaveCount(0)
+      await expect(ready).toHaveAttribute('data-live-gw', '33')
+      expect(reads).toBe(1)
+      recovered = true
+      await refresh.click()
+      if (scenario === 'error') {
+       // A 503 activates the existing 30-second dependency fence.
+       await expect(section.getByRole('alert')).toBeVisible()
+       expect(reads).toBe(1)
+       await page.clock.fastForward(30_000)
+       await refresh.click()
+      }
+     }
+     if (scenario === 'baseline') {
+      await expect(section).toContainText('Bound In')
+      await expect(section).toContainText('Bound Out')
+      await expect(section).toContainText('£5.5m')
+      await expect(section).toContainText('£6.2m')
+     } else await expect(section).toContainText(chinese ? '本轮暂无已同步的转会记录。' : 'No synced transfer records for this gameweek.')
+     await expect(section.getByRole('alert')).toHaveCount(0)
+     await expect(section.getByRole('status')).toHaveCount(0)
+     await expect(refresh).toBeEnabled()
+     expect(reads).toBe(scenario === 'error' || scenario === '401' ? 2 : 1)
+     const finalAuth = await page.request.get('/api/auth/get-session')
+     expect((await finalAuth.json()).user.id).toBe(session.userId)
+     expect(new URL(page.url()).pathname).toBe(`/${locale}/live/points/${session.entryId}`)
+     expect(new URL(page.url()).searchParams.get('gw')).toBe('33')
+     await testInfo.attach(variantId, { contentType: 'application/json', body: JSON.stringify({ variantId, persona: 'B', locale, width, theme: scenario === 'baseline' ? 'system' : 'dark', timezone: scenario === 'baseline' ? 'Australia/Perth' : 'UTC', scenario, authenticatedBeforeAndAfter: true, verifiedBinding: true, reads, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: 'Transfer records or confirmed empty, failure distinct from empty, explicit recovery with unchanged bound session; removed reauthorization link is not applicable to public transfer contract.' }) })
+    } finally { await sql.end(); await session.cleanup() }
+   })
+  })
+ }
+}
