@@ -1261,6 +1261,7 @@ export function PriceChangesBoard({
 								type="button"
 								variant="outline"
 								size="sm"
+								aria-label={t('previousPage')}
 								disabled={safePage <= 1}
 								onClick={() => setPage(current => Math.max(1, current - 1))}
 							>
@@ -1274,6 +1275,7 @@ export function PriceChangesBoard({
 								type="button"
 								variant="outline"
 								size="sm"
+								aria-label={t('nextPage')}
 								disabled={safePage >= pageCount}
 								onClick={() =>
 									setPage(current => Math.min(pageCount, current + 1))

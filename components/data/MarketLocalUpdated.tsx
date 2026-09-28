@@ -26,9 +26,8 @@ export function MarketLocalUpdated({
 			setLabel(capturedAt)
 			return
 		}
-		// No timeZone option → browser local zone. The market page uses the
-		// compact date-only variant in its page header; other consumers keep the
-		// precise capture timestamp.
+		// next-intl inherits the server provider zone unless explicitly overridden.
+		// Resolve the viewer zone after hydration for both timestamp variants.
 		const formatOptions = dateOnly
 			? {
 					day: 'numeric' as const,
@@ -42,7 +41,10 @@ export function MarketLocalUpdated({
 					second: '2-digit' as const,
 					timeZoneName: 'short' as const
 				}
-		setLabel(format.dateTime(parsed, formatOptions))
+		setLabel(format.dateTime(parsed, {
+			...formatOptions,
+			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+		}))
 	}, [capturedAt, dateOnly, format])
 
 	if (!label) {
