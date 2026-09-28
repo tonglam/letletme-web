@@ -48,3 +48,42 @@ test('MKT02.state.03 history error settles and reselecting recovers the same pla
   expect(calls).toBe(2)
   await testInfo.attach('planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MKT02.state.03', persona: 'A', locale: 'zh-CN', viewport: { width: 390, height: 900 }, theme: 'dark', timezone: 'UTC', scenario: 'error', playerId: 1, calls, scope: 'Error is distinct from empty history; loading ends; actual clear and same-player reselection recovers with one new request.', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false }) })
 })
+
+
+test('MKT03.state.03 partial availability retains rows and retries the missing page', async ({ page }, testInfo) => {
+  let calls = 0
+  let complete: { revision: string; items: unknown[]; totalCount: number; nextOffset: number | null }
+  await page.route('**/api/market/availability?**', async route => {
+    calls++
+    const offset = Number(new URL(route.request().url()).searchParams.get('offset'))
+    if (calls === 1) {
+      expect(offset).toBe(0)
+      complete = await (await route.fetch()).json()
+      expect(complete.items).toHaveLength(6)
+      return route.fulfill({ json: { ...complete, items: complete.items.slice(0, 2), nextOffset: 2 } })
+    }
+    expect(offset).toBe(2)
+    if (calls === 2) return route.fulfill({ status: 503, json: { error: 'fixture missing page' } })
+    return route.fulfill({ json: { ...complete, items: complete.items.slice(2), nextOffset: null } })
+  })
+  await page.goto('/zh-CN/explore/market')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  const board = page.locator('#market-most-selected-share')
+  await expect(board.locator('li')).toHaveCount(4)
+  const disclosure = page.getByTestId('market-availability-disclosure')
+  await disclosure.locator('summary').click()
+  await expect(disclosure.locator('li')).toHaveCount(2)
+  await page.locator('#market-availability-search').fill('NoSuchFixturePlayer')
+  await expect(page.locator('#market-availability-search-status')).toHaveText('部分更新暂时无法载入，已显示当前已载入的结果。')
+  await expect(page.getByText('没有匹配的出场状态更新。', { exact: true })).toHaveCount(0)
+  await expect(board.locator('li')).toHaveCount(4)
+  expect(calls).toBe(2)
+  await disclosure.getByRole('button', { name: '重试载入更新', exact: true }).click()
+  await expect(page.locator('#market-availability-search-status')).toHaveText('没有匹配的出场状态更新。')
+  expect(calls).toBe(3)
+  await disclosure.getByRole('button', { name: '清除球员搜索', exact: true }).click()
+  await expect(disclosure.locator('li')).toHaveCount(6)
+  await expect(board.locator('li')).toHaveCount(4)
+  await testInfo.attach('planned-context', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MKT03.state.03', persona: 'A', locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', scenario: 'partial', calls, scope: 'Partial page failure retains main ownership list and distinguishes incomplete search from no matches; explicit retry completes remaining page, clearing restores six rows without duplicates.', readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
+})
