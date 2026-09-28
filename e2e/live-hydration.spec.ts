@@ -150,3 +150,58 @@ test.describe('J09 match status and player navigation', () => {
 		}
 	}
 })
+
+
+test.describe('J09 planned single-state variants', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 900 } })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_LIVE_HYDRATION !== '1', 'Isolated local fixture only')
+ for (const [index, scenario] of [[1, 'scheduled'], [2, 'live'], [3, 'finished'], [4, 'empty']] as const) {
+  test(`J09 planned state ${scenario}`, async ({ page }, testInfo) => {
+   const origin = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+   const seedResponse = await fetch(`${origin}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchday { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+   const seed = await seedResponse.json()
+   expect(seed.errors).toBeUndefined()
+   const snapshot = seed.data.liveMatchday.snapshot
+   const first = snapshot.matches[0]
+   snapshot.matches = scenario === 'empty' ? [] : [{ ...first, fixtureId: 101, started: scenario !== 'scheduled', finished: scenario === 'finished', finishedProvisional: scenario === 'finished', minutes: scenario === 'live' ? 35 : scenario === 'finished' ? 90 : 0, homeScore: scenario === 'scheduled' ? null : 2, awayScore: scenario === 'scheduled' ? null : 1, players: [] }]
+   try {
+    expect((await fetch(`${origin}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetLiveMatchdayV3', data: seed.data }] }) })).ok).toBe(true)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto('/zh-CN')
+    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
+    const nav = page.getByRole('navigation').first()
+    await nav.locator('[data-navigation-mobile] > summary').click()
+    const link = nav.locator('a[href="/zh-CN/live/matches"]').filter({ visible: true })
+    await expect(link).toHaveCount(1)
+    await link.click()
+    await expect(page).toHaveURL(url => url.pathname === '/zh-CN/live/matches')
+    const targetTab = scenario === 'scheduled' ? 'not-started' : scenario === 'finished' ? 'finished' : 'live'
+    for (const [tab, emptyText] of [['live', '暂无进行中的比赛'], ['finished', '暂无已结束的比赛'], ['not-started', '暂无未开始的比赛']] as const) {
+     await page.locator(`[role="tab"][aria-controls$="content-${tab}"]`).click()
+     const active = page.getByRole('tabpanel')
+     if (scenario !== 'empty' && tab === targetTab) {
+      await expect(active.locator('[data-live-match-card="true"]')).toHaveCount(1)
+      const card = active.locator('[data-match-id="101"]')
+      await expect(card).toContainText('Arsenal')
+      await expect(card).toContainText('Chelsea')
+      await expect(card.getByRole('status')).toContainText(scenario === 'scheduled' ? '未开始' : scenario === 'finished' ? '比赛结束' : '35')
+      if (scenario === 'scheduled') {
+       await expect(card.locator('.scoreboard')).not.toContainText('2')
+       await expect(card.getByRole('button', { name: /Palmer|Saka/ })).toHaveCount(0)
+      } else await expect(card.locator('.scoreboard')).toContainText('2')
+     } else {
+      await expect(active.locator('[data-live-match-card="true"]')).toHaveCount(0)
+      await expect(active.getByText(emptyText, { exact: true })).toBeVisible()
+     }
+    }
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await testInfo.attach('J09-state-binding', { contentType: 'application/json', body: JSON.stringify({ variantId: `J09.state.0${index}`, scenario, locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', identity: 'A', eventId: snapshot.eventId, revision: snapshot.revisions, matchIds: snapshot.matches.map((match: { fixtureId: number }) => match.fixtureId), functionalStatus: 'PASS', wholeVariantComplete: false, readyMs: null, eventToPaintMs: null, missingReason: 'Scoped match-state routing/empty content only; no player detail, full position matrix or production/performance claim.' }) })
+   } finally {
+    expect((await fetch(`${origin}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+   }
+  })
+ }
+})

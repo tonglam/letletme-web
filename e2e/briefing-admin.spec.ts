@@ -5,11 +5,26 @@ import postgres from 'postgres'
 test.describe.configure({ mode: 'serial' })
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_BRIEFING_ADMIN !== '1', 'Explicit isolated admin fixture only')
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
-  for (const role of ['editor', 'publisher', 'both', 'neither', 'anonymous'] as const) {
+const contexts = [
+ ...(['en', 'zh-CN'] as const).flatMap(locale => [1440, 390].flatMap(width =>
+  (['editor', 'publisher', 'both', 'neither', 'anonymous'] as const).map(role => ({
+   locale, width, role, timezone: 'Australia/Perth', theme: 'system' as const,
+   variantId: ['editor', 'publisher', 'anonymous'].includes(role)
+    ? `R08.${role === 'anonymous' ? 'A' : role}.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`
+    : null
+  }))
+ )),
+ { locale: 'zh-CN' as const, width: 390, role: 'anonymous' as const,
+  timezone: 'UTC', theme: 'dark' as const, variantId: 'R08.state.03' }
+]
+for (const context of contexts) {
+ const { locale, width, role, timezone, theme } = context
+ test.describe(`${context.variantId ?? role} ${timezone}`, () => {
+  test.use({ timezoneId: timezone, colorScheme: theme === 'dark' ? 'dark' : 'light' })
    test(`BRIEF03 ${role} ${locale} ${width} observes capabilities without submitting`, async ({ page }, testInfo) => {
+    await page.addInitScript(theme => localStorage.setItem('theme', theme), theme)
     const enabled = process.env.BRIEFING_ADMIN_ENABLED === 'true'
+    const variantId = enabled || context.variantId === 'R08.state.03' ? context.variantId : null
     const canEdit = enabled && (role === 'editor' || role === 'both')
     const canPublish = enabled && (role === 'publisher' || role === 'both')
     const direct = process.env.E2E_DIRECT_DATABASE_URL
@@ -54,6 +69,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
      const homeResponse = await page.goto(homeUrl)
      await expect(page).toHaveURL(new RegExp(`${homeUrl}$`))
      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+     await expect(page.locator('html')).toHaveClass(new RegExp(`(?:^|\\s)${theme === 'dark' ? 'dark' : 'light'}(?:\\s|$)`))
      const homeChain = await navigationChain(homeResponse)
      const directResponse = await page.goto(url)
      await expect(page).toHaveURL(new RegExp(`${url}$`))
@@ -95,6 +113,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
      expect(writes).toEqual([])
      await testInfo.attach('R08-scope', { body: JSON.stringify({
       caseId: 'R08',
+      variantId,
+      timezone,
+      theme,
+      enabled,
       stepIds: ['R08.01', 'R08.02', 'R08.04', 'R08.05'],
       environment: 'isolated-fixture',
       role,
@@ -123,6 +145,5 @@ for (const locale of ['en', 'zh-CN'] as const) {
      try { await sql`DELETE FROM bauth.session WHERE id = ${id}`; await sql`DELETE FROM bauth."user" WHERE id = ${id}` } finally { await sql.end() }
     }
    })
-  }
- }
+ })
 }

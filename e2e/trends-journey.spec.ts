@@ -1,11 +1,24 @@
 import { expect, test } from '@playwright/test'
 
-for (const locale of ['en', 'zh-CN']) {
-	for (const width of [1440, 390]) {
+const journeyContexts = [
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ locale, width, theme: 'system', timezone: 'Australia/Perth', plannedState: false }))),
+ { locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', plannedState: true }
+]
+
+for (const variant of journeyContexts) {
+ const { locale, width } = variant
+ test.describe(`J05 context ${locale} ${width} ${variant.theme}`, () => {
+  test.use({ timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+  test.beforeEach(async ({ page, context }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'J05 fixture states only')
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+   expect((await context.cookies()).some(cookie => /session/i.test(cookie.name))).toBe(false)
+  })
 		test(`J05 public trends click journey ${locale} ${width}px`, async ({ page }, testInfo) => {
 			const zh = locale === 'zh-CN'
 			const prefix = zh ? '/zh-CN' : ''
 			const path = `${prefix}/explore/selections`
+			testInfo.annotations.push({ type: 'coverage-variant', description: variant.plannedState ? 'J05.state.01' : `J05.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` })
 			await page.setViewportSize({ width, height: 900 })
 			testInfo.annotations.push({ type: 'coverage-case', description: 'J05 public ready journey only; empty, unavailable, late response and performance remain separate' })
 			await page.goto(prefix || '/')
@@ -17,6 +30,8 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(link).toHaveCount(1)
 			await link.click()
 			await expect(page).toHaveURL(url => url.pathname === path)
+			await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
 			const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
 			const gw = page.getByRole('combobox', { name: zh ? '观察轮次' : 'Gameweek', exact: true })
 			const checkPanels = async (player: string, percent: number) => {
@@ -58,16 +73,26 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(gw).toHaveValue('32')
 			await checkPanels('Palmer', 53)
 		})
-	}
+	})
 }
 
-for (const locale of ['en', 'zh-CN']) {
-	for (const width of [1440, 390]) {
+for (const variant of journeyContexts) {
+ const { locale, width } = variant
+ test.describe(`J05 context ${locale} ${width} ${variant.theme}`, () => {
+  test.use({ timezoneId: variant.timezone, colorScheme: variant.theme === 'dark' ? 'dark' : 'light' })
+  test.beforeEach(async ({ page, context }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'J05 fixture states only')
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), variant.theme)
+   expect((await context.cookies()).some(cookie => /session/i.test(cookie.name))).toBe(false)
+  })
 		for (const state of ['failure', 'empty', 'unavailable'] as const) {
 			test(`J05 ${state} recovery ${locale} ${width}px`, async ({ page }, testInfo) => {
+				if (variant.plannedState && state !== 'failure') testInfo.annotations.push({ type: 'coverage-variant', description: state === 'empty' ? 'J05.state.02' : 'J05.state.03' })
 				const zh = locale === 'zh-CN'
 				await page.setViewportSize({ width, height: 900 })
 				await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&tournament=777&gw=33`)
+				await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+				expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
 				const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
 				const gw = page.getByRole('combobox', { name: zh ? '观察轮次' : 'Gameweek', exact: true })
 				await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
@@ -164,6 +189,8 @@ for (const locale of ['en', 'zh-CN']) {
 			})
 			await page.setViewportSize({ width, height: 900 })
 			await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&tournament=777&gw=33`)
+			await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
 			const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
 			const gw = page.getByRole('combobox', { name: zh ? '观察轮次' : 'Gameweek', exact: true })
 			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
@@ -202,7 +229,7 @@ for (const locale of ['en', 'zh-CN']) {
 				}
 			}
 		})
-	}
+	})
 }
 
 for (const locale of ['en', 'zh-CN']) {
