@@ -1,9 +1,12 @@
+import { createPerformanceCorrelationId } from './performance-correlation'
+
 type RouteNavigationStart = {
 	pathname: string
 	startedAt: number
+	navigationId: string
 }
 
-type BackgroundResumeStart = RouteNavigationStart
+type BackgroundResumeStart = Omit<RouteNavigationStart, 'navigationId'>
 
 export type RouteReadyMeasurementKind =
 	| 'initial_navigation'
@@ -14,6 +17,8 @@ export type RouteReadyMeasurementKind =
 
 export type RouteReadyKeyKind = 'identity' | 'interaction'
 
+let documentClockAvailable = true
+let documentNavigationId: string | undefined
 let currentRouteNavigation: RouteNavigationStart | null = null
 let pendingBackgroundResume: BackgroundResumeStart | null = null
 const readyInteractionStarts = new Map<string, number>()
@@ -43,7 +48,12 @@ export function markRouteReadyStart(
 		)
 		return
 	}
-	currentRouteNavigation = { pathname: normalizedPathname, startedAt }
+	documentClockAvailable = false
+	currentRouteNavigation = {
+		pathname: normalizedPathname,
+		startedAt,
+		navigationId: createPerformanceCorrelationId('nav')
+	}
 }
 
 /** Called by Next's pre-hydration client instrumentation when a route starts. */
@@ -66,6 +76,7 @@ export function markBackgroundResumeStart(
 	pathname: string,
 	startedAt = performance.now()
 ): void {
+	documentClockAvailable = false
 	// A visibility resume starts a fresh measurement context. A stale route
 	// navigation clock must not win classification for the resumed page.
 	currentRouteNavigation = null
@@ -79,6 +90,20 @@ function documentNavigationStart(): number | null {
 	const entry = performance.getEntriesByType('navigation')[0] as
 		PerformanceNavigationTiming | undefined
 	return entry?.startTime ?? null
+}
+
+/** Share an identity across markers using the same document or route clock. */
+export function routeReadyNavigationId(
+	pathname: string,
+	documentStart = documentNavigationStart()
+): string | undefined {
+	const path = normalizePathname(pathname)
+	if (currentRouteNavigation) {
+		return currentRouteNavigation.pathname === path
+			? currentRouteNavigation.navigationId : undefined
+	}
+	if (!documentClockAvailable || pendingBackgroundResume || documentStart === null) return undefined
+	return documentNavigationId ??= createPerformanceCorrelationId('nav')
 }
 
 /** Returns the latest browser-recorded paint time for one annotated RSC element. */
@@ -198,7 +223,7 @@ export function routeReadyStartTime(
 			return pendingBackgroundResume.startedAt
 		pendingBackgroundResume = null
 	}
-	return documentStart
+	return documentClockAvailable ? documentStart : null
 }
 
 /** Classify the clock without putting missing starts into the latency distribution. */
@@ -224,7 +249,7 @@ export function routeReadyMeasurementKind(
 			return 'background_resume'
 		pendingBackgroundResume = null
 	}
-	if (!currentRouteNavigation && documentStart !== null) {
+	if (documentClockAvailable && !currentRouteNavigation && documentStart !== null) {
 		return 'initial_navigation'
 	}
 	return 'missing_start'
@@ -236,7 +261,7 @@ export function measureRouteReadyDuration(
 	documentStart = documentNavigationStart(),
 	readyKey?: string,
 	readyKeyKind: RouteReadyKeyKind = 'identity',
-	claimedBackgroundResumeStart?: number
+	claimedStart?: number | null
 ): number | null {
 	// Keep keyed starts available while sibling readiness markers consume the
 	// same interaction. A marker that captured a background-resume clock keeps
@@ -248,16 +273,14 @@ export function measureRouteReadyDuration(
 			? pendingBackgroundResume.startedAt
 			: undefined
 	const start =
-		claimedBackgroundResumeStart ??
-		routeReadyStartTime(pathname, documentStart, readyKey, readyKeyKind)
+		claimedStart !== undefined
+			? claimedStart
+			: routeReadyStartTime(pathname, documentStart, readyKey, readyKeyKind)
 	const measured = start === null ? null : Math.max(0, now - start)
 	if (pendingResumeStart !== undefined && start === pendingResumeStart) {
 		// Identity-keyed readiness markers may use the resume clock as their
 		// applicable navigation context. Consume it just like an unkeyed marker;
 		// only keyed interaction clocks remain available to sibling markers.
-		pendingBackgroundResume = null
-	}
-	if (!readyKey && pendingBackgroundResume?.pathname === normalizedPathname) {
 		pendingBackgroundResume = null
 	}
 	return measured
@@ -274,6 +297,8 @@ export function clearRouteReadyStart(
 }
 
 export function resetRouteNavigationStartForTests(): void {
+	documentClockAvailable = true
+	documentNavigationId = undefined
 	currentRouteNavigation = null
 	pendingBackgroundResume = null
 	readyInteractionStarts.clear()

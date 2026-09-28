@@ -8,17 +8,28 @@ cd "$(dirname "$0")/.."
 case "${1:-}" in
   ssr)
     npx playwright test e2e/navigation-metrics.spec.ts --workers=1 --trace=on --output=test-results/navigation-metrics
-    npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts e2e/match-fallback.spec.ts --grep 'SSR remediation|SSR detail stream|canonical competition|personal league carousel|R23 actual internal competition entry|J19|J10|J08|J12|live board layout fixture' --workers=1 --trace=on
+    npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts e2e/match-fallback.spec.ts --grep 'SSR remediation|FIX04 planned unavailable and unbound|SSR detail stream|canonical competition|personal league carousel|R23 actual internal competition entry|J19|J10|J08|J12|live board layout fixture' --workers=1 --trace=on
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-readiness.spec.ts --workers=1 --trace=on --output=test-results/market-readiness
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh horizon
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh trends-unpublished
     E2E_MARKET_HISTORY=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-historical-freshness.spec.ts --workers=1 --trace=on --output=test-results/market-history
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'C09 text share' --workers=1 --trace=on --output=test-results/market-share
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'prediction pagination accessible names' --workers=1 --trace=on --output=test-results/prediction-pagination
+    # Timezone seeds must not inherit the pagination suite's server price cache.
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'market viewer timezone' --workers=1 --trace=on --output=test-results/market-timezone
     for status in READY PARTIAL STALE UNAVAILABLE; do
       E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 board states $status " --workers=1 --trace=on --output="test-results/prediction-$status"
     done
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep "PRED03 cached board" --workers=1 --trace=on --output=test-results/prediction-cache
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-journey.spec.ts --grep 'J02.state.03' --workers=1 --trace=on --output=test-results/market-partial-journey
+    for selection in 'J03.A.|J03.state.01' 'J03.state.02' 'J03.state.03'; do
+      prediction_live_fixture="${E2E_LIVE_HYDRATION:-0}"
+      if [[ "$selection" == "J03.state.02" ]]; then prediction_live_fixture=0; fi
+      E2E_LIVE_HYDRATION="$prediction_live_fixture" E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/prediction-journey.spec.ts --grep "$selection" --workers=1 --trace=on --output="test-results/prediction-journey-${selection//[^a-zA-Z0-9]/_}"
+    done
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh governance
+    E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'HOME02 planned' --workers=1 --trace=on --output=test-results/home-carousel-contexts
+    E2E_LIVE_HYDRATION=0 E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-controls.spec.ts --grep 'HOME02 empty planned' --workers=1 --trace=on --output=test-results/home-carousel-empty
     npx playwright test e2e/match-missing-stats.spec.ts --workers=1 --trace=on --output=test-results/match-missing-stats
     ;;
   governance)
