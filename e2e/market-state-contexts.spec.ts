@@ -89,7 +89,7 @@ test('MKT03.state.03 partial availability retains rows and retries the missing p
 })
 
 
-for (const empty of [true]) test(`MKT03.state.${empty ? '02' : '01'} ownership and availability ${empty ? 'empty' : 'ready'}`, async ({ page }, testInfo) => {
+for (const empty of [false, true]) test(`MKT03.state.${empty ? '02' : '01'} ownership and availability ${empty ? 'empty' : 'ready'}`, async ({ page }, testInfo) => {
   test.skip(process.env.E2E_MARKET_READINESS !== '1', 'Requires isolated market cache control')
   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
   const seed = await (await fetch(`${fixture}/graphql`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'query GetMarketPulseSummary { __typename }' }) })).json()
