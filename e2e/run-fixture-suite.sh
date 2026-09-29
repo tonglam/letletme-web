@@ -10,6 +10,10 @@ case "${1:-}" in
     npx playwright test e2e/navigation-metrics.spec.ts --workers=1 --trace=on --output=test-results/navigation-metrics
     npx playwright test e2e/home-personal.spec.ts e2e/player-stats.spec.ts e2e/match-fallback.spec.ts --grep 'SSR remediation|FIX04 planned unavailable and unbound|SSR detail stream|canonical competition|personal league carousel|R23 actual internal competition entry|J19|J10|J08|J12|live board layout fixture' --workers=1 --trace=on
     E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-readiness.spec.ts --workers=1 --trace=on --output=test-results/market-readiness
+    # Mutating a market summary must not reuse another scenario's Next cache.
+    for market_state in ready empty; do
+      E2E_MARKET_READINESS=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-state-contexts.spec.ts --grep "ownership and availability $market_state$" --workers=1 --trace=on --output="test-results/market-state-$market_state"
+    done
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh horizon
     PLAYWRIGHT_USE_EXISTING_BUILD=1 bash e2e/run-fixture-suite.sh trends-unpublished
     E2E_MARKET_HISTORY=1 PLAYWRIGHT_USE_EXISTING_BUILD=1 npx playwright test e2e/market-historical-freshness.spec.ts --workers=1 --trace=on --output=test-results/market-history
