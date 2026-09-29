@@ -32,7 +32,13 @@ process.exit(process.env.FIXTURE_FAIL === '1' ? 17 : 0)
 test('SSR suite preserves selectors, serial execution and fixture environment', () => {
 	const result = invoke('ssr')
 	assert.equal(result.status, 0, result.stderr)
-	assert.equal(result.calls.length, 23)
+	assert.equal(result.calls.length, 25)
+	for (const [index, state] of ['ready', 'empty'].entries()) {
+		const call = result.calls[3 + index]
+		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/market-state-contexts.spec.ts', '--grep', `ownership and availability ${state}$`, '--workers=1', '--trace=on', `--output=test-results/market-state-${state}`])
+		assert.equal(call.market, '1')
+		assert.equal(call.existingBuild, '1')
+	}
 	assert.deepEqual(result.calls[0].args, ['playwright', 'test', 'e2e/navigation-metrics.spec.ts', '--workers=1', '--trace=on', '--output=test-results/navigation-metrics'])
 	assert.deepEqual(result.calls.at(-1).args, ['playwright', 'test', 'e2e/match-missing-stats.spec.ts', '--workers=1', '--trace=on', '--output=test-results/match-missing-stats'])
 	assert.deepEqual(result.calls.at(-3).args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'HOME02 planned', '--workers=1', '--trace=on', '--output=test-results/home-carousel-contexts'])
@@ -44,63 +50,63 @@ test('SSR suite preserves selectors, serial execution and fixture environment', 
 	assert.equal(result.calls.at(-1).fixture, '1')
 	assert.equal(result.calls.at(-1).cwd, root)
 	for (const [index, status] of ['READY', 'PARTIAL', 'STALE', 'UNAVAILABLE'].entries()) {
-		const call = result.calls[10 + index]
+		const call = result.calls[12 + index]
 		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', `PRED03 board states ${status} `, '--workers=1', '--trace=on', `--output=test-results/prediction-${status}`])
 		assert.equal(call.market, '1')
 		assert.equal(call.existingBuild, '1')
 		assert.equal(call.fixture, '1')
 	}
-	assert.deepEqual(result.calls[14].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'PRED03 cached board', '--workers=1', '--trace=on', '--output=test-results/prediction-cache'])
-	assert.equal(result.calls[14].market, '1')
-	assert.equal(result.calls[14].existingBuild, '1')
+	assert.deepEqual(result.calls[16].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'PRED03 cached board', '--workers=1', '--trace=on', '--output=test-results/prediction-cache'])
+	assert.equal(result.calls[16].market, '1')
+	assert.equal(result.calls[16].existingBuild, '1')
 
-	assert.deepEqual(result.calls[15].args, ['playwright', 'test', 'e2e/market-journey.spec.ts', '--grep', 'J02.state.03', '--workers=1', '--trace=on', '--output=test-results/market-partial-journey'])
+	assert.deepEqual(result.calls[17].args, ['playwright', 'test', 'e2e/market-journey.spec.ts', '--grep', 'J02.state.03', '--workers=1', '--trace=on', '--output=test-results/market-partial-journey'])
 	for (const [index, selection] of ['J03.A.|J03.state.01', 'J03.state.02', 'J03.state.03'].entries()) {
-		const call = result.calls[16 + index]
+		const call = result.calls[18 + index]
 		assert.equal(call.fixture, selection === 'J03.state.02' ? '0' : '1')
 		assert.deepEqual(call.args, ['playwright', 'test', 'e2e/prediction-journey.spec.ts', '--grep', selection, '--workers=1', '--trace=on', `--output=test-results/prediction-journey-${selection.replace(/[^a-zA-Z0-9]/g, '_')}`])
 	}
-	assert.equal(result.calls[15].fixture, '1')
-	for (const call of result.calls.slice(15, 19)) {
+	assert.equal(result.calls[17].fixture, '1')
+	for (const call of result.calls.slice(17, 21)) {
 		assert.equal(call.market, '1')
 		assert.equal(call.existingBuild, '1')
 		assert.equal(call.cwd, root)
 	}
-	assert.deepEqual(result.calls[8].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'prediction pagination accessible names', '--workers=1', '--trace=on', '--output=test-results/prediction-pagination'])
-	assert.equal(result.calls[8].market, '1')
-	assert.equal(result.calls[8].existingBuild, '1')
-	assert.equal(result.calls[8].fixture, '1')
-	assert.equal(result.calls[8].cwd, root)
-	assert.deepEqual(result.calls[9].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'market viewer timezone', '--workers=1', '--trace=on', '--output=test-results/market-timezone'])
-	assert.equal(result.calls[9].market, '1')
-	assert.equal(result.calls[9].existingBuild, '1')
+	assert.deepEqual(result.calls[10].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'prediction pagination accessible names', '--workers=1', '--trace=on', '--output=test-results/prediction-pagination'])
+	assert.equal(result.calls[10].market, '1')
+	assert.equal(result.calls[10].existingBuild, '1')
+	assert.equal(result.calls[10].fixture, '1')
+	assert.equal(result.calls[10].cwd, root)
+	assert.deepEqual(result.calls[11].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'market viewer timezone', '--workers=1', '--trace=on', '--output=test-results/market-timezone'])
+	assert.equal(result.calls[11].market, '1')
+	assert.equal(result.calls[11].existingBuild, '1')
 	assert.equal(result.calls[0].fixture, '1')
 	assert.equal(result.calls[0].cwd, root)
 	assert.deepEqual(result.calls[2].args, ['playwright', 'test', 'e2e/market-readiness.spec.ts', '--workers=1', '--trace=on', '--output=test-results/market-readiness'])
 	assert.equal(result.calls[2].market, '1')
 	assert.equal(result.calls[2].existingBuild, '1')
-	assert.deepEqual(result.calls[3].args, ['playwright', 'test', 'e2e/nonterminal-horizon.spec.ts', '--workers=1', '--trace=on', '--output=test-results/horizon'])
-	assert.equal(result.calls[3].horizon, '1')
-	assert.equal(result.calls[3].existingBuild, '1')
-	assert.equal(result.calls[3].fixture, '1')
-	assert.equal(result.calls[3].cwd, root)
+	assert.deepEqual(result.calls[5].args, ['playwright', 'test', 'e2e/nonterminal-horizon.spec.ts', '--workers=1', '--trace=on', '--output=test-results/horizon'])
+	assert.equal(result.calls[5].horizon, '1')
+	assert.equal(result.calls[5].existingBuild, '1')
+	assert.equal(result.calls[5].fixture, '1')
+	assert.equal(result.calls[5].cwd, root)
 	assert.deepEqual(result.calls[1].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', 'e2e/player-stats.spec.ts', 'e2e/match-fallback.spec.ts', '--grep', 'SSR remediation|FIX04 planned unavailable and unbound|SSR detail stream|canonical competition|personal league carousel|R23 actual internal competition entry|J19|J10|J08|J12|live board layout fixture', '--workers=1', '--trace=on'])
 	assert.equal(result.calls[1].fixture, '1')
 	assert.equal(result.calls[1].cwd, root)
-	assert.deepEqual(result.calls[4].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])
-	assert.deepEqual(result.calls[5].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'TR03 planned.*unpublished', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished-bound'])
-	for (const call of result.calls.slice(4, 6)) {
+	assert.deepEqual(result.calls[6].args, ['playwright', 'test', 'e2e/trends-unpublished.spec.ts', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished'])
+	assert.deepEqual(result.calls[7].args, ['playwright', 'test', 'e2e/home-personal.spec.ts', '--grep', 'TR03 planned.*unpublished', '--workers=1', '--trace=on', '--output=test-results/trends-unpublished-bound'])
+	for (const call of result.calls.slice(6, 8)) {
 		assert.equal(call.unpublished, '1')
 		assert.equal(call.existingBuild, '1')
 		assert.equal(call.cwd, root)
 	}
-	assert.equal(result.calls[5].ssr, '1')
-	assert.equal(result.calls[6].marketHistory, '1')
-	assert.equal(result.calls[6].existingBuild, '1')
-	assert.ok(result.calls[6].args.includes('e2e/market-historical-freshness.spec.ts'))
-	assert.equal(result.calls[7].market, '1')
-	assert.equal(result.calls[7].existingBuild, '1')
-	assert.deepEqual(result.calls[7].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'C09 text share', '--workers=1', '--trace=on', '--output=test-results/market-share'])
+	assert.equal(result.calls[7].ssr, '1')
+	assert.equal(result.calls[8].marketHistory, '1')
+	assert.equal(result.calls[8].existingBuild, '1')
+	assert.ok(result.calls[8].args.includes('e2e/market-historical-freshness.spec.ts'))
+	assert.equal(result.calls[9].market, '1')
+	assert.equal(result.calls[9].existingBuild, '1')
+	assert.deepEqual(result.calls[9].args, ['playwright', 'test', 'e2e/market-controls.spec.ts', '--grep', 'C09 text share', '--workers=1', '--trace=on', '--output=test-results/market-share'])
 })
 
 test('standalone horizon keeps build enabled and separates its artifacts', () => {
