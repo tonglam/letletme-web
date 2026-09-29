@@ -3378,6 +3378,7 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   ...[1, 2, 3].map(eventId => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: { ...distinctGameweek(eventId), entry: { ...managerReview.entry!, id: session.entryId! } } } }))
  ]
  let releaseHistory: (() => void) | undefined
+ let releaseChunks: (() => void) | undefined
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
@@ -3448,6 +3449,30 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: labels[5], exact: true }) })
   await expect.poll(() => metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length).toBeGreaterThan(0)
   const initialReadySamples = metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY').length
+  const chunkGate = new Promise<void>(resolve => { releaseChunks = resolve })
+  const heldChunks: string[] = []
+  await page.route('**/_next/static/chunks/*.js*', async route => {
+   heldChunks.push(route.request().url())
+   await chunkGate
+   await route.continue()
+  })
+  await history.getByRole('button', { name: zh ? '打开第 3 轮' : 'Open gameweek 3', exact: true }).click()
+  await expect.poll(() => heldChunks.length).toBeGreaterThan(0)
+  await expect(page.locator('[data-manager-view="gameweek"][data-manager-ready="true"]').filter({ visible: true })).toHaveCount(0)
+  expect(metrics.filter(m => m.metricName === 'MANAGER_REVIEW_READY')).toHaveLength(initialReadySamples)
+  await expect(season).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toBeVisible()
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: labels[1], exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'GW3', exact: true }).click()
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
+  releaseChunks!()
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-view', 'gameweek')
+  await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+  await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  await season.click()
+  await expect(season).toHaveAttribute('aria-selected', 'true')
   const historyGate = new Promise<void>(resolve => { releaseHistory = resolve })
   const historyRequest = page.waitForRequest(request => request.url().endsWith('/api/graphql') && request.postDataJSON()?.query?.includes('GetMyFplManagerGameweek') && request.postDataJSON()?.variables?.eventId === 1)
   await page.route('**/api/graphql', async route => {
@@ -3462,6 +3487,7 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
   await expect(page.locator('[data-manager-ready]').getByRole('alert').filter({ hasText: /200[123]|2026/ })).toHaveCount(0)
   releaseHistory!()
+  await expect.poll(() => heldChunks.length).toBeGreaterThan(0)
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
@@ -3533,6 +3559,7 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
    notApplicable: 'FINAL snapshot has no direct live handoff; PENDING/PROVISIONAL journeys require separate evidence'
   }), contentType: 'application/json' })
  } finally {
+  releaseChunks?.()
   releaseHistory?.()
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
@@ -6836,3 +6863,59 @@ test.describe(`LC02 planned state ${large ? 'large' : 'empty'} canonical board`,
 })
 
 }
+
+test('J10 first historical gameweek overlaps UI chunks and data', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated manager fixture only')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ let releaseData: (() => void) | undefined
+ let releaseScripts: (() => void) | undefined
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+   { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: { ...managerReview, entry: { ...managerReview.entry!, id: session.entryId! } } } },
+   { operation: 'GetMyFplManagerGameweek', variables: { eventId: 1 }, data: { myFplManagerGameweek: { ...managerGameweek(1), entry: { ...managerReview.entry!, id: session.entryId! } } } }
+  ] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/my-fpl/team')
+  const ready = page.locator('[data-manager-ready]')
+  await expect(ready).toHaveAttribute('data-manager-view', 'season')
+  await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+  const dataGate = new Promise<void>(resolve => { releaseData = resolve })
+  const scriptGate = new Promise<void>(resolve => { releaseScripts = resolve })
+  let dataRequests = 0
+  let scriptRequests = 0
+  await page.route('**/api/graphql', async route => {
+   const payload = route.request().postDataJSON()
+   if (payload?.query?.includes('GetMyFplManagerGameweek') && payload.variables?.eventId === 1) {
+    dataRequests++
+    await dataGate
+   }
+   await route.continue()
+  })
+  await page.route('**/_next/static/chunks/*.js*', async route => {
+   scriptRequests++
+   await scriptGate
+   await route.continue()
+  })
+  const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: 'Gameweek History', exact: true }) })
+  await history.getByRole('button', { name: 'Open gameweek 1', exact: true }).click()
+  // Neither response is released: both requests must already be in flight.
+  await expect.poll(() => dataRequests).toBe(1)
+  await expect.poll(() => scriptRequests).toBeGreaterThan(0)
+  await expect(ready).toHaveAttribute('data-manager-ready', 'false')
+  await expect(page.getByRole('tab', { name: 'Season Review', exact: true })).toBeVisible()
+  releaseData!()
+  await expect(ready).toHaveAttribute('data-manager-revision', '101')
+  await expect(ready).toHaveAttribute('data-manager-ready', 'false')
+  releaseScripts!()
+  await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+  await expect(ready).toHaveAttribute('data-manager-gw', '1')
+  await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+  await expect(page.getByText('Review Player 1', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+ } finally {
+  releaseData?.()
+  releaseScripts?.()
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
