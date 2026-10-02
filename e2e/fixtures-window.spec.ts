@@ -285,9 +285,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	]) {
 		const { width, planned } = profile
 		test.describe(`unknown fixture cells ${locale} ${width}${planned ? ' FIX01 partial planned UTC dark' : ''}`, () => {
-			test.use({ viewport: { width, height: 900 }, timezoneId: planned ? 'UTC' : 'Australia/Perth', ...(planned ? { colorScheme: 'dark' as const, storageState: { cookies: [], origins: [] } } : {}) })
+			test.use({ viewport: { width, height: 900 }, timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light', ...(planned ? { colorScheme: 'dark' as const, storageState: { cookies: [], origins: [] } } : {}) })
 			test('partial fixture window preserves each team and marks unknown cells unavailable', async ({ page }, testInfo) => {
-				if (planned) await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+				await page.addInitScript(theme => localStorage.setItem('theme', theme), planned ? 'dark' : 'system')
 				let windowRequests = 0
 				await page.route('**/api/fixtures/window?**', route => {
 					windowRequests += 1
@@ -327,6 +327,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(cell.locator('[title]')).toHaveCount(0)
 				}
 				await expect(matrix.locator('#fdr-team-1 [title^="GW33 ·"]')).toHaveText(originalGw33)
+                const gw34 = headers.findIndex(header => header.trim() === 'GW34')
+                expect(gw34).toBeGreaterThan(-1)
+                const knownBlank = matrix.locator('#fdr-team-1').locator(':scope > td, :scope > th').nth(gw34)
+                await expect(knownBlank).toHaveText(locale === 'en' ? 'BGW' : '空白轮')
+                await expect(knownBlank.locator('[title]')).toHaveCount(0)
+                expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(planned ? 'UTC' : 'Australia/Perth')
+                expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(planned ? 'dark' : 'system')
+                await expect(page.locator('html')).toHaveClass(planned ? /\bdark\b/ : /\blight\b/)
+                expect(page.viewportSize()?.width).toBe(width)
+                expect((await page.context().cookies()).some(cookie => /session_token/.test(cookie.name))).toBe(false)
+                await testInfo.attach('S20-unknown-vs-blank-context', { contentType: 'application/json', body: JSON.stringify({ variantId: planned ? 'S20.directed.02' : `S20.UNRESOLVED_ROLE.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, theme: planned ? 'dark' : 'system', timezone: planned ? 'UTC' : 'Australia/Perth', knownBlankGw: 34, unknownGw: 38, preservedKnownGw: 33, wholeVariantComplete: false, readyMs: null, performanceStatus: 'NOT_OBSERVED' }) })
 				expect(windowRequests).toBe(1)
 			})
 		})

@@ -282,6 +282,32 @@ describe('buildLivePlayerDetailWithPayload', () => {
 		assert.equal(breakdownSum(detail.pointsBreakdown), 7)
 	})
 
+	it('rejects a same-total explanation from different scoring events', () => {
+		const player = basePlayer({ position: 'MID', stats: { minutes: 90, goals: 1, points: 7 } })
+		const live = completeLive({ goalsScored: 1, totalPoints: 7 })
+		// Old appearance + assist + bonus also totals seven, but the current
+		// player earned appearance + a goal. Equal totals do not prove freshness.
+		const explain: EventLiveExplainItem = {
+			elementId: 1,
+			stats: { ...live, goalsScored: 0, assists: 1, bonus: 2 },
+			contributions: [
+				{ identifier: 'minutes', value: 90, points: 2 },
+				{ identifier: 'assists', value: 1, points: 3 },
+				{ identifier: 'bonus', value: 2, points: 2 }
+			]
+		}
+		assert.equal(explain.contributions!.reduce((sum, row) => sum + row.points, 0), live.totalPoints)
+		const detail = buildLivePlayerDetailWithPayload(player, { explain, live })
+		assert.equal(detail.points, 7)
+		assert.equal(detail.stats.goals, 1)
+		assert.equal(detail.stats.assists, 0)
+		assert.equal(detail.bonusPoints, 0)
+		assert.equal(detail.breakdownSource, 'provisional')
+		assert.equal(detail.breakdownPending, false)
+		assert.equal(breakdownSum(detail.pointsBreakdown), 7)
+		assert.equal(detail.pointsBreakdown.some(row => /assist|bonus/i.test(row.category)), false)
+	})
+
 	it('ignores an explain response for a different player', () => {
 		const player = basePlayer({
 			stats: { minutes: 90, goals: 1, points: 7 }

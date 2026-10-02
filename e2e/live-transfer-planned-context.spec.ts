@@ -28,9 +28,18 @@ test.describe('LP04 planned anonymous transfer context', () => {
 		await expect(section.getByRole('alert')).toHaveCount(0)
 		expect(reads).toBe(2)
 	})
+})
+
+for (const display of [
+ { kind: 'directed', locale: 'zh-CN', width: 390, timezone: 'UTC', theme: 'dark' },
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ kind: 'baseline', locale, width, timezone: 'Australia/Perth', theme: 'system' })))
+]) {
+test.describe(`S20 public transfers ${display.kind} ${display.locale} ${display.width}`, () => {
+ test.use({ locale: display.locale, viewport: { width: display.width, height: 900 }, colorScheme: display.theme === 'dark' ? 'dark' : 'light', timezoneId: display.timezone })
 	test('LP04.state.01 preserves public reads, explicit retry and confirmed empty', async ({ page, context }, testInfo) => {
 		test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated fixture only')
-		await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+		await page.addInitScript(theme => localStorage.setItem('theme', theme), display.theme)
+        const zh = display.locale === 'zh-CN'
 		let state: 'records' | 'failure' | 'empty' = 'records'
 		let reads = 0
 		let release!: () => void
@@ -50,15 +59,15 @@ test.describe('LP04 planned anonymous transfer context', () => {
 			}
 			await route.fulfill({ json: { data: { entryTransferHistory: state === 'empty' ? [] : [{ eventId: 33, eventTransfers: 1, eventTransfersCost: 0, transfers: [{ event: 33, elementOutWebName: 'Outgoing Player', elementOutTeamShortName: 'OUT', elementOutTypeName: 'MID', elementOutCost: 5.5, elementInWebName: 'Incoming Player', elementInTeamShortName: 'IN', elementInTypeName: 'MID', elementInCost: 6.2, time: '2026-08-04T10:00:00Z' }] }] } } })
 		})
-		await page.goto('/zh-CN/live/points/123?gw=33&tournamentId=3')
-		await expect(page.locator('html')).toHaveClass(/dark/)
-		expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', language: 'zh-CN' })
+		await page.goto(`${zh ? '/zh-CN' : ''}/live/points/123?gw=33&tournamentId=3`)
+		await expect(page.locator('html')).toHaveClass(display.theme === 'dark' ? /\bdark\b/ : /\blight\b/)
+		expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: document.documentElement.lang }))).toEqual({ width: display.width, timezone: display.timezone, language: display.locale })
 		expect((await context.cookies()).filter(cookie => /session_token/.test(cookie.name))).toEqual([])
 		const ready = page.locator('[data-live-points-ready="true"]')
 		await expect(ready).toHaveAttribute('data-live-entry', '123')
 		await expect(ready).toHaveAttribute('data-live-gw', '33')
-		const section = page.getByRole('region', { name: /本周转会\s*GW33/ })
-		const refresh = section.getByRole('button', { name: '刷新转会', exact: true })
+		const section = page.getByRole('region', { name: zh ? /本周转会\s*GW33/ : /Gameweek transfers\s*GW33/ })
+		const refresh = section.getByRole('button', { name: zh ? '刷新转会' : 'Refresh transfers', exact: true })
 		await refresh.click()
 		await expect(section).toContainText('Incoming Player')
 		await expect(section).toContainText('Outgoing Player')
@@ -79,12 +88,15 @@ test.describe('LP04 planned anonymous transfer context', () => {
 		state = 'empty'
 		await refresh.click()
 		await expect(section.getByRole('alert')).toHaveCount(0)
-		await expect(section).toContainText('本轮暂无已同步的转会记录。')
+		await expect(section).toContainText(zh ? '本轮暂无已同步的转会记录。' : 'No synced transfer records for this gameweek.')
 		await expect(section).not.toContainText('Incoming Player')
 		await expect(section.getByRole('status')).toHaveCount(0)
 		expect(reads).toBe(3)
 		expect(new URL(page.url()).searchParams.get('gw')).toBe('33')
 		expect(new URL(page.url()).searchParams.get('tournamentId')).toBe('3')
-		await testInfo.attach('LP04.state.01', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP04.state.01', persona: 'A', locale: 'zh-CN', device: 'mobile390', theme: 'dark', timezone: 'UTC', reads, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: 'Public transfer records, held refresh, 401 without login gate, explicit retry to confirmed empty; isolated fixture only' }) })
+        expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(display.theme)
+		await testInfo.attach('LP04.state.01', { contentType: 'application/json', body: JSON.stringify({ variantId: display.kind === 'directed' ? 'LP04.state.01' : `S20.UNRESOLVED_ROLE.${display.locale}.${display.width === 390 ? 'mobile390' : 'desktop1440'}.base`, persona: 'A', locale: display.locale, device: display.width === 390 ? 'mobile390' : 'desktop1440', theme: display.theme, timezone: display.timezone, wholeVariantComplete: false, reads, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, scope: 'Public transfer records, held refresh, 401 without login gate, explicit retry to confirmed empty; isolated fixture only' }) })
 	})
 })
+
+}

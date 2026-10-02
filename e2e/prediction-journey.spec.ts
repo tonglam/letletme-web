@@ -3,6 +3,7 @@ import en from '../messages/en.json'
 import zh from '../messages/zh-CN.json'
 
 const variants = [
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `S20.UNRESOLVED_ROLE.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth', scenario: 'not-published' }))),
  ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `J03.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth', scenario: 'baseline' }))),
  ...['ready', 'not-published', 'empty'].map((scenario, index) => ({ id: `J03.state.0${index + 1}`, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', scenario }))
 ]
@@ -35,6 +36,8 @@ for (const variant of variants) {
     expect((await fetch(`${fixture}/__performance`, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetPriceChangeBoard', data: seed.data }] }) })).ok).toBe(true)
     await page.goto(prefix || '/')
     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(variant.theme)
+    expect(page.viewportSize()?.width).toBe(variant.width)
     await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
     const carousel = page.locator('[data-home-carousel="home-price-changes"]')
     const pause = carousel.getByRole('checkbox', { name: h.homeCarouselPause, exact: true })
