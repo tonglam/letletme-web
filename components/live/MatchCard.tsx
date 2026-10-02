@@ -19,6 +19,7 @@ interface MatchCardProps {
 	allMatches?: Match[]
 	currentIndex?: number
 	eventId?: number
+	sourceRevision?: string
 	showShareActions?: boolean
 }
 
@@ -44,10 +45,11 @@ function MatchCardComponent({
 	allMatches,
 	currentIndex,
 	eventId,
+	sourceRevision,
 	showShareActions = true,
 }: MatchCardProps) {
 	const highlights = useMemo(() => buildMatchHighlights(match), [match])
-	const detail = useMatchPlayerDetail(eventId)
+	const detail = useMatchPlayerDetail(eventId, match, sourceRevision)
 	const playerOpenerRef = useRef<HTMLElement | null>(null)
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const shareT = useTranslations('Share')

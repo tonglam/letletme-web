@@ -800,6 +800,7 @@ export function LiveMatchesClient({
 										allMatches={activeMatches}
 										currentIndex={i}
 										eventId={selectedEventId}
+										sourceRevision={snapshot ? JSON.stringify([snapshot.season, snapshot.eventId, snapshot.revisions]) : undefined}
 									/>
 								))
 							) : (
