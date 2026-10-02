@@ -77,6 +77,19 @@ export async function GET(
 			headers: { 'Cache-Control': 'private, no-store, no-transform' }
 		})
 	} catch (error) {
+		if (
+			error instanceof GraphQLRequestError &&
+			(error.code === 'FORBIDDEN' || error.code === 'UNAUTHENTICATED')
+		) {
+			const status = error.code === 'FORBIDDEN' ? 403 : 401
+			return NextResponse.json(
+				{ error: status === 403 ? 'Forbidden.' : 'Unauthenticated.' },
+				{
+					status,
+					headers: { 'Cache-Control': 'private, no-store, no-transform' }
+				}
+			)
+		}
 		if (error instanceof GraphQLRequestError && error.code === 'REQUEST_TIMEOUT') {
 			return NextResponse.json(
 				{ error: 'GraphQL request timed out.' },

@@ -6919,3 +6919,247 @@ test('J10 first historical gameweek overlaps UI chunks and data', async ({ page 
   await session.cleanup()
  }
 })
+
+test.describe('J12 management polling authorization loss', () => {
+ for (const deniedStatus of [401, 403] as const) {
+  test(`J12 management polling ${deniedStatus} removes private controls without manual reload`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated authorization-loss fixture')
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   let release!: () => void
+   const gate = new Promise<void>(resolve => { release = resolve })
+   let polls = 0
+   const configure = async (available: boolean) => {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: available ? { ...managedTournament, setupStatus: 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } : null } }] }) })).ok).toBe(true)
+   }
+   await page.route('**/api/tournaments/77/status?**', async route => {
+    polls += 1
+    await gate
+    await route.fulfill({ status: deniedStatus, json: { error: deniedStatus === 401 ? 'Unauthenticated.' : 'Forbidden.' } })
+   })
+   try {
+    await configure(true)
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/en/competitions/77/manage')
+    const ready = page.locator('[data-competition-perf-ready="manage"]')
+    await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+    await expect(page.locator('#tournament-name')).toBeVisible()
+    await expect.poll(() => polls).toBeGreaterThan(0)
+    await configure(false)
+    if (deniedStatus === 401) {
+     const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1 })
+     try { await sql`UPDATE bauth.session SET expires_at = ${new Date(Date.now() - 60000)} WHERE user_id = ${session.userId}` } finally { await sql.end() }
+    }
+    release()
+    await expect(ready).toHaveCount(0)
+    await expect(page.locator('#tournament-name')).toHaveCount(0)
+    if (deniedStatus === 401) {
+     await expect(page).toHaveURL(url => url.pathname === '/auth/login' && url.searchParams.get('next') === '/en/competitions/77/manage')
+     await expect(page.getByLabel(enMessages.Auth.email, { exact: true })).toBeEnabled()
+    }
+    else await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toBeVisible()
+   } finally {
+    release()
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
+
+
+test('J12 management polling 503 preserves content and recovers on the next poll', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated polling recovery fixture')
+ const session = await createSession({ entryId: 909090 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ let attempts = 0
+ let release!: () => void
+ const gate = new Promise<void>(resolve => { release = resolve })
+ await page.route('**/api/tournaments/77/status?**', async route => {
+  attempts += 1
+  await gate
+  await route.fulfill(attempts === 1 ? { status: 503, json: { error: 'Unavailable' } } : { json: { revision: managedTournament.updatedAt, updatedAt: managedTournament.updatedAt, state: 'INACTIVE', setupStatus: 'PROCESSING', rosterSyncStatus: 'READY' } })
+ })
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: { ...managedTournament, setupStatus: 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } } }] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/en/competitions/77/manage')
+  const ready = page.locator('[data-competition-perf-ready="manage"]')
+  await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect.poll(() => attempts).toBe(1)
+  await expect(page.getByRole('button', { name: enMessages.TournamentManage.pause, exact: true })).toBeVisible()
+  const failure = page.waitForResponse(response => response.url().includes('/api/tournaments/77/status?') && response.status() === 503)
+  release()
+  await failure
+  await expect(page.locator('#tournament-name')).toBeVisible()
+  await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect.poll(() => attempts, { timeout: 10000 }).toBeGreaterThanOrEqual(2)
+  await expect(page.getByRole('button', { name: enMessages.TournamentManage.pause, exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: enMessages.TournamentManage.resume, exact: true })).toBeVisible()
+  await expect(page.locator('#tournament-name')).toBeVisible()
+  await expect(page).toHaveURL(/\/en\/competitions\/77\/manage$/)
+ } finally {
+  release()
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+
+test('MANAGE02 private status never reuses the preceding owner response', async ({ request }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated private-read fixture')
+ const owner = await createSession({ entryId: 909090 })
+ const other = await createSession({ entryId: 808080 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const revision = 'private-owner-revision-fixture'
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+   { operation: 'GetManagedTournamentStatus', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournamentStatus: { revision, state: 'ACTIVE', setupStatus: 'READY', issues: [{ issueKey: 'owner-only-fixture' }] } } },
+   { operation: 'GetManagedTournamentStatus', variables: { tournamentId: 77, entryId: other.entryId }, data: { managedTournamentStatus: null } }
+  ] }) })).ok).toBe(true)
+  for (const identity of ['owner', 'other', 'anonymous', 'owner', 'other'] as const) {
+   const response = await request.get('/api/tournaments/77/status', { headers: { cookie: identity === 'owner' ? owner.cookie : identity === 'other' ? other.cookie : '' } })
+   expect(response.status()).toBe(identity === 'owner' ? 200 : identity === 'other' ? 403 : 401)
+   const body = await response.text()
+   if (identity === 'owner') expect(JSON.parse(body)).toMatchObject({ revision, issues: [{ issueKey: 'owner-only-fixture' }] })
+   else {
+    expect(body).not.toContain(revision)
+    expect(body).not.toContain('owner-only-fixture')
+    expect(JSON.parse(body)).toEqual({ error: identity === 'other' ? 'Forbidden.' : 'Unauthenticated' })
+   }
+   if (identity !== 'anonymous') {
+    expect(response.headers()['cache-control']).toContain('private')
+    expect(response.headers()['cache-control']).toContain('no-store')
+   }
+  }
+  const observed = await (await fetch(fixture)).json()
+  const reads = observed.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournamentStatus')
+  expect(reads.map((x: { variables: { entryId: number } }) => x.variables.entryId)).toEqual([owner.entryId, other.entryId, owner.entryId, other.entryId])
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await owner.cleanup()
+  await other.cleanup()
+ }
+})
+
+for (const denied of [{ code: 'FORBIDDEN', status: 403 }, { code: 'UNAUTHENTICATED', status: 401 }]) {
+ test(`MANAGE02 upstream ${denied.code} keeps authorization status`, async ({ request }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated upstream authorization fixture')
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournamentStatus', error: true, errorCode: denied.code, httpStatus: denied.status }] }) })).ok).toBe(true)
+   const response = await request.get('/api/tournaments/77/status', { headers: { cookie: session.cookie } })
+   expect(response.status()).toBe(denied.status)
+   expect(await response.json()).toEqual({ error: denied.status === 403 ? 'Forbidden.' : 'Unauthenticated.' })
+   expect(response.headers()['cache-control']).toContain('private')
+   expect(response.headers()['cache-control']).toContain('no-store')
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
+
+for (const code of ['FORBIDDEN', 'UNAUTHENTICATED'] as const) {
+ test(`MANAGE02 mounted upstream ${code} removes private management content`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated upstream-to-render fixture')
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const status = code === 'FORBIDDEN' ? 403 : 401
+  let release!: () => void
+  let started!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const pending = new Promise<void>(resolve => { started = resolve })
+  const configure = async (available: boolean) => {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: session.entryId }, data: { managedTournament: available ? { ...managedTournament, setupStatus: 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } : null } },
+    { operation: 'GetManagedTournamentStatus', error: true, errorCode: code, httpStatus: status }
+   ] }) })).ok).toBe(true)
+  }
+  await page.route('**/api/tournaments/77/status?**', async route => {
+   started()
+   await gate
+   await route.continue()
+  })
+  try {
+   await configure(true)
+   await addSessionCookie(page, session.cookie)
+   await page.goto('/en/competitions/77/manage')
+   const ready = page.locator('[data-competition-perf-ready="manage"]')
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   await pending
+   await configure(false)
+   const responsePromise = page.waitForResponse(response => response.url().includes('/api/tournaments/77/status?'))
+   release()
+   const response = await responsePromise
+   expect(response.status()).toBe(status)
+   expect(response.headers()['cache-control']).toContain('no-store')
+   await expect(ready).toHaveCount(0)
+   await expect(page.locator('#tournament-name')).toHaveCount(0)
+   await expect(page.getByRole('button', { name: 'Delete tournament', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toBeVisible()
+   const observed = await (await fetch(fixture)).json()
+   expect(observed.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournamentStatus')).toHaveLength(1)
+   expect(observed.requests.some((x: { operation: string }) => x.operation === 'GetManagedTournament')).toBe(true)
+  } finally {
+   release()
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
+
+for (const code of ['FORBIDDEN'] as const) {
+ test(`MANAGE02 mounted upstream ${code} recovers after fresh server authorization`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated upstream-to-render fixture')
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const status = code === 'FORBIDDEN' ? 403 : 401
+  let release!: () => void
+  let started!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const pending = new Promise<void>(resolve => { started = resolve })
+  const configure = async (available: boolean, restored = false) => {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: session.entryId }, data: { managedTournament: available ? { ...managedTournament, setupStatus: restored ? 'READY' : 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } : null } },
+    { operation: 'GetManagedTournamentStatus', error: true, errorCode: code, httpStatus: status }
+   ] }) })).ok).toBe(true)
+  }
+  await page.route('**/api/tournaments/77/status?**', async route => {
+   started()
+   await gate
+   await route.continue()
+  })
+  try {
+   await configure(true)
+   await addSessionCookie(page, session.cookie)
+   await page.goto('/en/competitions/77/manage')
+   const ready = page.locator('[data-competition-perf-ready="manage"]')
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   await pending
+   await configure(true, true)
+   const responsePromise = page.waitForResponse(response => response.url().includes('/api/tournaments/77/status?'))
+   release()
+   const response = await responsePromise
+   expect(response.status()).toBe(status)
+   expect(response.headers()['cache-control']).toContain('no-store')
+   // The RSC read authorizes the same entity with an unchanged key/revision.
+   await expect.poll(async () => {
+    const state = await (await fetch(fixture)).json()
+    return state.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournament').length
+   }).toBeGreaterThan(0)
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toHaveCount(0)
+   const observed = await (await fetch(fixture)).json()
+   expect(observed.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournamentStatus')).toHaveLength(1)
+   expect(observed.requests.some((x: { operation: string }) => x.operation === 'GetManagedTournament')).toBe(true)
+  } finally {
+   release()
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
