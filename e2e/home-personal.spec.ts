@@ -900,6 +900,43 @@ test('S08.directed.08 exact context', async ({ page }, testInfo) => {
 		} finally { unlock(); await transaction; await sql.end(); await session.cleanup() }
 	})
 
+	test('C14 navigation identity survives actual link Back and Forward', async ({ page }) => {
+		const { installVitals } = await import('../scripts/performance-metrics.mjs')
+		await installVitals(page)
+		await control([])
+		const identity = () => page.evaluate(() => (performance.getEntriesByName('letletme-active-navigation').at(-1) as PerformanceMark | undefined)?.detail?.navigationId ?? null)
+		await page.goto('/explore/selections?scope=public&cohort=competition:777&gw=33')
+		const player = page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()
+		await expect(player).toBeVisible()
+		await expect.poll(identity).not.toBeNull()
+		const initialId = await identity()
+		const href = await player.getAttribute('href')
+		expect(href).toBeTruthy()
+		await player.click()
+		await expect(page).toHaveURL(url => url.pathname === new URL(href!, url).pathname)
+		await expect.poll(identity).not.toBe(initialId)
+		const playerId = await identity()
+		expect(playerId).not.toBeNull()
+		await page.goBack()
+		await expect(page).toHaveURL(/explore\/selections/)
+		await expect(player).toBeVisible()
+		await expect.poll(identity).not.toBe(playerId)
+		const backId = await identity()
+		expect(backId).not.toBeNull()
+		await page.goForward()
+		await expect(page).toHaveURL(url => url.pathname === new URL(href!, url).pathname)
+		await expect.poll(identity).not.toBe(backId)
+		const currentId = await identity()
+		expect(currentId).not.toBeNull()
+		const result = await page.evaluate(async ({ currentId, initialId }) => {
+			for (const [navigationId, value] of [[currentId, 240], [initialId, 130]]) {
+				await fetch('/api/vitals', { method: 'POST', body: JSON.stringify({ schemaVersion: 2, batchId: crypto.randomUUID(), samples: [{ metricName: 'C14_READY', result: 'ok', measurementKind: 'in_page_navigation', navigationId, value }] }) })
+			}
+			return (window as typeof window & { __performanceMetrics: { ready: Record<string, number> } }).__performanceMetrics.ready.C14_READY
+		}, { currentId, initialId })
+		expect(result).toBe(240)
+	})
+
 	test('PUBLIC Trends is usable while its private catalog is pending', async ({ page }, testInfo) => {
 		const readySamples: Record<string, unknown>[] = []
 		let initialDeskSample: Record<string, unknown> | null = null

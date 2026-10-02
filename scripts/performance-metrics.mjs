@@ -197,6 +197,22 @@ export async function installVitals(
 		window[aliasName] = state
 		window.__performanceMetrics = state
 		if (existing) return
+		const activeNavigationId = () => typeof performance === 'undefined'
+			? undefined : performance.getEntriesByName('letletme-active-navigation').at(-1)?.detail?.navigationId
+		let observedNavigationId = activeNavigationId()
+		const navigationValues = { ready: state.ready, readyDetails: state.readyDetails }
+		// Invalidate on read as well as arrival: a new route may not have reported yet.
+		for (const key of ['ready', 'readyDetails']) {
+			Object.defineProperty(state, key, { enumerable: true, get() {
+				const current = activeNavigationId()
+				if (current !== observedNavigationId) {
+					observedNavigationId = current
+					navigationValues.ready = {}
+					navigationValues.readyDetails = {}
+				}
+				return navigationValues[key]
+			} })
+		}
 		const notify = () => { void window.__capturePerformanceMetric?.({ ...state, documentUrl: location.href }) }
 		for (const [fn, key] of [['onLCP', 'lcp'], ['onCLS', 'cls'], ['onINP', 'inp'], ['onFCP', 'fcp'], ['onTTFB', 'ttfb']]) {
 			window.webVitals[fn](metric => { state[key] = metric.value; notify() }, { reportAllChanges: true })
@@ -222,6 +238,11 @@ export async function installVitals(
 				for (const metric of extractMetrics(payload)) {
 					const isInteraction = metric.measurementKind === 'interaction' || typeof metric.interactionId === 'string'
 					if (isInteraction && state.allowInteractionMetrics !== true) continue
+					if (metric.measurementKind === 'initial_navigation' || metric.measurementKind === 'in_page_navigation') {
+						const identity = activeNavigationId()
+						if (!identity || metric.navigationId !== identity) continue
+					}
+
 					state.readyDetails[metric.name] = metric
 					if (!usableMetric(metric, state.allowInteractionMetrics === true)) {
 						// The latest detail and duration must describe the same observation.

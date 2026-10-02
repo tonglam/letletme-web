@@ -621,7 +621,7 @@ it('navigation report does not pair late failure with the earlier ready time', a
  const sandbox = createContext({
   window: browserWindow, location, navigator: { sendBeacon: () => true },
   PerformanceObserver: { supportedEntryTypes: [] }, URL, Request, Response,
-  performance: { now: () => 500, getEntriesByType: () => [] },
+  performance: { now: () => 500, getEntriesByType: () => [], getEntriesByName: () => [] },
   document: { documentElement: { scrollWidth: 1440 } }, innerWidth: 1440
  })
  const emit = async (result: string, value: number) => browserWindow.fetch('/api/vitals', {
@@ -691,4 +691,42 @@ it('rejects entity and gameweek redirects before collecting readiness', async ()
    assert.equal(waitedForReady, true)
   }
  }
+})
+
+
+it('collector rejects a new batch from a superseded navigation using the route-start identity', async () => {
+ const { installVitals } = await import('../scripts/performance-metrics.mjs')
+ let source = ''
+ await installVitals({ addInitScript: async ({ content }: { content: string }) => { source = content } })
+ let activeNavigationId: string | null = 'nav-a'
+ const browserWindow = {
+  webVitals: Object.fromEntries(['onLCP', 'onCLS', 'onINP', 'onFCP', 'onTTFB'].map(name => [name, () => {}])),
+  fetch: async (_input: string, _init?: { body: string }) => new Response(null, { status: 204 }),
+  __performanceMetrics: undefined as undefined | { ready: Record<string, number> }
+ }
+ const initializerStart = source.indexOf(';(', source.indexOf('globalThis.webVitals = webVitals;'))
+ runInContext(source.slice(initializerStart), createContext({
+  window: browserWindow, location: { href: 'http://localhost/collector-fixture' },
+  navigator: { sendBeacon: () => true }, PerformanceObserver: { supportedEntryTypes: [] },
+  performance: { getEntriesByName: () => activeNavigationId ? [{ detail: { navigationId: activeNavigationId } }] : [] },
+  URL, Request, Response
+ }))
+ const send = async (batchId: string, navigationId: string, value: number) => {
+  await browserWindow.fetch('/api/vitals', { body: JSON.stringify({ schemaVersion: 2, batchId, samples: [
+   { metricName: 'READY', result: 'ok', measurementKind: 'in_page_navigation', navigationId, value }
+  ] }) })
+ }
+ await send('batch-a', 'nav-a', 125)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, 125)
+ activeNavigationId = 'nav-b'
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+ await send('batch-a-before-b', 'nav-a', 129)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+ await send('batch-b', 'nav-b', 240)
+ await send('batch-a-late-new', 'nav-a', 130)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, 240)
+ activeNavigationId = null
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+ await send('batch-missing-identity', 'nav-b', 241)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
 })
