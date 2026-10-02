@@ -985,9 +985,12 @@ for (const locale of ['en', 'zh-CN']) {
 	})
 }
 
+test.describe('J15 original baseline context', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
 for (const locale of ['en', 'zh-CN']) {
  for (const width of [1440, 390]) {
-  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }) => {
+  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }, testInfo) => {
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
    let prefix = locale === 'en' ? '' : '/zh-CN'
    let zh = locale === 'zh-CN'
    const expectHomeData = async () => {
@@ -1004,6 +1007,7 @@ for (const locale of ['en', 'zh-CN']) {
     await expect(fixtures.locator('[aria-busy="true"]')).toHaveCount(0)
     await expect(fixtures.getByRole('alert')).toHaveCount(0)
    }
+   await testInfo.attach('original-variant', { contentType: 'application/json', body: JSON.stringify({ variantId: `J15.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, wholeVariantComplete: false, readyMs: null }) })
    const authWrites: string[] = []
    page.on('request', request => {
     if (new URL(request.url()).pathname.startsWith('/api/auth/') && request.method() !== 'GET') authWrites.push(request.method() + ' ' + new URL(request.url()).pathname)
@@ -1026,6 +1030,9 @@ for (const locale of ['en', 'zh-CN']) {
    await page.goto(prefix || '/')
    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+   expect(await page.evaluate(() => innerWidth)).toBe(width)
    await expectHomeData()
    const nav = page.getByRole('navigation').first()
    const createHref = `${prefix}/competitions/create`
@@ -1071,12 +1078,17 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+   expect(await page.evaluate(() => innerWidth)).toBe(width)
    await expectHomeData()
    expect(await page.evaluate(() => sessionStorage.getItem('j15-protected-content-observed'))).toBeNull()
    expect(authWrites).toEqual([])
   })
  }
 }
+
+})
 
 test('repeated shell bootstrap executes theme actions only once', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Injects duplicate scripts only into an isolated fixture')
