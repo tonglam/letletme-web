@@ -210,13 +210,26 @@ export async function installVitals(
 			window.__finishLongTaskObservation = () => { add(observer.takeRecords()); observer.disconnect() }
 		}
 		if (!captureTelemetry) return
+		const capturedBatchIds = new Set()
 		const capture = async body => {
 			try {
 				const raw = typeof body === 'string' ? body : await body?.text?.()
 				const payload = JSON.parse(raw)
+				if (payload?.schemaVersion === 2 && typeof payload.batchId === 'string' && payload.batchId.length > 0) {
+					if (capturedBatchIds.has(payload.batchId)) return
+					capturedBatchIds.add(payload.batchId)
+				}
 				for (const metric of extractMetrics(payload)) {
+					const isInteraction = metric.measurementKind === 'interaction' || typeof metric.interactionId === 'string'
+					if (isInteraction && state.allowInteractionMetrics !== true) continue
 					state.readyDetails[metric.name] = metric
-					if (!usableMetric(metric, state.allowInteractionMetrics === true)) continue
+					if (!usableMetric(metric, state.allowInteractionMetrics === true)) {
+						// The latest detail and duration must describe the same observation.
+						// Rejected telemetry cannot borrow a previous successful duration.
+						delete state.ready[metric.name]
+						notify()
+						continue
+					}
 					state.ready[metric.name] = metric.value
 					state.readySequence[metric.name] = (state.readySequence[metric.name] ?? 0) + 1
 					notify()
@@ -377,8 +390,9 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				if (
 					sample.status !== 200 ||
 					actual.pathname !== target.pathname ||
-					(target.searchParams.has('tournamentId') && actual.searchParams.get('tournamentId') !== target.searchParams.get('tournamentId')) ||
-					(target.searchParams.has('gw') && actual.searchParams.get('gw') !== target.searchParams.get('gw'))
+					['tournamentId', 'gw', 'p1', 'p2'].some(key =>
+						target.searchParams.has(key) && actual.searchParams.get(key) !== target.searchParams.get(key)
+					)
 				) throw new Error('Unexpected response or redirect')
 				const readyMetricName = options.readyMetric ?? readyMetricFor(url)
 				if (!readyMetricName) {
@@ -445,6 +459,10 @@ export async function measureNavigation(browser, profile, url, options = {}) {
 				)
 				const detailsMetrics = details.metrics
 				latest = detailsMetrics
+				// Use one final snapshot for both the business result and its duration.
+				sample.readyMs = readyMetricName
+					? detailsMetrics?.ready?.[readyMetricName] ?? null
+					: null
 				sample.businessResult = readyMetricName
 					? detailsMetrics?.readyDetails?.[readyMetricName]?.result ?? 'ok'
 					: 'ok'
