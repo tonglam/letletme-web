@@ -9211,3 +9211,61 @@ for (const locale of ['en', 'zh-CN'] as const) {
 })
  }
 }
+
+test.describe('PS02 bound squad slot lifecycle', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+  test(`PS02 MySquad selection ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated session and fixture controls required')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession({ entryId: 15702 })
+   const zh = locale === 'zh-CN'
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`/${locale}/explore/player-stats?p1=1&p2=2`)
+    const overall = page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })
+    const rail = page.locator('[data-player-stats-navigation-id]')
+    await expect(overall).toContainText('Saka')
+    await expect(overall).toContainText('Palmer')
+    await expect(rail).toHaveAttribute('aria-busy', 'false')
+    await expect(rail.getByRole('button')).toHaveCount(15)
+    const second = rail.getByRole('button', { name: 'GKP Player 2', exact: true })
+    await expect(second).toHaveCount(1)
+    await second.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).not.toContainText('Saka')
+    await expect(page.locator('[data-player-stats-edit-slot="second"]')).toHaveCount(0)
+    await page.getByRole('button', { name: zh ? '添加对比' : 'Add comparison', exact: true }).click()
+    const players = page.getByRole('region', { name: zh ? '球员' : 'Players', exact: true })
+    await players.getByRole('button', { name: /^Saka MID / }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+    await expect(overall).toContainText('Saka')
+    await second.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).toContainText('Saka')
+    await rail.getByRole('button', { name: 'GKP Player 1', exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && !url.searchParams.has('p2'))
+    await expect(overall).toContainText('Saka')
+    await expect(overall).not.toContainText('Palmer')
+    await expect(page.locator('[data-player-stats-edit-slot="second"]')).toHaveCount(0)
+    const requests = (await (await fetch(fixture)).json()).requests as Array<{ operation: string; variables: { entryId?: number; eventId?: number } }>
+    const personalReads = requests.filter(row => ['GetEntryHistory', 'GetEntryEventResult'].includes(row.operation))
+    expect(personalReads.some(row => row.operation === 'GetEntryEventResult')).toBe(true)
+    expect(personalReads.every(row => row.variables.entryId === session.entryId)).toBe(true)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', locale })
+    expect(errors).toEqual([])
+    await testInfo.attach('PS02-bound-squad-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: `PS02.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, entryId: session.entryId, personalReads, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Bound squad rail click changes first player, preserves distinct second or clears duplicate second; same-player click retains distinct comparison', remaining: 'Full combined PS02 journey, slow/out-of-order bound contexts and performance' }) })
+   } finally {
+    await session.cleanup()
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+})
