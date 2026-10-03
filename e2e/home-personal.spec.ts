@@ -8995,3 +8995,37 @@ test.describe('MATCH03 partial detail boundary', () => {
   await testInfo.attach('MATCH03-partial-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.03', fullReads: reads, scope: 'READY desk with DEGRADED detail then recovery', readyMs: null, wholeVariantComplete: false }) })
  })
 })
+
+test.describe('MATCH03 initial unavailable boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 unavailable publication has no fake cards and recovers', async ({ page }, testInfo) => {
+  const endpoint = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+  const seed = await (await fetch(`${endpoint}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })).json()
+  expect(seed.errors).toBeUndefined()
+  const match = seed.data.liveMatchday.snapshot.matches[0]
+  const unavailable = { liveMatchday: { availability: 'UNAVAILABLE', delivery: { state: 'UNAVAILABLE', servedFrom: null, reasonCodes: ['DESK_UNAVAILABLE'] }, snapshot: null } }
+  const control = (rules: unknown[]) => fetch(`${endpoint}/__performance`, { method: 'POST', body: JSON.stringify({ rules }) })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  try {
+   expect((await control([{ operation: 'GetLiveMatchdayV3', data: unavailable }])).ok).toBe(true)
+   await page.goto('/zh-CN/live/matches')
+   expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute('data-status', 'UNAVAILABLE')
+   await expect(page.getByText('官方数据正在更新，比赛发布后会自动显示。', { exact: true })).toBeVisible()
+   await expect(page.locator('[data-live-match-card="true"]')).toHaveCount(0)
+   expect((await control([])).ok).toBe(true)
+   const response = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+   await page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true }).click()
+   const result = await response
+   expect(result.status()).toBe(200)
+   expect((await result.json()).liveMatchday.snapshot.eventId).toBe(33)
+   await expect(page.locator('[data-live-match-card="true"]')).toHaveCount(seed.data.liveMatchday.snapshot.matches.length)
+   await expect(page.getByText(`${match.homeScore}–${match.awayScore}`, { exact: true })).toBeVisible()
+   await expect(page.getByText('官方数据正在更新，比赛发布后会自动显示。', { exact: true })).toHaveCount(0)
+   await testInfo.attach('MATCH03-unavailable', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.03', eventId: 33, readyMs: null, wholeVariantComplete: false }) })
+  } finally {
+   expect((await control([])).ok).toBe(true)
+  }
+ })
+})
