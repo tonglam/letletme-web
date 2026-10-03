@@ -9774,3 +9774,27 @@ test(`TR01 private reads transmit current account identity A B A ${keepDisplayCa
  } finally { await a.cleanup(); await b.cleanup() }
 })
 }
+
+
+test('TR01 revoked session cannot use cached display identity for private reads', async ({ page }) => {
+ test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated revocation')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1 })
+ const reads = async () => (await (await fetch(fixture)).json()).requests.filter((r: { variables?: { access?: string } }) => r.variables?.access === 'MINE').length
+ try {
+  await addSessionCookie(page, session.cookie)
+  const auth = await page.request.get('/api/auth/get-session')
+  expect((await auth.json()).user.id).toBe(session.userId)
+  expect((await page.context().cookies()).some(cookie => cookie.name.includes('session_data'))).toBe(true)
+  await sql`DELETE FROM bauth.session WHERE user_id = ${session.userId}`
+  const before = await reads()
+  for (const endpoint of ['/api/trends/my-cohorts', '/api/trends/my-desk?cohortId=competition%3A778&eventId=33&limit=12']) {
+   const response = await page.request.get(endpoint)
+   expect(response.status()).toBe(401)
+   expect(response.headers()['cache-control']).toBe('private, no-store')
+   expect(await response.json()).toEqual({ error: 'Authentication required' })
+  }
+  expect(await reads()).toBe(before)
+ } finally { await sql.end(); await session.cleanup() }
+})
