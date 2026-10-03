@@ -6668,8 +6668,21 @@ for (const mode of ['delayed', 'failed'] as const) {
  }
 }
 
+for (const directed of [false, true]) {
+test.describe(directed ? 'PROFILE04 directed contexts' : 'PROFILE04 existing contexts', () => {
+ if (directed) {
+  test.use({ timezoneId: 'UTC', colorScheme: 'dark' })
+  test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem('theme', 'dark')) })
+  test.afterEach(async ({ page }, testInfo) => {
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', theme: 'dark', locale: 'zh-CN' })
+   const state = testInfo.title.includes('retry recovery') ? '03' : testInfo.title.includes('terminal empty') ? '01' : '02'
+   await testInfo.attach('PROFILE04-directed-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `PROFILE04.state.${state}`, identity: 'isolated bound session', width: 390, timezone: 'UTC', theme: 'dark', locale: 'zh-CN', functionalStatus: testInfo.status === 'passed' ? 'PASS' : 'FAIL', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Existing list terminal or error-retry assertions in planned context; no revoke' }) })
+  })
+ }
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
+  if (directed && (locale !== 'zh-CN' || width !== 390)) continue
   test(`PROFILE04 session list retry recovery ${locale} ${width}`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
    const session = await createSession({ entryId: 15702 })
@@ -6714,8 +6727,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 for (const mode of ['empty', 'unauthorized', 'stale'] as const) {
+ if (directed && mode === 'stale') continue
  for (const locale of ['en', 'zh-CN'] as const) {
   for (const width of [1440, 390]) {
+  if (directed && (locale !== 'zh-CN' || width !== 390)) continue
    test(`PROFILE04 session list terminal ${mode} ${locale} ${width}`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
     const session = await createSession({ entryId: 15702 })
@@ -6759,6 +6774,9 @@ for (const mode of ['empty', 'unauthorized', 'stale'] as const) {
    })
   }
  }
+}
+
+})
 }
 
 test.describe('live board layout fixture', () => {
