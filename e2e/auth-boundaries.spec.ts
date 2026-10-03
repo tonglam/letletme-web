@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
+import { hashPassword, verifyPassword } from 'better-auth/crypto'
 import en from '../messages/en.json'
 import zh from '../messages/zh-CN.json'
 
@@ -102,9 +103,14 @@ test.describe('AUTH03.state.02 expired token', () => {
   const sql = postgres(direct, { max: 1, prepare: false })
   const token = `auth-expired-${randomUUID()}`
   const identifier = `reset-password:${token}`
+  const userId = `reset-user-${randomUUID()}`
+  const validToken = `auth-valid-${randomUUID()}`
+  const oldHash = await hashPassword('OldIsolatedFixturePassword-42')
   try {
+   await sql`INSERT INTO bauth."user" (id, name, email, email_verified) VALUES (${userId}, 'Reset Fixture', ${`${userId}@example.invalid`}, true)`
+   await sql`INSERT INTO bauth.account (id, account_id, provider_id, user_id, password) VALUES (${userId}, ${userId}, 'credential', ${userId}, ${oldHash})`
    await sql`INSERT INTO bauth.verification (id, identifier, value, expires_at)
-    VALUES (${token}, ${identifier}, ${`absent-${token}`}, ${new Date(Date.now() - 60000)})`
+    VALUES (${token}, ${identifier}, ${userId}, ${new Date(Date.now() - 60000)})`
    await page.goto(`/zh-CN/auth/reset-password?token=${token}`)
    await page.getByLabel(zh.Auth.password, { exact: true }).fill('IsolatedFixturePassword-42')
    await page.getByLabel(zh.Auth.confirmPassword, { exact: true }).fill('IsolatedFixturePassword-42')
@@ -118,15 +124,34 @@ test.describe('AUTH03.state.02 expired token', () => {
    await expect(page).toHaveURL(url => url.pathname === '/zh-CN/auth/reset-password' && url.searchParams.get('token') === token)
    await expect(page.getByRole('button', { name: zh.Auth.setNewPassword, exact: true })).toBeEnabled()
    await expect(page.locator('form')).toHaveAttribute('aria-busy', 'false')
+   const [unchanged] = await sql`SELECT password FROM bauth.account WHERE id = ${userId}`
+   expect(unchanged.password).toBe(oldHash)
+   // Same existing account and payload; only the token validity changes.
+   await sql`INSERT INTO bauth.verification (id, identifier, value, expires_at)
+    VALUES (${validToken}, ${`reset-password:${validToken}`}, ${userId}, ${new Date(Date.now() + 60000)})`
+   await page.goto(`/zh-CN/auth/reset-password?token=${validToken}`)
+   await page.getByLabel(zh.Auth.password, { exact: true }).fill('IsolatedFixturePassword-42')
+   await page.getByLabel(zh.Auth.confirmPassword, { exact: true }).fill('IsolatedFixturePassword-42')
+   const validResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/reset-password' && response.request().method() === 'POST')
+   await page.getByRole('button', { name: zh.Auth.setNewPassword, exact: true }).click()
+   expect((await validResponse).status()).toBe(200)
+   await expect(page).toHaveURL(url => url.pathname === '/zh-CN/auth/login')
+   const [changed] = await sql`SELECT password FROM bauth.account WHERE id = ${userId}`
+   expect(await verifyPassword({ hash: changed.password, password: 'IsolatedFixturePassword-42' })).toBe(true)
+   expect(await sql`SELECT id FROM bauth.verification WHERE id = ${validToken}`).toHaveLength(0)
   } finally {
-   await sql`DELETE FROM bauth.verification WHERE id = ${token}`
+   await sql`DELETE FROM bauth.verification WHERE id IN (${token}, ${validToken})`
+   await sql`DELETE FROM bauth."user" WHERE id = ${userId}`
    await sql.end()
   }
  })
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
+for (const planned of [false, true]) {
+ test.describe(planned ? 'AUTH01 directed ready' : 'AUTH01 baseline', () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+for (const locale of (planned ? ['zh-CN'] as const : ['en', 'zh-CN'] as const)) {
+ for (const width of (planned ? [390] : [1440, 390])) {
   const prefix = locale === 'en' ? '' : '/zh-CN'
   const t = (locale === 'en' ? en : zh).Auth
   const forms = [
@@ -154,6 +179,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
      if (label === t.password || label === t.confirmPassword) await expect(field).toHaveAttribute('type', 'password')
      await field.fill('')
      await expect(field).toHaveValue('')
+     const nextLabel = form.fields[form.fields.indexOf(label) + 1]
+     if (nextLabel) {
+      await page.keyboard.press('Tab')
+      if (form.path === '/auth/login' && label === t.email) {
+       await expect(page.getByRole('link', { name: t.forgotPassword, exact: true })).toBeFocused()
+       await page.keyboard.press('Tab')
+      }
+      await expect(page.getByLabel(nextLabel, { exact: true })).toBeFocused()
+     }
     }
     expect(authWrites).toBe(0)
    })
@@ -175,6 +209,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
    await expect(page.getByLabel(t.password, { exact: true })).toBeEnabled()
   })
  }
+}
+
+ })
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
@@ -281,6 +318,9 @@ test.describe('AUTH02 planned error states', () => {
      await expect(page.getByRole('main').getByRole('alert')).toHaveText(expected)
      await expect(submit).toBeEnabled()
      await expect(page.locator('form')).toHaveAttribute('aria-busy', 'false')
+     for (const field of form.fields) {
+      await expect(page.getByLabel(zh.Auth[field], { exact: true })).toHaveValue(field === 'email' ? 'fixture@example.invalid' : field === 'name' ? 'Isolated Fixture' : 'IsolatedPassword-42')
+     }
      await expect(page).toHaveURL(url => `${url.pathname}${url.search}` === `/zh-CN${form.path}`)
     }
     expect(intercepted).toEqual([form.endpoint, form.endpoint])

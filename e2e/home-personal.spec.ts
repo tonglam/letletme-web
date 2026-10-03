@@ -1,7 +1,7 @@
 import { getCurrentSeasonKey } from '../lib/season'
 import { managedTournament } from './fixtures/managed-tournament'
 import { officialH2HFixture } from './fixtures/official-h2h'
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
@@ -762,7 +762,58 @@ test.describe('SSR remediation', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+	 test.describe(`S08 bound isolation baseline ${locale} ${width}`, () => {
+	  test.use({ locale, viewport: { width, height: 900 }, colorScheme: 'light', timezoneId: 'Australia/Perth' })
 	 test(`prediction squad isolates A B A session reads ${locale} ${width}px`, async ({ page }, testInfo) => {
+	  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session switching only')
+	  const a = await createSession({ entryId: 15702 })
+	  const b = await createSession({ entryId: 15702 })
+	  expect(a.userId).not.toBe(b.userId)
+	  expect(a.entryId).not.toBe(b.entryId)
+	  await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+	  const accounts = [a, b]
+	  const rules = accounts.map((account, index) => ({ operation: 'GetEntryEventResult', variables: { entryId: account.entryId }, data: { entryEventResult: { eventPicks: Array.from({ length: 15 }, (_, player) => ({ element: 1001 + index * 100 + player, webName: `Account${index} Player${player + 1}`, teamShortName: 'ARS', elementTypeName: player < 2 ? 'GOALKEEPER' : player < 7 ? 'DEFENDER' : player < 12 ? 'MIDFIELDER' : 'FORWARD', position: player + 1, multiplier: 1, isCaptain: player === 0, isViceCaptain: player === 1 })) } } }))
+	  try {
+	   await control(rules)
+	   await page.setViewportSize({ width, height: 900 })
+	   const path = `${locale === 'zh-CN' ? '/zh-CN' : ''}/explore/price-predictions#my-squad`
+	   let navigationCount = 0
+	   for (const index of [0, 1, 0]) {
+	    await page.context().clearCookies()
+	    await addSessionCookie(page, accounts[index].cookie)
+	    const documentResponse = navigationCount++ === 0 ? await page.goto(path) : await page.reload()
+	    expect(documentResponse?.status()).toBe(200)
+	    const squad = page.locator('#my-squad')
+	    await expect(squad).toHaveAttribute('open', '')
+	    await expect(squad.locator('li:visible')).toHaveCount(15)
+	    for (let player = 1; player <= 15; player++) await expect(squad.getByText(`Account${index} Player${player}`, { exact: true })).toBeVisible()
+	    await expect(squad).not.toContainText(`Account${1 - index} Player`)
+	   }
+	   const reads = (await observations()).filter(row => row.operation === 'GetEntryEventResult').map(row => row.variables.entryId)
+	   expect(reads).toEqual([a.entryId, b.entryId, a.entryId])
+	   await control(rules)
+	   await page.context().clearCookies()
+	   expect((await page.reload())?.status()).toBe(200)
+	   await expect(page.locator('#my-squad')).not.toContainText('Account0 Player')
+	   await expect(page.locator('#my-squad')).not.toContainText('Account1 Player')
+	   expect((await observations()).filter(row => ['GetEntryHistory', 'GetEntryEventResult'].includes(row.operation))).toEqual([])
+	   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+	   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+	   await expect(page.locator('html')).toHaveClass(/light/)
+	   expect(page.viewportSize()?.width).toBe(width)
+	   await testInfo.attach('prediction-account-isolation', { body: JSON.stringify({ locale, width, theme: 'system', timezone: 'Australia/Perth', parentVariantId: `S08.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, ownerIds: ['bound-member-allowed', 'B1-to-B2-cache-isolation'], wholeVariantComplete: false, entrySequence: reads, anonymousPrivateReads: 0, readyMs: null, environment: 'isolated fixture' }), contentType: 'application/json' })
+	  } finally { await a.cleanup(); await b.cleanup() }
+	 })
+	 })
+if (locale === 'zh-CN' && width === 390) test.describe('S08 required display context', () => {
+test.use({ colorScheme: 'dark', timezoneId: 'UTC', locale, viewport: { width, height: 900 } })
+test.beforeEach(async ({ page }, testInfo) => {
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  expect(await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(true)
+  expect(page.viewportSize()?.width).toBe(width)
+  await testInfo.attach('S08-context', { contentType: 'application/json', body: JSON.stringify({ locale, width, theme: 'dark', timezone: 'UTC', environment: 'local-isolated', readyMs: null }) })
+ })
+test('S08.directed.08 exact context', async ({ page }, testInfo) => {
 	  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session switching only')
 	  const a = await createSession({ entryId: 15702 })
 	  const b = await createSession({ entryId: 15702 })
@@ -795,6 +846,7 @@ test.describe('SSR remediation', () => {
 	   await testInfo.attach('prediction-account-isolation', { body: JSON.stringify({ locale, width, entrySequence: reads, anonymousPrivateReads: 0, readyMs: null, environment: 'isolated fixture' }), contentType: 'application/json' })
 	  } finally { await a.cleanup(); await b.cleanup() }
 	 })
+})
 	}
 
 	test('anonymous, unbound and invalid sessions do not issue squad history queries', async ({ page }) => {
@@ -846,6 +898,70 @@ test.describe('SSR remediation', () => {
 			await theme.locator('[data-theme-choice="light"]').click()
 			await expect(page.locator('html')).not.toHaveClass(/dark/)
 		} finally { unlock(); await transaction; await sql.end(); await session.cleanup() }
+	})
+
+	test.describe('C14 directed context', () => {
+	test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+	test('C14 navigation identity survives actual link Back and Forward', async ({ page }, testInfo) => {
+		const { installVitals } = await import('../scripts/performance-metrics.mjs')
+		await installVitals(page)
+		await control([])
+		const identity = () => page.evaluate(() => (performance.getEntriesByName('letletme-active-navigation').at(-1) as PerformanceMark | undefined)?.detail?.navigationId ?? null)
+		await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+		await page.goto('/zh-CN/explore/selections?scope=public&cohort=competition:777&gw=33')
+		expect(await page.evaluate(() => ({ width: innerWidth, lang: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, lang: 'zh-CN', timezone: 'UTC' })
+		await expect(page.locator('html')).toHaveClass(/dark/)
+		const player = page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()
+		await expect(player).toBeVisible()
+		await expect.poll(identity).not.toBeNull()
+		const initialId = await identity()
+		const href = await player.getAttribute('href')
+		expect(href).toBeTruthy()
+		await player.click()
+		await expect(page).toHaveURL(url => url.pathname === new URL(href!, url).pathname)
+		await expect.poll(identity).not.toBe(initialId)
+		const playerId = await identity()
+		expect(playerId).not.toBeNull()
+		await page.goBack()
+		await expect(page).toHaveURL(/explore\/selections/)
+		await expect(player).toBeVisible()
+		await expect.poll(identity).not.toBe(playerId)
+		const backId = await identity()
+		expect(backId).not.toBeNull()
+		await page.goForward()
+		await expect(page).toHaveURL(url => url.pathname === new URL(href!, url).pathname)
+		await expect.poll(identity).not.toBe(backId)
+		const currentId = await identity()
+		expect(currentId).not.toBeNull()
+		const result = await page.evaluate(async ({ currentId, initialId }) => {
+			for (const [navigationId, value] of [[currentId, 240], [initialId, 130]]) {
+				await fetch('/api/vitals', { method: 'POST', body: JSON.stringify({ schemaVersion: 2, batchId: crypto.randomUUID(), samples: [{ metricName: 'C14_READY', result: 'ok', measurementKind: 'in_page_navigation', navigationId, value }] }) })
+			}
+			return (window as typeof window & { __performanceMetrics: { ready: Record<string, number> } }).__performanceMetrics.ready.C14_READY
+		}, { currentId, initialId })
+		expect(result).toBe(240)
+		const invalidation = await page.evaluate(async navigationId => {
+			const metrics = (window as typeof window & { __performanceMetrics: { ready: Record<string, number> } }).__performanceMetrics
+			const send = async (batchId: string, result: string, value: number) => {
+				await fetch('/api/vitals', { method: 'POST', body: JSON.stringify({ schemaVersion: 2, batchId, samples: [{ metricName: 'C14_READY', result, value, navigationId, measurementKind: 'in_page_navigation' }] }) })
+			}
+			const observed: (number | null)[] = []
+			for (const status of ['unavailable', 'error']) {
+				await send(crypto.randomUUID(), status, 0)
+				observed.push(metrics.ready.C14_READY ?? null)
+				await send(crypto.randomUUID(), 'ok', 240)
+				observed.push(metrics.ready.C14_READY ?? null)
+			}
+			const batch = crypto.randomUUID()
+			await send(batch, 'ok', 125)
+			await send(crypto.randomUUID(), 'ok', 240)
+			await send(batch, 'ok', 125)
+			observed.push(metrics.ready.C14_READY ?? null)
+			return observed
+		}, currentId)
+		expect(invalidation).toEqual([null, 240, null, 240, 240])
+		await testInfo.attach('C14-directed-context', { contentType: 'application/json', body: JSON.stringify({ variantIds: ['C14.directed.02', 'C14.directed.03', 'C14.directed.08', 'C14.directed.01', 'C14.directed.06', 'C14.directed.09', 'C14.directed.10', 'C14.directed.11'], locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', syntheticValues: [240, 130], readyMs: null, wholeVariantComplete: false }) })
+	})
 	})
 
 	test('PUBLIC Trends is usable while its private catalog is pending', async ({ page }, testInfo) => {
@@ -967,7 +1083,13 @@ test.describe('SSR remediation', () => {
 					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public')
 					const privateRead = page.waitForResponse(response => response.url().includes('/api/trends/my-desk?') && response.url().includes('eventId=33'))
 					await mine.click()
-					expect((await privateRead).status()).toBe(200)
+					const privateResponse = await privateRead
+					expect(privateResponse.status()).toBe(200)
+					expect(privateResponse.headers()['cache-control']).toBe('private, no-store')
+					const privatePayload = await privateResponse.json()
+					const privateDesk = privatePayload.trendCohortSnapshot ?? privatePayload
+					expect(privateDesk.cohort).toMatchObject({ id: 'competition:777', access: 'MINE' })
+					expect(privateDesk.eventId).toBe(33)
 					await expect(cohort).toHaveAttribute('aria-busy', 'false')
 					await expect(mine).toHaveAttribute('aria-pressed', 'true')
 					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'mine' && url.searchParams.get('cohort') === 'competition:777')
@@ -1204,7 +1326,7 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const scenarioMode of ['classic-mobile', 'partial-mobile', 'loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-stale-mobile', 'live-journey-dgw-mobile', 'live-journey-auto-sub-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const scenarioMode of ['classic-mobile', 'partial-mobile', 'loading-layout', 'settlement-time', 'none', 'tournament-race', 'tournament-race-retry', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-stale-mobile', 'live-journey-dgw-mobile', 'live-journey-auto-sub-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus', 'live-journey-filter-options', 'live-journey-filter-limits', 'live-journey-filter-scope-race'] as const) {
 const plannedReview = scenarioMode === 'classic-mobile' || scenarioMode === 'partial-mobile'
 const recoveryMode = scenarioMode === 'classic-mobile' ? 'none' : scenarioMode === 'partial-mobile' ? 'partial-ssr-seed' : scenarioMode
 const comparisonJourney = recoveryMode.startsWith('live-journey-pinned')
@@ -1215,11 +1337,11 @@ const captainPoints = plannedState === 'DGW' ? 7 : 6
 const squadPoints = plannedState === 'DGW' ? 24 : 22
 const benchPlayerId = plannedState === 'auto-sub' ? 6 : 12
 const publishedJourney = recoveryMode === 'live-journey-published' || plannedStateJourney
-const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney
+const formalJourney = recoveryMode === 'live-journey-second-entry' || recoveryMode === 'live-journey-filter-scope-race' || publishedJourney
 const journeyTimezone = plannedStateJourney || plannedComparison || plannedReview ? 'UTC' : 'Australia/Perth'
 const journeyTheme = plannedStateJourney || plannedComparison || plannedReview ? 'dark' : 'system'
-for (const locale of plannedStateJourney || plannedComparison || plannedReview ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of plannedStateJourney || plannedComparison || plannedReview ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
+for (const locale of plannedStateJourney || plannedComparison || plannedReview ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode.startsWith('tournament-race') || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of plannedStateJourney || plannedComparison || plannedReview ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode.startsWith('tournament-race') || recoveryMode === 'live-journey-focus' || recoveryMode === 'live-journey-filter-options' || recoveryMode === 'live-journey-filter-limits' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1242,7 +1364,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	}
 	const session = await createSession({ entryId: 123 })
 	if (formalJourney || comparisonJourney || plannedReview) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
-	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: recoveryMode === 'live-journey-second-entry' ? 3 : 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
 	if (recoveryMode === 'settlement-time') {
 		phase.settledAt = '2026-09-15T18:00:00Z'
 		phase.publishedAt = '2026-09-15T19:00:00Z'
@@ -1254,7 +1376,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 		rows: [{ entryId: 123, entryName: 'Season Fixture United', playerName: 'Fixture Manager', applicable: true, groupId: null, rank: 1, previousRank: 2, grossPoints: 75, transferCost: 4, netPoints: 71, tournamentScore: 300, seasonGrossPoints: 300, seasonNetPoints: 296, eventRank: 1, overallPoints: 300, overallRank: 100 }]
 	}
 	if (recoveryMode === 'loading-layout') points.rows = Array.from({ length: 48 }, (_, index) => ({ ...points.rows[0], entryId: 123 + index, entryName: `Layout Team ${index + 1}`, rank: index + 1 }))
-	const pageInfo = { hasNextPage: false, endCursor: null }
+	const pageInfo: { hasNextPage: boolean; endCursor: string | null } = { hasNextPage: false, endCursor: null }
 	const reviewTournamentId = recoveryMode.startsWith('live-journey') ? 6 : 77
 	const scope = { ...phase, tournamentId: reviewTournamentId, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
 	const rules = [
@@ -1335,13 +1457,14 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				}
 			}
 			if (!isSeasonSectionOperation(payload.query)) return route.continue()
-			if (recoveryMode === 'tournament-race' && payload.variables.tournamentId === 78) {
+			if (recoveryMode.startsWith('tournament-race') && payload.variables.tournamentId === 78) {
 				secondSectionRequests += 1
 				expect(payload.variables).toMatchObject({ tournamentId: 78, throughEventId: 4, phaseId: 'points-2', revision: '2', semanticSha256: 'b'.repeat(64) })
+				if (recoveryMode === 'tournament-race-retry' && secondSectionRequests <= 2) return route.fulfill({ status: 503, headers: { 'retry-after': '0' }, json: { errors: [{ message: 'Second tournament section fixture failure' }] } })
 				return route.continue()
 			}
 			sectionRequests += 1
-			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
+			expect(payload.variables).toMatchObject({ tournamentId: reviewTournamentId, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
 			await gate
 			if (failFirstSections && sectionRequests <= 2) {
 				await route.fulfill({ status: 503, headers: { 'retry-after': '0' }, json: { errors: [{ message: 'Section temporarily unavailable' }] } })
@@ -1452,7 +1575,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			return
 		}
-		if (recoveryMode === 'tournament-race') {
+		if (recoveryMode.startsWith('tournament-race')) {
 			const catalogData = rules[0].data
 			if (!('myTournamentReviewCatalog' in catalogData) || !catalogData.myTournamentReviewCatalog) throw new Error('Missing catalog fixture')
 			const original = catalogData.myTournamentReviewCatalog
@@ -1474,10 +1597,20 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(ready).toHaveAttribute('data-review-tournament', '78')
 			await expect(ready).toHaveAttribute('data-review-phase', 'points-2')
 			await expect(ready).toHaveAttribute('data-review-revision', '2')
+			if (recoveryMode === 'tournament-race-retry') {
+				const retry = page.getByRole('button', { name: locale === 'zh-CN' ? zhMessages.TournamentStats.reviewRetryPhase : 'Retry this phase', exact: true })
+				await expect(retry).toBeVisible()
+				await expect(ready).toHaveAttribute('data-review-ready', 'false')
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '78' && url.searchParams.get('gw') === '4')
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toHaveCount(0)
+				expect(secondSectionRequests).toBe(2)
+				await retry.click()
+				await expect(retry).toHaveCount(0)
+			}
 			await expect(ready).toHaveAttribute('data-review-ready', 'true')
 			await expect(page.getByRole('cell', { name: /Second Fixture United/ })).toBeVisible()
 			await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '78' && url.searchParams.get('gw') === '4')
-			expect(secondSectionRequests).toBe(2)
+			expect(secondSectionRequests).toBe(recoveryMode === 'tournament-race-retry' ? 4 : 2)
 			const lateResponses = Promise.all([page.waitForResponse(response => response.url().includes('/api/graphql') && response.request().postDataJSON()?.variables?.tournamentId === 77 && response.request().postDataJSON()?.variables?.section === 'POINTS_STANDINGS'), page.waitForResponse(response => response.url().includes('/api/graphql') && response.request().postDataJSON()?.variables?.tournamentId === 77 && response.request().postDataJSON()?.variables?.section === 'POINTS_TRAJECTORIES')])
 			releaseSections()
 			await lateResponses
@@ -1537,7 +1670,21 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				})
 			}
 			const secondEntryRules: { operation: string; variables: { entryId: number; eventId: number }; data: unknown }[] = []
+			let journeyScoreRevision: string | undefined
+			const journeyTournamentRules: { operation: string; data: unknown }[] = []
 			if (formalJourney) {
+				const catalogResponse = await fetch(fixture.replace('/__performance', '/graphql'), {
+					method: 'POST', headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ query: 'query GetEntryTournaments { __typename }', variables: { entryId: 123 } })
+				})
+				expect(catalogResponse.ok).toBe(true)
+				const catalog = await catalogResponse.json()
+				expect(catalog.errors).toBeUndefined()
+				const targetTournament = catalog.data.entryTournaments.find((item: { id: number }) => item.id === 6)
+				expect(targetTournament).toBeDefined()
+				journeyTournamentRules.push({ operation: 'GetEntryTournaments', data: {
+					entryTournaments: [targetTournament, { ...targetTournament, id: 7, leagueId: 315, name: 'Journey Alternate Classic', sourceLeagueName: 'Journey Alternate Classic' }]
+				} })
 				const response = await fetch(fixture.replace('/__performance', '/graphql'), {
 					method: 'POST', headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ query: 'query GetLiveCalcPoints { __typename }', variables: { entryId: 6733550, eventId: 4 } })
@@ -1545,6 +1692,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const seed = await response.json()
 				expect(seed.errors).toBeUndefined()
 				const second = seed.data.calcLivePointsByEntry
+				journeyScoreRevision = second.score.revisions.input
+				expect(typeof journeyScoreRevision).toBe('string')
+				expect(journeyScoreRevision).not.toBe('')
 				// Use a legal 3-4-3 and four ordered substitutes, not the generic
 				// fixture's first eleven element IDs (which include two keepers).
 				const pickOrder = [1, 3, 4, 5, 8, 9, 10, 11, 13, 14, 15, 2, 6, 7, 12]
@@ -1620,19 +1770,120 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await route.fulfill({ response, json: body })
 				})
 			}
+			const earlierPhase = { ...phase, phaseId: 'points-earlier', startEventId: 1, endEventId: 2, revision: '2', semanticSha256: 'c'.repeat(64) }
+			const earlierSectionReads: { section: string; after?: string | null }[] = []
+			let journeyCatalogPages = 0
+			if (recoveryMode === 'live-journey-second-entry') {
+				const catalogRule = rules[0]
+				if (!('myTournamentReviewCatalog' in catalogRule.data)) throw new Error('Expected journey catalog')
+				const catalog = catalogRule.data.myTournamentReviewCatalog!
+				catalog.pageInfo = { hasNextPage: true, endCursor: 'journey-catalog-1' }
+				await page.route('**/api/graphql', async route => {
+					const body = route.request().postDataJSON()
+					if (body.query?.includes('GetMyTournamentReviewCatalog')) {
+						expect(body.variables).toMatchObject({ scope: 'ACCESSIBLE', first: 100, after: 'journey-catalog-1', search: null })
+						journeyCatalogPages++
+						const first = catalog.edges[0]
+						await route.fulfill({ json: { data: { myTournamentReviewCatalog: { ...catalog, pageInfo: { hasNextPage: false, endCursor: null }, edges: [first, { ...first, cursor: '7', node: { ...first.node, tournamentId: 7, name: 'Appended Catalog Cup', latestFinalizedScope: { ...first.node.latestFinalizedScope, tournamentId: 7 } } }] } } } })
+						return
+					}
+					if (!isSeasonSectionOperation(body.query) || body.variables.phaseId !== earlierPhase.phaseId) return route.fallback()
+					const v = body.variables
+					expect(v).toMatchObject({ tournamentId: 6, throughEventId: 4, phaseId: earlierPhase.phaseId, revision: '2', semanticSha256: earlierPhase.semanticSha256 })
+					earlierSectionReads.push(v)
+					const secondPage = Boolean(v.after)
+					if (secondPage) expect(v).toMatchObject({ section: 'POINTS_STANDINGS', after: 'earlier-page-1' })
+					const hasNextPage = v.section === 'POINTS_STANDINGS' && !secondPage
+					const cursor = hasNextPage ? 'earlier-page-1' : null
+					const row = { ...points.rows[0], entryId: secondPage ? 456 : 123, entryName: secondPage ? 'Earlier Appended United' : 'Earlier Phase United', rank: secondPage ? 2 : 1 }
+					await route.fulfill({ json: { data: { myTournamentSeasonReviewSection: { ...earlierPhase, tournamentId: 6, throughEventId: 4, section: v.section, points: { ...points, rows: [row], hasNextPage, nextCursor: cursor }, h2h: null, knockout: null, pageInfo: { hasNextPage, endCursor: cursor } } } } })
+				})
+			}
 			const unavailableRules = [
+				...journeyTournamentRules,
 				...comparisonRules,
 				...secondEntryRules,
+				...(recoveryMode === 'live-journey-second-entry' ? [
+					{ operation: 'GetMyTournamentSeasonReview', variables: { throughEventId: 4 }, data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 6, throughEventId: 4, latestFinalizedEventId: 4, phases: [earlierPhase, phase] } } },
+					{ operation: 'GetMyTournamentGameweekReview', variables: { eventId: 3 }, data: { myTournamentGameweekReview: { state: 'READY', scope: { ...scope, eventId: 3, revision: '3', semanticSha256: 'b'.repeat(64) }, payload: { format: 'POINTS', points: { ...points, grossPointsTotal: 33, netPointsTotal: 29, rows: points.rows.map(row => ({ ...row, entryName: 'GW3 Journey United', grossPoints: 33, netPoints: 29 })) } } } } },
+					{ operation: 'GetMyTournamentSeasonReview', variables: { throughEventId: 3 }, data: { myTournamentSeasonReview: { state: 'READY', tournamentId: 6, throughEventId: 3, latestFinalizedEventId: 3, phases: [{ ...phase, endEventId: 3, revision: '3', semanticSha256: 'b'.repeat(64) }] } } }
+				] : []),
 				...(publishedJourney ? [] : [{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } }]),
 				...rules
 			]
 			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: unavailableRules }) })).ok).toBe(true)
 			await page.goto(`${routePath}?tournamentId=6&view=gameweek&gw=4`)
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
-			const unsettledLink = page.getByRole('link', { name: locale === 'zh-CN' ? '未结算数据请前往 Live' : 'Open Live for unsettled data', exact: true })
-			const live = publishedJourney
-				? page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '实时赛事' : 'Live Competitions', exact: true })
-				: unsettledLink
+			const unsettledLink = page.getByRole('link', { name: publishedJourney ? (locale === 'zh-CN' ? '查看本轮积分榜' : 'View gameweek standings') : (locale === 'zh-CN' ? '未结算数据请前往 Live' : 'Open Live for unsettled data'), exact: true })
+			if (recoveryMode === 'live-journey-second-entry') {
+				// Keep catalog/view interactions in the same browser journey as the
+				// contextual Live link; no direct navigation between these controls.
+				const search = page.getByRole('textbox', { name: locale === 'zh-CN' ? '搜索赛事' : 'Search tournaments', exact: true })
+				await expect(search).toHaveCount(0)
+				await expect(page.getByRole('button', { name: locale === 'zh-CN' ? '管理员：查看全部赛事' : 'Admin: show all tournaments', exact: true })).toHaveCount(0)
+				const selector = page.getByRole('complementary').getByRole('combobox').first()
+				await expect(selector).toHaveValue('6')
+				const catalogMore = page.getByRole('button', { name: locale === 'zh-CN' ? '加载更多赛事' : 'Load more tournaments', exact: true })
+				await expect(selector.locator('option[value="7"]')).toHaveCount(0)
+				await catalogMore.click()
+				await expect(selector.locator('option[value="7"]')).toHaveText(/Appended Catalog Cup/)
+				await expect(selector.locator('option[value="6"]')).toHaveCount(1)
+				await expect(selector).toHaveValue('6')
+				await expect(catalogMore).toHaveCount(0)
+				expect(journeyCatalogPages).toBe(1)
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+				await selector.selectOption('')
+				await expect(page.getByRole('status')).toHaveText(locale === 'zh-CN' ? '选择赛事' : 'Select tournament')
+				await selector.selectOption('6')
+				await expect(unsettledLink).toBeVisible()
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+				const reviewGw = page.getByRole('combobox').nth(1)
+				await reviewGw.selectOption('3')
+				const historicalReady = page.locator('[data-review-ready="true"]')
+				await expect(historicalReady).toHaveAttribute('data-review-tournament', '6')
+				await expect(historicalReady).toHaveAttribute('data-review-gw', '3')
+				await expect(historicalReady).toHaveAttribute('data-review-revision', '3')
+				await expect(historicalReady).toHaveAttribute('data-review-hash', 'b'.repeat(64))
+				const historicalRow = page.getByRole('row').filter({ hasText: 'GW3 Journey United' })
+				await expect(historicalRow).toHaveCount(1)
+				await expect(historicalRow).toContainText('33')
+				await expect(historicalRow).toContainText('29')
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '3')
+				await reviewGw.selectOption('4')
+				await expect(unsettledLink).toBeVisible()
+				await expect(page.getByRole('cell', { name: 'GW3 Journey United Fixture Manager', exact: true })).toHaveCount(0)
+				releaseSections()
+				await page.getByRole('tab', { name: locale === 'zh-CN' ? zhMessages.TournamentStats.viewSeason : 'Season', exact: true }).click()
+				const seasonReady = page.locator('[data-review-ready="true"]')
+				await expect(seasonReady).toHaveAttribute('data-review-tournament', '6')
+				await expect(seasonReady).toHaveAttribute('data-review-gw', '4')
+				await expect(seasonReady).toHaveAttribute('data-review-view', 'season')
+				await expect(seasonReady).toHaveAttribute('data-review-hash', phase.semanticSha256)
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+				const phaseTabs = page.getByRole('tablist', { name: locale === 'zh-CN' ? zhMessages.TournamentStats.reviewPhaseTimeline : 'Tournament phases', exact: true })
+				await phaseTabs.getByRole('tab').filter({ hasText: 'GW1–2' }).click()
+				await expect(seasonReady).toHaveAttribute('data-review-phase', earlierPhase.phaseId)
+				await expect(seasonReady).toHaveAttribute('data-review-revision', '2')
+				await expect(seasonReady).toHaveAttribute('data-review-hash', earlierPhase.semanticSha256)
+				await expect(page.getByRole('cell', { name: 'Earlier Phase United Fixture Manager', exact: true })).toBeVisible()
+				await expect(page.getByRole('cell', { name: 'Season Fixture United Fixture Manager', exact: true })).toHaveCount(0)
+				const phaseMore = page.getByRole('button', { name: locale === 'zh-CN' ? zhMessages.TournamentStats.reviewLoadMore : 'Load more', exact: true })
+				await phaseMore.click()
+				await expect(page.getByRole('cell', { name: 'Earlier Appended United Fixture Manager', exact: true })).toBeVisible()
+				await expect(page.getByRole('cell', { name: 'Earlier Phase United Fixture Manager', exact: true })).toHaveCount(1)
+				await expect(phaseMore).toHaveCount(0)
+				expect(earlierSectionReads).toHaveLength(3)
+				await phaseTabs.getByRole('tab').filter({ hasText: 'GW3–4' }).click()
+				await expect(seasonReady).toHaveAttribute('data-review-phase', phase.phaseId)
+				await expect(seasonReady).toHaveAttribute('data-review-hash', phase.semanticSha256)
+				await expect(page.getByRole('cell', { name: 'Season Fixture United Fixture Manager', exact: true })).toBeVisible()
+				await expect(page.getByRole('cell', { name: 'Earlier Appended United Fixture Manager', exact: true })).toHaveCount(0)
+				await page.getByRole('tab', { name: locale === 'zh-CN' ? zhMessages.TournamentStats.viewGameweek : 'Gameweek', exact: true }).click()
+				await expect(unsettledLink).toBeVisible()
+				await expect(page).toHaveURL(url => url.searchParams.get('view') === 'gameweek' && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+				await testInfo.attach('J11-continuous-review-prefix', { contentType: 'application/json', body: JSON.stringify({ stepIds: ['J11.04', 'J11.05', 'J11.06', 'J11.08', 'J11.09', 'J11.10', 'J11.07'], notApplicable: { 'J11.02': 'adminReadAll false: no scope control', 'J11.03': 'adminReadAll false: no catalog search' }, order: ['assert-admin-controls-absent', 'catalog-next-page', 'clear-selection', 'select-6', 'GW3-ready-revision3', 'GW4-unavailable', 'season', 'earlier-phase', 'phase-next-page', 'current-phase', 'gameweek', 'contextual-live-link'], tournamentId: 6, eventId: 4, seasonRevision: '1', semanticSha256: phase.semanticSha256, wholeJourneyComplete: false, readyMs: null }) })
+			}
+			const live = unsettledLink
 			if (publishedJourney) {
 				const review = page.locator('[data-review-ready="true"]')
 				await expect(review).toHaveAttribute('data-review-tournament', '6')
@@ -1643,10 +1894,10 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(row).toHaveCount(1)
 				await expect(row).toContainText('75')
 				await expect(row).toContainText('71')
-				await expect(unsettledLink).toHaveCount(0)
+				await expect(live).toHaveCount(1)
 			}
 			await expect(live).toBeVisible()
-			await expect(live).toHaveAttribute('href', publishedJourney ? `${prefix}/live/competitions` : `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			let recoveryBoardRequests = 0
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
 				await page.route('**/api/live/competitions/6/board', async route => {
@@ -1676,14 +1927,19 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					} else await route.continue()
 				})
 			}
+
+            if (recoveryMode === 'live-journey-filter-limits') {
+                await page.route('**/api/live/competitions/6/selection-index?*', async route => {
+                    const response = await route.fetch()
+                    const payload = await response.json()
+                    const first = payload.tournamentSelectionIndex.rows[0]
+                    payload.tournamentSelectionIndex.rows = Array.from({ length: 6 }, (_, index) => ({ ...first, playerId: index + 1, playerName: index ? `LimitPlayer${index + 1}` : 'Saka', teamId: index + 1, teamName: index ? `LimitClub${index + 1}` : 'Arsenal', teamShortName: index ? `LC${index + 1}` : 'ARS' }))
+                    await route.fulfill({ response, json: payload })
+                })
+            }
 			const selectionResponse = page.waitForResponse(response =>
 				response.url().includes('/api/live/competitions/6/selection-index?') && new URL(response.url()).searchParams.get('eventId') === '4' && response.status() === 200)
 			await live.click()
-			if (publishedJourney) {
-				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions`)
-				await page.getByRole('combobox', { name: locale === 'zh-CN' ? '选择轮次' : 'Select gameweek', exact: true }).click()
-				await page.getByRole('option', { name: locale === 'zh-CN' ? '第 4 轮' : 'Gameweek 4', exact: true }).click()
-			}
 			if (recoveryMode === 'live-journey-index-retry' || recoveryMode === 'live-journey-index-gone') {
 				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
 				if (locale === 'zh-CN') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
@@ -1697,15 +1953,274 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			const selection = await (await selectionResponse).json()
 			expect(selection.tournamentSelectionIndex).toMatchObject({
 				tournamentId: 6, eventId: 4, scoreCoreRevision: recoveryMode === 'live-journey-index-gone-new-revision' ? 'e2e-competition-score-v2' : 'e2e-competition-score-v1',
-				rows: [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
+				rows: recoveryMode === 'live-journey-filter-limits' ? Array.from({ length: 6 }, (_, index) => ({ playerId: index + 1, playerName: index ? `LimitPlayer${index + 1}` : 'Saka', captainCount: 1 })) : [{ playerId: 1, playerName: 'Saka', captainCount: 1 }]
 			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			if (formalJourney) {
+				for (const tournament of [{ id: 7, name: 'Journey Alternate Classic' }, { id: 6, name: 'E2E Classic League' }]) {
+					await page.getByRole('button', { name: locale === 'zh-CN' ? '经典联赛' : 'Classic', exact: true }).click()
+					const option = page.getByRole('menuitem', { name: tournament.name, exact: true })
+					await expect(option).toHaveCount(1)
+					await expect(option).toBeEnabled()
+					const boardResponse = page.waitForResponse(response => response.url().endsWith(`/api/live/competitions/${tournament.id}/board`) && response.request().method() === 'POST')
+					await option.click()
+					const response = await boardResponse
+					expect(response.status()).toBe(200)
+					expect(response.request().postDataJSON()).toMatchObject({ tournamentId: tournament.id, eventId: 4 })
+					expect((await response.json()).entryLiveCompetitionBoard.head).toMatchObject({ tournamentId: tournament.id, eventId: 4 })
+					await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === String(tournament.id) && url.searchParams.get('gw') === '4')
+					await expect(page.locator(`[data-competition-perf-ready="detail"][data-competition-tournament-id="${tournament.id}"][data-competition-gameweek="4"]`)).toHaveCount(1)
+					const selectedTeam = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
+					await expect(selectedTeam).toHaveCount(1)
+					await expect(selectedTeam).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=${tournament.id}&gw=4`)
+				}
+			}
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
 				expect(recoveryBoardRequests).toBe(2)
 				expect(indexRequests).toBe(2)
 				await expect(page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })).toHaveCount(0)
 				await expect(page.locator('[data-competition-perf-ready="detail"]')).toBeVisible()
 			}
+
+
+
+            if (recoveryMode === 'live-journey-filter-scope-race') {
+                const labels = (locale === 'zh-CN' ? zhMessages : enMessages).Filters
+                const ensureFiltersVisible = async () => {
+                    if (catalogWidth === 390 && !await page.getByRole('combobox', { name: labels.ownershipScope, exact: true }).isVisible()) {
+                        await page.getByRole('button', { name: labels.advancedFilters, exact: true }).click()
+                    }
+                }
+                const chooseTournament = async (id: number) => {
+                    await page.getByRole('button', { name: locale === 'zh-CN' ? '经典联赛' : 'Classic', exact: true }).click()
+                    await page.getByRole('menuitem', { name: id === 7 ? 'Journey Alternate Classic' : 'E2E Classic League', exact: true }).click()
+                }
+                const readyFor = (tournament: number, gw: number) => page.locator(`[data-competition-perf-ready="detail"][data-competition-tournament-id="${tournament}"][data-competition-gameweek="${gw}"]`)
+                for (const scope of ['gameweek', 'tournament'] as const) {
+                    await expect(readyFor(6, 4)).toHaveCount(1)
+                    await ensureFiltersVisible()
+                    await page.getByRole('button', { name: labels.addPlayer, exact: true }).click()
+                    const ownerResponse = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().postDataJSON().input.ownership?.playerIds?.[0] === 1)
+                    await page.getByRole('button', { name: /^Saka MID/ }).click()
+                    expect((await ownerResponse).status()).toBe(200)
+                    await expect(page.getByRole('button', { name: labels.removePlayer.replace('{name}', 'Saka'), exact: true })).toBeVisible()
+                    await page.getByRole('combobox', { name: labels.selectTeamAria, exact: true }).click()
+                    await page.getByRole('option', { name: 'Arsenal', exact: true }).click()
+                    let release!: () => void
+                    let markStarted!: () => void
+                    let markSettled!: () => void
+                    const gate = new Promise<void>(resolve => { release = resolve })
+                    const started = new Promise<void>(resolve => { markStarted = resolve })
+                    const settled = new Promise<void>(resolve => { markSettled = resolve })
+                    let held = false
+                    await page.route('**/api/live/competitions/6/board', async route => {
+                        const input = route.request().postDataJSON()
+                        if (held || input.eventId !== 4 || !input.input.teamCountRules?.length) return route.continue()
+                        held = true
+                        expect(input.input).toMatchObject({ ownership: { playerIds: [1], scope: 'ANY', captainMode: 'ANY' }, teamCountRules: [{ teamId: 1, exactCount: 1, scope: 'ANY' }] })
+                        const response = await route.fetch()
+                        const payload = await response.json()
+                        for (const row of payload.entryLiveCompetitionBoard.rows) row.entryName = 'Obsolete combined filter row'
+                        markStarted()
+                        await gate
+                        try {
+                            if (scope === 'gameweek') await route.fulfill({ response, json: payload })
+                            else await route.fulfill({ status: 503, json: { error: 'Obsolete filter failure' } })
+                        } finally { markSettled() }
+                    })
+                    const targetId = scope === 'gameweek' ? 6 : 7
+                    const targetGw = scope === 'gameweek' ? 3 : 4
+                    try {
+                        await page.getByRole('button', { name: labels.addTeam, exact: true }).click()
+                        await started
+                        if (scope === 'gameweek') await page.getByRole('button', { name: locale === 'zh-CN' ? '上一轮' : 'Previous gameweek', exact: true }).click()
+                        else await chooseTournament(7)
+                        await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === String(targetId) && url.searchParams.get('gw') === String(targetGw))
+                        await expect(readyFor(targetId, targetGw)).toHaveCount(1)
+                        const link = page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })
+                        await expect(link).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=${targetId}&gw=${targetGw}`)
+                        await ensureFiltersVisible()
+                        await expect(page.getByRole('combobox', { name: labels.ownershipScope, exact: true })).toBeDisabled()
+                        release()
+                        await settled
+                        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+                        await expect(readyFor(targetId, targetGw)).toHaveCount(1)
+                        await expect(link).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=${targetId}&gw=${targetGw}`)
+                        await expect(page.getByRole('link', { name: /Obsolete combined filter row/ })).toHaveCount(0)
+                        await expect(page.getByRole('button', { name: labels.removePlayer.replace('{name}', 'Saka'), exact: true })).toHaveCount(0)
+                        await expect(page.getByRole('button', { name: labels.removeTeamItem.replace('{team}', 'Arsenal'), exact: true })).toHaveCount(0)
+                        await expect(page.locator('#main-content').getByRole('alert')).toHaveCount(0)
+                    } finally {
+                        release()
+                        await page.unroute('**/api/live/competitions/6/board')
+                    }
+                    if (scope === 'gameweek') await page.getByRole('button', { name: locale === 'zh-CN' ? '下一轮' : 'Next gameweek', exact: true }).click()
+                    else await chooseTournament(6)
+                    await expect(readyFor(6, 4)).toHaveCount(1)
+                }
+                await testInfo.attach('J06-filter-scope-race', { contentType: 'application/json', body: JSON.stringify({ locale, width: catalogWidth, cases: ['late success after GW change', 'late503 after tournament change'], scope: 'Actual input and controlled late delivery; aborted requests may prevent consumer delivery', wholeVariantComplete: false, readyMs: null }) })
+                return
+            }
+            if (recoveryMode === 'live-journey-filter-limits') {
+                const labels = (locale === 'zh-CN' ? zhMessages : enMessages).Filters
+                if (catalogWidth === 390) await page.getByRole('button', { name: labels.advancedFilters, exact: true }).click()
+                const owners: number[] = []
+                const clubs: number[] = []
+                const observations: unknown[] = []
+                await page.route('**/api/live/competitions/6/board', async route => {
+                    const input = route.request().postDataJSON().input
+                    const response = await route.fetch()
+                    const payload = await response.json()
+                    const board = payload.entryLiveCompetitionBoard
+                    board.rows = [{ ...board.rows[0], entryName: `Limit result P${input.ownership?.playerIds.length ?? 0} T${input.teamCountRules?.length ?? 0}` }]
+                    board.filteredEntries = 1
+                    board.pageInfo = { hasNextPage: false, endCursor: null }
+                    observations.push(input)
+                    await route.fulfill({ response, json: payload })
+                })
+                const apply = async (action: () => Promise<unknown>) => {
+                    const result = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().method() === 'POST')
+                    await action()
+                    const response = await result
+                    expect(response.status()).toBe(200)
+                    expect(response.request().postDataJSON()).toMatchObject({ tournamentId: 6, eventId: 4, input: { ownership: owners.length ? { playerIds: [...owners], scope: 'ANY', captainMode: 'ANY' } : null, teamCountRules: clubs.map(teamId => ({ teamId, exactCount: 1, scope: 'ANY' })) } })
+                    await expect(page.getByRole('link', { name: new RegExp(`^Limit result P${owners.length} T${clubs.length}`) }).filter({ visible: true })).toHaveCount(1)
+                    await expect(page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+                }
+                const playerName = (id: number) => id === 1 ? 'Saka' : `LimitPlayer${id}`
+                const clubName = (id: number) => id === 1 ? 'Arsenal' : `LimitClub${id}`
+                const addPlayer = page.getByRole('button', { name: labels.addPlayer, exact: true })
+                const addTeam = page.getByRole('button', { name: labels.addTeam, exact: true })
+                const selectClub = async (id: number) => {
+                    await page.getByRole('combobox', { name: labels.selectTeamAria, exact: true }).click()
+                    for (const selected of clubs) await expect(page.getByRole('option', { name: clubName(selected), exact: true })).toHaveCount(0)
+                    await page.getByRole('option', { name: clubName(id), exact: true }).click()
+                }
+                for (const id of [1, 2, 3, 4, 5]) {
+                    await addPlayer.click()
+                    for (const selected of owners) await expect(page.getByRole('button', { name: new RegExp(`^${playerName(selected)} MID`) })).toHaveCount(0)
+                    owners.push(id)
+                    await apply(() => page.getByRole('button', { name: new RegExp(`^${playerName(id)} MID`) }).click())
+                }
+                await expect(addPlayer).toBeDisabled()
+                owners.shift()
+                await apply(() => page.getByRole('button', { name: labels.removePlayer.replace('{name}', 'Saka'), exact: true }).click())
+                await expect(addPlayer).toBeEnabled()
+                await addPlayer.click()
+                owners.push(6)
+                await apply(() => page.getByRole('button', { name: /^LimitPlayer6 MID/ }).click())
+                await expect(addPlayer).toBeDisabled()
+                for (const id of [1, 2, 3, 4]) {
+                    await selectClub(id)
+                    clubs.push(id)
+                    await apply(() => addTeam.click())
+                }
+                await selectClub(5)
+                await expect(addTeam).toBeDisabled()
+                clubs.shift()
+                await apply(() => page.getByRole('button', { name: labels.removeTeamItem.replace('{team}', 'Arsenal'), exact: true }).click())
+                await expect(addTeam).toBeEnabled()
+                clubs.push(5)
+                await apply(() => addTeam.click())
+                await expect(addTeam).toBeDisabled()
+                const clears = page.getByRole('button', { name: labels.clearAll, exact: true })
+                await expect(clears).toHaveCount(3)
+                owners.length = 0
+                await apply(() => clears.nth(0).click())
+                await expect(addPlayer).toBeEnabled()
+                await expect(page.getByRole('combobox', { name: labels.ownershipScope, exact: true })).toBeDisabled()
+                await expect(clears).toHaveCount(2)
+                clubs.length = 0
+                await apply(() => clears.nth(0).click())
+                await expect(clears).toHaveCount(1)
+                await expect(clears).toBeDisabled()
+                await addPlayer.click()
+                owners.push(1)
+                await apply(() => page.getByRole('button', { name: /^Saka MID/ }).click())
+                await selectClub(1)
+                clubs.push(1)
+                await apply(() => addTeam.click())
+                owners.length = 0
+                clubs.length = 0
+                await apply(() => clears.last().click())
+                await expect(clears).toHaveCount(1)
+                await expect(clears).toBeDisabled()
+                await testInfo.attach('J06-filter-limits', { contentType: 'application/json', body: JSON.stringify({ locale, width: catalogWidth, observations, ownershipLimit: 5, teamRuleLimit: 4, wholeVariantComplete: false, readyMs: null, scope: 'Web control and payload limits; controlled result responses' }) })
+                return
+            }
+            if (recoveryMode === 'live-journey-filter-options') {
+                const labels = (locale === 'zh-CN' ? zhMessages : enMessages).Filters
+                if (catalogWidth === 390) await page.getByRole('button', { name: labels.advancedFilters, exact: true }).click()
+                const teams = [
+                    { entry: 910001, name: 'Filter Captain', scope: 'STARTER', captain: 'CAPTAIN', counts: { ANY: 3, STARTER: 2, BENCH: 1 } },
+                    { entry: 910002, name: 'Filter Vice', scope: 'STARTER', captain: 'VICE', counts: { ANY: 2, STARTER: 2, BENCH: 0 } },
+                    { entry: 910003, name: 'Filter Bench', scope: 'BENCH', captain: 'ANY', counts: { ANY: 1, STARTER: 0, BENCH: 1 } }
+                ]
+                const observations: unknown[] = []
+                await page.route('**/api/live/competitions/6/board', async route => {
+                    const input = route.request().postDataJSON().input
+                    const response = await route.fetch()
+                    const payload = await response.json()
+                    const board = payload.entryLiveCompetitionBoard
+                    const matched = teams.filter(team => (!input.ownership || ((input.ownership.scope === 'ANY' || input.ownership.scope === team.scope) && (input.ownership.captainMode === 'ANY' || input.ownership.captainMode === team.captain))) && (input.teamCountRules ?? []).every((rule: { scope: 'ANY' | 'STARTER' | 'BENCH'; exactCount: number }) => team.counts[rule.scope] === rule.exactCount))
+                    const template = board.rows[0]
+                    expect(template).toBeTruthy()
+                    board.rows = matched.map((team, index) => ({ ...template, entry: team.entry, entryName: team.name, liveRank: index + 1 }))
+                    board.totalEntries = 3
+                    board.filteredEntries = matched.length
+                    board.pageInfo = { hasNextPage: false, endCursor: null }
+                    observations.push({ input, expectedEntries: matched.map(team => team.entry) })
+                    await route.fulfill({ response, json: payload })
+                })
+                const links = page.getByRole('link', { name: /^Filter (Captain|Vice|Bench)/ }).filter({ visible: true })
+                const apply = async (action: () => Promise<unknown>, expected: object, names: string[]) => {
+                    const result = page.waitForResponse(response => response.url().endsWith('/api/live/competitions/6/board') && response.request().method() === 'POST')
+                    await action()
+                    const response = await result
+                    expect(response.status()).toBe(200)
+                    expect(response.request().postDataJSON()).toMatchObject({ tournamentId: 6, eventId: 4, input: expected })
+                    await expect(links).toHaveCount(names.length)
+                    for (const name of names) await expect(links.filter({ hasText: name })).toHaveCount(1)
+                    await expect(page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+                }
+                const choose = async (name: string, value: string) => {
+                    await page.getByRole('combobox', { name, exact: true }).click()
+                    await page.getByRole('option', { name: value, exact: true }).click()
+                }
+                const scopeLabels = { ANY: labels.any, STARTER: labels.starter, BENCH: labels.bench }
+                const captainLabels = { ANY: labels.anyCaptain, CAPTAIN: labels.selectedCaptain, VICE: labels.selectedViceCaptain }
+                const allNames = teams.map(team => team.name)
+                await expect(page.getByRole('combobox', { name: labels.ownershipScope, exact: true })).toBeDisabled()
+                await expect(page.getByRole('combobox', { name: labels.captaincyFilter, exact: true })).toBeDisabled()
+                await page.getByRole('button', { name: labels.addPlayer, exact: true }).click()
+                await apply(() => page.getByRole('button', { name: /^Saka MID/ }).click(), { ownership: { playerIds: [1], scope: 'ANY', captainMode: 'ANY' } }, allNames)
+                let currentScope = 'ANY'
+                let currentCaptain = 'ANY'
+                for (const scope of ['ANY', 'STARTER', 'BENCH'] as const) {
+                    for (const captainMode of ['ANY', 'CAPTAIN', 'VICE'] as const) {
+                        if (scope !== currentScope) {
+                            await apply(() => choose(labels.ownershipScope, scopeLabels[scope]), { ownership: { playerIds: [1], scope, captainMode: currentCaptain } }, teams.filter(team => (scope === 'ANY' || team.scope === scope) && (currentCaptain === 'ANY' || team.captain === currentCaptain)).map(team => team.name))
+                            currentScope = scope
+                        }
+                        if (captainMode === currentCaptain) continue
+                        await apply(() => choose(labels.captaincyFilter, captainLabels[captainMode]), { ownership: { playerIds: [1], scope, captainMode } }, teams.filter(team => (scope === 'ANY' || team.scope === scope) && (captainMode === 'ANY' || team.captain === captainMode)).map(team => team.name))
+                        currentCaptain = captainMode
+                    }
+                }
+                await apply(() => page.getByRole('button', { name: labels.removePlayer.replace('{name}', 'Saka'), exact: true }).click(), { ownership: null }, allNames)
+                await expect(page.getByRole('combobox', { name: labels.ownershipScope, exact: true })).toBeDisabled()
+                for (const scope of ['ANY', 'STARTER', 'BENCH'] as const) {
+                    for (const exactCount of [1, 2, 3]) {
+                        await choose(labels.selectTeamAria, 'Arsenal')
+                        await choose(labels.minimumPlayers, String(exactCount))
+                        await choose(labels.teamScope, scopeLabels[scope])
+                        await apply(() => page.getByRole('button', { name: labels.addTeam, exact: true }).click(), { ownership: null, teamCountRules: [{ teamId: 1, exactCount, scope }] }, teams.filter(team => team.counts[scope] === exactCount).map(team => team.name))
+                        await apply(() => page.getByRole('button', { name: labels.removeTeamItem.replace('{team}', 'Arsenal'), exact: true }).click(), { teamCountRules: [] }, allNames)
+                    }
+                }
+                await testInfo.attach('J06-filter-options', { contentType: 'application/json', body: JSON.stringify({ locale, width: catalogWidth, observations, scope: 'Web parameter forwarding and rendering of controlled three-team results; not backend filtering proof', ownershipCombinations: 9, teamCountCombinations: 9, wholeVariantComplete: false, readyMs: null }) })
+                return
+            }
 			if (recoveryMode === 'live-journey-focus') {
 				const zh = locale === 'zh-CN'
 				if (catalogWidth === 390) await page.getByRole('button', { name: zh ? '更多筛选' : 'More filters', exact: true }).click()
@@ -2142,6 +2657,28 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(compareOpener).toBeFocused()
 				await expect.poll(() => page.evaluate(() => ({ overflow: document.body.style.overflow, lock: document.body.getAttribute('data-scroll-locked') }))).toEqual(initialScrollLock)
 				await page.getByRole('button', { name: locale === 'zh-CN' ? '取消' : 'Cancel', exact: true }).click()
+				await expect(page.getByRole('checkbox').filter({ visible: true })).toHaveCount(0)
+				await expect(compareOpener).toHaveCount(0)
+				await expect(page.getByRole('button', { name: locale === 'zh-CN' ? '对比' : 'Compare', exact: true })).toBeEnabled()
+				await expect(team).toBeVisible()
+				await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=4`)
+				await expect(page.getByRole('dialog')).toHaveCount(0)
+				await expect.poll(() => page.evaluate(() => ({ overflow: document.body.style.overflow, lock: document.body.getAttribute('data-scroll-locked') }))).toEqual(initialScrollLock)
+				// J07.08–11 must remain contiguous: reload must not mask comparison state.
+				const cancelledBoardUrl = page.url()
+				await team.click()
+				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/15702` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+				await expect(page.locator('[data-live-entry="15702"][data-live-gw="4"][data-selected-gw="4"]')).toHaveCount(1)
+				const cancelledTeamPitch = page.getByRole('region', { name: locale === 'zh-CN' ? /阵型/ : /formation/ })
+				await expect(cancelledTeamPitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+				await expect(page.getByRole('dialog')).toHaveCount(0)
+				await page.goBack()
+				await expect(page).toHaveURL(cancelledBoardUrl)
+				await expect(page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+				await expect(team).toBeVisible()
+				await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=4`)
+				await expect(page.getByRole('dialog')).toHaveCount(0)
+				await expect.poll(() => page.evaluate(() => ({ overflow: document.body.style.overflow, lock: document.body.getAttribute('data-scroll-locked') }))).toEqual(initialScrollLock)
 			}
 			const gameweekNavigations: string[] = []
 			const recordGameweekNavigation = (request: import('@playwright/test').Request) => {
@@ -2175,11 +2712,15 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(team).toHaveAttribute('href', `${prefix}/live/points/15702?tournamentId=6&gw=4`)
 			if (formalJourney) expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(journeyTimezone)
 			const originalBoardUrl = page.url()
+			const firstReady = page.locator('[data-live-points-ready="true"][data-live-entry="15702"][data-live-gw="4"]')
 			await team.click()
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/15702` && url.searchParams.get('gw') === '4' && url.searchParams.get('tournamentId') === '6')
 			const pitch = page.getByRole('region', { name: locale === 'zh-CN' ? /阵型/ : /formation/ })
 			await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
 			if (formalJourney) {
+				await expect(firstReady).toHaveCount(1)
+				await expect(firstReady).toHaveAttribute('data-selected-gw', '4')
+				await expect(firstReady).toHaveAttribute('data-live-revision', journeyScoreRevision!)
 				await expect(pitch.getByText(locale === 'zh-CN' ? '得分' : 'GW PTS', { exact: true }).locator('..')).toContainText(String(squadPoints))
 				const captain = pitch.getByRole('button', { name: locale === 'zh-CN' ? '查看 Player 1 的详情' : 'View details for Player 1', exact: true })
 				await expect(captain.getByRole('img', { name: locale === 'zh-CN' ? '队长' : 'Captain', exact: true })).toBeVisible()
@@ -2201,8 +2742,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			for (const playerId of [1, benchPlayerId]) {
 				const opener = pitch.getByRole('button', { name: locale === 'zh-CN' ? `查看 Player ${playerId} 的详情` : `View details for Player ${playerId}`, exact: true })
-				// Model browsers where pointer activation does not focus the button.
-				await opener.evaluate(element => element.addEventListener('mousedown', event => event.preventDefault(), { once: true }))
+				// Exercise the unmodified pointer path in this continuous journey.
 				await opener.click()
 				const dialog = page.getByRole('dialog')
 				await expect(dialog.getByRole('heading', { name: `Player ${playerId}`, exact: true })).toBeVisible()
@@ -2241,7 +2781,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			const originalTeamUrl = page.url()
 			await page.goBack()
 			await expect(page).toHaveURL(originalBoardUrl)
-			const restoredBoard = page.locator('[data-competition-perf-ready="detail"]')
+			const restoredBoard = page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')
 			await expect(restoredBoard).toHaveCount(1)
 			await expect(restoredBoard).toHaveAttribute('data-competition-tournament-id', '6')
 			await expect(restoredBoard).toHaveAttribute('data-competition-gameweek', '4')
@@ -2251,14 +2791,26 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await expect(page.getByRole('dialog')).toHaveCount(0)
 			await page.goForward()
 			await expect(page).toHaveURL(originalTeamUrl)
+			if (formalJourney) {
+				await expect(firstReady).toHaveCount(1)
+				await expect(firstReady).toHaveAttribute('data-selected-gw', '4')
+				await expect(firstReady).toHaveAttribute('data-live-revision', journeyScoreRevision!)
+			}
 			await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
 			await page.getByRole('link', { name: locale === 'zh-CN' ? '返回赛事' : 'Back to competition', exact: true }).click()
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			await expect(restoredBoard).toHaveCount(1)
 			await expect(team).toBeVisible()
 			await page.goBack()
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/15702` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+			if (formalJourney) {
+				await expect(firstReady).toHaveCount(1)
+				await expect(firstReady).toHaveAttribute('data-selected-gw', '4')
+				await expect(firstReady).toHaveAttribute('data-live-revision', journeyScoreRevision!)
+			}
 			await expect(pitch.getByRole('button', { name: locale === 'zh-CN' ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
 			await page.goForward()
+			await expect(restoredBoard).toHaveCount(1)
 			await expect(team).toBeVisible()
 			if (formalJourney) {
 				const secondTeam = page.getByRole('link', { name: /Second Journey United/ }).filter({ visible: true })
@@ -2268,17 +2820,33 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/points/6733550` && url.searchParams.get('gw') === '4' && url.searchParams.get('tournamentId') === '6')
 				const secondReady = page.locator('[data-live-points-ready="true"][data-live-entry="6733550"][data-live-gw="4"]')
 				await expect(secondReady).toHaveCount(1)
+				await expect(secondReady).toHaveAttribute('data-selected-gw', '4')
+				await expect(secondReady).toHaveAttribute('data-live-revision', journeyScoreRevision!)
 				await expect(pitch.getByRole('button', { name: /Second Player/ })).toHaveCount(15)
-				const secondPlayer = pitch.getByRole('button', { name: locale === 'zh-CN' ? '查看 Second Player 1 的详情' : 'View details for Second Player 1', exact: true })
-				await secondPlayer.click()
-				await expect(page.getByRole('dialog').getByRole('heading', { name: 'Second Player 1', exact: true })).toBeVisible()
-				await expect(page.getByRole('dialog').getByRole('heading', { name: 'Player 1', exact: true })).toHaveCount(0)
-				await page.getByRole('dialog').press('Escape')
-				await expect(secondPlayer).toBeFocused()
+				for (const playerId of [1, benchPlayerId]) {
+                    const secondPlayer = pitch.getByRole('button', { name: locale === 'zh-CN' ? `查看 Second Player ${playerId} 的详情` : `View details for Second Player ${playerId}`, exact: true })
+                    await secondPlayer.click()
+                    const dialog = page.getByRole('dialog')
+                    await expect(dialog.getByRole('heading', { name: `Second Player ${playerId}`, exact: true })).toBeVisible()
+                    await expect(dialog.getByRole('heading', { name: `Player ${playerId}`, exact: true })).toHaveCount(0)
+                    await expect(dialog.getByText(locale === 'zh-CN' ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+                    const items = dialog.getByRole('listitem')
+                    await expect(items).toHaveCount(playerId === 1 ? 4 : 2)
+                    const values = (await items.locator(':scope > span:last-child').allTextContents()).map(value => Number(value.replace(/\s/g, '')))
+                    expect(values).toEqual(playerId === 1 ? [plannedState === 'DGW' ? 2 : 1, 6, -1, captainPoints] : [1, 1])
+                    expect(values.slice(0, -1).reduce((sum, value) => sum + value, 0)).toBe(values.at(-1))
+                    await expect(dialog.getByText(locale === 'zh-CN' ? '估算' : 'Estimated', { exact: true })).toHaveCount(0)
+                    await dialog.press('Escape')
+                    await expect(dialog).toHaveCount(0)
+                    await expect(secondPlayer).toBeFocused()
+                }
 				await page.goBack()
+				await expect(restoredBoard).toHaveCount(1)
 				await expect(secondTeam).toBeVisible()
 				await page.goForward()
 				await expect(secondReady).toHaveCount(1)
+				await expect(secondReady).toHaveAttribute('data-selected-gw', '4')
+				await expect(secondReady).toHaveAttribute('data-live-revision', journeyScoreRevision!)
 				await expect(pitch.getByRole('button', { name: /Second Player/ })).toHaveCount(15)
 				expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(journeyTheme)
 				if (plannedStateJourney) {
@@ -2286,6 +2854,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang }))).toEqual({ width: 390, language: 'zh-CN' })
 				}
 				await testInfo.attach('J06-J11-formal-journey-binding', { contentType: 'application/json', body: JSON.stringify({
+					recoveryMode, scoreRevision: journeyScoreRevision,
+					tournamentSelectionSequence: [6, 7, 6],
 					variantIds: plannedStateJourney ? [`J06.state.${plannedState === 'ready' ? '01' : plannedState === 'stale' ? '02' : plannedState === 'DGW' ? '03' : '04'}`] : ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
 					locale, viewport: { width: catalogWidth, height: 900 }, theme: journeyTheme, timezone: journeyTimezone, scenario: plannedState ?? 'baseline',
 					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, benchPlayerId], searchAssertions: ['hit', 'empty', 'clear-restores-both'],
@@ -3085,6 +3655,7 @@ for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
 			const prefix = zh ? '/zh-CN' : ''
 			const session = await createSession({ entryId: 15702 })
 			const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+			const untouched = profile !== 'session-expired' ? await createSession({ entryId: 15702 }) : null
 			const otherSessionId = `j14-other-${randomUUID()}`
 			const writes: string[] = []
 			page.on('request', request => {
@@ -3096,7 +3667,12 @@ for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
 				await sql`INSERT INTO bauth.session (id, expires_at, token, user_id, user_agent) VALUES (${otherSessionId}, ${new Date(Date.now() + 3600000)}, ${randomUUID()}, ${session.userId}, 'Mozilla/5.0 (Windows NT 10.0) Firefox/130.0')`
 				await addSessionCookie(page, session.cookie)
 				await page.setViewportSize({ width, height: 900 })
-				await page.goto(`${prefix}/explore/gameweek`)
+				if (profile !== 'session-expired') {
+     const [before] = await sql`SELECT fpl_team_name, fpl_manager_name, fpl_identity_refreshed_at FROM bauth."user" WHERE id=${session.userId}`
+     expect(before).toEqual({ fpl_team_name: 'E2E United', fpl_manager_name: 'Test Manager', fpl_identity_refreshed_at: null })
+     expect(await sql`SELECT team_name FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId}`).toHaveLength(0)
+    }
+    await page.goto(`${prefix}/explore/gameweek`)
 				const nav = page.getByRole('navigation').first()
 				const profileHref = `${prefix}/profile`
 				if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
@@ -3142,7 +3718,17 @@ for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
 				await page.unroute('**/*')
 				const [identity] = await sql`SELECT fpl_team_name, fpl_manager_name FROM bauth."user" WHERE id=${session.userId}`
 				expect(identity).toEqual({ fpl_team_name: 'E2E Synced United', fpl_manager_name: 'Fixture Manager' })
-				await main.locator(`a[href="${prefix}/profile/sessions"]`).click()
+				if (profile !== 'session-expired') {
+     const history = await sql`SELECT entry_id, team_name FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId} ORDER BY team_name`
+     expect(history).toEqual([{ entry_id: session.entryId, team_name: 'E2E Synced United' }, { entry_id: session.entryId, team_name: 'E2E United' }])
+     const [after] = await sql`SELECT fpl_entry_id, fpl_identity_refreshed_at FROM bauth."user" WHERE id=${session.userId}`
+     expect(after.fpl_entry_id).toBe(session.entryId)
+     expect(after.fpl_identity_refreshed_at).not.toBeNull()
+     const [other] = await sql`SELECT fpl_team_name, fpl_manager_name, fpl_identity_refreshed_at FROM bauth."user" WHERE id=${untouched!.userId}`
+     expect(other).toEqual({ fpl_team_name: 'E2E United', fpl_manager_name: 'Test Manager', fpl_identity_refreshed_at: null })
+     expect(await sql`SELECT team_name FROM bauth.fpl_entry_name_history WHERE user_id=${untouched!.userId}`).toHaveLength(0)
+    }
+    await main.locator(`a[href="${prefix}/profile/sessions"]`).click()
 				await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile/sessions`)
 				await expect(main.getByText(zh ? '当前设备' : 'This device', { exact: true })).toBeVisible()
 				await expect(main.getByText(zh ? '当前设备' : 'This device', { exact: true })).toHaveCount(1)
@@ -3177,6 +3763,7 @@ for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
 				await sql`DELETE FROM bauth.fpl_entry_name_history WHERE user_id=${session.userId}`
 				await sql.end()
 				await session.cleanup()
+    await untouched?.cleanup()
 			}
 		})
  })
@@ -3304,7 +3891,75 @@ test.describe('J19 planned UTC dark mobile states', () => {
 
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
-  test(`J16 unbound navigation leaves identity unchanged ${locale} ${width}px`, async ({ page }) => {
+  test.describe(`S08 unbound baseline ${locale} ${width}`, () => {
+   test.use({ locale, viewport: { width, height: 900 }, colorScheme: 'light', timezoneId: 'Australia/Perth' })
+  test(`J16 unbound navigation leaves identity unchanged ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated unbound identity')
+   const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
+   await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+   const session = await createSession()
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const mutations: string[] = []
+   page.on('request', request => {
+    if (request.headers()['next-action'] || (request.method() !== 'GET' && /\/api\/(auth|fpl)/.test(new URL(request.url()).pathname))) mutations.push(new URL(request.url()).pathname)
+   })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await addSessionCookie(page, session.cookie)
+    await page.goto(prefix || '/')
+    const main = page.locator('#main-content')
+    await expect(main.getByText(locale === 'zh-CN' ? '绑定你的 FPL 球队' : 'Link your FPL team', { exact: true })).toBeVisible()
+    const clickNav = async (href: string) => {
+     const nav = page.getByRole('navigation').first()
+     if (width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+     else await nav.locator('details').filter({ has: page.locator(`a[href="${href}"]`) }).locator('summary').filter({ visible: true }).click()
+     const link = nav.locator(`a[href="${href}"]`).filter({ visible: true })
+     await expect(link).toHaveCount(1)
+     await link.click()
+    }
+    await clickNav(`${prefix}/my-fpl/team`)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/onboarding/bind-entry`)
+    const input = main.locator('input[name="entryId"]')
+    await expect(input).toBeVisible()
+    await expect(main.locator('[data-manager-entry]')).toHaveCount(0)
+    await expect(main.getByText('E2E United', { exact: true })).toHaveCount(0)
+    await expect(main.getByText('Test Manager', { exact: true })).toHaveCount(0)
+    await input.fill('-1')
+    await expect(input).toHaveValue('-1')
+    await input.clear()
+    await expect(input).toHaveValue('')
+    await expect(main.getByText(locale === 'zh-CN' ? '如何查找参赛 ID' : 'How to find your entry ID', { exact: true })).toBeVisible()
+    await expect(main.locator('a[href="https://fantasy.premierleague.com/en/my-team"]')).toHaveAttribute('target', '_blank')
+    await expect(main.getByRole('dialog')).toHaveCount(0)
+    await page.goBack()
+    await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
+    await clickNav(`${prefix}/profile`)
+    await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
+    await expect(main.getByRole('heading', { name: locale === 'zh-CN' ? '我的资料' : 'My Profile', exact: true })).toBeVisible()
+    const [identity] = await sql`SELECT name, email, fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+    expect(identity).toMatchObject({ fpl_entry_id: null, fpl_entry_verified_at: null })
+    await expect(main.getByText(identity.name, { exact: true })).toBeVisible()
+    await expect(main.getByText(identity.email, { exact: true })).toHaveCount(2)
+    await expect(main.locator('[data-manager-entry]')).toHaveCount(0)
+    await expect(main.getByText('E2E United', { exact: true })).toHaveCount(0)
+    expect(mutations).toEqual([])
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+    await expect(page.locator('html')).toHaveClass(/light/)
+    expect(page.viewportSize()?.width).toBe(width)
+    await testInfo.attach('S08-unbound-baseline-context', { contentType: 'application/json', body: JSON.stringify({ parentVariantId: `S08.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, journeyVariantId: `J16.U.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, identity: 'U', locale, width, theme: 'system', timezone: 'Australia/Perth', owner: 'unbound-guidance', identityUnchanged: true, mutations, wholeVariantComplete: false, readyMs: null }) })
+   } finally { await sql.end(); await session.cleanup() }
+  })
+  })
+if (locale === 'zh-CN' && width === 390) test.describe('S08 required display context', () => {
+test.use({ colorScheme: 'dark', timezoneId: 'UTC', locale, viewport: { width, height: 900 } })
+test.beforeEach(async ({ page }, testInfo) => {
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  expect(await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(true)
+  expect(page.viewportSize()?.width).toBe(width)
+  await testInfo.attach('S08-context', { contentType: 'application/json', body: JSON.stringify({ locale, width, theme: 'dark', timezone: 'UTC', environment: 'local-isolated', readyMs: null }) })
+ })
+test('S08.directed.02 exact context', async ({ page }) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses isolated unbound identity')
    const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
    const session = await createSession()
@@ -3331,6 +3986,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(page).toHaveURL(url => url.pathname === `${prefix}/onboarding/bind-entry`)
     const input = main.locator('input[name="entryId"]')
     await expect(input).toBeVisible()
+    await expect(main.locator('[data-manager-entry]')).toHaveCount(0)
+    await expect(main.getByText('E2E United', { exact: true })).toHaveCount(0)
+    await expect(main.getByText('Test Manager', { exact: true })).toHaveCount(0)
     await input.fill('-1')
     await expect(input).toHaveValue('-1')
     await input.clear()
@@ -3343,11 +4001,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await clickNav(`${prefix}/profile`)
     await expect(page).toHaveURL(url => url.pathname === `${prefix}/profile`)
     await expect(main.getByRole('heading', { name: locale === 'zh-CN' ? '我的资料' : 'My Profile', exact: true })).toBeVisible()
-    const [identity] = await sql`SELECT fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
-    expect(identity).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
+    const [identity] = await sql`SELECT name, email, fpl_entry_id, fpl_entry_verified_at FROM bauth."user" WHERE id=${session.userId}`
+    expect(identity).toMatchObject({ fpl_entry_id: null, fpl_entry_verified_at: null })
+    await expect(main.getByText(identity.name, { exact: true })).toBeVisible()
+    await expect(main.getByText(identity.email, { exact: true })).toHaveCount(2)
+    await expect(main.locator('[data-manager-entry]')).toHaveCount(0)
+    await expect(main.getByText('E2E United', { exact: true })).toHaveCount(0)
     expect(mutations).toEqual([])
    } finally { await sql.end(); await session.cleanup() }
   })
+})
  }
 }
 
@@ -3430,6 +4093,7 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
    const dialog = page.getByRole('dialog')
    await expect(dialog).toBeVisible()
    await expect(dialog.getByRole('heading')).toContainText(chip)
+   await expect(dialog).toHaveAccessibleDescription(zh ? '2 次转会' : '2 transfers')
    const eventId = index + 2
    await expect(dialog.locator('li')).toHaveCount(2)
    for (const move of [1, 2]) {
@@ -3486,6 +4150,26 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
   await expect(page.locator('[data-manager-ready]').getByRole('alert').filter({ hasText: /200[123]|2026/ })).toHaveCount(0)
+  if (planned) {
+   await page.getByRole('button', { name: '关闭第 1 轮', exact: true }).click()
+   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
+   const lateResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/graphql' && response.request().postDataJSON()?.query?.includes('GetMyFplManagerGameweek') && response.request().postDataJSON()?.variables?.eventId === 1)
+   releaseHistory!()
+   const response = await lateResponse
+   expect(response.ok()).toBe(true)
+   await response.finished()
+   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '3')
+   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
+   await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+   await expect(page.getByText('Review Player 1 GW1', { exact: true }).filter({ visible: true })).toHaveCount(0)
+   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
+   await season.click()
+   await history.getByRole('button', { name: '打开第 1 轮', exact: true }).click()
+   await testInfo.attach('TEAM01-closed-request-completion', { contentType: 'application/json', body: JSON.stringify({ closedGw: 1, retainedGw: 3, retainedRevision: '103', lateResponseCompleted: true, readyMs: null, wholeVariantComplete: false }) })
+  }
   releaseHistory!()
   await expect.poll(() => heldChunks.length).toBeGreaterThan(0)
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -3548,6 +4232,35 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(planned ? 'dark' : 'system')
   if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
   else await expect(page.locator('html')).not.toHaveClass(/dark/)
+  if (planned) {
+   const completedHistoryReads = async () => {
+    const ledger = await (await fetch(fixture)).json() as { requests: { operation: string }[] }
+    return ledger.requests.filter(request => request.operation === 'GetMyFplManagerGameweek').length
+   }
+   const readsBeforeCycles = await completedHistoryReads()
+   const browserReads: number[] = []
+   const trackHistory = (request: import('@playwright/test').Request) => {
+    if (new URL(request.url()).pathname === '/api/graphql' && request.postDataJSON()?.query?.includes('GetMyFplManagerGameweek')) browserReads.push(request.postDataJSON().variables.eventId)
+   }
+   page.on('request', trackHistory)
+   for (let cycle = 0; cycle < 5; cycle++) {
+    await season.click()
+    await history.getByRole('button', { name: '打开第 1 轮', exact: true }).click()
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '101')
+    await expect(page.getByText('Review Player 1 GW1', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+    await page.getByRole('button', { name: '关闭第 1 轮', exact: true }).click()
+    await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '3')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
+    expect(await completedHistoryReads()).toBe(readsBeforeCycles)
+    expect(browserReads).toEqual([])
+   }
+   page.off('request', trackHistory)
+   await testInfo.attach('TEAM01-cached-reopen-cycles', { contentType: 'application/json', body: JSON.stringify({ variantIds: ['TEAM01.state.01', 'TEAM01.state.02'], cycles: 5, browserReads, readsBeforeCycles, readsAfterCycles: await completedHistoryReads(), scope: 'Completed-history cache reuse and selected revision after actual close/reopen. Pending races and eight-tab eviction remain separate.', readyMs: null, wholeVariantComplete: false }) })
+  }
   await testInfo.attach('J10-planned-baseline', { body: JSON.stringify({
    variantId: planned ? 'TEAM01.state.02' : `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
    overlappingVariantIds: planned ? ['TEAM01.state.01'] : [],
@@ -4056,6 +4769,69 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await session.cleanup()
    }
   })
+if (locale === 'zh-CN' && width === 390) test.describe('S08 required display context', () => {
+test.use({ colorScheme: 'dark', timezoneId: 'UTC', locale, viewport: { width, height: 900 } })
+test.beforeEach(async ({ page }, testInfo) => {
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  expect(await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(true)
+  expect(page.viewportSize()?.width).toBe(width)
+  await testInfo.attach('S08-context', { contentType: 'application/json', body: JSON.stringify({ locale, width, theme: 'dark', timezone: 'UTC', environment: 'local-isolated', readyMs: null }) })
+ })
+test('S08.directed.07 exact context', async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fresh-session boundary')
+   const prefix = '/zh-CN'
+   const zh = locale === 'zh-CN'
+   await page.setViewportSize({ width, height: 900 })
+   const session = await createSession({ entryId: 909090 })
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method())
+     await route.fulfill({ status: 409, body: 'Unexpected mutation blocked' })
+    } else await route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: 909090 }, data: { entryTournaments: [managedTournament] } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${prefix}/competitions/browse`)
+    await page.getByRole('button', { name: zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup', exact: true }).click()
+    const manage = page.getByRole('menuitem', { name: zh ? '管理赛事' : 'Manage tournament', exact: true })
+    await expect(manage).toBeVisible()
+    await sql`UPDATE bauth.session SET expires_at = ${new Date(Date.now() - 60000)} WHERE user_id = ${session.userId}`
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ reset: true, rules: [] }) })).ok).toBe(true)
+    await manage.click()
+    const assertLogin = async () => {
+     await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === `${prefix}/competitions/77/manage`)
+     await expect(page.getByLabel(zh ? zhMessages.Auth.email : enMessages.Auth.email, { exact: true })).toBeEnabled()
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+     await expect(page.locator('#tournament-name')).toHaveCount(0)
+     await expect(page.getByRole('button', { name: zh ? '删除赛事' : 'Delete tournament', exact: true })).toHaveCount(0)
+    }
+    await assertLogin()
+    await page.reload()
+    await assertLogin()
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.filter((r: { operation: string }) => r.operation === 'GetManagedTournament')).toEqual([])
+    expect(mutations).toEqual([])
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    await testInfo.attach('manage-expired-baseline', { contentType: 'application/json', body: JSON.stringify({
+     variantIds: ['S08.directed.07'],
+     identity: 'X isolated expired database session', locale, viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC',
+     actualClick: true, loginNext: `${prefix}/competitions/77/manage`, managementReadsAfterExpiry: 0, mutations,
+     performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false
+    }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await sql.end()
+    await session.cleanup()
+   }
+  })
+})
  }
 }
 })
@@ -4292,11 +5068,14 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
  }
 }
 
+test.describe('AUTH04 explicit baseline context', () => {
+ test.use({ timezoneId: 'Australia/Perth' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
   for (const persona of ['anonymous', 'unbound', 'bound'] as const) {
-   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }) => {
+   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated identity fixtures')
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
     const prefix = locale === 'en' ? '' : '/zh-CN'
     const session = persona === 'anonymous' ? null : await createSession(persona === 'bound' ? { entryId: 909090 } : {})
     try {
@@ -4344,11 +5123,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
        expect(row).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
       } finally { await sql.end() }
      }
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', language: locale })
+    await testInfo.attach('AUTH04-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `AUTH04.${persona === 'anonymous' ? 'A' : persona === 'unbound' ? 'U' : 'B'}.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, persona, locale, width, timezone: 'Australia/Perth', theme: 'system', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Identity redirect or unbound validation, no real binding' }) })
     } finally { if (session) await session.cleanup() }
    })
   }
  }
 }
+
+})
 
 for (const profile of [
  { name: 'baseline', timezoneId: 'Australia/Perth', theme: 'system' },
@@ -4996,6 +5779,7 @@ for (const { locale, width, planned } of [
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const timeline = Array.from({ length: 25 }, (_, index) => ({
     ...managerReview.timeline[0], eventId: index + 1, eventChip: 'NONE',
+    eventTransfersCost: planned && index === 23 ? 4 : 0,
     eventTransfers: index === 24 ? 0 : planned && index === 23 ? 8 : 1, overallPoints: (index + 1) * 60
    }))
    const review = {
@@ -5005,7 +5789,7 @@ for (const { locale, width, planned } of [
     currentGameweek: { ...managerGameweek(3), eventId: 25, entry: { ...managerReview.entry!, id: session.entryId! }, snapshotMeta: managerSnapshot(25), result: { ...managerGameweek(3).result!, ...timeline[24] } },
     context: { ...managerReview.context, currentEventId: 25, nextEventId: 26, latestFinalizedEventId: 25, latestPublishedEventId: 25 },
     transfers: timeline.map(row => ({
-     ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers,
+     ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers, eventTransfersCost: row.eventTransfersCost,
      transfers: Array.from({ length: row.eventTransfers }, (_, move) => ({ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}-${move + 1}`, elementOutWebName: `Transfer Out GW${row.eventId}-${move + 1}`, evaluatedThroughEventId: row.eventId }))
     }))
    }
@@ -5039,6 +5823,7 @@ for (const { locale, width, planned } of [
       await opener.click()
       const sheet = page.getByRole('dialog')
       await expect(sheet.getByRole('heading', { name: 'GW24 转会明细', exact: true })).toBeVisible()
+      await expect(sheet).toHaveAccessibleDescription('8 次转会−4')
       await expect(sheet.locator('li')).toHaveCount(8)
       for (let move = 1; move <= 8; move += 1) {
        await expect(sheet.getByText(`Transfer In GW24-${move}`, { exact: true })).toBeVisible()
@@ -5076,10 +5861,10 @@ for (const { locale, width, planned } of [
  })
 }
 
-for (const profile of ['baseline', 'planned', 'group'] as const) {
+for (const profile of ['baseline', 'planned', 'group', 'phase-pages', 'phase-race', 'phase-error'] as const) {
  test.describe(`J11 format ${profile}`, () => {
  test.use({ timezoneId: profile === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: profile === 'baseline' ? 'light' : 'dark', viewport: { width: profile === 'baseline' ? 1440 : 390, height: 900 } })
-for (const format of (profile === 'group' ? ['H2H'] : ['H2H', 'KNOCKOUT']) as Array<'H2H' | 'KNOCKOUT'>) {
+for (const format of (profile === 'group' || (profile === 'phase-pages' || profile === 'phase-race' || profile === 'phase-error') ? ['H2H'] : ['H2H', 'KNOCKOUT']) as Array<'H2H' | 'KNOCKOUT'>) {
  test(`SSR remediation review readiness waits for required ${format} sections`, async ({ page }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated fixture controls only')
   const planned = profile !== 'baseline'
@@ -5109,14 +5894,41 @@ for (const format of (profile === 'group' ? ['H2H'] : ['H2H', 'KNOCKOUT']) as Ar
    { operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: format === 'H2H' ? { format, h2h } : { format, knockout } } } },
    ...sections.map(section => ({ operation: 'GetMyTournamentSeasonReviewSection', variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: 78, throughEventId: 4, section, points: null, h2h: format === 'H2H' ? { ...h2h, matches: section === 'H2H_FIXTURES' ? h2h.matches : [], standings: section === 'H2H_STANDINGS' ? h2h.standings : [] } : null, knockout: format === 'KNOCKOUT' ? knockout : null, pageInfo } } }))
   ]
+  const secondPhase = { ...phase, phaseId: 'second-phase', revision: '10', semanticSha256: 'c'.repeat(64), startEventId: 1, endEventId: 2 }
+  if ((profile === 'phase-pages' || profile === 'phase-race' || profile === 'phase-error')) {
+   const seasonRule = rules.find(rule => rule.operation === 'GetMyTournamentSeasonReview')!
+   Object.assign(seasonRule.data, { myTournamentSeasonReview: { state: 'READY', tournamentId: 78, throughEventId: 4, latestFinalizedEventId: 4, phases: [{ ...phase, startEventId: 3 }, secondPhase] } })
+  }
+  const sectionReads: Array<Record<string, unknown>> = []
   let release!: () => void
   const gate = new Promise<void>(resolve => { release = resolve })
+  let releasePage!: () => void
+  const pageGate = new Promise<void>(resolve => { releasePage = resolve })
+  let heldPage = 0
   let heldRequests = 0
   try {
    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
    await addSessionCookie(page, session.cookie)
    await page.route('**/api/graphql', async route => {
     const body = route.request().postDataJSON()
+    if ((profile === 'phase-pages' || profile === 'phase-race' || profile === 'phase-error') && body.query?.includes('GetMyTournamentSeasonReviewSection')) {
+     const v = body.variables
+     sectionReads.push(v)
+     const chosen = v.phaseId === secondPhase.phaseId ? secondPhase : phase
+     expect(v).toMatchObject({ tournamentId: 78, throughEventId: 4, phaseId: chosen.phaseId, revision: chosen.revision, semanticSha256: chosen.semanticSha256 })
+     const standings = v.section === 'H2H_STANDINGS'
+     const pageTwo = Boolean(v.after)
+     if (pageTwo) expect(v.after).toBe('standings-page-1')
+     if ((profile === 'phase-race' || profile === 'phase-error') && pageTwo) { heldPage++; await pageGate }
+     if (profile === 'phase-error' && pageTwo) {
+      await route.fulfill({ status: 503, json: { errors: [{ message: 'Isolated old phase pagination failure' }] } })
+      return
+     }
+     const row = { ...standing, entryId: chosen === secondPhase ? 789 : pageTwo ? 456 : 123, entryName: chosen === secondPhase ? 'Second Phase Only' : pageTwo ? 'Appended Player' : 'Readiness Home', rank: pageTwo ? 2 : 1 }
+     if (v.section === sections.at(-1) && chosen === phase) { heldRequests++; await gate }
+     await route.fulfill({ json: { data: { myTournamentSeasonReviewSection: { ...chosen, tournamentId: 78, throughEventId: 4, section: v.section, points: null, knockout: null, h2h: { ...h2h, standings: standings ? [row] : [], matches: standings ? [] : h2h.matches, hasNextPage: standings && chosen === phase && !pageTwo, nextCursor: standings && chosen === phase && !pageTwo ? 'standings-page-1' : null }, pageInfo: { hasNextPage: standings && chosen === phase && !pageTwo, endCursor: standings && chosen === phase && !pageTwo ? 'standings-page-1' : null } } } } })
+     return
+    }
     if (body.query?.includes('GetMyTournamentSeasonReviewSection') && body.variables.section === sections.at(-1)) { heldRequests++; await gate }
     await route.continue()
    })
@@ -5135,6 +5947,43 @@ for (const format of (profile === 'group' ? ['H2H'] : ['H2H', 'KNOCKOUT']) as Ar
    await expect(page.getByText('Readiness Away', { exact: true }).first()).toBeVisible()
    if (format === 'H2H') await expect(page.getByRole('cell', { name: 'Readiness Home', exact: true })).toBeVisible()
    else await expect(page.getByText('Readiness Final', { exact: true })).toBeVisible()
+   if ((profile === 'phase-pages' || profile === 'phase-race' || profile === 'phase-error')) {
+    const more = page.getByRole('button', { name: zhMessages.TournamentStats.reviewLoadMore, exact: true })
+    await more.click()
+    if (profile === 'phase-race' || profile === 'phase-error') await expect.poll(() => heldPage).toBe(1)
+    else {
+    await expect(page.getByRole('cell', { name: 'Appended Player', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'Readiness Home', exact: true })).toHaveCount(1)
+    await expect(more).toHaveCount(0)
+    }
+    expect(sectionReads.filter(v => v.after)).toHaveLength(1)
+    const timeline = page.getByRole('tablist', { name: zhMessages.TournamentStats.reviewPhaseTimeline, exact: true })
+    await timeline.getByRole('tab').filter({ hasText: 'GW1–2' }).click()
+    await expect(ready).toHaveAttribute('data-review-ready', 'true')
+    await expect(ready).toHaveAttribute('data-review-phase', secondPhase.phaseId)
+    await expect(ready).toHaveAttribute('data-review-hash', secondPhase.semanticSha256)
+    await expect(page.getByRole('cell', { name: 'Second Phase Only', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'Appended Player', exact: true })).toHaveCount(0)
+    expect(sectionReads.filter(v => v.phaseId === secondPhase.phaseId)).toHaveLength(2)
+    if (profile === 'phase-race' || profile === 'phase-error') {
+     const completed = page.waitForResponse(response => {
+      if (!response.url().endsWith('/api/graphql')) return false
+      return response.request().postDataJSON()?.variables?.after === 'standings-page-1'
+     })
+     releasePage()
+     const late = await completed
+     expect(late.status()).toBe(profile === 'phase-error' ? 503 : 200)
+     expect(await late.finished()).toBeNull()
+     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+     await expect(ready).toHaveAttribute('data-review-ready', 'true')
+     await expect(ready).toHaveAttribute('data-review-phase', secondPhase.phaseId)
+     await expect(ready).toHaveAttribute('data-review-hash', secondPhase.semanticSha256)
+     await expect(page.getByRole('cell', { name: 'Second Phase Only', exact: true })).toBeVisible()
+     await expect(page.getByRole('cell', { name: 'Appended Player', exact: true })).toHaveCount(0)
+     await expect(more).toHaveCount(0)
+     await expect(page.getByText(zhMessages.TournamentStats.loadFailed, { exact: true })).toHaveCount(0)
+    }
+   }
    if (profile === 'group') {
     const groupRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Group Two Home', exact: true }) })
     await expect(groupRow).toHaveCount(1)
@@ -5144,10 +5993,11 @@ for (const format of (profile === 'group' ? ['H2H'] : ['H2H', 'KNOCKOUT']) as Ar
    if (planned) {
     await expect(page.locator('html')).toHaveClass(/dark/)
     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
-    await testInfo.attach('J11-format-variant', { contentType: 'application/json', body: JSON.stringify({ variantId: profile === 'group' ? 'J11.state.03' : format === 'H2H' ? 'J11.state.02' : 'J11.state.04', format, profile, locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', tournamentId: 78, eventId: 4, revision: '9', requiredSections: sections, groups: profile === 'group' ? [1, 2] : [1], scope: 'Direct GW entry and actual Season click with held required-section gate and rendered content', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
+    await testInfo.attach('J11-format-variant', { contentType: 'application/json', body: JSON.stringify({ variantId: (profile === 'phase-pages' || profile === 'phase-race' || profile === 'phase-error') ? null : profile === 'group' ? 'J11.state.03' : format === 'H2H' ? 'J11.state.02' : 'J11.state.04', format, profile, locale: 'zh-CN', viewport: page.viewportSize(), theme: 'dark', timezone: 'UTC', tournamentId: 78, eventId: 4, revision: '9', requiredSections: sections, groups: profile === 'group' ? [1, 2] : [1], scope: 'Direct GW entry and actual Season click with held required-section gate and rendered content', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }) })
    }
   } finally {
    release()
+   releasePage()
    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
    await session.cleanup()
   }
@@ -5810,8 +6660,21 @@ for (const mode of ['delayed', 'failed'] as const) {
  }
 }
 
+for (const directed of [false, true]) {
+test.describe(directed ? 'PROFILE04 directed contexts' : 'PROFILE04 existing contexts', () => {
+ if (directed) {
+  test.use({ timezoneId: 'UTC', colorScheme: 'dark' })
+  test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem('theme', 'dark')) })
+  test.afterEach(async ({ page }, testInfo) => {
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', theme: 'dark', locale: 'zh-CN' })
+   const state = testInfo.title.includes('retry recovery') ? '03' : testInfo.title.includes('terminal empty') ? '01' : '02'
+   await testInfo.attach('PROFILE04-directed-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `PROFILE04.state.${state}`, identity: 'isolated bound session', width: 390, timezone: 'UTC', theme: 'dark', locale: 'zh-CN', functionalStatus: testInfo.status === 'passed' ? 'PASS' : 'FAIL', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Existing list terminal or error-retry assertions in planned context; no revoke' }) })
+  })
+ }
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
+  if (directed && (locale !== 'zh-CN' || width !== 390)) continue
   test(`PROFILE04 session list retry recovery ${locale} ${width}`, async ({ page }, testInfo) => {
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
    const session = await createSession({ entryId: 15702 })
@@ -5856,8 +6719,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 for (const mode of ['empty', 'unauthorized', 'stale'] as const) {
+ if (directed && mode === 'stale') continue
  for (const locale of ['en', 'zh-CN'] as const) {
   for (const width of [1440, 390]) {
+  if (directed && (locale !== 'zh-CN' || width !== 390)) continue
    test(`PROFILE04 session list terminal ${mode} ${locale} ${width}`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session fixture only')
     const session = await createSession({ entryId: 15702 })
@@ -5901,6 +6766,9 @@ for (const mode of ['empty', 'unauthorized', 'stale'] as const) {
    })
   }
  }
+}
+
+})
 }
 
 test.describe('live board layout fixture', () => {
@@ -6121,7 +6989,7 @@ test.describe('GOV isolated admin REST evidence', () => {
     } finally { await session?.cleanup() }
    })
   }
-  for (const failed of planned ? [] : ['none', 'overview', 'windows', 'cases', 'large']) {
+  for (const failed of ['none', 'overview', 'windows', 'cases', 'large']) {
    test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
     const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -6208,7 +7076,12 @@ test.describe('GOV isolated admin REST evidence', () => {
        await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
       }
      }
-     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ caseId: 'R02', stepIds: ['R02.01', 'R02.02', 'R02.04', 'R02.05'], variantId: failed === 'none' ? `R02.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : null, identity: 'platform-admin', locale, width, timezone, theme, failed, backForward: failed === 'none', reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
+     if (planned) {
+      expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang }))).toEqual({ width: 390, language: 'zh-CN' })
+      await expect(page.locator('html')).toHaveClass(/dark/)
+      await testInfo.attach('GOV-directed-binding', { contentType: 'application/json', body: JSON.stringify({ variantIds: failed === 'none' ? ['GOV01.state.01'] : failed === 'large' ? ['GOV02.state.02'] : ['GOV01.state.02', 'GOV02.state.01'], failed, timezone, theme, locale, width, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false }) })
+     }
+     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ caseId: 'R02', stepIds: ['R02.01', 'R02.02', 'R02.04', 'R02.05'], variantId: failed === 'none' && !planned ? `R02.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : null, identity: 'platform-admin', locale, width, timezone, theme, failed, backForward: failed === 'none', reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
     } finally {
      try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
     }
@@ -6918,4 +7791,2011 @@ test('J10 first historical gameweek overlaps UI chunks and data', async ({ page 
   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
   await session.cleanup()
  }
+})
+
+
+test.describe('management API real handler authorization', () => {
+ for (const scenario of ['anonymous', 'unbound', 'unverified', 'expired', 'cross-site', 'forged-entry-PATCH', 'forged-role-PATCH', 'forged-entry-POST', 'forged-role-POST', 'upstream-forbidden', 'genuine-admin'] as const) {
+  test(`management API boundary ${scenario}`, async ({ request, baseURL }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_TOURNAMENT_BOUNDARY !== '1', 'Dedicated local upstream sink only')
+   const { createServer } = await import('node:http')
+   const upstream = new URL(process.env.LETLETME_DATA_URL!)
+   expect(upstream.hostname).toBe('127.0.0.1')
+   const received: Array<{ method: string; path: string; body: unknown }> = []
+   const server = createServer(async (req, res) => {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    received.push({ method: req.method!, path: req.url!, body: JSON.parse(body || '{}') })
+    if (scenario === 'upstream-forbidden' && !body.includes('Control Fixture Cup')) {
+     res.writeHead(403, { 'Content-Type': 'application/json' })
+     res.end(JSON.stringify({ error: 'internal fixture database detail', code: 'PRIVATE_OWNER_CHECK', stack: 'private-stack-fixture', ownerEntryId: 808080 }))
+     return
+    }
+    res.writeHead(501, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'Isolated sink: no business mutation implemented' }))
+   })
+   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(Number(upstream.port), '127.0.0.1', resolve) })
+   const sessions: Awaited<ReturnType<typeof createSession>>[] = []
+   const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+   const results: Array<{ method: string; status: number }> = []
+   try {
+    const session = scenario === 'anonymous' ? null : await createSession(scenario === 'unbound' ? {} : { entryId: 909090, ...(scenario === 'genuine-admin' ? { userId: 'e2e-management-platform-admin' } : {}) })
+    if (session) sessions.push(session)
+    if (scenario === 'unverified') await sql`UPDATE bauth."user" SET fpl_entry_verified_at = null WHERE id = ${session!.userId}`
+    if (scenario === 'expired') await sql`UPDATE bauth.session SET expires_at = ${new Date(Date.now() - 60000)} WHERE user_id = ${session!.userId}`
+    const forged = scenario.startsWith('forged-')
+    const methods = forged ? [scenario.endsWith('PATCH') ? 'PATCH' : 'POST'] : ['PATCH', 'POST', 'DELETE']
+    for (const method of methods) {
+     const body: Record<string, unknown> = method === 'PATCH' ? { name: 'Authorization Fixture Cup' } : { action: 'pause' }
+     if (forged) body[scenario.includes('-entry-') ? 'adminEntryId' : 'platformAdmin'] = scenario.includes('-entry-') ? 808080 : true
+     const response = await request.fetch('/api/tournaments/77', {
+      method,
+      headers: { origin: scenario === 'cross-site' ? 'https://attacker.invalid' : baseURL!, 'sec-fetch-site': scenario === 'cross-site' ? 'cross-site' : 'same-origin', ...(session ? { cookie: session.cookie } : {}) },
+      ...(method === 'DELETE' ? {} : { data: body }),
+      maxRedirects: 0
+     })
+     if (scenario === 'genuine-admin') {
+      expect(response.status()).toBe(501)
+      expect(received.at(-1)).toEqual({ method: method === 'POST' ? 'PATCH' : method, path: method === 'POST' ? '/tournaments/77/state' : '/tournaments/77', body: { ...(method === 'PATCH' ? { name: 'Authorization Fixture Cup' } : method === 'POST' ? { state: 'inactive' } : {}), adminEntryId: session!.entryId, platformAdmin: true } })
+      results.push({ method, status: response.status() })
+      expect(received).toHaveLength(results.length)
+      continue
+     }
+     const expected = forged ? 400 : ['anonymous', 'expired'].includes(scenario) ? 401 : 403
+     expect(response.status()).toBe(expected)
+     const payload = await response.json()
+     if (expected === 401) expect(payload).toEqual({ error: 'Unauthenticated' })
+     else expect(payload.success).toBe(false)
+     expect(payload.error).toBeTruthy()
+     results.push({ method, status: response.status() })
+     if (scenario === 'upstream-forbidden') {
+      expect(payload).toEqual({ success: false, error: 'You are not allowed to perform this tournament action.', code: 'TOURNAMENT_FORBIDDEN' })
+      expect(received).toHaveLength(results.length)
+      expect(received.at(-1)).toEqual({ method: method === 'POST' ? 'PATCH' : method, path: method === 'POST' ? '/tournaments/77/state' : '/tournaments/77', body: { ...(method === 'PATCH' ? { name: 'Authorization Fixture Cup' } : method === 'POST' ? { state: 'inactive' } : {}), adminEntryId: session!.entryId, platformAdmin: false } })
+     } else expect(received).toEqual([])
+    }
+    const deniedUpstreamRequests = received.length
+    received.length = 0
+    const control = await createSession({ entryId: 15702 })
+    sessions.push(control)
+    const response = await request.patch('/api/tournaments/77', { headers: { origin: baseURL!, 'sec-fetch-site': 'same-origin', cookie: control.cookie }, data: { name: 'Control Fixture Cup' } })
+    expect(response.status()).toBe(501)
+    expect(received).toEqual([{ method: 'PATCH', path: '/tournaments/77', body: { name: 'Control Fixture Cup', adminEntryId: control.entryId, platformAdmin: false } }])
+    await testInfo.attach('management-api-boundary', { contentType: 'application/json', body: JSON.stringify({ scenario, results, rejectedUpstreamRequests: scenario === 'genuine-admin' ? 0 : deniedUpstreamRequests, admittedAdminRequests: scenario === 'genuine-admin' ? deniedUpstreamRequests : 0, controlUpstreamRequests: 1, upstreamBusinessMutation: false, environment: 'local isolated', functionalStatus: 'PASS', performanceStatus: 'NOT_OBSERVED', readyMs: null, wholeVariantComplete: false }) })
+   } finally {
+    for (const session of sessions) await session.cleanup()
+    await sql.end()
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+   }
+  })
+ }
+})
+
+// TEAM01.state.02: exercise the pagination thresholds with a real 20-GW fixture.
+test.describe('manager twenty-GW pagination', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('filters, expands, collapses and opens an appended historical GW', async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Local fixture only')
+  const session = await createSession({ entryId: 15702 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const context = { ...managerReview.context!, currentEventId: 20, nextEventId: 21, latestFinalizedEventId: 20, latestPublishedEventId: 20 }
+  const entry = { ...managerReview.entry!, id: session.entryId!, overallPoints: 1200, overallRank: 1000, totalTransfers: 16 }
+  const timeline = Array.from({ length: 20 }, (_, i) => ({ ...managerReview.timeline[0], eventId: i + 1, eventChip: 'NONE', eventTransfers: (i + 1) % 5 === 0 ? 0 : 1, overallPoints: (i + 1) * 60, overallRank: 1200 - (i + 1) * 10, overallRankDelta: 10 }))
+  const gameweek = (id: number) => ({ ...managerGameweek(1), context, entry, eventId: id, result: { ...managerGameweek(1).result!, ...timeline[id - 1] }, snapshotMeta: { ...managerGameweek(1).snapshotMeta!, eventId: id, revision: String(100 + id) } })
+  const review = { ...managerReview, context, entry, throughEventId: 20, timeline, currentGameweek: gameweek(20), snapshotMeta: gameweek(20).snapshotMeta,
+   summary: { ...managerReview.summary!, gameweeksReviewed: 20, totalNetPoints: 1200, totalBenchPoints: 80, totalCaptainPoints: 400, topCaptainGameweeks: 20, bestOverallRank: 1000, worstOverallRank: 1190, overallRankChange: 190, currentImprovementStreak: 19, longestImprovementStreak: 19, formations: [{ formation: '4-4-2', gameweeks: 20 }], positionPoints: { goalkeeper: 80, defender: 320, midfielder: 400, forward: 200, assistantManager: 0, total: 1000 }, chips: [] },
+   transfers: timeline.map(row => ({ ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers, transfers: row.eventTransfers ? [{ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, evaluatedThroughEventId: row.eventId, elementInWebName: `Incoming GW${row.eventId}`, elementOutWebName: `Outgoing GW${row.eventId}` }] : [] })) }
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } },
+    ...timeline.map(({ eventId }) => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: gameweek(eventId) } }))
+   ] }) })).ok).toBe(true)
+   await addSessionCookie(page, session.cookie)
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await page.goto('/zh-CN/my-fpl/team')
+   await page.getByRole('tab', { name: '赛季复盘', exact: true }).click()
+   const ready = page.locator('[data-manager-ready]')
+   await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+   await expect(ready).toHaveAttribute('data-manager-revision', '120')
+   const transfers = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '转会历史', exact: true }) })
+   const history = page.locator('div.bg-card').filter({ has: page.getByRole('heading', { name: '轮次历史', exact: true }) })
+   const links = (section: typeof transfers) => section.getByRole('button', { name: /^打开第 \d+ 轮$/ })
+   const ids = (values: number[]) => values.map(id => `打开第 ${id} 轮`)
+   const all = timeline.map(row => row.eventId).reverse()
+   const active = all.filter(id => id % 5 !== 0)
+   const assertRows = async (section: typeof transfers, values: number[]) => expect.poll(() => links(section).evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')))).toEqual(ids(values))
+   await assertRows(transfers, active.slice(0, 6))
+   await transfers.getByRole('button', { name: zhMessages.TeamStats.transferShowMore.replace('{count}', '8'), exact: true }).click()
+   await assertRows(transfers, active.slice(0, 14))
+   await transfers.getByRole('button', { name: zhMessages.TeamStats.transferShowMore.replace('{count}', '2'), exact: true }).click()
+   await assertRows(transfers, active)
+   await transfers.getByRole('button', { name: zhMessages.TeamStats.transferShowLess, exact: true }).click()
+   await assertRows(transfers, active.slice(0, 6))
+   await transfers.getByRole('button', { name: zhMessages.TeamStats.transferShowAllRemaining.replace('{count}', '10'), exact: true }).click()
+   await assertRows(transfers, active)
+   await transfers.getByRole('button', { name: zhMessages.TeamStats.transferFilterAll, exact: true }).click()
+   await assertRows(transfers, all.slice(0, 6))
+   await transfers.getByRole('button', { name: zhMessages.TeamStats.transferFilterWith, exact: true }).click()
+   await assertRows(transfers, active.slice(0, 6))
+   await assertRows(history, all.slice(0, 12))
+   await history.getByRole('button', { name: zhMessages.TeamStats.historyShowMore.replace('{count}', '8'), exact: true }).click()
+   await assertRows(history, all)
+   await history.getByRole('button', { name: zhMessages.TeamStats.historyShowLess, exact: true }).click()
+   await assertRows(history, all.slice(0, 12))
+   await history.getByRole('button', { name: zhMessages.TeamStats.historyShowMore.replace('{count}', '8'), exact: true }).click()
+   await history.getByRole('button', { name: '打开第 4 轮', exact: true }).click()
+   await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+   await expect(ready).toHaveAttribute('data-manager-gw', '4')
+   await expect(ready).toHaveAttribute('data-manager-revision', '104')
+   await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+   await expect(page.locator('section[aria-labelledby="team-gw-scoreboard-title"]')).toContainText('Saka (20)')
+   let expectedTabs = [20, 4]
+   for (const eventId of [11, 12, 13, 14, 15, 16, 17, 18, 19]) {
+    await page.getByRole('tab', { name: '赛季复盘', exact: true }).click()
+    await history.getByRole('button', { name: `打开第 ${eventId} 轮`, exact: true }).click()
+    expectedTabs = [...expectedTabs, eventId].slice(-8)
+    await expect(page.getByRole('tab', { name: /^GW\d+$/ })).toHaveText(expectedTabs.map(id => `GW${id}`))
+    await expect(page.getByRole('tab', { name: `GW${eventId}`, exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-gw', String(eventId))
+    await expect(ready).toHaveAttribute('data-manager-revision', String(100 + eventId))
+    await expect(page).toHaveURL(url => url.searchParams.get('gw') === String(eventId))
+    await expect(page.locator('section[aria-labelledby="team-gw-scoreboard-title"]')).toContainText('Saka (20)')
+   }
+   await expect(page.getByRole('tab', { name: 'GW11', exact: true })).toHaveCount(0)
+   await page.getByRole('button', { name: '关闭第 19 轮', exact: true }).click()
+   await expect(page.getByRole('tab', { name: 'GW18', exact: true })).toHaveAttribute('aria-selected', 'true')
+   await expect(ready).toHaveAttribute('data-manager-gw', '18')
+   await expect(ready).toHaveAttribute('data-manager-revision', '118')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   await expect(page.locator('html')).toHaveClass(/dark/)
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+})
+
+// S19.directed.04: the real UI submits only to browser substitutes.
+for (const context of [
+ { kind: 'directed', locale: 'zh-CN', width: 390, timezone: 'UTC', theme: 'dark' },
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ kind: 'baseline', locale, width, timezone: 'Australia/Perth', theme: 'system' })))
+]) {
+test.describe(`isolated classic import submission ${context.kind} ${context.locale} ${context.width}`, () => {
+ test.use({ locale: context.locale, timezoneId: context.timezone, colorScheme: context.theme === 'dark' ? 'dark' : 'light', viewport: { width: context.width, height: 900 } })
+ test('S19 import failure recovers without upstream mutation', async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Local substitutes only')
+  const prefix = context.locale === 'zh-CN' ? '/zh-CN' : ''
+  const messages = context.locale === 'zh-CN' ? zhMessages : enMessages
+  const session = await createSession({ entryId: 15702 })
+  const submitted: unknown[] = []
+  const unexpected: string[] = []
+  let previews = 0
+  await page.route('**/api/tournaments{,/**}', async route => {
+   const path = new URL(route.request().url()).pathname
+   if (path === '/api/tournaments/check-name') return route.fulfill({ json: { available: true } })
+   if (path === '/api/tournaments/preview') {
+    previews++
+    expect(route.request().method()).toBe('POST')
+    expect(route.request().postDataJSON()).toEqual({ leagueUrl: 'https://fantasy.premierleague.com/leagues/123/standings/c' })
+    return route.fulfill({ json: { previewToken: 'isolated-import-preview', expiresAt: new Date(Date.now() + 600000).toISOString(), leagueId: 123, leagueType: 'classic', leagueName: 'Isolated Import Cup', startEvent: 4, participants: [1, 2].map(id => ({ id: String(id), team: `Import Team ${id}`, manager: `Manager ${id}`, overallRank: id, totalPoints: 100 })) } })
+   }
+   if (path === '/api/tournaments' && route.request().method() === 'POST') {
+    const body = route.request().postDataJSON()
+    expect(body).toMatchObject({ creationMode: 'classic', participantSource: 'official', tournamentType: 'standard', groupFormat: 'points', startGameweek: 'GW4', endGameweek: 'GW38', groupNum: '1', qualifiersPerGroup: '', knockoutFormat: 'none', selectedParticipantIds: ['1', '2'], previewToken: 'isolated-import-preview' })
+    submitted.push(body)
+    return submitted.length === 1
+     ? route.fulfill({ status: 503, json: { success: false, code: 'DEPENDENCY_UNAVAILABLE' } })
+     : route.fulfill({ json: { success: true, tournament: { id: 77001, participantCount: 2 }, setupStatus: 'ready' } })
+   }
+   unexpected.push(path)
+   await route.abort()
+  })
+  try {
+   await addSessionCookie(page, session.cookie)
+   await page.addInitScript(theme => localStorage.setItem('theme', theme), context.theme)
+   await page.goto(`${prefix}/competitions/create`)
+   await page.locator('label[for="creation-mode-classic"]').click()
+   await page.locator('#league-url').fill('https://fantasy.premierleague.com/leagues/123/standings/c')
+   await page.getByRole('button', { name: messages.TournamentCreate.checkLeague, exact: true }).click()
+   const submit = page.locator('#tournament-create-form button[type="submit"]')
+   await expect(submit).toBeEnabled()
+   await submit.click()
+   await expect(page.locator('#tournament-create-form [aria-live="assertive"]')).toBeVisible()
+   await expect(submit).toBeEnabled()
+   expect(submitted).toHaveLength(1)
+   await submit.click()
+   const success = page.locator(`a[href="${prefix}/live/competitions/77001?created=1"]`)
+   await expect(success).toBeVisible()
+   await expect(page.locator('#tournament-create-form [aria-live="assertive"]')).toHaveCount(0)
+   expect(submitted).toHaveLength(2)
+   expect(submitted[1]).toEqual(submitted[0])
+   expect(previews).toBe(1)
+   expect(unexpected).toEqual([])
+   await expect(page.locator('html')).toHaveClass(context.theme === 'dark' ? /\bdark\b/ : /\blight\b/)
+   expect(page.viewportSize()?.width).toBe(context.width)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezone)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(context.theme)
+   await testInfo.attach('S19-import-boundary-context', { contentType: 'application/json', body: JSON.stringify({ variantIds: context.kind === 'directed' ? ['S19.directed.03', 'S19.directed.04'] : [`S19.UNRESOLVED_ROLE.${context.locale}.${context.width === 390 ? 'mobile390' : 'desktop1440'}.base`], locale: context.locale, width: context.width, theme: context.theme, timezone: context.timezone, previews, submissions: submitted.length, unexpected, realProducerInvoked: false, wholeVariantComplete: false, readyMs: null, performanceStatus: 'NOT_OBSERVED' }) })
+  } finally { await session.cleanup() }
+ })
+})
+
+
+}
+
+test('management API boundary joined-domain genuine-admin rename persistence', async ({ request, baseURL }, testInfo) => {
+ test.skip(process.env.E2E_JOINED_DOMAIN !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Task-owned real Data HTTP and disposable database only')
+ const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+ const sessions: Awaited<ReturnType<typeof createSession>>[] = []
+ try {
+  const owner = await createSession({ entryId: 15702 }); sessions.push(owner)
+  const nonowner = await createSession({ entryId: 6733550 }); sessions.push(nonowner)
+  const admin = await createSession({ entryId: 909090, userId: 'e2e-management-platform-admin' }); sessions.push(admin)
+  await sql`INSERT INTO fpl.seasons(season_id,season_code,display_name,start_year,end_year,lifecycle_state,is_current) VALUES(2026,'2627','Joined fixture',2026,2027,'active',true) ON CONFLICT(season_id) DO UPDATE SET is_current=true`
+  const seasons = await sql`SELECT season_id FROM fpl.seasons WHERE is_current = true`
+  expect(seasons).toHaveLength(1)
+  const season = seasons[0].season_id
+  const id = 995831
+  for (const session of sessions) await sql`INSERT INTO competition.entries(season_id,entry_id,entry_name,player_name) VALUES(${season},${session.entryId!},'Joined fixture','Fixture')`
+  await sql`INSERT INTO competition.tournaments(season_id,tournament_id,name,creator,admin_entry_id,league_id,league_type,total_team_num,tournament_mode,group_mode,group_auto_averages,state) VALUES(${season},${id},'Joined initial','fixture',${owner.entryId!},${id},'classic',1,'normal','no_group',false,'active')`
+  const read = () => sql`SELECT * FROM competition.tournaments WHERE season_id=${season} AND tournament_id=${id}`
+  const before = await read()
+  const rename = (session: typeof owner, name: string) => request.patch(`/api/tournaments/${id}`, { headers: { origin: baseURL!, 'sec-fetch-site':'same-origin', cookie:session.cookie }, data:{name} })
+  const denied = await rename(nonowner, 'Joined denied')
+  expect(denied.status()).toBe(403)
+  expect((await denied.json()).code).toBe('TOURNAMENT_FORBIDDEN')
+  expect(await read()).toEqual(before)
+  for (const [session, name] of [[owner,'Joined owner renamed'],[admin,'Joined admin renamed']] as const) {
+   const response = await rename(session,name)
+   expect(response.status()).toBe(200)
+   const payload = await response.json()
+   expect(payload.success).toBe(true)
+   expect(payload.tournament.name).toBe(name)
+   expect(payload.tournament.adminEntryId).toBe(owner.entryId)
+   const rows = await read()
+   expect(rows).toHaveLength(1)
+   expect(rows[0].name).toBe(name)
+   expect(rows[0].admin_entry_id).toBe(owner.entryId)
+  }
+  await testInfo.attach('joined-domain-rename', { contentType:'application/json', body:JSON.stringify({ methods:['PATCH'], nonowner:'403 unchanged', owner:'200 persisted', admin:'200 persisted owner preserved', environment:'local isolated real Web and Data HTTP with PostgreSQL', performanceStatus:'NOT_OBSERVED',readyMs:null,wholeVariantComplete:false }) })
+ } finally {
+  for (const session of sessions) await session.cleanup()
+  await sql.end()
+ }
+})
+
+test('management API boundary joined-domain genuine-admin pause persistence', async ({ request, baseURL }, testInfo) => {
+ test.skip(process.env.E2E_JOINED_DOMAIN !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Task-owned real Data HTTP and disposable database only')
+ const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+ const sessions: Awaited<ReturnType<typeof createSession>>[] = []
+ try {
+  const owner = await createSession({ entryId: 15702 }); sessions.push(owner)
+  const nonowner = await createSession({ entryId: 6733550 }); sessions.push(nonowner)
+  const admin = await createSession({ entryId: 909090, userId: 'e2e-management-platform-admin' }); sessions.push(admin)
+  await sql`INSERT INTO fpl.seasons(season_id,season_code,display_name,start_year,end_year,lifecycle_state,is_current) VALUES(2026,'2627','Joined fixture',2026,2027,'active',true) ON CONFLICT(season_id) DO UPDATE SET is_current=true`
+  const seasons = await sql`SELECT season_id FROM fpl.seasons WHERE is_current = true`
+  expect(seasons).toHaveLength(1)
+  const season = seasons[0].season_id
+  const id = 995832
+  for (const session of sessions) await sql`INSERT INTO competition.entries(season_id,entry_id,entry_name,player_name) VALUES(${season},${session.entryId!},'Joined fixture','Fixture')`
+  await sql`INSERT INTO competition.tournaments(season_id,tournament_id,name,creator,admin_entry_id,league_id,league_type,total_team_num,tournament_mode,group_mode,group_auto_averages,state) VALUES(${season},${id},'Joined pause initial','fixture',${owner.entryId!},${id},'classic',1,'normal','no_group',false,'active')`
+  const read = () => sql`SELECT * FROM competition.tournaments WHERE season_id=${season} AND tournament_id=${id}`
+  const before = await read()
+  const pause = (session: typeof owner) => request.post(`/api/tournaments/${id}`, { headers: { origin: baseURL!, 'sec-fetch-site':'same-origin', cookie:session.cookie }, data:{action:'pause'} })
+  const denied = await pause(nonowner)
+  expect(denied.status()).toBe(403)
+  expect((await denied.json()).code).toBe('TOURNAMENT_FORBIDDEN')
+  expect(await read()).toEqual(before)
+  for (const session of [owner, admin]) {
+   // Reset only disposable fixture state so each actor must perform the transition.
+   await sql`UPDATE competition.tournaments SET state='active' WHERE season_id=${season} AND tournament_id=${id}`
+   const response = await pause(session)
+   expect(response.status()).toBe(200)
+   const payload = await response.json()
+   expect(payload.success).toBe(true)
+   expect(payload.tournament.state).toBe('inactive')
+   expect(payload.tournament.adminEntryId).toBe(owner.entryId)
+   const rows = await read()
+   expect(rows).toHaveLength(1)
+   expect(rows[0].state).toBe('inactive')
+   expect(rows[0].admin_entry_id).toBe(owner.entryId)
+  }
+  await testInfo.attach('joined-domain-pause', { contentType:'application/json', body:JSON.stringify({ methods:['POST pause -> Data PATCH state'], nonowner:'403 unchanged', owner:'200 persisted', admin:'200 persisted owner preserved', environment:'local isolated real Web and Data HTTP with PostgreSQL', performanceStatus:'NOT_OBSERVED',readyMs:null,wholeVariantComplete:false }) })
+ } finally {
+  for (const session of sessions) await session.cleanup()
+  await sql.end()
+ }
+})
+
+test('management API boundary joined-domain genuine-admin delete persistence', async ({ request, baseURL }, testInfo) => {
+ test.skip(process.env.E2E_JOINED_DOMAIN !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Task-owned real Data HTTP and disposable database only')
+ const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+ const sessions: Awaited<ReturnType<typeof createSession>>[] = []
+ try {
+  const owner = await createSession({ entryId: 15702 }); sessions.push(owner)
+  const nonowner = await createSession({ entryId: 6733550 }); sessions.push(nonowner)
+  const admin = await createSession({ entryId: 909090, userId: 'e2e-management-platform-admin' }); sessions.push(admin)
+  await sql`INSERT INTO fpl.seasons(season_id,season_code,display_name,start_year,end_year,lifecycle_state,is_current) VALUES(2026,'2627','Joined fixture',2026,2027,'active',true) ON CONFLICT(season_id) DO UPDATE SET is_current=true`
+  const seasons = await sql`SELECT season_id FROM fpl.seasons WHERE is_current = true`
+  expect(seasons).toHaveLength(1)
+  const season = seasons[0].season_id
+  for (const session of sessions) await sql`INSERT INTO competition.entries(season_id,entry_id,entry_name,player_name) VALUES(${season},${session.entryId!},'Joined fixture','Fixture')`
+  const seed = async (id: number) => {
+   await sql`INSERT INTO competition.tournaments(season_id,tournament_id,name,creator,admin_entry_id,league_id,league_type,total_team_num,tournament_mode,group_mode,group_auto_averages,state) VALUES(${season},${id},${'Joined delete '+id},'fixture',${owner.entryId!},${id},'classic',1,'normal','no_group',false,'active')`
+   await sql`INSERT INTO competition.tournament_entries(season_id,tournament_id,league_id,entry_id) VALUES(${season},${id},${id},${owner.entryId!})`
+  }
+  const read = (id: number) => sql`SELECT * FROM competition.tournaments WHERE season_id=${season} AND tournament_id=${id}`
+  const children = (id: number) => sql`SELECT * FROM competition.tournament_entries WHERE season_id=${season} AND tournament_id=${id}`
+  const inspectQueue = async (id: number) => {
+   const response = await request.get(`http://127.0.0.1:4318/__fixture/queue/${id}`)
+   expect(response.status()).toBe(200)
+   return await response.json() as string[]
+  }
+  const withQueue = process.env.E2E_JOINED_QUEUE === '1'
+  const sentinelJobs = withQueue ? await inspectQueue(995839) : []
+  if (withQueue) expect(sentinelJobs).toHaveLength(6)
+  await seed(995839)
+  const sentinel = await read(995839), sentinelChildren = await children(995839)
+  for (const [actor,id] of [[owner,995833],[admin,995834]] as const) {
+   await seed(id)
+   const before = await read(id), childBefore = await children(id)
+   expect(childBefore).toHaveLength(1)
+   const jobsBefore = withQueue ? await inspectQueue(id) : []
+   if (withQueue) expect(jobsBefore).toHaveLength(6)
+   const remove = (session: typeof owner) => request.delete(`/api/tournaments/${id}`, { headers:{origin:baseURL!,'sec-fetch-site':'same-origin',cookie:session.cookie} })
+   const denied = await remove(nonowner)
+   expect(denied.status()).toBe(403)
+   expect((await denied.json()).code).toBe('TOURNAMENT_FORBIDDEN')
+   expect(await read(id)).toEqual(before)
+   expect(await children(id)).toEqual(childBefore)
+   if (withQueue) expect(await inspectQueue(id)).toEqual(jobsBefore)
+   const allowed = await remove(actor)
+   expect(allowed.status()).toBe(200)
+   expect(await allowed.json()).toMatchObject({success:true,tournamentId:id,deletedName:'Joined delete '+id})
+   expect(await read(id)).toHaveLength(0)
+   expect(await children(id)).toHaveLength(0)
+   expect(await read(995839)).toEqual(sentinel)
+   expect(await children(995839)).toEqual(sentinelChildren)
+   if (withQueue) {
+    expect(await inspectQueue(id)).toEqual([])
+    expect(await inspectQueue(995839)).toEqual(sentinelJobs)
+   }
+  }
+  await testInfo.attach('joined-domain-delete', { contentType:'application/json', body:JSON.stringify({ methods:['DELETE'], queueFixture:withQueue, nonowner:'403 unchanged', owner:'200 parent and child removed', admin:'200 parent and child removed; unrelated rows preserved', environment:'local isolated real Web and Data HTTP with PostgreSQL', performanceStatus:'NOT_OBSERVED',readyMs:null,wholeVariantComplete:false }) })
+ } finally {
+  for (const session of sessions) await session.cleanup()
+  await sql.end()
+ }
+})
+
+for (const context of [
+ { id: 'S08.directed.01', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' },
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ id: `S08.UNRESOLVED_ROLE.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, locale, width, theme: 'system', timezone: 'Australia/Perth' })))
+]) test.describe(`S08 anonymous ${context.id}`, () => {
+ test.use({ locale: context.locale, viewport: { width: context.width, height: 900 }, colorScheme: context.theme === 'dark' ? 'dark' : 'light', timezoneId: context.timezone })
+ test(`${context.id} anonymous actual team navigation is denied`, async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Local isolated anonymous session only')
+  const prefix = context.locale === 'zh-CN' ? '/zh-CN' : ''
+  const messages = context.locale === 'zh-CN' ? zhMessages : enMessages
+  await page.addInitScript(theme => localStorage.setItem('theme', theme), context.theme)
+  const mutations: string[] = []
+  page.on('request', request => {
+   if (request.headers()['next-action'] || (request.method() !== 'GET' && /\/api\/(auth|fpl|tournaments)/.test(new URL(request.url()).pathname))) mutations.push(new URL(request.url()).pathname)
+  })
+  await page.goto(prefix || '/')
+  const nav = page.getByRole('navigation').first()
+  if (context.width === 390) await nav.locator('[data-navigation-mobile] > summary').click()
+  else await nav.locator('details[data-navigation-group]').filter({ has: page.locator(`a[href="${prefix}/my-fpl/team"]`) }).locator(':scope > summary').click()
+  const team = nav.locator(`a[href="${prefix}/my-fpl/team"]`).filter({ visible: true })
+  await expect(team).toHaveCount(1)
+  await team.click()
+  const assertDenied = async () => {
+   await expect(page).toHaveURL(url => url.pathname === `${prefix}/auth/login` && url.searchParams.get('next') === `${prefix}/my-fpl/team`)
+   await expect(page.getByLabel(messages.Auth.email, { exact: true })).toBeEnabled()
+   await expect(page.locator('[data-manager-entry]')).toHaveCount(0)
+   await expect(page.locator('#main-content')).not.toContainText('E2E United')
+  }
+  await assertDenied()
+  await page.reload()
+  await assertDenied()
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezone)
+  await expect(page.locator('html')).toHaveClass(context.theme === 'dark' ? /dark/ : /light/)
+  expect(page.viewportSize()?.width).toBe(context.width)
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(context.theme)
+  expect(mutations).toEqual([])
+  await testInfo.attach('S08-anonymous-denied', { contentType: 'application/json', body: JSON.stringify({ variantId: context.id, owner: 'anonymous-protected-team', identity: 'A', locale: context.locale, width: context.width, theme: context.theme, timezone: context.timezone, wholeVariantComplete: false, actualClick: true, reload: true, mutations, readyMs: null }) })
+ })
+})
+
+for (const context of [
+ { kind: 'directed', locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC' },
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ kind: 'baseline', locale, width, theme: 'system', timezone: 'Australia/Perth' })))
+]) test.describe(`S08 role genuine-admin ${context.kind} ${context.locale} ${context.width}`, () => {
+ test.use({ locale: context.locale, viewport: { width: context.width, height: 900 }, colorScheme: context.theme === 'dark' ? 'dark' : 'light', timezoneId: context.timezone })
+ const parentVariantId = `S08.UNRESOLVED_ROLE.${context.locale}.${context.width === 1440 ? 'desktop1440' : 'mobile390'}.base`
+ const prefix = context.locale === 'zh-CN' ? '/zh-CN' : ''
+ const zh = context.locale === 'zh-CN'
+ for (const [role, variantId] of [['owner', 'S08.directed.04'], ['admin', 'S08.directed.05'], ['nonowner', 'S08.directed.06']] as const) {
+  test(`${context.kind === 'baseline' ? parentVariantId : variantId} ${role} actual menu and management boundary`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_S08_ROLE_BOUNDARY !== '1', 'Isolated trusted role configuration only')
+   const session = await createSession({ entryId: 909090, ...(role === 'admin' ? { userId: 'e2e-management-platform-admin' } : {}) })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const tournament = { ...managedTournament, adminEntryId: role === 'owner' ? session.entryId : 808080 }
+   const mutations: string[] = []
+   await page.route('**/api/tournaments/**', async route => {
+    if (['PATCH','POST','DELETE'].includes(route.request().method())) {
+     mutations.push(route.request().method()); await route.fulfill({ status: 409, body: 'Unexpected write blocked' })
+    } else await route.continue()
+   })
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetEntryTournamentsList', variables: { entryId: session.entryId }, data: { entryTournaments: [tournament] } },
+     { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: session.entryId }, data: { managedTournament: role === 'nonowner' ? null : tournament } }
+    ] }) })).ok).toBe(true)
+    await page.addInitScript(theme => localStorage.setItem('theme',theme), context.theme)
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${prefix}/competitions/browse`)
+    await page.getByRole('button',{ name:zh ? 'J12 Owned Cup 的操作' : 'Actions for J12 Owned Cup',exact:true }).click()
+    const manage = page.getByRole('menuitem',{ name:zh ? '管理赛事' : 'Manage tournament',exact:true })
+    if (role === 'nonowner') {
+     await expect(manage).toHaveCount(0)
+     await page.keyboard.press('Escape')
+     await page.goto(`${prefix}/competitions/77/manage`)
+     await expect(page.getByRole('heading',{name:zh ? '需要管理员权限' : 'Administrator access required',exact:true})).toBeVisible()
+     await expect(page.locator('#tournament-name')).toHaveCount(0)
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveCount(0)
+    } else {
+     await expect(manage).toHaveCount(1)
+     await manage.click()
+     await expect(page).toHaveURL(url=>url.pathname===`${prefix}/competitions/77/manage`)
+     await expect(page.locator('[data-competition-perf-ready="manage"]')).toHaveAttribute('data-competition-tournament-id','77')
+     await expect(page.locator('#tournament-name')).toHaveValue('J12 Owned Cup')
+     await expect(page.getByRole('button',{name:zh ? '删除赛事' : 'Delete tournament',exact:true})).toBeEnabled()
+    }
+    expect(await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezone)
+    await expect(page.locator('html')).toHaveClass(context.theme === 'dark' ? /dark/ : /light/)
+    expect(page.viewportSize()?.width).toBe(context.width)
+    const observations = await (await fetch(fixture)).json()
+    expect(observations.requests.some((row: { operation:string;variables:{entryId?:number;tournamentId?:number} })=>row.operation==='GetManagedTournament'&&row.variables.entryId===session.entryId&&row.variables.tournamentId===77)).toBe(true)
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(context.theme)
+    expect(mutations).toEqual([])
+    await testInfo.attach('S08-role-boundary',{contentType:'application/json',body:JSON.stringify({variantId:context.kind === 'baseline' ? parentVariantId : variantId,role,locale:context.locale,width:context.width,theme:context.theme,timezone:context.timezone,wholeVariantComplete:false,actualClick:role!=='nonowner',nonownerDeepLink:role==='nonowner',graphql:'controlled domain response',writes:0,readyMs:null})})
+   } finally {
+    await fetch(fixture,{method:'POST',body:JSON.stringify({rules:[]})})
+    await session.cleanup()
+   }
+  })
+ }
+})
+
+
+test('management API boundary joined-domain active roster worker delete', async ({ request, baseURL }, testInfo) => {
+ test.skip(process.env.E2E_JOINED_DOMAIN !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Task-owned active worker fixture only')
+ const owner = await createSession({ entryId: 15702 })
+ const nonowner = await createSession({ entryId: 6733550 })
+ const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+ const control = (path: string) => request.post(`http://127.0.0.1:4318/__fixture/${path}`, { headers: {'x-api-key':'isolated-e2e-sink-key'} })
+ const id=995843
+ try {
+  await sql`INSERT INTO fpl.seasons(season_id,season_code,display_name,start_year,end_year,lifecycle_state,is_current) VALUES(2026,'2627','Owned concurrency fixture',2026,2027,'active',true)`
+  await sql`INSERT INTO fpl.events(season_id,event_id,name,finished,data_checked) VALUES(2026,4,'Owned GW4',false,false)`
+  await sql`INSERT INTO competition.entries(season_id,entry_id,entry_name,player_name) VALUES(2026,${owner.entryId!},'Fixture owner','Fixture')`
+  await sql`INSERT INTO competition.tournaments(season_id,tournament_id,name,creator,admin_entry_id,league_id,league_type,total_team_num,tournament_mode,group_mode,group_auto_averages,state,roster_mode,roster_sync_status,setup_status) VALUES(2026,${id},'Active worker fixture','fixture',${owner.entryId!},${id},'classic',1,'normal','no_group',false,'active','official_sync','ready','ready')`
+  await sql`INSERT INTO competition.tournament_entries(season_id,tournament_id,league_id,entry_id) VALUES(2026,${id},${id},${owner.entryId!})`
+  const start=await control('start');expect(start.status()).toBe(200);expect(await start.json()).toEqual({state:'active',providerCalls:1})
+  const remove = (cookie: string) => request.delete(`/api/tournaments/${id}`, { headers: {origin:baseURL!,'sec-fetch-site':'same-origin',cookie} })
+  const denied=await remove(nonowner.cookie);expect(denied.status()).toBe(403);expect((await denied.json()).code).toBe('TOURNAMENT_FORBIDDEN')
+  expect(await sql`SELECT 1 FROM competition.tournaments WHERE season_id=2026 AND tournament_id=${id}`).toHaveLength(1)
+  const deleted=await remove(owner.cookie);expect(deleted.status()).toBe(200);expect(await deleted.json()).toMatchObject({success:true,tournamentId:id})
+  const settle=await control('release');expect(settle.status()).toBe(200);const outcome=await settle.json()
+  expect(outcome).toMatchObject({state:'completed',result:{changed:false,participantCount:0},pending:[],failures:[],providerCalls:1})
+  expect(await sql`SELECT 1 FROM competition.tournaments WHERE season_id=2026 AND tournament_id=${id}`).toHaveLength(0)
+  expect(await sql`SELECT 1 FROM competition.tournament_entries WHERE season_id=2026 AND tournament_id=${id}`).toHaveLength(0)
+  await testInfo.attach('joined-active-worker-delete', {contentType:'application/json',body:JSON.stringify({outcome,path:'Real Web auth and DELETE -> real Data HTTP -> canonical delete during real roster worker provider wait',wholeVariantComplete:false,readyMs:null,performanceStatus:'NOT_OBSERVED'})})
+ } finally {
+  const stopped=await control('stop');expect(stopped.status()).toBe(200)
+  await owner.cleanup();await nonowner.cleanup();await sql.end()
+ }
+})
+
+
+test.describe('J12 management polling authorization loss', () => {
+ for (const deniedStatus of [401, 403] as const) {
+  test(`J12 management polling ${deniedStatus} removes private controls without manual reload`, async ({ page }) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated authorization-loss fixture')
+   const session = await createSession({ entryId: 909090 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   let release!: () => void
+   const gate = new Promise<void>(resolve => { release = resolve })
+   let polls = 0
+   const configure = async (available: boolean) => {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: available ? { ...managedTournament, setupStatus: 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } : null } }] }) })).ok).toBe(true)
+   }
+   await page.route('**/api/tournaments/77/status?**', async route => {
+    polls += 1
+    await gate
+    await route.fulfill({ status: deniedStatus, json: { error: deniedStatus === 401 ? 'Unauthenticated.' : 'Forbidden.' } })
+   })
+   try {
+    await configure(true)
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/en/competitions/77/manage')
+    const ready = page.locator('[data-competition-perf-ready="manage"]')
+    await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+    await expect(page.locator('#tournament-name')).toBeVisible()
+    await expect.poll(() => polls).toBeGreaterThan(0)
+    await configure(false)
+    if (deniedStatus === 401) {
+     const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1 })
+     try { await sql`UPDATE bauth.session SET expires_at = ${new Date(Date.now() - 60000)} WHERE user_id = ${session.userId}` } finally { await sql.end() }
+    }
+    release()
+    await expect(ready).toHaveCount(0)
+    await expect(page.locator('#tournament-name')).toHaveCount(0)
+    if (deniedStatus === 401) {
+     await expect(page).toHaveURL(url => url.pathname === '/auth/login' && url.searchParams.get('next') === '/en/competitions/77/manage')
+     await expect(page.getByLabel(enMessages.Auth.email, { exact: true })).toBeEnabled()
+    }
+    else await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toBeVisible()
+   } finally {
+    release()
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
+
+
+test('J12 management polling 503 preserves content and recovers on the next poll', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated polling recovery fixture')
+ const session = await createSession({ entryId: 909090 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ let attempts = 0
+ let release!: () => void
+ const gate = new Promise<void>(resolve => { release = resolve })
+ await page.route('**/api/tournaments/77/status?**', async route => {
+  attempts += 1
+  await gate
+  await route.fulfill(attempts === 1 ? { status: 503, json: { error: 'Unavailable' } } : { json: { revision: managedTournament.updatedAt, updatedAt: managedTournament.updatedAt, state: 'INACTIVE', setupStatus: 'PROCESSING', rosterSyncStatus: 'READY' } })
+ })
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournament: { ...managedTournament, setupStatus: 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } } }] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/en/competitions/77/manage')
+  const ready = page.locator('[data-competition-perf-ready="manage"]')
+  await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect.poll(() => attempts).toBe(1)
+  await expect(page.getByRole('button', { name: enMessages.TournamentManage.pause, exact: true })).toBeVisible()
+  const failure = page.waitForResponse(response => response.url().includes('/api/tournaments/77/status?') && response.status() === 503)
+  release()
+  await failure
+  await expect(page.locator('#tournament-name')).toBeVisible()
+  await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+  await expect.poll(() => attempts, { timeout: 10000 }).toBeGreaterThanOrEqual(2)
+  await expect(page.getByRole('button', { name: enMessages.TournamentManage.pause, exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: enMessages.TournamentManage.resume, exact: true })).toBeVisible()
+  await expect(page.locator('#tournament-name')).toBeVisible()
+  await expect(page).toHaveURL(/\/en\/competitions\/77\/manage$/)
+ } finally {
+  release()
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+
+test('MANAGE02 private status never reuses the preceding owner response', async ({ request }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated private-read fixture')
+ const owner = await createSession({ entryId: 909090 })
+ const other = await createSession({ entryId: 808080 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const revision = 'private-owner-revision-fixture'
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+   { operation: 'GetManagedTournamentStatus', variables: { tournamentId: 77, entryId: 909090 }, data: { managedTournamentStatus: { revision, state: 'ACTIVE', setupStatus: 'READY', issues: [{ issueKey: 'owner-only-fixture' }] } } },
+   { operation: 'GetManagedTournamentStatus', variables: { tournamentId: 77, entryId: other.entryId }, data: { managedTournamentStatus: null } }
+  ] }) })).ok).toBe(true)
+  for (const identity of ['owner', 'other', 'anonymous', 'owner', 'other'] as const) {
+   const response = await request.get('/api/tournaments/77/status', { headers: { cookie: identity === 'owner' ? owner.cookie : identity === 'other' ? other.cookie : '' } })
+   expect(response.status()).toBe(identity === 'owner' ? 200 : identity === 'other' ? 403 : 401)
+   const body = await response.text()
+   if (identity === 'owner') expect(JSON.parse(body)).toMatchObject({ revision, issues: [{ issueKey: 'owner-only-fixture' }] })
+   else {
+    expect(body).not.toContain(revision)
+    expect(body).not.toContain('owner-only-fixture')
+    expect(JSON.parse(body)).toEqual({ error: identity === 'other' ? 'Forbidden.' : 'Unauthenticated' })
+   }
+   if (identity !== 'anonymous') {
+    expect(response.headers()['cache-control']).toContain('private')
+    expect(response.headers()['cache-control']).toContain('no-store')
+   }
+  }
+  const observed = await (await fetch(fixture)).json()
+  const reads = observed.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournamentStatus')
+  expect(reads.map((x: { variables: { entryId: number } }) => x.variables.entryId)).toEqual([owner.entryId, other.entryId, owner.entryId, other.entryId])
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await owner.cleanup()
+  await other.cleanup()
+ }
+})
+
+for (const denied of [{ code: 'FORBIDDEN', status: 403 }, { code: 'UNAUTHENTICATED', status: 401 }]) {
+ test(`MANAGE02 upstream ${denied.code} keeps authorization status`, async ({ request }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated upstream authorization fixture')
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  try {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetManagedTournamentStatus', error: true, errorCode: denied.code, httpStatus: denied.status }] }) })).ok).toBe(true)
+   const response = await request.get('/api/tournaments/77/status', { headers: { cookie: session.cookie } })
+   expect(response.status()).toBe(denied.status)
+   expect(await response.json()).toEqual({ error: denied.status === 403 ? 'Forbidden.' : 'Unauthenticated.' })
+   expect(response.headers()['cache-control']).toContain('private')
+   expect(response.headers()['cache-control']).toContain('no-store')
+  } finally {
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
+
+for (const code of ['FORBIDDEN', 'UNAUTHENTICATED'] as const) {
+ test(`MANAGE02 mounted upstream ${code} removes private management content`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated upstream-to-render fixture')
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const status = code === 'FORBIDDEN' ? 403 : 401
+  let release!: () => void
+  let started!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const pending = new Promise<void>(resolve => { started = resolve })
+  const configure = async (available: boolean) => {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: session.entryId }, data: { managedTournament: available ? { ...managedTournament, setupStatus: 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } : null } },
+    { operation: 'GetManagedTournamentStatus', error: true, errorCode: code, httpStatus: status }
+   ] }) })).ok).toBe(true)
+  }
+  await page.route('**/api/tournaments/77/status?**', async route => {
+   started()
+   await gate
+   await route.continue()
+  })
+  try {
+   await configure(true)
+   await addSessionCookie(page, session.cookie)
+   await page.goto('/en/competitions/77/manage')
+   const ready = page.locator('[data-competition-perf-ready="manage"]')
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   await pending
+   await configure(false)
+   const responsePromise = page.waitForResponse(response => response.url().includes('/api/tournaments/77/status?'))
+   release()
+   const response = await responsePromise
+   expect(response.status()).toBe(status)
+   expect(response.headers()['cache-control']).toContain('no-store')
+   await expect(ready).toHaveCount(0)
+   await expect(page.locator('#tournament-name')).toHaveCount(0)
+   await expect(page.getByRole('button', { name: 'Delete tournament', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toBeVisible()
+   const observed = await (await fetch(fixture)).json()
+   expect(observed.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournamentStatus')).toHaveLength(1)
+   expect(observed.requests.some((x: { operation: string }) => x.operation === 'GetManagedTournament')).toBe(true)
+  } finally {
+   release()
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
+
+for (const code of ['FORBIDDEN'] as const) {
+ test(`MANAGE02 mounted upstream ${code} recovers after fresh server authorization`, async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated upstream-to-render fixture')
+  const session = await createSession({ entryId: 909090 })
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const status = code === 'FORBIDDEN' ? 403 : 401
+  let release!: () => void
+  let started!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const pending = new Promise<void>(resolve => { started = resolve })
+  const configure = async (available: boolean, restored = false) => {
+   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+    { operation: 'GetManagedTournament', variables: { tournamentId: 77, entryId: session.entryId }, data: { managedTournament: available ? { ...managedTournament, setupStatus: restored ? 'READY' : 'PROCESSING', setupPhase: 'BUILDING_STRUCTURE' } : null } },
+    { operation: 'GetManagedTournamentStatus', error: true, errorCode: code, httpStatus: status }
+   ] }) })).ok).toBe(true)
+  }
+  await page.route('**/api/tournaments/77/status?**', async route => {
+   started()
+   await gate
+   await route.continue()
+  })
+  try {
+   await configure(true)
+   await addSessionCookie(page, session.cookie)
+   await page.goto('/en/competitions/77/manage')
+   const ready = page.locator('[data-competition-perf-ready="manage"]')
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   await pending
+   await configure(true, true)
+   const responsePromise = page.waitForResponse(response => response.url().includes('/api/tournaments/77/status?'))
+   release()
+   const response = await responsePromise
+   expect(response.status()).toBe(status)
+   expect(response.headers()['cache-control']).toContain('no-store')
+   // The RSC read authorizes the same entity with an unchanged key/revision.
+   await expect.poll(async () => {
+    const state = await (await fetch(fixture)).json()
+    return state.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournament').length
+   }).toBeGreaterThan(0)
+   await expect(ready).toHaveAttribute('data-competition-tournament-id', '77')
+   await expect(page.locator('#tournament-name')).toBeVisible()
+   await expect(page.getByRole('heading', { name: 'Administrator access required', exact: true })).toHaveCount(0)
+   const observed = await (await fetch(fixture)).json()
+   expect(observed.requests.filter((x: { operation: string }) => x.operation === 'GetManagedTournamentStatus')).toHaveLength(1)
+   expect(observed.requests.some((x: { operation: string }) => x.operation === 'GetManagedTournament')).toBe(true)
+  } finally {
+   release()
+   await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   await session.cleanup()
+  }
+ })
+}
+
+test.describe('LP02 bound baseline', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+  test(`LP02 bound entry pitch and modal ${locale} ${width}`, async ({ page }, testInfo) => {
+   const session = await createSession({ entryId: 123 })
+   const zh = locale === 'zh-CN'
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${zh ? '/zh-CN' : ''}/live/points`)
+    await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/points`)
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    const pitch = page.getByRole('region', { name: zh ? /阵型/ : /formation/ })
+    await expect(pitch.getByRole('button', { name: zh ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+    await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+    expect(await page.evaluate(() => innerWidth)).toBe(width)
+    for (const [id, label] of [[1, zh ? '队长' : 'Captain'], [2, zh ? '副队长' : 'Vice-captain']] as const) {
+     const player = pitch.getByRole('button', { name: zh ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
+     await expect(pitch.getByRole('img', { name: label, exact: true })).toHaveCount(1)
+     await expect(player.getByRole('img', { name: label, exact: true })).toBeVisible()
+    }
+    for (const [id, position] of [[1, 'GKP'], [3, 'DEF'], [8, 'MID'], [13, 'FWD'], [15, 'FWD']] as const) {
+     const opener = pitch.getByRole('button', { name: zh ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
+     await opener.click()
+     const dialog = page.getByRole('dialog')
+     await expect(dialog).toHaveCount(1)
+     await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+     await expect(dialog.getByText(zh ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+     await expect(dialog.getByText(position, { exact: true })).toBeVisible()
+     await expect(dialog.getByText(zh ? '估算' : 'Estimated', { exact: true })).toHaveCount(0)
+     await expect(dialog.getByText(zh ? '（45 分钟）' : '(45 min)', { exact: true })).toBeVisible()
+     await expect(dialog.getByText(`+${id === 1 ? 6 : 1}`, { exact: true }).last()).toBeVisible()
+     await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+     await expect(dialog).toHaveCount(0)
+     await expect(opener).toBeFocused()
+    }
+    await testInfo.attach('LP02-bound-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `LP02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, entryId: session.entryId, gw: 33, identity: 'isolated verified bound session', readyMs: null, wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  }) }
+})
+
+test.describe('LP02 bound chip states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark' })
+for (const chip of ['3xc', 'bboost'] as const) {
+ test(`LP02 bound state chip ${chip}`, async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated chip payload only')
+  const session = await createSession({ entryId: 123 })
+  try {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  await addSessionCookie(page, session.cookie)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const expectedTeamPoints = chip === '3xc' ? 28 : 26
+  let chipReads = 0
+  let contributionSum: number | null = null
+  await page.route('**/api/graphql', async route => {
+   const request = route.request().postDataJSON() as { query?: string }
+   if (!request.query?.includes('GetLiveCalcPoints')) {
+    await route.continue()
+    return
+   }
+   const response = await route.fetch({ url: `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql` })
+   const body = await response.json()
+   const live = body.data.calcLivePointsByEntry
+   live.chip = chip
+   live.score.eventPoints = expectedTeamPoints
+   live.score.netEventPoints = expectedTeamPoints
+   for (const pick of live.pickList) {
+    pick.multiplier = pick.element === 1 ? (chip === '3xc' ? 3 : 2) : (pick.position <= 11 || chip === 'bboost' ? 1 : 0)
+    pick.pickActive = pick.position <= 11 || chip === 'bboost'
+   }
+   contributionSum = live.pickList.reduce((sum: number, pick: { totalPoints: number; multiplier: number }) => sum + pick.totalPoints * pick.multiplier, 0)
+   chipReads += 1
+   await route.fulfill({ response, json: body })
+  })
+  await page.goto('/zh-CN/live/points')
+  await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+  await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => innerWidth)).toBe(390)
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect.poll(() => chipReads).toBeGreaterThan(0)
+  expect(contributionSum).toBe(expectedTeamPoints)
+  const pitch = page.getByRole('region', { name: /阵型/ })
+  await expect(pitch.getByText(chip === '3xc' ? 'TC' : 'BB', { exact: true }).first()).toBeVisible()
+  await expect(pitch.getByText(String(expectedTeamPoints), { exact: true }).first()).toBeVisible()
+  for (const [id, rawPoints] of [[1, 6], [15, 1]] as const) {
+   await pitch.getByRole('button', { name: `查看 Player ${id} 的详情`, exact: true }).click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+   await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText('估算', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText(`+${rawPoints}`, { exact: true }).last()).toBeVisible()
+   if (id === 1) await expect(dialog.getByText(chip === '3xc' ? '+18' : '+12', { exact: true })).toHaveCount(0)
+   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+  }
+  await testInfo.attach('LP02-state-context', { contentType: 'application/json', body: JSON.stringify({ variantId: chip === '3xc' ? 'LP02.state.03' : 'LP02.state.02', entryId: session.entryId, gw: 33, chip, expectedTeamPoints, contributionSum, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+}
+
+})
+
+test.describe('LP02 bound automatic substitution', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ for (const lifecycle of ['published', 'official'] as const) {
+ test(`LP02 state01 ${lifecycle} defender swap retains bound context`, async ({ page }, testInfo) => {
+  const session = await createSession({ entryId: 123 })
+  let reads = 0
+  try {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/graphql', async route => {
+    if (!route.request().postDataJSON().query?.includes('GetLiveCalcPoints')) return route.continue()
+    const response = await route.fetch({ url: `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql` })
+    const body = await response.json()
+    const live = body.data.calcLivePointsByEntry
+    const order = [1, 3, 4, 5, 8, 9, 10, 11, 13, 14, 15, 2, 6, 7, 12]
+    for (const pick of live.pickList) {
+     pick.position = order.indexOf(pick.element) + 1
+     pick.pickActive = (pick.position <= 11 && pick.element !== 3) || pick.element === 6
+     pick.multiplier = pick.pickActive ? (pick.element === 1 ? 2 : 1) : 0
+     pick.autoSub = pick.element === 6
+     if (pick.element === 3) { pick.minutes = 0; pick.totalPoints = 0; pick.isGwFinished = true; pick.isPlayed = false }
+    }
+    if (lifecycle === 'official') {
+     live.score.delivery = { ...live.score.delivery, state: 'FINAL' }
+     live.score.source = 'FPL_FINAL_RESULT'
+     live.score.calculationMode = 'FINAL_RESULT'
+    }
+    live.score.eventPoints = 22
+    live.score.netEventPoints = 22
+    reads++
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/zh-CN/live/points')
+   await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+   await page.getByRole('button', { name: '刷新', exact: true }).click()
+   await expect.poll(() => reads).toBeGreaterThan(0)
+   await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   expect(await page.evaluate(() => innerWidth)).toBe(390)
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   const pitch = page.getByRole('region', { name: /阵型/ })
+   const incoming = pitch.getByRole('button', { name: lifecycle === 'official' ? /查看 Player 6 的详情.*官方已换入 Player 6，替下 Player 3/ : /查看 Player 6 的详情.*实时自动换人：Player 6 换入，替下 Player 3/ })
+   const outgoing = pitch.getByRole('button', { name: lifecycle === 'official' ? /查看 Player 3 的详情.*官方已用 Player 6 替下 Player 3/ : /查看 Player 3 的详情.*实时自动换人：Player 3 被 Player 6 替下/ })
+   await expect(incoming).toBeVisible()
+   await expect(outgoing).toBeVisible()
+   for (const [position, ids] of [['GKP', [1]], ['DEF', [6, 4, 5]], ['MID', [8, 9, 10, 11]], ['FWD', [13, 14, 15]]] as const) {
+    const row = pitch.getByRole('list', { name: position, exact: true })
+    await expect(row.getByRole('button')).toHaveCount(ids.length)
+    const names = await row.getByRole('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')?.match(/Player (\d+)/)?.[1]))
+    expect(names).toEqual(ids.map(String))
+   }
+   const bench = pitch.locator('ol:not([aria-label])')
+   await expect(bench.getByRole('button')).toHaveCount(4)
+   expect(await bench.getByRole('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')?.match(/Player (\d+)/)?.[1]))).toEqual(['2', '3', '7', '12'])
+
+   await expect(pitch.getByText('22', { exact: true }).first()).toBeVisible()
+   await incoming.click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: 'Player 6', exact: true })).toBeVisible()
+   await expect(dialog.getByText('+1', { exact: true }).last()).toBeVisible()
+   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+   await expect(incoming).toBeFocused()
+   await testInfo.attach('LP02-auto-sub', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP02.state.01', lifecycle, entryId: session.entryId, gw: 33, incoming: 6, outgoing: 3, expectedTeamPoints: 22, readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+ }
+})
+
+test.describe('LP02 bound double gameweek', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('LP02 state04 aggregated two-fixture captain points', async ({ page }, testInfo) => {
+  const session = await createSession({ entryId: 123 })
+  let liveReads = 0
+  let explainReads = 0
+  // Two fixture inputs: 90 minutes + fifteen saves, then 90 minutes, total 9.
+  const contributions = [{ identifier: 'minutes', value: 180, points: 4 }, { identifier: 'saves', value: 15, points: 5 }]
+  try {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/graphql', async route => {
+    const query = route.request().postDataJSON().query ?? ''
+    if (!query.includes('GetLiveCalcPoints') && !query.includes('EventLiveExplainBatch')) return route.continue()
+    const response = await route.fetch({ url: `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql` })
+    const body = await response.json()
+    if (query.includes('GetLiveCalcPoints')) {
+     const live = body.data.calcLivePointsByEntry
+     const captain = live.pickList.find((pick: { element: number }) => pick.element === 1)
+     captain.minutes = 180
+     captain.goalsScored = 0
+     captain.saves = 15
+     captain.totalPoints = 9
+     captain.multiplier = 2
+     live.score.eventPoints = 28
+     live.score.netEventPoints = 28
+     liveReads++
+    } else {
+     const captain = body.data.eventLiveExplains.find((item: { elementId: number }) => item.elementId === 1)
+     captain.stats.minutes = 180
+     captain.stats.goalsScored = 0
+     captain.stats.saves = 15
+     captain.contributions = contributions
+     explainReads++
+    }
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/zh-CN/live/points')
+   await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+   await page.getByRole('button', { name: '刷新', exact: true }).click()
+   await expect.poll(() => liveReads).toBeGreaterThan(0)
+   await expect.poll(() => explainReads).toBeGreaterThan(0)
+   await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   expect(await page.evaluate(() => innerWidth)).toBe(390)
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   const pitch = page.getByRole('region', { name: /阵型/ })
+   await expect(pitch.getByText('28', { exact: true }).first()).toBeVisible()
+   const captain = pitch.getByRole('button', { name: '查看 Player 1 的详情', exact: true })
+   await captain.click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
+   await expect(dialog.getByText('（180 分钟）', { exact: true })).toBeVisible()
+   await expect(dialog.getByText('+9', { exact: true }).last()).toBeVisible()
+   await expect(dialog.getByText('估算', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText('+18', { exact: true })).toHaveCount(0)
+   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+   await expect(captain).toBeFocused()
+   await testInfo.attach('LP02-DGW-context', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP02.state.04', entryId: session.entryId, gw: 33, fixturePoints: [7, 2], rawPoints: 9, captainContribution: 18, teamTotal: 28, readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+})
+
+test.describe('LP03 bound transfer states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ for (const status of [503, 401]) {
+  test(`LP03 bound transfer ${status} recovers to explicit empty`, async ({ page }, testInfo) => {
+   const session = await createSession({ entryId: 123 })
+   let reads = 0
+   let recovered = false
+   try {
+    await page.clock.install()
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await addSessionCookie(page, session.cookie)
+    await page.route('**/api/graphql', async route => {
+     const payload = route.request().postDataJSON()
+     if (!payload.query?.includes('GetEntryTransferHistory')) return route.continue()
+     expect(payload.variables.entryId).toBe(session.entryId)
+     reads++
+     await route.fulfill(!recovered ? { status, json: { errors: [{ message: 'Controlled unavailable transfer history' }] } } : { status: 200, json: { data: { entryTransferHistory: [] } } })
+    })
+    await page.goto('/zh-CN/live/points')
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    expect(await page.evaluate(() => ({ width: innerWidth, lang: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, lang: 'zh-CN', timezone: 'UTC' })
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    const section = page.getByRole('region', { name: /本周转会/ })
+    await section.getByRole('button', { name: '刷新转会', exact: true }).click()
+    await expect(section.getByRole('alert')).toContainText('转会记录加载失败')
+    expect(reads).toBeGreaterThan(0)
+    const failedReads = reads
+    if (status === 503) {
+     await section.getByRole('button', { name: '刷新转会', exact: true }).click()
+     await expect(section.getByRole('alert')).toContainText('转会记录加载失败')
+     expect(reads).toBe(failedReads)
+     await page.clock.fastForward(30_000)
+    }
+    recovered = true
+    await section.getByRole('button', { name: '刷新转会', exact: true }).click()
+    await expect(section.getByText('本轮暂无已同步的转会记录。', { exact: true })).toBeVisible()
+    await expect(section.getByRole('alert')).toHaveCount(0)
+    await expect.poll(() => reads).toBeGreaterThan(failedReads)
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    await testInfo.attach('LP03-bound-state', { contentType: 'application/json', body: JSON.stringify({ variantIds: ['LP03.state.01', status === 401 ? 'LP03.state.03' : 'LP03.state.02'], entryId: session.entryId, status, readyMs: null, scope: 'Bound public transfer request error to empty recovery, not session reauthorization', wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  })
+ }
+})
+
+for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+ test.describe(`LP03 bound baseline ${locale} ${width}`, () => {
+  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light', viewport: { width, height: 900 } })
+  test('LP03 bound transfer content preserves entry identity', async ({ page }, testInfo) => {
+   const session = await createSession({ entryId: 123 })
+   let reads = 0
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.route('**/api/graphql', async route => {
+     const payload = route.request().postDataJSON()
+     if (!payload.query?.includes('GetEntryTransferHistory')) return route.continue()
+     expect(payload.variables.entryId).toBe(session.entryId)
+     reads++
+     await route.fulfill({ json: { data: { entryTransferHistory: [{ eventId: 33, eventTransfers: 1, eventTransfersCost: 0, transfers: [{ event: 33, elementOutWebName: 'Outgoing Player', elementOutTeamShortName: 'OUT', elementOutTypeName: 'MID', elementOutCost: 5.5, elementInWebName: 'Incoming Player', elementInTeamShortName: 'IN', elementInTypeName: 'MID', elementInCost: 6.2, time: '2026-08-04T10:00:00Z' }] }] } } })
+    })
+    await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/live/points`)
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', language: locale })
+    const section = page.getByRole('region', { name: locale === 'en' ? /Gameweek transfers.*GW33/ : /本周转会.*GW33/ })
+    await section.getByRole('button', { name: locale === 'en' ? 'Refresh transfers' : '刷新转会', exact: true }).click()
+    for (const text of ['Incoming Player', 'Outgoing Player', '£5.5m', '£6.2m']) await expect(section).toContainText(text)
+    await expect(section.getByRole('alert')).toHaveCount(0)
+    expect(reads).toBeGreaterThan(0)
+    expect(await section.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await testInfo.attach('LP03-baseline', { contentType: 'application/json', body: JSON.stringify({ variantId: `LP03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, entryId: session.entryId, readyMs: null, wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  })
+ })
+}
+
+test.describe('MATCH03 stale FULL boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 old FULL does not roll back accepted desk generation', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const newer = structuredClone(seed.data)
+  newer.liveMatchday.snapshot.revisions.deskGeneration += 2
+  newer.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-new-desk'
+  newer.liveMatchday.snapshot.revisions.scoreState = 'f'.repeat(24)
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.matches[0].homeScore = oldMatch.homeScore + 3
+  const newScore = `${oldMatch.homeScore + 3}–${oldMatch.awayScore}`
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: reads === 1 ? newer : seed.data })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  await refresh.click()
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect.poll(() => reads).toBe(1)
+  await refresh.click()
+  await expect.poll(() => reads).toBe(2)
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('错误：最新比赛更新失败，正在显示上次可用的比分。')
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect(page.getByText(oldScore, { exact: true })).toHaveCount(0)
+  const currentView = page.locator('[data-live-matchday-view="true"]')
+  await expect(currentView).toHaveAttribute('data-event-id', '33')
+  await expect(currentView).toHaveAttribute('data-revisions', JSON.stringify(newer.liveMatchday.snapshot.revisions))
+  await expect(currentView).toHaveAttribute('data-loading', 'false')
+  await testInfo.attach('MATCH03-stale-FULL', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedGeneration: newer.liveMatchday.snapshot.revisions.deskGeneration, rejectedGeneration: seed.data.liveMatchday.snapshot.revisions.deskGeneration, reads, readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+
+test.describe('MATCH03 stale detail boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 newer desk retains accepted player details', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const newer = structuredClone(seed.data)
+  newer.liveMatchday.snapshot.revisions.deskGeneration += 2
+  newer.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-new-desk'
+  newer.liveMatchday.snapshot.revisions.scoreState = 'f'.repeat(24)
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.matches[0].homeScore = oldMatch.homeScore + 3
+  const newScore = `${oldMatch.homeScore + 3}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.revisions.detailGeneration = 10
+  newer.liveMatchday.snapshot.revisions.detailPublicationId = 'detail10'
+  newer.liveMatchday.snapshot.revisions.playerDetail = 'd'.repeat(24)
+  newer.liveMatchday.snapshot.revisions.detailObservation = 'd'.repeat(24)
+  newer.liveMatchday.snapshot.times.detailSourceCheckedAt = '2026-08-04T18:00:30.000Z'
+  newer.liveMatchday.snapshot.times.detailContentUpdatedAt = '2026-08-04T18:00:00.000Z'
+  newer.liveMatchday.snapshot.times.detailPublishedAt = '2026-08-04T18:00:00.000Z'
+  newer.liveMatchday.snapshot.times.detailStaleAt = '2026-08-04T18:01:07.500Z'
+  newer.liveMatchday.snapshot.detailDelivery = {
+   state: 'FRESH',
+   servedFrom: 'REDIS_CURRENT',
+   reasonCodes: []
+  }
+  newer.liveMatchday.snapshot.matches[0].players = [{ id: 257, webName: 'Accepted Bassey', position: 'DEFENDER', teamId: oldMatch.homeTeamId, price: 45, totalPoints: 6, stats: [{ identifier: 'minutes', value: 90 }] }]
+  newer.liveMatchday.snapshot.matches[0].players.push({ id: 9999, webName: 'Accepted Away Player', position: 'MIDFIELDER', teamId: oldMatch.awayTeamId, price: 55, totalPoints: 2, stats: [{ identifier: 'minutes', value: 90 }] })
+  const staleDetail = structuredClone(newer)
+  staleDetail.liveMatchday.snapshot.revisions.deskGeneration++
+  staleDetail.liveMatchday.snapshot.revisions.deskPublicationId = 'new-desk-old-detail'
+  staleDetail.liveMatchday.snapshot.revisions.scoreState = 'e'.repeat(24)
+  staleDetail.liveMatchday.snapshot.revisions.detailGeneration = 1
+  staleDetail.liveMatchday.snapshot.revisions.detailPublicationId = 'detail1'
+  staleDetail.liveMatchday.snapshot.revisions.playerDetail = 'a'.repeat(24)
+  staleDetail.liveMatchday.snapshot.matches[0].homeScore++
+  staleDetail.liveMatchday.snapshot.matches[0].players[0].webName = 'Obsolete Bassey'
+  const latestScore = `${oldMatch.homeScore + 4}–${oldMatch.awayScore}`
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: reads === 1 ? newer : staleDetail })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  await refresh.click()
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect.poll(() => reads).toBe(1)
+  await page.getByRole('button', { name: '球员列表', exact: true }).click()
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  const teamTabs = page.getByRole('region', { name: zhMessages.LiveMatches.playerPoints, exact: true }).getByRole('tab')
+  await expect(teamTabs).toHaveCount(2)
+  await expect(teamTabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+  await teamTabs.nth(1).click()
+  await expect(teamTabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByText('Accepted Away Player', { exact: true })).toBeVisible()
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toHaveCount(0)
+  await teamTabs.nth(0).click()
+  await expect(teamTabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  await expect(page.getByText('Accepted Away Player', { exact: true })).toHaveCount(0)
+  await refresh.click()
+  await expect.poll(() => reads).toBe(2)
+  await expect(page.getByText(latestScore, { exact: true })).toBeVisible()
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  await expect(page.getByText('Obsolete Bassey', { exact: true })).toHaveCount(0)
+  await expect(teamTabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+  await testInfo.attach('MATCH03-stale-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedDetailGeneration: 10, rejectedDetailGeneration: 1, acceptedDeskGeneration: staleDetail.liveMatchday.snapshot.revisions.deskGeneration, displayedScore: latestScore, reads, readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+
+test.describe('MATCH03 delayed HEAD boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 delayed HEAD cannot roll back newer FULL', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const newer = structuredClone(seed.data)
+  newer.liveMatchday.snapshot.revisions.deskGeneration += 2
+  newer.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-new-desk'
+  newer.liveMatchday.snapshot.revisions.scoreState = 'f'.repeat(24)
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.matches[0].homeScore = oldMatch.homeScore + 3
+  const newScore = `${oldMatch.homeScore + 3}–${oldMatch.awayScore}`
+  let headReads = 0
+  let releaseHead!: () => void
+  const headGate = new Promise<void>(resolve => { releaseHead = resolve })
+  const head = structuredClone(seed.data)
+  delete head.liveMatchday.snapshot.matches
+  head.liveMatchday.snapshot.detailDelivery.state = 'PENDING'
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  await page.route('**/api/graphql', async route => {
+   if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
+   headReads++
+   await headGate
+   await route.fulfill({ json: { data: head } })
+  })
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: newer })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  const { resolveLiveRefreshProfile } = await import('../lib/live-refresh')
+  const interval = resolveLiveRefreshProfile(process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE, 'production') === 'conserve' ? 120_000 : 30_000
+  await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+  await expect.poll(() => headReads).toBeGreaterThan(0)
+  await refresh.click()
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect.poll(() => reads).toBe(1)
+  const settledHead = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+  releaseHead()
+  await settledHead
+  await page.clock.fastForward(1000)
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect(page.getByText(oldScore, { exact: true })).toHaveCount(0)
+  const currentView = page.locator('[data-live-matchday-view="true"]')
+  await expect(currentView).toHaveAttribute('data-event-id', '33')
+  await expect(currentView).toHaveAttribute('data-revisions', JSON.stringify(newer.liveMatchday.snapshot.revisions))
+  await expect(currentView).toHaveAttribute('data-loading', 'false')
+  await testInfo.attach('MATCH03-delayed-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedGeneration: newer.liveMatchday.snapshot.revisions.deskGeneration, rejectedGeneration: seed.data.liveMatchday.snapshot.revisions.deskGeneration, reads, readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+
+test.describe('MATCH03 unchanged HEAD boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 unchanged HEAD avoids FULL reads', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  let headReads = 0
+  const head = structuredClone(seed.data)
+  delete head.liveMatchday.snapshot.matches
+  head.liveMatchday.snapshot.detailDelivery.state = 'PENDING'
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  await page.route('**/api/graphql', async route => {
+   if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
+   headReads++
+   await route.fulfill({ json: { data: head } })
+  })
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: seed.data })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const { resolveLiveRefreshProfile } = await import('../lib/live-refresh')
+  const interval = resolveLiveRefreshProfile(process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE, 'production') === 'conserve' ? 120_000 : 30_000
+  for (let index = 0; index < 3; index++) {
+   const before = headReads
+   const settled = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+   await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+   await settled
+   await expect.poll(() => headReads).toBeGreaterThan(before)
+   await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+   expect(reads).toBe(0)
+  }
+  await testInfo.attach('MATCH03-unchanged-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.01', headReads, fullReads: reads, headFixtureBodyBytes: Buffer.byteLength(JSON.stringify(head)), fullFixtureBodyBytes: Buffer.byteLength(JSON.stringify(seed.data)), byteScope: 'Uncompressed fixture JSON only, not network transfer bytes', readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+
+test.describe('MATCH03 partial detail boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 delayed detail keeps scores and recovers', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  const delayed = structuredClone(seed.data)
+  delayed.liveMatchday.snapshot.revisions.deskGeneration += 1
+  delayed.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-partial-desk'
+  delayed.liveMatchday.snapshot.revisions.scoreState = 'e'.repeat(24)
+  delayed.liveMatchday.snapshot.matches[0].homeScore += 1
+  const hasDetailRevision = delayed.liveMatchday.snapshot.revisions.detailPublicationId !== null
+  delayed.liveMatchday.snapshot.detailDelivery = {
+   state: 'DEGRADED',
+   servedFrom: hasDetailRevision ? seed.data.liveMatchday.snapshot.detailDelivery.servedFrom : null,
+   reasonCodes: ['DETAIL_PENDING']
+  }
+  const recovered = structuredClone(delayed)
+  recovered.liveMatchday.snapshot.revisions.deskGeneration += 1
+  recovered.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-recovered-desk'
+  recovered.liveMatchday.snapshot.detailDelivery = seed.data.liveMatchday.snapshot.detailDelivery
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ json: reads === 1 ? delayed : recovered })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  await refresh.click()
+  await expect.poll(() => reads).toBe(1)
+  await expect(page.getByText(`${oldMatch.homeScore + 1}–${oldMatch.awayScore}`, { exact: true })).toBeVisible()
+  await expect(page.getByText(/球员数据正在更新/)).toBeVisible()
+  await refresh.click()
+  await expect.poll(() => reads).toBe(2)
+  await expect(page.getByText(`${oldMatch.homeScore + 1}–${oldMatch.awayScore}`, { exact: true })).toBeVisible()
+  await expect(page.getByText(/球员数据正在更新/)).toHaveCount(0)
+  await testInfo.attach('MATCH03-partial-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.03', fullReads: reads, scope: 'READY desk with DEGRADED detail then recovery', readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+
+test.describe('MATCH03 initial unavailable boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 unavailable publication has no fake cards and recovers', async ({ page }, testInfo) => {
+  const endpoint = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+  const seed = await (await fetch(`${endpoint}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })).json()
+  expect(seed.errors).toBeUndefined()
+  const match = seed.data.liveMatchday.snapshot.matches[0]
+  const unavailable = { liveMatchday: { availability: 'UNAVAILABLE', delivery: { state: 'UNAVAILABLE', servedFrom: null, reasonCodes: ['DESK_UNAVAILABLE'] }, snapshot: null } }
+  const control = (rules: unknown[]) => fetch(`${endpoint}/__performance`, { method: 'POST', body: JSON.stringify({ rules }) })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  try {
+   expect((await control([{ operation: 'GetLiveMatchdayV3', data: unavailable }])).ok).toBe(true)
+   await page.goto('/zh-CN/live/matches')
+   expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute('data-status', 'UNAVAILABLE')
+   await expect(page.getByText('官方数据正在更新，比赛发布后会自动显示。', { exact: true })).toBeVisible()
+   await expect(page.locator('[data-live-match-card="true"]')).toHaveCount(0)
+   expect((await control([])).ok).toBe(true)
+   const response = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+   await page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true }).click()
+   const result = await response
+   expect(result.status()).toBe(200)
+   expect((await result.json()).liveMatchday.snapshot.eventId).toBe(33)
+   await expect(page.locator('[data-live-match-card="true"]')).toHaveCount(seed.data.liveMatchday.snapshot.matches.length)
+   await expect(page.getByText(`${match.homeScore}–${match.awayScore}`, { exact: true })).toBeVisible()
+   await expect(page.getByText('官方数据正在更新，比赛发布后会自动显示。', { exact: true })).toHaveCount(0)
+   const currentView = page.locator('[data-live-matchday-view="true"]')
+   await expect(currentView).toHaveAttribute('data-event-id', '33')
+   await expect(currentView).toHaveAttribute('data-season', String(seed.data.liveMatchday.snapshot.season))
+   await expect(currentView).toHaveAttribute('data-revisions', JSON.stringify(seed.data.liveMatchday.snapshot.revisions))
+   await expect(currentView).toHaveAttribute('data-loading', 'false')
+   // This server marker describes the initial seed, not the refreshed client state.
+   await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute('data-status', 'UNAVAILABLE')
+   await expect(page.locator('[data-letletme-contract="live_matches"]')).toHaveAttribute('data-revision', 'unavailable')
+   await testInfo.attach('MATCH03-unavailable', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.03', eventId: 33, readyMs: null, wholeVariantComplete: false }) })
+  } finally {
+   expect((await control([])).ok).toBe(true)
+  }
+ })
+})
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+ test.describe(`MATCH03 baseline ${locale} ${width}`, () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light', viewport: { width, height: 900 } })
+ test('MATCH03 HEAD changes fetch one FULL and preserve revision', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  let headReads = 0
+  const head = structuredClone(seed.data)
+  delete head.liveMatchday.snapshot.matches
+  head.liveMatchday.snapshot.detailDelivery.state = 'PENDING'
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  await page.route('**/api/graphql', async route => {
+   if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
+   headReads++
+   await route.fulfill({ json: { data: head } })
+  })
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: seed.data })
+  })
+  await page.goto(`/${locale}/live/matches`)
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width, language: locale, timezone: 'Australia/Perth' })
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const { resolveLiveRefreshProfile } = await import('../lib/live-refresh')
+  const interval = resolveLiveRefreshProfile(process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE, 'production') === 'conserve' ? 120_000 : 30_000
+  for (let index = 0; index < 3; index++) {
+   const before = headReads
+   const settled = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+   await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+   await settled
+   await expect.poll(() => headReads).toBeGreaterThan(before)
+   await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+   expect(reads).toBe(0)
+  }
+  await expect(page.locator('[data-live-matchday-view="true"]')).toHaveAttribute('data-revisions', JSON.stringify(seed.data.liveMatchday.snapshot.revisions))
+  seed.data.liveMatchday.snapshot.revisions.deskGeneration += 1
+  seed.data.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-baseline-new-desk'
+  seed.data.liveMatchday.snapshot.revisions.scoreState = 'c'.repeat(24)
+  seed.data.liveMatchday.snapshot.matches[0].homeScore += 1
+  Object.assign(head.liveMatchday.snapshot.revisions, seed.data.liveMatchday.snapshot.revisions)
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  const changedFull = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+  await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+  expect((await changedFull).status()).toBe(200)
+  await expect.poll(() => reads).toBe(1)
+  await expect(page.getByText(`${oldMatch.homeScore}–${oldMatch.awayScore}`, { exact: true })).toBeVisible()
+  const currentView = page.locator('[data-live-matchday-view="true"]')
+  await expect(currentView).toHaveAttribute('data-revisions', JSON.stringify(seed.data.liveMatchday.snapshot.revisions))
+  await expect(currentView).toHaveAttribute('data-event-id', '33')
+  await expect(currentView).toHaveAttribute('data-loading', 'false')
+  const nextHead = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+  await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+  await nextHead
+  expect(reads).toBe(1)
+  await testInfo.attach('MATCH03-unchanged-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: `MATCH03.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, headReads, fullReads: reads, headFixtureBodyBytes: Buffer.byteLength(JSON.stringify(head)), fullFixtureBodyBytes: Buffer.byteLength(JSON.stringify(seed.data)), byteScope: 'Uncompressed fixture JSON only, not network transfer bytes', readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+ }
+}
+
+test.describe('PS02 bound squad slot lifecycle', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+  test(`PS02 continuous bound lifecycle ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated session and fixture controls required')
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const session = await createSession({ entryId: 15702 })
+   const zh = locale === 'zh-CN'
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   try {
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })).ok).toBe(true)
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`/${locale}/explore/player-stats?p1=1`)
+    const overall = page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })
+    const rail = page.locator('[data-player-stats-navigation-id]')
+    const players = page.getByRole('region', { name: zh ? '球员' : 'Players', exact: true })
+    const add = page.getByRole('button', { name: zh ? '添加对比' : 'Add comparison', exact: true })
+    const remove = page.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true })
+    const firstEdit = players.locator('[data-player-stats-edit-slot="first"]')
+    const steps: string[] = []
+    await expect(overall).toContainText('Saka')
+    await expect(overall).not.toContainText('Palmer')
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && !url.searchParams.has('p2'))
+    steps.push('PS02.01')
+    await add.click()
+    await players.getByRole('button', { name: /^Palmer MID / }).click()
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).toContainText('Saka')
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && url.searchParams.get('p2') === '2')
+    steps.push('PS02.02')
+    await remove.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && !url.searchParams.has('p2'))
+    await expect(overall).not.toContainText('Palmer')
+    steps.push('PS02.03')
+    await firstEdit.click()
+    await players.getByRole('button', { name: /^Palmer MID / }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).not.toContainText('Saka')
+    steps.push('PS02.04')
+    await add.click()
+    await players.getByRole('button', { name: /^Saka MID / }).click()
+    await expect(overall).toContainText('Saka')
+    await players.locator('[data-player-stats-edit-slot="second"]').click()
+    await players.locator('[data-player-stats-recent-player="2"]').click()
+    await expect(players.locator('[data-player-stats-edit-slot="second"]')).toBeVisible()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+    await expect(overall).toContainText('Saka')
+    await expect(overall).toContainText('Palmer')
+    steps.push('PS02.05')
+    await remove.click()
+    await firstEdit.click()
+    await players.getByRole('button', { name: /^Saka MID / }).click()
+    await expect(overall).toContainText('Saka')
+    await firstEdit.click()
+    await players.locator('[data-player-stats-recent-player="2"]').click()
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).not.toContainText('Saka')
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
+    await firstEdit.click()
+    await players.locator('[data-player-stats-recent-player="1"]').click()
+    await expect(overall).toContainText('Saka')
+    await add.click()
+    await players.getByRole('button', { name: /^Palmer MID / }).click()
+    await expect(overall).toContainText('Palmer')
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && url.searchParams.get('p2') === '2')
+    await expect(rail).toHaveAttribute('aria-busy', 'false')
+    await expect(rail.getByRole('button')).toHaveCount(15)
+    const second = rail.getByRole('button', { name: 'GKP Player 2', exact: true })
+    await expect(second).toHaveCount(1)
+    await second.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).not.toContainText('Saka')
+    await expect(page.locator('[data-player-stats-edit-slot="second"]')).toHaveCount(0)
+    await page.getByRole('button', { name: zh ? '添加对比' : 'Add comparison', exact: true }).click()
+    await players.getByRole('button', { name: /^Saka MID / }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+    await expect(overall).toContainText('Saka')
+    await second.click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+    await expect(overall).toContainText('Palmer')
+    await expect(overall).toContainText('Saka')
+    await rail.getByRole('button', { name: 'GKP Player 1', exact: true }).click()
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && !url.searchParams.has('p2'))
+    await expect(overall).toContainText('Saka')
+    await expect(overall).not.toContainText('Palmer')
+    await expect(page.locator('[data-player-stats-edit-slot="second"]')).toHaveCount(0)
+    steps.push('PS02.06')
+    expect(steps).toEqual(['PS02.01', 'PS02.02', 'PS02.03', 'PS02.04', 'PS02.05', 'PS02.06'])
+    const requests = (await (await fetch(fixture)).json()).requests as Array<{ operation: string; variables: { entryId?: number; eventId?: number } }>
+    const personalReads = requests.filter(row => ['GetEntryHistory', 'GetEntryEventResult'].includes(row.operation))
+    expect(personalReads.some(row => row.operation === 'GetEntryEventResult')).toBe(true)
+    expect(personalReads.every(row => row.variables.entryId === session.entryId)).toBe(true)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', locale })
+    expect(errors).toEqual([])
+    await testInfo.attach('PS02-bound-squad-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: `PS02.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, entryId: session.entryId, personalReads, steps, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Continuous PS02.01–06: initial player, add and clear second, replace first, duplicate via recent, recent and MySquad selection in one bound context', remaining: 'Performance metrics not measured; directed races have separate execution evidence' }) })
+   } finally {
+    await session.cleanup()
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+   }
+  })
+ }
+})
+
+test.describe('PS02 bound directed races', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ for (const scenario of ['slow', 'out-of-order'] as const) {
+  test(`PS02 bound selection ${scenario}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated session and browser fault injection only')
+   const session = await createSession({ entryId: 15702 })
+   let release = () => {}
+   const held = new Promise<void>(resolve => { release = resolve })
+   const events: string[] = []
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    if (scenario === 'out-of-order') await page.addInitScript(() => {
+     const originalFetch = window.fetch.bind(window)
+     window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? new URL(input, location.origin) : null
+      return url?.pathname === '/api/player-stats/desk' && url.searchParams.get('playerIds')?.split(',').includes('2')
+       ? originalFetch(input, { ...init, signal: undefined }) : originalFetch(input, init)
+     }
+    })
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/zh-CN/explore/player-stats?p1=1')
+    const overall = page.getByRole('region', { name: '球员总览', exact: true })
+    const rail = page.locator('[data-player-stats-navigation-id]')
+    await expect(overall).toContainText('Saka')
+    await expect(rail.getByRole('button')).toHaveCount(15)
+    await expect(rail).toHaveAttribute('aria-busy', 'false')
+    let requests = 0
+    await page.route('**/api/player-stats/desk?**', async route => {
+     const url = new URL(route.request().url())
+     if (!url.searchParams.get('playerIds')?.split(',').includes('2')) return route.continue()
+     requests++
+     events.push('player2-request-held')
+     await held
+     const response = await route.fetch()
+     await route.fulfill({ response })
+     events.push('player2-response-released')
+    })
+    await rail.getByRole('button', { name: 'GKP Player 2', exact: true }).click()
+    await expect.poll(() => requests).toBe(1)
+    // The committed player remains in the URL until the requested detail arrives.
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1')
+    await expect(overall).not.toContainText('Palmer')
+    if (scenario === 'out-of-order') {
+     await rail.getByRole('button', { name: 'GKP Player 1', exact: true }).click()
+     await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && !url.searchParams.has('p2'))
+     await expect(overall).toContainText('Saka')
+     events.push('player1-committed-before-player2-response')
+    }
+    const responseFinished = page.waitForResponse(response => new URL(response.url()).pathname === '/api/player-stats/desk' && new URL(response.url()).searchParams.get('playerIds')?.split(',').includes('2') === true)
+    release()
+    const response = await responseFinished
+    expect(response.status()).toBe(200)
+    expect(await response.finished()).toBeNull()
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    await expect(overall).toContainText(scenario === 'slow' ? 'Palmer' : 'Saka')
+    await expect(overall).not.toContainText(scenario === 'slow' ? 'Saka' : 'Palmer')
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === (scenario === 'slow' ? '2' : '1') && !url.searchParams.has('p2'))
+    expect(requests).toBe(1)
+    expect(events).toEqual(scenario === 'slow' ? ['player2-request-held', 'player2-response-released'] : ['player2-request-held', 'player1-committed-before-player2-response', 'player2-response-released'])
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', theme: 'dark', locale: 'zh-CN' })
+    expect(errors).toEqual([])
+    await testInfo.attach('PS02-directed-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: `PS02.state.0${scenario === 'slow' ? 1 : 2}`, entryId: session.entryId, events, requests, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Bound MySquad first-slot slow read or stale response after newer selection; successful late response awaited', remaining: 'Complete combined slot lifecycle and performance' }) })
+   } finally {
+    release()
+    await page.unrouteAll({ behavior: 'wait' })
+    await session.cleanup()
+   }
+  })
+ }
+})
+
+test.describe('PROFILE04 bound list controls', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+  test(`PROFILE04 current and other sessions ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session only; never revoke a session')
+   const session = await createSession({ entryId: 15702 })
+   const t = (locale === 'en' ? enMessages : zhMessages).Sessions
+   const errors: string[] = []
+   const writes: string[] = []
+   let reads = 0
+   let count = 2
+   page.on('pageerror', error => errors.push(error.message))
+   page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/api/auth/') && !['GET', 'HEAD'].includes(request.method())) writes.push(new URL(request.url()).pathname)
+   })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.route('**/api/auth/list-sessions', async route => {
+     reads++
+     const response = await route.fetch()
+     expect(response.status()).toBe(200)
+     const rows = await response.json()
+     expect(rows).toHaveLength(1)
+     expect(rows[0].userId).toBe(session.userId)
+     const other = { ...rows[0], id: 'isolated-other-session', token: 'isolated-other-session-token', userAgent: 'Mozilla/5.0 Firefox/120.0' }
+     await route.fulfill({ response, json: count === 2 ? [rows[0], other] : count === 1 ? rows : [] })
+    })
+    await page.goto(`/${locale}/profile/sessions`)
+    const main = page.locator('#main-content')
+    const list = main.getByRole('list', { name: t.listLabel, exact: true })
+    const others = main.getByRole('button', { name: t.signOutOthers, exact: true })
+    const all = main.getByRole('button', { name: t.signOutEverywhere, exact: true })
+    for (const expected of [2, 1, 0]) {
+     if (expected !== 2) { count = expected; await page.reload() }
+     await expect.poll(() => reads).toBe(3 - expected)
+     await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(expected ? 1 : 0)
+     if (expected) {
+      await expect(list.getByRole('listitem')).toHaveCount(expected)
+      await expect(list.getByRole('listitem').filter({ hasText: t.thisDevice })).toHaveCount(1)
+      await expect(list.getByRole('button', { name: t.signOut, exact: true })).toHaveCount(expected)
+      for (const button of await list.getByRole('button', { name: t.signOut, exact: true }).all()) await expect(button).toBeEnabled()
+      await expect(all).toBeEnabled()
+     } else {
+      await expect(list).toHaveCount(0)
+      await expect(main.getByText(t.empty, { exact: true })).toBeVisible()
+      await expect(all).toBeDisabled()
+     }
+     if (expected > 1) await expect(others).toBeEnabled()
+     else await expect(others).toBeDisabled()
+     await expect(main.getByText(t.loadFailed, { exact: true })).toHaveCount(0)
+     await expect(main.getByText(t.reauthTitle, { exact: true })).toHaveCount(0)
+    }
+    expect(writes).toEqual([])
+    expect(errors).toEqual([])
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', locale })
+    await testInfo.attach('PROFILE04-list-controls', { contentType: 'application/json', body: JSON.stringify({ variantId: `PROFILE04.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, stepIds: ['PROFILE04.01', 'PROFILE04.02', 'PROFILE04.03'], listCounts: [2, 1, 0], reads, writes, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Real isolated current session plus synthetic other list row; reload reads and count-dependent disabled controls; no revoke clicks', remaining: 'Error/401 historical evidence separate; expired identity and complete performance unproved' }) })
+   } finally {
+    await page.unrouteAll({ behavior: 'wait' })
+    await session.cleanup()
+   }
+  })
+ }
+})
+
+test.describe('TEAM04 private identity cache boundary', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+  test(`TEAM04 same URL isolates accounts ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Task-owned database and serial fixture only')
+   const accounts = [await createSession({ entryId: 15702 }), await createSession({ entryId: 15702 })]
+   expect(accounts[0].entryId).not.toBe(accounts[1].entryId)
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const observations: Array<{ account: number; entryId: number | null; revision: string; cacheControl: string; managerReads: number }> = []
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    for (const { index, account } of [0, 1, 0].map((account, index) => ({ account, index }))) {
+     const session = accounts[account]
+     const revision = String(103 + index * 100)
+     const identity = { ...managerReview.entry!, id: session.entryId!, entryName: `Private Account ${account} Team` }
+     const snapshotMeta = { ...managerSnapshot(3), revision }
+     const review = { ...managerReview, entry: identity, snapshotMeta, currentGameweek: { ...managerGameweek(3), entry: identity, snapshotMeta } }
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+     await addSessionCookie(page, session.cookie)
+     const response = await page.goto(`/${locale}/my-fpl/team`)
+     expect(response?.status()).toBe(200)
+     const cacheControl = response!.headers()['cache-control'] ?? ''
+     expect(cacheControl).toMatch(/\bprivate\b/)
+     expect(cacheControl).toMatch(/\bno-store\b/)
+     expect(cacheControl).not.toMatch(/\bpublic\b|s-maxage=[1-9]/)
+     const ready = page.locator('[data-manager-ready]')
+     await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+     await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+     await expect(ready).toHaveAttribute('data-manager-revision', revision)
+     await expect(page.getByRole('heading', { name: identity.entryName, exact: true })).toBeVisible()
+     await expect(page.locator('#main-content')).not.toContainText(`Private Account ${1 - account} Team`)
+     const requests = (await (await fetch(fixture)).json()).requests as Array<{ operation: string }>
+     const managerReads = requests.filter(row => row.operation === 'GetMyFplManagerReview').length
+     expect(managerReads).toBe(1)
+     observations.push({ account, entryId: session.entryId, revision, cacheControl, managerReads })
+    }
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', locale })
+    expect(errors).toEqual([])
+    await testInfo.attach('TEAM04-private-cache-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: `TEAM04.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, observations, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'A/B/A on identical document URL: private no-store headers, current entry/revision, no other team name, fresh upstream read each visit', remaining: 'GraphQL authorization, SPA transition, production cache and timings not proved' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    for (const account of accounts) await account.cleanup()
+   }
+  })
+ }
+})
+
+test.describe('TEAM04 loader phases directed', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ for (const view of ['season', 'gameweek'] as const) {
+  test(`TEAM04 loader phases ${view}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Controlled local stage diagnosis only')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   try {
+    const identity = { ...managerReview.entry!, id: session.entryId! }
+    const review = { ...managerReview, entry: identity, currentGameweek: { ...managerGameweek(3), entry: identity } }
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetCoreEventContext', delayMs: 120 },
+     { operation: 'GetMyFplManagerReview', delayMs: 250, data: { myFplManagerReview: review } },
+     { operation: 'GetMyFplManagerGameweek', variables: { eventId: 2 }, delayMs: 150, data: { myFplManagerGameweek: { ...managerGameweek(2), entry: identity } } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto(`/zh-CN/my-fpl/team?view=${view}&gw=2`)
+    const ready = page.locator('[data-manager-ready]')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-view', view)
+    await expect(ready).toHaveAttribute('data-manager-gw', view === 'gameweek' ? '2' : '3')
+    await expect(ready).toHaveAttribute('data-manager-revision', view === 'gameweek' ? '102' : '103')
+    const requests = (await (await fetch(fixture)).json()).requests as Array<{ operation: string; variables: Record<string, unknown>; startedAt: number; finishedAt: number | null }>
+    const reviews = requests.filter(row => row.operation === 'GetMyFplManagerReview')
+    const history = requests.filter(row => row.operation === 'GetMyFplManagerGameweek')
+    expect(reviews).toHaveLength(1)
+    expect(reviews[0].finishedAt).not.toBeNull()
+    expect(history).toHaveLength(view === 'gameweek' ? 1 : 0)
+    if (view === 'gameweek') {
+     expect(history[0].variables).toEqual({ eventId: 2, snapshotRevision: null })
+     expect(history[0].startedAt).toBeGreaterThanOrEqual(reviews[0].finishedAt!)
+     expect(history[0].finishedAt).not.toBeNull()
+    }
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', locale: 'zh-CN' })
+    await testInfo.attach('TEAM04-loader-phase-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: 'TEAM04.state.01', view, entryId: session.entryId, revision: view === 'gameweek' ? '102' : '103', injectedDelayMs: { context: 120, review: 250, history: 150 }, requests, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Correct ready marker and request dependency; server stage log retained separately. Injected delays excluded from normal performance distribution.' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
+
+// LC03 distinguishes a rendered pending terminal from complete board data.
+for (const availability of ['PENDING', 'READY', 'MISSING', 'ERROR'] as const) {
+test(`LC03 ${availability} first board reports only complete data readiness`, async ({ page }) => {
+ test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated board fixture only')
+ const session = await createSession({ entryId: 123 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...managedTournament, id: 6, name: 'Pending Coverage League', adminEntryId: 15702 }] } }] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  let observedPending = 0
+  let expectedCount = 0
+  let started = 0
+  let recovered = false
+  let release = () => {}
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const directed = availability === 'MISSING' || availability === 'ERROR'
+  await page.route('**/api/live/competitions/6/board', async route => {
+   started++
+   if (directed && !recovered) await gate
+   const response = await route.fetch()
+   expect(response.ok()).toBe(true)
+   const body = await response.json()
+   const board = body.entryLiveCompetitionBoard
+   expectedCount = board.totalEntries
+   if (availability !== 'READY' && !recovered) {
+    board.head.availability = availability
+    board.rows = []
+    board.viewerRow = null
+   }
+   observedPending++
+   await route.fulfill({ response, json: body })
+  })
+  await page.goto('/live/competitions?tournamentId=6&gw=4')
+  if (directed) {
+   await expect.poll(() => started).toBe(1)
+   await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveCount(0)
+   release()
+  }
+  await expect.poll(() => observedPending).toBeGreaterThan(0)
+  const messages = enMessages as unknown as { LiveTournament: Record<string, string> }
+  // Assert the returned state has committed before testing the marker.
+  const warming = messages.LiveTournament.coverageWarming
+  expect(warming).toBeTruthy()
+  if (availability === 'PENDING') await expect(page.getByText(warming, { exact: true }).first()).toBeVisible()
+  else if (directed) await expect(page.getByText(messages.LiveTournament.unavailableCalculation.replace('{count}', String(expectedCount)), { exact: true }).first()).toBeVisible()
+  else await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+  await expect(page.locator('[data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+  await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveCount(availability === 'READY' ? 1 : 0)
+  if (directed) {
+   recovered = true
+   await page.getByRole('button', { name: messages.LiveTournament.errorCtaRetry, exact: true }).click()
+   await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+   await expect(page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+   expect(observedPending).toBe(2)
+  }
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+}
+
+
+test.describe('TR03 bound directed cohort race', () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('TR03 bound late public cohort cannot replace latest GW', async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated bound session only')
+  const session = await createSession({ entryId: 15702 })
+  const locale = 'zh-CN'
+  const width = 390
+  const variant = { theme: 'dark', timezone: 'UTC' }
+  try {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await addSessionCookie(page, session.cookie)
+   const auth = await page.request.get('/api/auth/get-session')
+   expect(auth.ok()).toBe(true)
+   expect((await auth.json()).user.id).toBe(session.userId)
+			const zh = locale === 'zh-CN'
+			// Isolated fault injection: deliver an old response despite cancellation.
+			await page.addInitScript(() => {
+				const original = window.fetch.bind(window)
+				window.fetch = (input, init) => {
+					if (String(input).includes('/api/trends/public-desk?')) {
+						return original(input, { ...init, signal: undefined })
+					}
+					return original(input, init)
+				}
+			})
+			await page.setViewportSize({ width, height: 900 })
+			await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&tournament=777&gw=33`)
+			await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+			const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
+			const gw = page.getByRole('combobox', { name: zh ? '观察轮次' : 'Gameweek', exact: true })
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
+			let release!: () => void
+			const gate = new Promise<void>(resolve => { release = resolve })
+			let oldReady = false
+			await page.route('**/api/trends/public-desk?**', async route => {
+				if (new URL(route.request().url()).searchParams.get('cohortId') !== 'competition:779') return route.continue()
+				const response = await route.fetch()
+				oldReady = true
+				await gate
+				await route.fulfill({ response })
+			})
+			await cohort.selectOption('competition:779')
+			await expect.poll(() => oldReady).toBe(true)
+			await cohort.selectOption('competition:777')
+			await gw.selectOption('32')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			await expect(page.getByRole('tabpanel').getByRole('listitem').first().getByText('64%', { exact: true })).toBeVisible()
+			const oldResponse = page.waitForResponse(response => new URL(response.url()).searchParams.get('cohortId') === 'competition:779')
+			release()
+			await (await oldResponse).finished()
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			await expect(cohort).toHaveValue('competition:777')
+			await expect(gw).toHaveValue('32')
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
+			await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:777' && url.searchParams.get('gw') === '32')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			for (const name of zh ? ['持有率', '队长选择', '转会'] : ['Ownership', 'Captaincy', 'Transfers']) {
+				await page.getByRole('tab', { name, exact: true }).click()
+				const rows = page.getByRole('tabpanel').getByRole('listitem')
+				await expect(rows).toHaveCount(name === 'Transfers' || name === '转会' ? 1 : 2)
+				for (const row of await rows.all()) {
+					await expect(row.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+					await expect(row.getByText('64%', { exact: true })).toBeVisible()
+				}
+			}
+   expect(await page.evaluate(() => navigator.language)).toBe('zh-CN')
+   await testInfo.attach('TR03-bound-scope-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: 'TR03.state.01', stepId: 'TR03.01', persona: 'B', locale, width, theme: 'dark', timezone: 'UTC', scope: 'PUBLIC while authenticated; MINE isolation not covered', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+})
+
+
+for (const role of ['anonymous', 'unbound', 'bound'] as const) {
+ test(`TR01 private endpoints enforce ${role} identity`, async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated identity boundary')
+  const session = role === 'anonymous' ? null : await createSession(role === 'bound' ? { entryId: 15702 } : {})
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const privateReads = async () => {
+   const ledger = await (await fetch(fixture)).json()
+   return ledger.requests.filter((row: { operation: string; variables?: { access?: string } }) => ['TrendCohorts', 'TrendCohortSnapshot'].includes(row.operation) && row.variables?.access === 'MINE')
+  }
+  try {
+   if (session) {
+    await addSessionCookie(page, session.cookie)
+    const auth = await page.request.get('/api/auth/get-session')
+    expect((await auth.json()).user.id).toBe(session.userId)
+   }
+   const before = (await privateReads()).length
+   for (const endpoint of ['/api/trends/my-cohorts', '/api/trends/my-desk?cohortId=competition%3A778&eventId=33&limit=12']) {
+    const response = await page.request.get(endpoint)
+    expect(response.status()).toBe(role === 'bound' ? 200 : 401)
+    expect(response.headers()['cache-control']).toBe('private, no-store')
+    const body = await response.json()
+    if (role !== 'bound') expect(body).toEqual({ error: 'Authentication required' })
+    else if (endpoint.includes('my-cohorts')) expect(body.cohorts).toEqual(expect.arrayContaining([expect.objectContaining({ access: 'MINE', id: 'competition:778' })]))
+    else expect(body.trendCohortSnapshot).toMatchObject({ cohort: { access: 'MINE', id: 'competition:778' }, eventId: 33 })
+   }
+   const after = await privateReads()
+   expect(after.length - before).toBe(role === 'bound' ? 2 : 0)
+   await testInfo.attach('TR01-private-identity', { contentType: 'application/json', body: JSON.stringify({ role, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, upstreamPrivateReads: after.length - before, wholeVariantComplete: false }) })
+  } finally { await session?.cleanup() }
+ })
+}
+
+
+for (const keepDisplayCache of [false, true]) {
+test(`TR01 private reads transmit current account identity A B A ${keepDisplayCache ? 'stale-display' : 'clean'}`, async ({ page }) => {
+ test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated account switching')
+ const a = await createSession({ entryId: 15702 })
+ const b = await createSession({ entryId: 15703 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const readLedger = async () => (await (await fetch(fixture)).json()).requests.filter((r: { operation: string; variables: { access?: string } }) => r.operation === 'TrendCohortSnapshot' && r.variables.access === 'MINE')
+ try {
+  const initial = (await readLedger()).length
+  for (const account of [a, b, a]) {
+   if (!keepDisplayCache) await page.context().clearCookies()
+   await addSessionCookie(page, account.cookie)
+   const auth = await page.request.get('/api/auth/get-session')
+   expect((await auth.json()).user.id).toBe(keepDisplayCache ? a.userId : account.userId)
+   const response = await page.request.get('/api/trends/my-desk?cohortId=competition%3A778&eventId=33&limit=12')
+   expect(response.status()).toBe(200)
+   expect(response.headers()['cache-control']).toBe('private, no-store')
+   expect((await response.json()).trendCohortSnapshot).toMatchObject({ cohort: { access: 'MINE', id: 'competition:778' }, eventId: 33 })
+   const reads = await readLedger()
+   expect(reads.at(-1).identityDigest).toBe(createHash('sha256').update(JSON.stringify([account.userId, account.entryId])).digest('hex'))
+  }
+  expect((await readLedger()).length - initial).toBe(3)
+ } finally { await a.cleanup(); await b.cleanup() }
+})
+}
+
+
+test('TR01 revoked session cannot use cached display identity for private reads', async ({ page }) => {
+ test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated revocation')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const sql = postgres(process.env.E2E_DIRECT_DATABASE_URL!, { max: 1 })
+ const reads = async () => (await (await fetch(fixture)).json()).requests.filter((r: { variables?: { access?: string } }) => r.variables?.access === 'MINE').length
+ try {
+  await addSessionCookie(page, session.cookie)
+  const auth = await page.request.get('/api/auth/get-session')
+  expect((await auth.json()).user.id).toBe(session.userId)
+  expect((await page.context().cookies()).some(cookie => cookie.name.includes('session_data'))).toBe(true)
+  await sql`DELETE FROM bauth.session WHERE user_id = ${session.userId}`
+  const before = await reads()
+  for (const endpoint of ['/api/trends/my-cohorts', '/api/trends/my-desk?cohortId=competition%3A778&eventId=33&limit=12']) {
+   const response = await page.request.get(endpoint)
+   expect(response.status()).toBe(401)
+   expect(response.headers()['cache-control']).toBe('private, no-store')
+   expect(await response.json()).toEqual({ error: 'Authentication required' })
+  }
+  expect(await reads()).toBe(before)
+ } finally { await sql.end(); await session.cleanup() }
 })

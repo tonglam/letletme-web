@@ -224,6 +224,8 @@ export function createBasePlayerDetail(
 			yellowCards: player.yellow_cards,
 			redCards: player.red_cards
 		},
+		breakdownSource: 'none',
+		breakdownPending: (player.totalPoints ?? 0) !== 0 || (player.minutes ?? 0) > 0,
 		pointsBreakdown: []
 	}
 }

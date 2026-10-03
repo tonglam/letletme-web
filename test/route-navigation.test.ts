@@ -254,6 +254,19 @@ it('shares clock identity across markers and changes it on repeat navigation', (
  markRouteNavigationStart('/market', 20, 'https://example.test')
  assert.notEqual(routeReadyNavigationId('/market', 0), first)
 })
+it('publishes an RSC-provided identity for the active route clock', () => {
+ const serverNavigationId = 'nav-rsc-seeded-12345678'
+ markRouteNavigationStart('/explore/player-stats', 10, 'https://example.test')
+ assert.notEqual(routeReadyNavigationId('/explore/player-stats', 0), serverNavigationId)
+ assert.equal(
+  routeReadyNavigationId('/explore/player-stats', 0, serverNavigationId),
+  serverNavigationId
+ )
+ const activeMark = performance.getEntriesByName('letletme-active-navigation') as PerformanceMark[]
+ assert.equal(activeMark.length, 1)
+ assert.equal(activeMark[0].detail.navigationId, serverNavigationId)
+ assert.equal(routeReadyNavigationId('/profile', 0, 'nav-wrong-route-12345678'), undefined)
+})
 it('does not manufacture a navigation identity without a clock', () => {
  assert.equal(routeReadyNavigationId('/market', null), undefined)
 })
@@ -281,4 +294,26 @@ it('finishing an old claimed navigation does not consume a newer background resu
  assert.equal(measureRouteReadyDuration('/market', 120, 0, undefined, 'identity', 10), 110)
  assert.equal(routeReadyMeasurementKind('/market', 0), 'background_resume')
  assert.equal(measureRouteReadyDuration('/market', 130, 0), 50)
+})
+
+
+it('publishes a distinct bounded identity for same-path query changes and traversal', () => {
+ const markName = 'letletme-active-navigation'
+ const ids: string[] = []
+ for (const [index, target] of Array.from(['/en/live?gw=4', '/en/live?gw=5', '/en/live?gw=4'].entries())) {
+  markRouteNavigationStart(target, index + 1, 'http://localhost/')
+  const id = routeReadyNavigationId('/en/live', 0)
+  assert.ok(id)
+  ids.push(id)
+  const entries = performance.getEntriesByName(markName) as PerformanceMark[]
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0].detail.navigationId, id)
+ }
+ assert.equal(new Set(ids).size, 3)
+ markBackgroundResumeStart('/en/live', 10)
+ assert.equal(performance.getEntriesByName(markName).length, 0)
+ resetRouteNavigationStartForTests()
+ const initialId = routeReadyNavigationId('/en/live', 0)
+ assert.ok(initialId)
+ assert.equal((performance.getEntriesByName(markName)[0] as PerformanceMark).detail.navigationId, initialId)
 })

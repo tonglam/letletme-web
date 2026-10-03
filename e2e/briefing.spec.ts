@@ -9,13 +9,15 @@ async function control(rules: unknown[] = []) {
  expect(response.ok).toBe(true)
 }
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
-  test.describe(`J17 ${locale} ${width}`, () => {
-   test.use({ viewport: { width, height: 900 }, timezoneId: 'Australia/Perth' })
+for (const directed of [false, true]) {
+for (const locale of (directed ? ['zh-CN'] : ['en', 'zh-CN'])) {
+ for (const width of (directed ? [390] : [1440, 390])) {
+  test.describe(`J17 ${directed ? "directed published" : "baseline"} ${locale} ${width}`, () => {
+   test.use({ viewport: { width, height: 900 }, timezoneId: directed ? 'UTC' : 'Australia/Perth', colorScheme: directed ? 'dark' : 'light' })
    test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'true', 'Requires an explicitly enabled isolated standalone server')
    test.afterEach(async () => { await control() })
    test('Week to canonical story and back preserves publication content', async ({ page }, testInfo) => {
+    await page.addInitScript(theme => localStorage.setItem('theme', theme), directed ? 'dark' : 'system')
     const prefix = locale === 'en' ? '' : '/zh-CN'
     const gqlLocale = locale === 'en' ? 'EN' : 'ZH_CN'
     const story = { id: 'j17-story', slug: 'j17-old-slug', storyRevision: 3, title: locale === 'en' ? 'J17 fixture dispatch' : 'J17 隔离周报', summary: 'J17 publication-specific summary', sourceName: 'Fixture source', sourceUrl: 'https://example.invalid/j17-source', sourceCheckedAt: '2026-09-15T10:00:00Z', expiresAt: null }
@@ -153,18 +155,25 @@ for (const locale of ['en', 'zh-CN'] as const) {
      wholeVariantComplete: false,
      missingReason: 'Scoped enabled publication route evidence; remaining state/locale/device/role variants and performance markers remain open.'
     }), contentType: 'application/json' })
-    await testInfo.attach('J17-scope', { body: JSON.stringify({ caseId: 'J17', additionalStepAssertions: ['R10.05', 'R11.05'], steps: ['J17.01','J17.02','J17.03','J17.04','J17.05','J17.06','J17.07'], variantId: `J17.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, reads, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false, limitation: 'Summary/source contract only; no full-body field. No cold/warm or browser vitals measured.' }), contentType: 'application/json' })
+    if (directed) {
+     await expect(page.locator('html')).toHaveClass(/dark/)
+     expect(await page.evaluate(() => ({ width: innerWidth, locale: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, locale: 'zh-CN', timezone: 'UTC' })
+    }
+    await testInfo.attach('J17-scope', { body: JSON.stringify({ caseId: 'J17', additionalStepAssertions: ['R10.05', 'R11.05'], steps: ['J17.01','J17.02','J17.03','J17.04','J17.05','J17.06','J17.07'], variantId: directed ? 'J17.state.03' : `J17.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, additionalVariantIds: directed ? ['J17.state.01'] : [], reads, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false, limitation: 'Summary/source contract only; no full-body field. No cold/warm or browser vitals measured.' }), contentType: 'application/json' })
    })
   })
  }
 }
 
+}
+
 for (const locale of ['en', 'zh-CN'] as const) {
  test.describe(`J17 states ${locale}`, () => {
-  test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC' })
+  test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'true', 'Enabled isolated runtime only')
   test.afterEach(async () => { await control() })
-  test('missing and withdrawn stories do not render stale story content', async ({ page }) => {
+  test('missing and withdrawn stories do not render stale story content', async ({ page }, testInfo) => {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
    const prefix = locale === 'en' ? '' : '/zh-CN'
    for (const [slug, result, heading] of [
     ['missing', null, locale === 'en' ? 'Briefing temporarily unavailable' : '资讯暂时不可用'],
@@ -175,13 +184,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
     await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible()
     await expect(page.getByText('Must not render withdrawn content', { exact: true })).toHaveCount(0)
     await expect(page.locator('article')).toHaveCount(0)
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', locale })
+    await testInfo.attach('J17-missing-context', { contentType: 'application/json', body: JSON.stringify({ variantId: locale === 'zh-CN' ? 'J17.state.04' : null, slug, readyMs: null, wholeVariantComplete: false }) })
    }
   })
  })
  test.describe(`J17 disabled ${locale}`, () => {
+  test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.BRIEFING_PUBLIC_ENABLED !== 'false', 'Separate explicitly disabled isolated runtime only')
   test.afterEach(async () => { await control() })
-  test('feature-disabled routes show not-found without publication reads', async ({ page }) => {
+  test('feature-disabled routes show not-found without publication reads', async ({ page }, testInfo) => {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
    await control()
    const prefix = locale === 'en' ? '' : '/zh-CN'
    for (const path of ['/briefing', '/briefing/week', '/briefing/story/j17-canonical']) {
@@ -190,6 +204,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
    }
    const observations = await (await fetch(fixture)).json()
    expect(observations.requests.filter((row: { operation: string }) => row.operation.startsWith('Briefing'))).toEqual([])
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, timezone: 'UTC' })
+   await testInfo.attach('J17-disabled-context', { contentType: 'application/json', body: JSON.stringify({ variantId: locale === 'zh-CN' ? 'J17.state.02' : null, locale, publicationReads: 0, readyMs: null, wholeVariantComplete: false }) })
   })
  })
 }

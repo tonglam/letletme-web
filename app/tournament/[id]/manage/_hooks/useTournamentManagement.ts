@@ -88,6 +88,9 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			}
 		})
 	}
+	// A denial invalidates this authorized server snapshot, not future RSC reads.
+	const [deniedTournament, setDeniedTournament] = useState<EntryTournament | null>(null)
+	const authorizationLost = deniedTournament === tournament
 	const [isSaving, setIsSaving] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
 	const [pendingAction, setPendingAction] =
@@ -109,7 +112,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		)
 
 	useEffect(() => {
-		if (!lifecycleWorkInFlight) return
+		if (!lifecycleWorkInFlight || authorizationLost) return
 		let cancelled = false
 		let terminalRefreshed = false
 		let revision = tournament.updatedAt
@@ -128,6 +131,15 @@ export function useTournamentManagement(tournament: EntryTournament) {
 						`/api/tournaments/${tournament.id}/status?revision=${encodeURIComponent(revision)}`,
 						{ cache: 'no-store' }
 					)
+					if (cancelled) return
+					if (response.status === 401 || response.status === 403) {
+						// Invalidate this polling generation before any concurrent response
+						// can restore content after an explicit authorization denial.
+						cancelled = true
+						setDeniedTournament(tournament)
+						router.refresh()
+						return
+					}
 					status = (await response.json()) as Record<string, unknown>
 					if (typeof status.revision === 'string') revision = status.revision
 					if (response.status !== 409 || attempt === 1 || cancelled) break
@@ -231,7 +243,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			cancelled = true
 			window.clearInterval(timer)
 		}
-	}, [lifecycleWorkInFlight, router, tournament.id, tournament.updatedAt])
+	}, [authorizationLost, lifecycleWorkInFlight, router, tournament])
 
 	const renameTournament = async ({ name }: TournamentNameForm) => {
 		const normalizedName = name.trim()
@@ -343,6 +355,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	}
 
 	return {
+		authorizationLost,
 		currentName: currentTournament.name,
 		currentTournament,
 		deleteTournament,

@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test'
 import type { LiveMatchdayResponse } from '../lib/graphql/operations/live'
 
-test.describe('SSR remediation MATCH04 fallback publication', () => {
+for (const plannedState of [false, true]) {
+test.describe(`SSR remediation MATCH04 fallback publication${plannedState ? ' planned UTC dark' : ''}`, () => {
+ if (plannedState) test.use({ timezoneId: 'UTC', colorScheme: 'dark' })
  test.describe.configure({ mode: 'serial' })
- for (const locale of ['en', 'zh-CN']) {
-  for (const width of [1440, 390]) {
-   for (const scenario of ['current', 'advance', 'unavailable', 'corroborated'] as const) {
+ for (const locale of plannedState ? ['zh-CN'] : ['en', 'zh-CN']) {
+  for (const width of plannedState ? [390] : [1440, 390]) {
+   for (const scenario of plannedState ? ['advance', 'unavailable'] as const : ['current', 'advance', 'unavailable', 'corroborated'] as const) {
     test(`${scenario} ${locale} ${width}px`, async ({ page }) => {
      test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Requires isolated serial fixture controls')
      const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -44,6 +46,10 @@ test.describe('SSR remediation MATCH04 fallback publication', () => {
       ])
       await page.setViewportSize({ width, height: 900 })
       await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/live/matches`)
+      if (plannedState) {
+       expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, dark: matchMedia('(prefers-color-scheme: dark)').matches, width: innerWidth }))).toEqual({ timezone: 'UTC', dark: true, width: 390 })
+       await expect(page.locator('html')).toHaveClass(/dark/)
+      }
       const marker = page.locator('[data-letletme-contract="live_matches"]')
       await expect(marker).toHaveAttribute('data-status', scenario === 'unavailable' ? 'UNAVAILABLE' : scenario === 'corroborated' ? 'STALE' : 'READY')
       await expect(marker).toHaveAttribute('data-revision', scenario === 'unavailable' ? 'unavailable' : current.liveMatchday.snapshot!.revisions.scoreState)
@@ -65,3 +71,4 @@ test.describe('SSR remediation MATCH04 fallback publication', () => {
   }
  }
 })
+}

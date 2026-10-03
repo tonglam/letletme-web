@@ -725,7 +725,14 @@ export function LiveMatchesClient({
 
 	return (
 		<PageShell>
-			<div className="container mx-auto max-w-4xl px-4 py-8">
+			<div
+				className="container mx-auto max-w-4xl px-4 py-8"
+				data-live-matchday-view="true"
+				data-event-id={snapshot?.eventId}
+				data-season={snapshot?.season}
+				data-revisions={snapshot ? JSON.stringify(snapshot.revisions) : undefined}
+				data-loading={String(isLoading || isRefreshing)}
+			>
 				<RouteReadyMarker
 					name="LIVE_MATCHDAY_READY"
 					readyKey={
@@ -800,6 +807,7 @@ export function LiveMatchesClient({
 										allMatches={activeMatches}
 										currentIndex={i}
 										eventId={selectedEventId}
+										sourceRevision={snapshot ? JSON.stringify([snapshot.season, snapshot.eventId, snapshot.revisions]) : undefined}
 									/>
 								))
 							) : (
