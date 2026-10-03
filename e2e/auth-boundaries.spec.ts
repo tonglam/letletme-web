@@ -147,8 +147,11 @@ test.describe('AUTH03.state.02 expired token', () => {
  })
 })
 
-for (const locale of ['en', 'zh-CN'] as const) {
- for (const width of [1440, 390]) {
+for (const planned of [false, true]) {
+ test.describe(planned ? 'AUTH01 directed ready' : 'AUTH01 baseline', () => {
+  test.use({ timezoneId: planned ? 'UTC' : 'Australia/Perth', colorScheme: planned ? 'dark' : 'light' })
+for (const locale of (planned ? ['zh-CN'] as const : ['en', 'zh-CN'] as const)) {
+ for (const width of (planned ? [390] : [1440, 390])) {
   const prefix = locale === 'en' ? '' : '/zh-CN'
   const t = (locale === 'en' ? en : zh).Auth
   const forms = [
@@ -206,6 +209,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
    await expect(page.getByLabel(t.password, { exact: true })).toBeEnabled()
   })
  }
+}
+
+ })
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
