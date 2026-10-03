@@ -8475,6 +8475,7 @@ for (const chip of ['3xc', 'bboost'] as const) {
   await page.setViewportSize({ width: 390, height: 844 })
   const expectedTeamPoints = chip === '3xc' ? 28 : 26
   let chipReads = 0
+  let contributionSum: number | null = null
   await page.route('**/api/graphql', async route => {
    const request = route.request().postDataJSON() as { query?: string }
    if (!request.query?.includes('GetLiveCalcPoints')) {
@@ -8491,6 +8492,7 @@ for (const chip of ['3xc', 'bboost'] as const) {
     pick.multiplier = pick.element === 1 ? (chip === '3xc' ? 3 : 2) : (pick.position <= 11 || chip === 'bboost' ? 1 : 0)
     pick.pickActive = pick.position <= 11 || chip === 'bboost'
    }
+   contributionSum = live.pickList.reduce((sum: number, pick: { totalPoints: number; multiplier: number }) => sum + pick.totalPoints * pick.multiplier, 0)
    chipReads += 1
    await route.fulfill({ response, json: body })
   })
@@ -8503,6 +8505,7 @@ for (const chip of ['3xc', 'bboost'] as const) {
   expect(await page.evaluate(() => innerWidth)).toBe(390)
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   await expect.poll(() => chipReads).toBeGreaterThan(0)
+  expect(contributionSum).toBe(expectedTeamPoints)
   const pitch = page.getByRole('region', { name: /阵型/ })
   await expect(pitch.getByText(chip === '3xc' ? 'TC' : 'BB', { exact: true }).first()).toBeVisible()
   await expect(pitch.getByText(String(expectedTeamPoints), { exact: true }).first()).toBeVisible()
@@ -8513,9 +8516,10 @@ for (const chip of ['3xc', 'bboost'] as const) {
    await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
    await expect(dialog.getByText('估算', { exact: true })).toHaveCount(0)
    await expect(dialog.getByText(`+${rawPoints}`, { exact: true }).last()).toBeVisible()
+   if (id === 1) await expect(dialog.getByText(chip === '3xc' ? '+18' : '+12', { exact: true })).toHaveCount(0)
    await dialog.getByRole('button', { name: '关闭', exact: true }).click()
   }
-  await testInfo.attach('LP02-state-context', { contentType: 'application/json', body: JSON.stringify({ variantId: chip === '3xc' ? 'LP02.state.03' : 'LP02.state.02', entryId: session.entryId, gw: 33, chip, expectedTeamPoints, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', readyMs: null, wholeVariantComplete: false }) })
+  await testInfo.attach('LP02-state-context', { contentType: 'application/json', body: JSON.stringify({ variantId: chip === '3xc' ? 'LP02.state.03' : 'LP02.state.02', entryId: session.entryId, gw: 33, chip, expectedTeamPoints, contributionSum, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', readyMs: null, wholeVariantComplete: false }) })
   } finally { await session.cleanup() }
  })
 }
@@ -8524,7 +8528,8 @@ for (const chip of ['3xc', 'bboost'] as const) {
 
 test.describe('LP02 bound automatic substitution', () => {
  test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
- test('LP02 state01 published defender swap retains bound context', async ({ page }, testInfo) => {
+ for (const lifecycle of ['published', 'official'] as const) {
+ test(`LP02 state01 ${lifecycle} defender swap retains bound context`, async ({ page }, testInfo) => {
   const session = await createSession({ entryId: 123 })
   let reads = 0
   try {
@@ -8543,6 +8548,11 @@ test.describe('LP02 bound automatic substitution', () => {
      pick.autoSub = pick.element === 6
      if (pick.element === 3) { pick.minutes = 0; pick.totalPoints = 0; pick.isGwFinished = true; pick.isPlayed = false }
     }
+    if (lifecycle === 'official') {
+     live.score.delivery = { ...live.score.delivery, state: 'FINAL' }
+     live.score.source = 'FPL_FINAL_RESULT'
+     live.score.calculationMode = 'FINAL_RESULT'
+    }
     live.score.eventPoints = 22
     live.score.netEventPoints = 22
     reads++
@@ -8557,8 +8567,8 @@ test.describe('LP02 bound automatic substitution', () => {
    expect(await page.evaluate(() => innerWidth)).toBe(390)
    await expect(page.locator('html')).toHaveClass(/dark/)
    const pitch = page.getByRole('region', { name: /阵型/ })
-   const incoming = pitch.getByRole('button', { name: /查看 Player 6 的详情.*Player 6 换入，替下 Player 3/ })
-   const outgoing = pitch.getByRole('button', { name: /查看 Player 3 的详情.*Player 3 被 Player 6 替下/ })
+   const incoming = pitch.getByRole('button', { name: lifecycle === 'official' ? /查看 Player 6 的详情.*官方已换入 Player 6，替下 Player 3/ : /查看 Player 6 的详情.*实时自动换人：Player 6 换入，替下 Player 3/ })
+   const outgoing = pitch.getByRole('button', { name: lifecycle === 'official' ? /查看 Player 3 的详情.*官方已用 Player 6 替下 Player 3/ : /查看 Player 3 的详情.*实时自动换人：Player 3 被 Player 6 替下/ })
    await expect(incoming).toBeVisible()
    await expect(outgoing).toBeVisible()
    for (const [position, ids] of [['GKP', [1]], ['DEF', [6, 4, 5]], ['MID', [8, 9, 10, 11]], ['FWD', [13, 14, 15]]] as const) {
@@ -8578,9 +8588,10 @@ test.describe('LP02 bound automatic substitution', () => {
    await expect(dialog.getByText('+1', { exact: true }).last()).toBeVisible()
    await dialog.getByRole('button', { name: '关闭', exact: true }).click()
    await expect(incoming).toBeFocused()
-   await testInfo.attach('LP02-auto-sub', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP02.state.01', entryId: session.entryId, gw: 33, incoming: 6, outgoing: 3, expectedTeamPoints: 22, readyMs: null, wholeVariantComplete: false }) })
+   await testInfo.attach('LP02-auto-sub', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP02.state.01', lifecycle, entryId: session.entryId, gw: 33, incoming: 6, outgoing: 3, expectedTeamPoints: 22, readyMs: null, wholeVariantComplete: false }) })
   } finally { await session.cleanup() }
  })
+ }
 })
 
 test.describe('LP02 bound double gameweek', () => {
