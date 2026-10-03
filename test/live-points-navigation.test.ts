@@ -133,6 +133,10 @@ describe('live points navigation context', () => {
 			tournamentReview,
 			/reviewReady \|\|\s*\(selectedTournament\.latestFinalizedEventId === null/
 		)
+		assert.match(
+			tournamentReview,
+			/reviewReady \? t\('reviewLiveStandingsLink'\) : t\('reviewLiveLink'\)/
+		)
 	})
 
 	it('keeps player detail selection scoped to player and gameweek', () => {

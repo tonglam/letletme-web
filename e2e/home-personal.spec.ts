@@ -1644,6 +1644,11 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(row).toContainText('75')
 				await expect(row).toContainText('71')
 				await expect(unsettledLink).toHaveCount(0)
+				const contextualLive = review.getByRole('link', {
+					name: locale === 'zh-CN' ? '查看实时榜' : 'View live standings',
+					exact: true
+				})
+				await expect(contextualLive).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			}
 			await expect(live).toBeVisible()
 			await expect(live).toHaveAttribute('href', publishedJourney ? `${prefix}/live/competitions` : `${prefix}/live/competitions?tournamentId=6&gw=4`)
