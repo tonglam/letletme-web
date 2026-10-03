@@ -8219,7 +8219,7 @@ for (const context of [
  const zh = context.locale === 'zh-CN'
  for (const [role, variantId] of [['owner', 'S08.directed.04'], ['admin', 'S08.directed.05'], ['nonowner', 'S08.directed.06']] as const) {
   test(`${context.kind === 'baseline' ? parentVariantId : variantId} ${role} actual menu and management boundary`, async ({ page }, testInfo) => {
-   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated trusted role configuration only')
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_S08_ROLE_BOUNDARY !== '1', 'Isolated trusted role configuration only')
    const session = await createSession({ entryId: 909090, ...(role === 'admin' ? { userId: 'e2e-management-platform-admin' } : {}) })
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const tournament = { ...managedTournament, adminEntryId: role === 'owner' ? session.entryId : 808080 }
@@ -8918,6 +8918,16 @@ test.describe('MATCH03 stale detail boundary', () => {
   newer.liveMatchday.snapshot.revisions.detailGeneration = 10
   newer.liveMatchday.snapshot.revisions.detailPublicationId = 'detail10'
   newer.liveMatchday.snapshot.revisions.playerDetail = 'd'.repeat(24)
+  newer.liveMatchday.snapshot.revisions.detailObservation = 'd'.repeat(24)
+  newer.liveMatchday.snapshot.times.detailSourceCheckedAt = '2026-08-04T18:00:30.000Z'
+  newer.liveMatchday.snapshot.times.detailContentUpdatedAt = '2026-08-04T18:00:00.000Z'
+  newer.liveMatchday.snapshot.times.detailPublishedAt = '2026-08-04T18:00:00.000Z'
+  newer.liveMatchday.snapshot.times.detailStaleAt = '2026-08-04T18:01:07.500Z'
+  newer.liveMatchday.snapshot.detailDelivery = {
+   state: 'FRESH',
+   servedFrom: 'REDIS_CURRENT',
+   reasonCodes: []
+  }
   newer.liveMatchday.snapshot.matches[0].players = [{ id: 257, webName: 'Accepted Bassey', position: 'DEFENDER', teamId: oldMatch.homeTeamId, price: 45, totalPoints: 6, stats: [{ identifier: 'minutes', value: 90 }] }]
   newer.liveMatchday.snapshot.matches[0].players.push({ id: 9999, webName: 'Accepted Away Player', position: 'MIDFIELDER', teamId: oldMatch.awayTeamId, price: 55, totalPoints: 2, stats: [{ identifier: 'minutes', value: 90 }] })
   const staleDetail = structuredClone(newer)
@@ -9085,7 +9095,12 @@ test.describe('MATCH03 partial detail boundary', () => {
   delayed.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-partial-desk'
   delayed.liveMatchday.snapshot.revisions.scoreState = 'e'.repeat(24)
   delayed.liveMatchday.snapshot.matches[0].homeScore += 1
-  delayed.liveMatchday.snapshot.detailDelivery = { state: 'DEGRADED', servedFrom: 'REDIS_CURRENT', reasonCodes: ['DETAIL_PENDING'] }
+  const hasDetailRevision = delayed.liveMatchday.snapshot.revisions.detailPublicationId !== null
+  delayed.liveMatchday.snapshot.detailDelivery = {
+   state: 'DEGRADED',
+   servedFrom: hasDetailRevision ? seed.data.liveMatchday.snapshot.detailDelivery.servedFrom : null,
+   reasonCodes: ['DETAIL_PENDING']
+  }
   const recovered = structuredClone(delayed)
   recovered.liveMatchday.snapshot.revisions.deskGeneration += 1
   recovered.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-recovered-desk'
