@@ -9477,3 +9477,53 @@ test.describe('PROFILE04 bound list controls', () => {
   })
  }
 })
+
+test.describe('TEAM04 private identity cache boundary', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+  test(`TEAM04 same URL isolates accounts ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Task-owned database and serial fixture only')
+   const accounts = [await createSession({ entryId: 15702 }), await createSession({ entryId: 15702 })]
+   expect(accounts[0].entryId).not.toBe(accounts[1].entryId)
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   const observations: Array<{ account: number; entryId: number | null; revision: string; cacheControl: string; managerReads: number }> = []
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    for (const [index, account] of [0, 1, 0].entries()) {
+     const session = accounts[account]
+     const revision = String(103 + index * 100)
+     const identity = { ...managerReview.entry!, id: session.entryId!, entryName: `Private Account ${account} Team` }
+     const snapshotMeta = { ...managerSnapshot(3), revision }
+     const review = { ...managerReview, entry: identity, snapshotMeta, currentGameweek: { ...managerGameweek(3), entry: identity, snapshotMeta } }
+     expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } }] }) })).ok).toBe(true)
+     await addSessionCookie(page, session.cookie)
+     const response = await page.goto(`/${locale}/my-fpl/team`)
+     expect(response?.status()).toBe(200)
+     const cacheControl = response!.headers()['cache-control'] ?? ''
+     expect(cacheControl).toMatch(/\bprivate\b/)
+     expect(cacheControl).toMatch(/\bno-store\b/)
+     expect(cacheControl).not.toMatch(/\bpublic\b|s-maxage=[1-9]/)
+     const ready = page.locator('[data-manager-ready]')
+     await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+     await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+     await expect(ready).toHaveAttribute('data-manager-revision', revision)
+     await expect(page.getByRole('heading', { name: identity.entryName, exact: true })).toBeVisible()
+     await expect(page.locator('#main-content')).not.toContainText(`Private Account ${1 - account} Team`)
+     const requests = (await (await fetch(fixture)).json()).requests as Array<{ operation: string }>
+     const managerReads = requests.filter(row => row.operation === 'GetMyFplManagerReview').length
+     expect(managerReads).toBe(1)
+     observations.push({ account, entryId: session.entryId, revision, cacheControl, managerReads })
+    }
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', locale })
+    expect(errors).toEqual([])
+    await testInfo.attach('TEAM04-private-cache-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: `TEAM04.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, observations, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'A/B/A on identical document URL: private no-store headers, current entry/revision, no other team name, fresh upstream read each visit', remaining: 'GraphQL authorization, SPA transition, production cache and timings not proved' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    for (const account of accounts) await account.cleanup()
+   }
+  })
+ }
+})
