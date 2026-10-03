@@ -4101,6 +4101,7 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
    const dialog = page.getByRole('dialog')
    await expect(dialog).toBeVisible()
    await expect(dialog.getByRole('heading')).toContainText(chip)
+   await expect(dialog).toHaveAccessibleDescription(zh ? '2 次转会' : '2 transfers')
    const eventId = index + 2
    await expect(dialog.locator('li')).toHaveCount(2)
    for (const move of [1, 2]) {
@@ -5779,6 +5780,7 @@ for (const { locale, width, planned } of [
    const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
    const timeline = Array.from({ length: 25 }, (_, index) => ({
     ...managerReview.timeline[0], eventId: index + 1, eventChip: 'NONE',
+    eventTransfersCost: planned && index === 23 ? 4 : 0,
     eventTransfers: index === 24 ? 0 : planned && index === 23 ? 8 : 1, overallPoints: (index + 1) * 60
    }))
    const review = {
@@ -5788,7 +5790,7 @@ for (const { locale, width, planned } of [
     currentGameweek: { ...managerGameweek(3), eventId: 25, entry: { ...managerReview.entry!, id: session.entryId! }, snapshotMeta: managerSnapshot(25), result: { ...managerGameweek(3).result!, ...timeline[24] } },
     context: { ...managerReview.context, currentEventId: 25, nextEventId: 26, latestFinalizedEventId: 25, latestPublishedEventId: 25 },
     transfers: timeline.map(row => ({
-     ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers,
+     ...managerReview.transfers[0], eventId: row.eventId, eventTransfers: row.eventTransfers, eventTransfersCost: row.eventTransfersCost,
      transfers: Array.from({ length: row.eventTransfers }, (_, move) => ({ ...managerReview.transfers[0].transfers[0], eventId: row.eventId, elementInWebName: `Transfer In GW${row.eventId}-${move + 1}`, elementOutWebName: `Transfer Out GW${row.eventId}-${move + 1}`, evaluatedThroughEventId: row.eventId }))
     }))
    }
@@ -5822,6 +5824,7 @@ for (const { locale, width, planned } of [
       await opener.click()
       const sheet = page.getByRole('dialog')
       await expect(sheet.getByRole('heading', { name: 'GW24 转会明细', exact: true })).toBeVisible()
+      await expect(sheet).toHaveAccessibleDescription('8 次转会−4')
       await expect(sheet.locator('li')).toHaveCount(8)
       for (let move = 1; move <= 8; move += 1) {
        await expect(sheet.getByText(`Transfer In GW24-${move}`, { exact: true })).toBeVisible()
