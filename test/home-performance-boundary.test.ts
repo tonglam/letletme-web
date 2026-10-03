@@ -730,3 +730,38 @@ it('collector rejects a new batch from a superseded navigation using the route-s
  await send('batch-missing-identity', 'nav-b', 241)
  assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
 })
+
+it('missing ready marker does not fabricate successful navigation time', async () => {
+ const { measureNavigation } = await import('../scripts/performance-metrics.mjs')
+ const target = 'http://localhost/explore/player-stats?p1=13'
+ let predicateChecked = false
+ let evaluatedAfterMissingMarker = false
+ const page = {
+  context: () => ({}), setDefaultTimeout: () => {}, on: () => {}, off: () => {},
+  addInitScript: async () => {}, exposeBinding: async () => {},
+  goto: async () => ({ status: () => 200, headers: () => ({}) }),
+  url: () => target,
+  waitForFunction: async (fn: (...args: any[]) => unknown, name: string) => {
+   for (const metrics of [undefined, { ready: {}, readyDetails: {} }]) {
+    const result = runInContext(`(${fn.toString()})(${JSON.stringify(name)})`, createContext({ window: { __performanceMetrics: metrics } }))
+    assert.equal(result, false)
+   }
+   predicateChecked = true
+   throw new Error('fixture missing ready marker')
+  },
+  evaluate: async () => { evaluatedAfterMissingMarker = true },
+  waitForTimeout: async () => {}
+ }
+ const result = await measureNavigation({ version: () => 'isolated-missing-marker-double' },
+  { name: 'desktop', viewport: { width: 1440, height: 900 } }, target, { page })
+ assert.equal(predicateChecked, true)
+ assert.equal(evaluatedAfterMissingMarker, false)
+ assert.equal(result.readyMs, null)
+ assert.equal(result.error, 'fixture missing ready marker')
+ assert.ok('functionalStatus' in result)
+ assert.ok('performanceStatus' in result)
+ assert.ok('navigationComplete' in result)
+ assert.equal(result.functionalStatus, 'NOT_OBSERVED')
+ assert.equal(result.performanceStatus, 'NOT_OBSERVED')
+ assert.equal(result.navigationComplete, false)
+})
