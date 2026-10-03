@@ -9573,3 +9573,65 @@ test.describe('TEAM04 loader phases directed', () => {
   })
  }
 })
+
+// LC03 distinguishes a rendered pending terminal from complete board data.
+for (const availability of ['PENDING', 'READY', 'MISSING', 'ERROR'] as const) {
+test(`LC03 ${availability} first board reports only complete data readiness`, async ({ page }) => {
+ test.skip(process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated board fixture only')
+ const session = await createSession({ entryId: 123 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [{ operation: 'GetEntryTournaments', data: { entryTournaments: [{ ...managedTournament, id: 6, name: 'Pending Coverage League', adminEntryId: 15702 }] } }] }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  let observedPending = 0
+  let expectedCount = 0
+  let started = 0
+  let recovered = false
+  let release = () => {}
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const directed = availability === 'MISSING' || availability === 'ERROR'
+  await page.route('**/api/live/competitions/6/board', async route => {
+   started++
+   if (directed && !recovered) await gate
+   const response = await route.fetch()
+   expect(response.ok()).toBe(true)
+   const body = await response.json()
+   const board = body.entryLiveCompetitionBoard
+   expectedCount = board.totalEntries
+   if (availability !== 'READY' && !recovered) {
+    board.head.availability = availability
+    board.rows = []
+    board.viewerRow = null
+   }
+   observedPending++
+   await route.fulfill({ response, json: body })
+  })
+  await page.goto('/live/competitions?tournamentId=6&gw=4')
+  if (directed) {
+   await expect.poll(() => started).toBe(1)
+   await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveCount(0)
+   release()
+  }
+  await expect.poll(() => observedPending).toBeGreaterThan(0)
+  const messages = enMessages as unknown as { LiveTournament: Record<string, string> }
+  // Assert the returned state has committed before testing the marker.
+  const warming = messages.LiveTournament.coverageWarming
+  expect(warming).toBeTruthy()
+  if (availability === 'PENDING') await expect(page.getByText(warming, { exact: true }).first()).toBeVisible()
+  else if (directed) await expect(page.getByText(messages.LiveTournament.unavailableCalculation.replace('{count}', String(expectedCount)), { exact: true }).first()).toBeVisible()
+  else await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+  await expect(page.locator('[data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+  await expect(page.locator('[data-competition-perf-ready="detail"]')).toHaveCount(availability === 'READY' ? 1 : 0)
+  if (directed) {
+   recovered = true
+   await page.getByRole('button', { name: messages.LiveTournament.errorCtaRetry, exact: true }).click()
+   await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toHaveCount(1)
+   await expect(page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toHaveCount(1)
+   expect(observedPending).toBe(2)
+  }
+ } finally {
+  await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+  await session.cleanup()
+ }
+})
+}
