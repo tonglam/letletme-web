@@ -900,12 +900,17 @@ test('S08.directed.08 exact context', async ({ page }, testInfo) => {
 		} finally { unlock(); await transaction; await sql.end(); await session.cleanup() }
 	})
 
-	test('C14 navigation identity survives actual link Back and Forward', async ({ page }) => {
+	test.describe('C14 directed context', () => {
+	test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+	test('C14 navigation identity survives actual link Back and Forward', async ({ page }, testInfo) => {
 		const { installVitals } = await import('../scripts/performance-metrics.mjs')
 		await installVitals(page)
 		await control([])
 		const identity = () => page.evaluate(() => (performance.getEntriesByName('letletme-active-navigation').at(-1) as PerformanceMark | undefined)?.detail?.navigationId ?? null)
-		await page.goto('/explore/selections?scope=public&cohort=competition:777&gw=33')
+		await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+		await page.goto('/zh-CN/explore/selections?scope=public&cohort=competition:777&gw=33')
+		expect(await page.evaluate(() => ({ width: innerWidth, lang: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, lang: 'zh-CN', timezone: 'UTC' })
+		await expect(page.locator('html')).toHaveClass(/dark/)
 		const player = page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()
 		await expect(player).toBeVisible()
 		await expect.poll(identity).not.toBeNull()
@@ -935,6 +940,28 @@ test('S08.directed.08 exact context', async ({ page }, testInfo) => {
 			return (window as typeof window & { __performanceMetrics: { ready: Record<string, number> } }).__performanceMetrics.ready.C14_READY
 		}, { currentId, initialId })
 		expect(result).toBe(240)
+		const invalidation = await page.evaluate(async navigationId => {
+			const metrics = (window as typeof window & { __performanceMetrics: { ready: Record<string, number> } }).__performanceMetrics
+			const send = async (batchId: string, result: string, value: number) => {
+				await fetch('/api/vitals', { method: 'POST', body: JSON.stringify({ schemaVersion: 2, batchId, samples: [{ metricName: 'C14_READY', result, value, navigationId, measurementKind: 'in_page_navigation' }] }) })
+			}
+			const observed: (number | null)[] = []
+			for (const status of ['unavailable', 'error']) {
+				await send(crypto.randomUUID(), status, 0)
+				observed.push(metrics.ready.C14_READY ?? null)
+				await send(crypto.randomUUID(), 'ok', 240)
+				observed.push(metrics.ready.C14_READY ?? null)
+			}
+			const batch = crypto.randomUUID()
+			await send(batch, 'ok', 125)
+			await send(crypto.randomUUID(), 'ok', 240)
+			await send(batch, 'ok', 125)
+			observed.push(metrics.ready.C14_READY ?? null)
+			return observed
+		}, currentId)
+		expect(invalidation).toEqual([null, 240, null, 240, 240])
+		await testInfo.attach('C14-directed-context', { contentType: 'application/json', body: JSON.stringify({ variantIds: ['C14.directed.02', 'C14.directed.03', 'C14.directed.08', 'C14.directed.01', 'C14.directed.06', 'C14.directed.09', 'C14.directed.10', 'C14.directed.11'], locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', syntheticValues: [240, 130], readyMs: null, wholeVariantComplete: false }) })
+	})
 	})
 
 	test('PUBLIC Trends is usable while its private catalog is pending', async ({ page }, testInfo) => {
