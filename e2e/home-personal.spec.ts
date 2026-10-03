@@ -8418,3 +8418,47 @@ for (const code of ['FORBIDDEN'] as const) {
   }
  })
 }
+
+test.describe('LP02 bound baseline', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN']) for (const width of [1440, 390]) {
+  test(`LP02 bound entry pitch and modal ${locale} ${width}`, async ({ page }, testInfo) => {
+   const session = await createSession({ entryId: 123 })
+   const zh = locale === 'zh-CN'
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.goto(`${zh ? '/zh-CN' : ''}/live/points`)
+    await expect(page).toHaveURL(url => url.pathname === `${zh ? '/zh-CN' : ''}/live/points`)
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    const pitch = page.getByRole('region', { name: zh ? /阵型/ : /formation/ })
+    await expect(pitch.getByRole('button', { name: zh ? /查看 Player/ : /View details for Player/ })).toHaveCount(15)
+    await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('Australia/Perth')
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('system')
+    expect(await page.evaluate(() => innerWidth)).toBe(width)
+    for (const [id, label] of [[1, zh ? '队长' : 'Captain'], [2, zh ? '副队长' : 'Vice-captain']] as const) {
+     const player = pitch.getByRole('button', { name: zh ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
+     await expect(pitch.getByRole('img', { name: label, exact: true })).toHaveCount(1)
+     await expect(player.getByRole('img', { name: label, exact: true })).toBeVisible()
+    }
+    for (const [id, position] of [[1, 'GKP'], [3, 'DEF'], [8, 'MID'], [13, 'FWD'], [15, 'FWD']] as const) {
+     const opener = pitch.getByRole('button', { name: zh ? `查看 Player ${id} 的详情` : `View details for Player ${id}`, exact: true })
+     await opener.click()
+     const dialog = page.getByRole('dialog')
+     await expect(dialog).toHaveCount(1)
+     await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+     await expect(dialog.getByText(zh ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
+     await expect(dialog.getByText(position, { exact: true })).toBeVisible()
+     await expect(dialog.getByText(zh ? '估算' : 'Estimated', { exact: true })).toHaveCount(0)
+     await expect(dialog.getByText(zh ? '（45 分钟）' : '(45 min)', { exact: true })).toBeVisible()
+     await expect(dialog.getByText(`+${id === 1 ? 6 : 1}`, { exact: true }).last()).toBeVisible()
+     await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click()
+     await expect(dialog).toHaveCount(0)
+     await expect(opener).toBeFocused()
+    }
+    await testInfo.attach('LP02-bound-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `LP02.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, entryId: session.entryId, gw: 33, identity: 'isolated verified bound session', readyMs: null, wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  }) }
+})
