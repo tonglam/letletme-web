@@ -9527,3 +9527,49 @@ test.describe('TEAM04 private identity cache boundary', () => {
   })
  }
 })
+
+test.describe('TEAM04 loader phases directed', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ for (const view of ['season', 'gameweek'] as const) {
+  test(`TEAM04 loader phases ${view}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Controlled local stage diagnosis only')
+   const session = await createSession({ entryId: 15702 })
+   const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+   try {
+    const identity = { ...managerReview.entry!, id: session.entryId! }
+    const review = { ...managerReview, entry: identity, currentGameweek: { ...managerGameweek(3), entry: identity } }
+    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
+     { operation: 'GetCoreEventContext', delayMs: 120 },
+     { operation: 'GetMyFplManagerReview', delayMs: 250, data: { myFplManagerReview: review } },
+     { operation: 'GetMyFplManagerGameweek', variables: { eventId: 2 }, delayMs: 150, data: { myFplManagerGameweek: { ...managerGameweek(2), entry: identity } } }
+    ] }) })).ok).toBe(true)
+    await addSessionCookie(page, session.cookie)
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.goto(`/zh-CN/my-fpl/team?view=${view}&gw=2`)
+    const ready = page.locator('[data-manager-ready]')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-view', view)
+    await expect(ready).toHaveAttribute('data-manager-gw', view === 'gameweek' ? '2' : '3')
+    await expect(ready).toHaveAttribute('data-manager-revision', view === 'gameweek' ? '102' : '103')
+    const requests = (await (await fetch(fixture)).json()).requests as Array<{ operation: string; variables: Record<string, unknown>; startedAt: number; finishedAt: number | null }>
+    const reviews = requests.filter(row => row.operation === 'GetMyFplManagerReview')
+    const history = requests.filter(row => row.operation === 'GetMyFplManagerGameweek')
+    expect(reviews).toHaveLength(1)
+    expect(reviews[0].finishedAt).not.toBeNull()
+    expect(history).toHaveLength(view === 'gameweek' ? 1 : 0)
+    if (view === 'gameweek') {
+     expect(history[0].variables).toEqual({ eventId: 2, snapshotRevision: null })
+     expect(history[0].startedAt).toBeGreaterThanOrEqual(reviews[0].finishedAt!)
+     expect(history[0].finishedAt).not.toBeNull()
+    }
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', locale: 'zh-CN' })
+    await testInfo.attach('TEAM04-loader-phase-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: 'TEAM04.state.01', view, entryId: session.entryId, revision: view === 'gameweek' ? '102' : '103', injectedDelayMs: { context: 120, review: 250, history: 150 }, requests, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Correct ready marker and request dependency; server stage log retained separately. Injected delays excluded from normal performance distribution.' }) })
+   } finally {
+    await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) })
+    await session.cleanup()
+   }
+  })
+ }
+})
