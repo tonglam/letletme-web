@@ -6979,7 +6979,7 @@ test.describe('GOV isolated admin REST evidence', () => {
     } finally { await session?.cleanup() }
    })
   }
-  for (const failed of planned ? [] : ['none', 'overview', 'windows', 'cases', 'large']) {
+  for (const failed of ['none', 'overview', 'windows', 'cases', 'large']) {
    test(`GOV REST sections ${failed} ${locale} ${width}px`, async ({ page }, testInfo) => {
     const session = await createSession({ entryId: 909090, userId: 'e2e-governance-admin' })
     const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
@@ -7066,7 +7066,12 @@ test.describe('GOV isolated admin REST evidence', () => {
        await expect(page.getByRole('row').filter({ hasText: 'fixture-case-1746' })).toContainText('FIXTURE_CASE')
       }
      }
-     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ caseId: 'R02', stepIds: ['R02.01', 'R02.02', 'R02.04', 'R02.05'], variantId: failed === 'none' ? `R02.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : null, identity: 'platform-admin', locale, width, timezone, theme, failed, backForward: failed === 'none', reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
+     if (planned) {
+      expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang }))).toEqual({ width: 390, language: 'zh-CN' })
+      await expect(page.locator('html')).toHaveClass(/dark/)
+      await testInfo.attach('GOV-directed-binding', { contentType: 'application/json', body: JSON.stringify({ variantIds: failed === 'none' ? ['GOV01.state.01'] : failed === 'large' ? ['GOV02.state.02'] : ['GOV01.state.02', 'GOV02.state.01'], failed, timezone, theme, locale, width, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false }) })
+     }
+     await testInfo.attach('GOV-section-evidence', { body: JSON.stringify({ caseId: 'R02', stepIds: ['R02.01', 'R02.02', 'R02.04', 'R02.05'], variantId: failed === 'none' && !planned ? `R02.PA.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base` : null, identity: 'platform-admin', locale, width, timezone, theme, failed, backForward: failed === 'none', reloadRecovery: ['overview', 'windows', 'cases'].includes(failed), paths: requests.map((row: { path: string }) => row.path), functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, eventToPaintMs: null, limitation: 'Overview failure intentionally closes the whole current page. No production or complete variant claim.' }), contentType: 'application/json' })
     } finally {
      try { await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [] }) }) } finally { await session.cleanup() }
     }
