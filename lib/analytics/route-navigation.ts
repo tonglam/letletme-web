@@ -105,14 +105,23 @@ function documentNavigationStart(): number | null {
 /** Share an identity across markers using the same document or route clock. */
 export function routeReadyNavigationId(
 	pathname: string,
-	documentStart = documentNavigationStart()
+	documentStart = documentNavigationStart(),
+	preferredNavigationId?: string
 ): string | undefined {
 	const path = normalizePathname(pathname)
 	if (currentRouteNavigation) {
-		return currentRouteNavigation.pathname === path
-			? currentRouteNavigation.navigationId : undefined
+		if (currentRouteNavigation.pathname !== path) return undefined
+		if (preferredNavigationId) {
+			currentRouteNavigation = {
+				...currentRouteNavigation,
+				navigationId: preferredNavigationId
+			}
+			publishNavigationIdentity(preferredNavigationId)
+		}
+		return currentRouteNavigation.navigationId
 	}
 	if (!documentClockAvailable || pendingBackgroundResume || documentStart === null) return undefined
+	if (preferredNavigationId) documentNavigationId = preferredNavigationId
 	documentNavigationId ??= createPerformanceCorrelationId('nav')
 	publishNavigationIdentity(documentNavigationId)
 	return documentNavigationId

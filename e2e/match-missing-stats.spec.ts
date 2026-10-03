@@ -153,6 +153,10 @@ for (const exactContext of baselineContext ? [false] : [false, true]) test.descr
    let detailRequests = 0
    let aCompleted = 0
    let aDelivered = 0
+   let currentSourceRequests = 0
+   let currentSourceCompleted = 0
+   let releaseCurrentSource!: () => void
+   const currentSourceGate = new Promise<void>(resolve => { releaseCurrentSource = resolve })
    page.on('response', response => {
     if (new URL(response.url()).pathname !== '/api/graphql' || response.status() !== 200) return
     const variables = response.request().postDataJSON()?.variables
@@ -170,12 +174,15 @@ for (const exactContext of baselineContext ? [false] : [false, true]) test.descr
     const id = variables.playerId ?? variables.elementId
     expect(variables.eventId).toBe(33)
     expect([257, 258]).toContain(id)
-    const isOld = id === 257 && (boundary !== 'reopen' || aStarted < 2)
+    const isOld = id === 257 && (sourceUpdate ? aStarted < 2 : boundary !== 'reopen' || aStarted < 2)
     if (isOld) { aStarted++; await gate }
+    else if (id === 257 && sourceUpdate) { currentSourceRequests++; await currentSourceGate }
     if (boundary === 'return-a' && id === 258) { bStarted++; await gateB }
-    const stats = { minutes: 90, goalsScored: 0, assists: 0, cleanSheets: 0, goalsConceded: 0, defensiveContribution: 0, saves: 0, penaltiesSaved: 0, ownGoals: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, totalPoints: isOld ? 99 : 2, bps: isOld ? 99 : 8, bonus: 0 }
-    await route.fulfill({ json: { data: live ? { playerLive: stats } : { eventLiveExplain: { elementId: id, player: { webName: isOld ? 'Late A' : boundary === 'reopen' ? 'Fresh A' : 'Fast B' }, contributions: [] } } } })
+    const currentSourcePoints = boundary === 'snapshot' ? 8 : 2
+    const stats = { minutes: 90, goalsScored: 0, assists: 0, cleanSheets: 0, goalsConceded: 0, defensiveContribution: 0, saves: 0, penaltiesSaved: 0, ownGoals: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, totalPoints: isOld ? 99 : sourceUpdate && id === 257 ? currentSourcePoints : 2, bps: isOld ? 99 : 8, bonus: 0 }
+    await route.fulfill({ json: { data: live ? { playerLive: stats } : { eventLiveExplain: { elementId: id, player: { webName: isOld ? 'Late A' : sourceUpdate && id === 257 ? 'Current A' : boundary === 'reopen' ? 'Fresh A' : 'Fast B' }, contributions: [] } } } })
     if (isOld) aCompleted++
+    else if (id === 257 && sourceUpdate) currentSourceCompleted++
    })
    try {
     await control([{ operation: 'GetLiveMatchdayV3', variables: { eventId: null }, data: seed }])
@@ -250,14 +257,21 @@ for (const exactContext of baselineContext ? [false] : [false, true]) test.descr
      const accepted = await refreshed
      expect((await accepted.json()).liveMatchday.snapshot.revisions.deskPublicationId).toBe('match-detail-new-source')
      await page.clock.runFor(50)
+     await expect(page.locator('[data-live-matchday-view="true"]')).toHaveAttribute('data-revisions', /match-detail-new-source/)
      // The route contract marker is SSR-only; assert the updated client player row.
      await expect(card.getByRole('button', { name: /Slow A/, includeHidden: true })).toContainText(boundary === 'snapshot' ? '8' : '2')
-     // A newer accepted source cannot leave the old selected total visible.
-     await expect(page.getByRole('dialog').locator(`[aria-label="${boundary === 'snapshot' ? 8 : 2} points"]`)).toBeVisible()
+     await expect.poll(() => currentSourceRequests).toBe(2)
+     const dialog = page.getByRole('dialog')
+     await expect(dialog.getByText(zh ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toBeVisible()
+     releaseCurrentSource()
+     await expect.poll(() => currentSourceCompleted).toBe(2)
+     await expect(dialog.getByRole('heading', { name: 'Current A', exact: true })).toBeVisible()
+     await expect(dialog.locator(`[aria-label="${boundary === 'snapshot' ? 8 : 2} points"]`)).toBeVisible()
+     await expect(dialog.getByText(zh ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
     }
     release()
     await expect.poll(() => aCompleted).toBe(2)
-    if (sourceUpdate || boundary === 'reopen' || boundary === 'return-a') await expect.poll(() => aDelivered).toBe(2)
+    if (sourceUpdate || boundary === 'reopen' || boundary === 'return-a') await expect.poll(() => aDelivered).toBe(sourceUpdate ? 4 : 2)
     // Let fulfilled network callbacks and React commits settle before the negative assertions.
     if (sourceUpdate) await page.clock.runFor(50)
     else await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
@@ -288,13 +302,17 @@ for (const exactContext of baselineContext ? [false] : [false, true]) test.descr
      await expect(dialog.getByRole('listitem').last()).toContainText('+2')
      await expect(dialog.getByText(zh ? '正在加载积分明细…' : 'Loading breakdown…', { exact: true })).toHaveCount(0)
     } else if (sourceUpdate) {
-     await expect(page.getByRole('dialog').locator(`[aria-label="${boundary === 'snapshot' ? 8 : 2} points"]`)).toBeVisible()
-     await expect(page.getByRole('dialog')).not.toContainText('Late A')
+     const dialog = page.getByRole('dialog')
+     await expect(dialog.getByRole('heading', { name: 'Current A', exact: true })).toBeVisible()
+     await expect(dialog.locator(`[aria-label="${boundary === 'snapshot' ? 8 : 2} points"]`)).toBeVisible()
+     await expect(dialog).not.toContainText('Late A')
+     await expect(dialog).not.toContainText('99')
+     expect(detailRequests).toBe(4)
     } else await expect(page.getByRole('dialog')).toHaveCount(0)
     if (boundary === 'unmount') await expect(page).toHaveURL(/\/explore\/market$/)
     expect(errors).toEqual([])
     if (baselineContext) await testInfo.attach('S09-baseline-owner', { contentType: 'application/json', body: JSON.stringify({ parentVariantId: `S09.UNRESOLVED_ROLE.${baselineContext.locale}.${baselineContext.width === 1440 ? 'desktop1440' : 'mobile390'}.base`, owner: boundary, identity: 'A', ...baselineContext, theme: 'system', timezone: 'Australia/Perth', eventId: 33, players: [257,258], detailRequests, aCompleted, aDelivered, bDelivered, errors, readyMs: null, wholeVariantComplete: false }) })
-   } finally { release(); releaseB(); await control([]) }
+   } finally { release(); releaseB(); releaseCurrentSource(); await control([]) }
   })
   })
  }

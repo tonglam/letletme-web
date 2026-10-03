@@ -254,6 +254,19 @@ it('shares clock identity across markers and changes it on repeat navigation', (
  markRouteNavigationStart('/market', 20, 'https://example.test')
  assert.notEqual(routeReadyNavigationId('/market', 0), first)
 })
+it('publishes an RSC-provided identity for the active route clock', () => {
+ const serverNavigationId = 'nav-rsc-seeded-12345678'
+ markRouteNavigationStart('/explore/player-stats', 10, 'https://example.test')
+ assert.notEqual(routeReadyNavigationId('/explore/player-stats', 0), serverNavigationId)
+ assert.equal(
+  routeReadyNavigationId('/explore/player-stats', 0, serverNavigationId),
+  serverNavigationId
+ )
+ const activeMark = performance.getEntriesByName('letletme-active-navigation') as PerformanceMark[]
+ assert.equal(activeMark.length, 1)
+ assert.equal(activeMark[0].detail.navigationId, serverNavigationId)
+ assert.equal(routeReadyNavigationId('/profile', 0, 'nav-wrong-route-12345678'), undefined)
+})
 it('does not manufacture a navigation identity without a clock', () => {
  assert.equal(routeReadyNavigationId('/market', null), undefined)
 })

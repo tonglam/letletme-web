@@ -871,7 +871,22 @@ test('anonymous competition redirects cannot be counted as successful content me
 	}
 	const sample = await measureNavigation(browser, { name: 'desktop', viewport: { width: 1440, height: 900 } }, `${baseURL}/live/competitions?tournamentId=6`)
 	expect(sample.error).toContain('Unexpected response or redirect')
-	expect(sample.readyMs).toBeNull()
+ expect(sample.readyMs).toBeNull()
+})
+
+test('navigation measurements correlate RSC-seeded readiness across pages', async ({ browser, baseURL }) => {
+	const { isProductionMeasurementUrl, measureNavigation } = await import('../scripts/performance-metrics.mjs')
+	if (isProductionMeasurementUrl(baseURL ?? '')) {
+		test.skip(true, 'Production measurements use the existing logged-in Chrome tab')
+		return
+	}
+	const profile = { name: 'desktop', viewport: { width: 1440, height: 900 } }
+	for (const pathname of ['/explore/player-stats', '/explore/price-predictions']) {
+		const sample = await measureNavigation(browser, profile, `${baseURL}${pathname}`)
+		expect(sample.error, pathname).toBeNull()
+		expect(sample.readyMs, pathname).toEqual(expect.any(Number))
+		expect(sample.readyMs).toBeGreaterThanOrEqual(0)
+	}
 })
 
 for (const locale of ['en', 'zh-CN']) {

@@ -107,10 +107,13 @@ export function RouteReadyMarker({
 				measurementKind === 'in_page_navigation') &&
 			reportedNavigationStart.current === routeStartedAt
 		) return
-		const correlatedNavigationId = navigationId ?? (
-			measurementKind === 'initial_navigation' || measurementKind === 'in_page_navigation'
-				? routeReadyNavigationId(pathname) : undefined
-		)
+		const isNavigationMeasurement =
+			measurementKind === 'initial_navigation' ||
+			measurementKind === 'in_page_navigation'
+		const routeNavigationId = isNavigationMeasurement
+			? routeReadyNavigationId(pathname, undefined, navigationId)
+			: undefined
+		const correlatedNavigationId = navigationId ?? routeNavigationId
 		// Claim the clock with its identity before paint can yield to another navigation.
 		void (async () => {
 			const paintedAt = elementTiming
