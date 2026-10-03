@@ -8881,12 +8881,13 @@ test.describe('MATCH03 delayed HEAD boundary', () => {
   const headGate = new Promise<void>(resolve => { releaseHead = resolve })
   const head = structuredClone(seed.data)
   delete head.liveMatchday.snapshot.matches
+  head.liveMatchday.snapshot.detailDelivery.state = 'PENDING'
   for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
   await page.route('**/api/graphql', async route => {
    if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
    headReads++
    await headGate
-   await route.fulfill({ json: head })
+   await route.fulfill({ json: { data: head } })
   })
   let reads = 0
   await page.route('**/api/live/matches?*', async route => {
@@ -8932,11 +8933,12 @@ test.describe('MATCH03 unchanged HEAD boundary', () => {
   let headReads = 0
   const head = structuredClone(seed.data)
   delete head.liveMatchday.snapshot.matches
+  head.liveMatchday.snapshot.detailDelivery.state = 'PENDING'
   for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
   await page.route('**/api/graphql', async route => {
    if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
    headReads++
-   await route.fulfill({ json: head })
+   await route.fulfill({ json: { data: head } })
   })
   let reads = 0
   await page.route('**/api/live/matches?*', async route => {
@@ -9045,3 +9047,71 @@ test.describe('MATCH03 initial unavailable boundary', () => {
   }
  })
 })
+
+for (const locale of ['en', 'zh-CN'] as const) {
+ for (const width of [1440, 390]) {
+ test.describe(`MATCH03 baseline ${locale} ${width}`, () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light', viewport: { width, height: 900 } })
+ test('MATCH03 HEAD changes fetch one FULL and preserve revision', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  let headReads = 0
+  const head = structuredClone(seed.data)
+  delete head.liveMatchday.snapshot.matches
+  head.liveMatchday.snapshot.detailDelivery.state = 'PENDING'
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  await page.route('**/api/graphql', async route => {
+   if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
+   headReads++
+   await route.fulfill({ json: { data: head } })
+  })
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: seed.data })
+  })
+  await page.goto(`/${locale}/live/matches`)
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width, language: locale, timezone: 'Australia/Perth' })
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const { resolveLiveRefreshProfile } = await import('../lib/live-refresh')
+  const interval = resolveLiveRefreshProfile(process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE, 'production') === 'conserve' ? 120_000 : 30_000
+  for (let index = 0; index < 3; index++) {
+   const before = headReads
+   const settled = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+   await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+   await settled
+   await expect.poll(() => headReads).toBeGreaterThan(before)
+   await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+   expect(reads).toBe(0)
+  }
+  await expect(page.locator('[data-live-matchday-view="true"]')).toHaveAttribute('data-revisions', JSON.stringify(seed.data.liveMatchday.snapshot.revisions))
+  seed.data.liveMatchday.snapshot.revisions.deskGeneration += 1
+  seed.data.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-baseline-new-desk'
+  seed.data.liveMatchday.snapshot.revisions.scoreState = 'c'.repeat(24)
+  seed.data.liveMatchday.snapshot.matches[0].homeScore += 1
+  Object.assign(head.liveMatchday.snapshot.revisions, seed.data.liveMatchday.snapshot.revisions)
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  const changedFull = page.waitForResponse(response => new URL(response.url()).pathname === '/api/live/matches')
+  await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+  expect((await changedFull).status()).toBe(200)
+  await expect.poll(() => reads).toBe(1)
+  await expect(page.getByText(`${oldMatch.homeScore}–${oldMatch.awayScore}`, { exact: true })).toBeVisible()
+  const currentView = page.locator('[data-live-matchday-view="true"]')
+  await expect(currentView).toHaveAttribute('data-revisions', JSON.stringify(seed.data.liveMatchday.snapshot.revisions))
+  await expect(currentView).toHaveAttribute('data-event-id', '33')
+  await expect(currentView).toHaveAttribute('data-loading', 'false')
+  const nextHead = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+  await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+  await nextHead
+  expect(reads).toBe(1)
+  await testInfo.attach('MATCH03-unchanged-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: `MATCH03.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, headReads, fullReads: reads, headFixtureBodyBytes: Buffer.byteLength(JSON.stringify(head)), fullFixtureBodyBytes: Buffer.byteLength(JSON.stringify(seed.data)), byteScope: 'Uncompressed fixture JSON only, not network transfer bytes', readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+ }
+}
