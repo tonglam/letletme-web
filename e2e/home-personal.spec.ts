@@ -1,7 +1,7 @@
 import { getCurrentSeasonKey } from '../lib/season'
 import { managedTournament } from './fixtures/managed-tournament'
 import { officialH2HFixture } from './fixtures/official-h2h'
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import postgres from 'postgres'
@@ -9746,4 +9746,31 @@ for (const role of ['anonymous', 'unbound', 'bound'] as const) {
    await testInfo.attach('TR01-private-identity', { contentType: 'application/json', body: JSON.stringify({ role, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, upstreamPrivateReads: after.length - before, wholeVariantComplete: false }) })
   } finally { await session?.cleanup() }
  })
+}
+
+
+for (const keepDisplayCache of [false, true]) {
+test(`TR01 private reads transmit current account identity A B A ${keepDisplayCache ? 'stale-display' : 'clean'}`, async ({ page }) => {
+ test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated account switching')
+ const a = await createSession({ entryId: 15702 })
+ const b = await createSession({ entryId: 15703 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const readLedger = async () => (await (await fetch(fixture)).json()).requests.filter((r: { operation: string; variables: { access?: string } }) => r.operation === 'TrendCohortSnapshot' && r.variables.access === 'MINE')
+ try {
+  const initial = (await readLedger()).length
+  for (const account of [a, b, a]) {
+   if (!keepDisplayCache) await page.context().clearCookies()
+   await addSessionCookie(page, account.cookie)
+   const auth = await page.request.get('/api/auth/get-session')
+   expect((await auth.json()).user.id).toBe(keepDisplayCache ? a.userId : account.userId)
+   const response = await page.request.get('/api/trends/my-desk?cohortId=competition%3A778&eventId=33&limit=12')
+   expect(response.status()).toBe(200)
+   expect(response.headers()['cache-control']).toBe('private, no-store')
+   expect((await response.json()).trendCohortSnapshot).toMatchObject({ cohort: { access: 'MINE', id: 'competition:778' }, eventId: 33 })
+   const reads = await readLedger()
+   expect(reads.at(-1).identityDigest).toBe(createHash('sha256').update(JSON.stringify([account.userId, account.entryId])).digest('hex'))
+  }
+  expect((await readLedger()).length - initial).toBe(3)
+ } finally { await a.cleanup(); await b.cleanup() }
+})
 }
