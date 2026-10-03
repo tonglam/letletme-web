@@ -8689,3 +8689,79 @@ test.describe('LP02 bound double gameweek', () => {
   } finally { await session.cleanup() }
  })
 })
+
+test.describe('LP03 bound transfer states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ for (const status of [503, 401]) {
+  test(`LP03 bound transfer ${status} recovers to explicit empty`, async ({ page }, testInfo) => {
+   const session = await createSession({ entryId: 123 })
+   let reads = 0
+   let recovered = false
+   try {
+    await page.clock.install()
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await addSessionCookie(page, session.cookie)
+    await page.route('**/api/graphql', async route => {
+     const payload = route.request().postDataJSON()
+     if (!payload.query?.includes('GetEntryTransferHistory')) return route.continue()
+     expect(payload.variables.entryId).toBe(session.entryId)
+     reads++
+     await route.fulfill(!recovered ? { status, json: { errors: [{ message: 'Controlled unavailable transfer history' }] } } : { status: 200, json: { data: { entryTransferHistory: [] } } })
+    })
+    await page.goto('/zh-CN/live/points')
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    expect(await page.evaluate(() => ({ width: innerWidth, lang: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, lang: 'zh-CN', timezone: 'UTC' })
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    const section = page.getByRole('region', { name: /本周转会/ })
+    await section.getByRole('button', { name: '刷新转会', exact: true }).click()
+    await expect(section.getByRole('alert')).toContainText('转会记录加载失败')
+    expect(reads).toBeGreaterThan(0)
+    const failedReads = reads
+    if (status === 503) {
+     await section.getByRole('button', { name: '刷新转会', exact: true }).click()
+     await expect(section.getByRole('alert')).toContainText('转会记录加载失败')
+     expect(reads).toBe(failedReads)
+     await page.clock.fastForward(30_000)
+    }
+    recovered = true
+    await section.getByRole('button', { name: '刷新转会', exact: true }).click()
+    await expect(section.getByText('本轮暂无已同步的转会记录。', { exact: true })).toBeVisible()
+    await expect(section.getByRole('alert')).toHaveCount(0)
+    await expect.poll(() => reads).toBeGreaterThan(failedReads)
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    await testInfo.attach('LP03-bound-state', { contentType: 'application/json', body: JSON.stringify({ variantIds: ['LP03.state.01', status === 401 ? 'LP03.state.03' : 'LP03.state.02'], entryId: session.entryId, status, readyMs: null, scope: 'Bound public transfer request error to empty recovery, not session reauthorization', wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  })
+ }
+})
+
+for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+ test.describe(`LP03 bound baseline ${locale} ${width}`, () => {
+  test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light', viewport: { width, height: 900 } })
+  test('LP03 bound transfer content preserves entry identity', async ({ page }, testInfo) => {
+   const session = await createSession({ entryId: 123 })
+   let reads = 0
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.route('**/api/graphql', async route => {
+     const payload = route.request().postDataJSON()
+     if (!payload.query?.includes('GetEntryTransferHistory')) return route.continue()
+     expect(payload.variables.entryId).toBe(session.entryId)
+     reads++
+     await route.fulfill({ json: { data: { entryTransferHistory: [{ eventId: 33, eventTransfers: 1, eventTransfersCost: 0, transfers: [{ event: 33, elementOutWebName: 'Outgoing Player', elementOutTeamShortName: 'OUT', elementOutTypeName: 'MID', elementOutCost: 5.5, elementInWebName: 'Incoming Player', elementInTeamShortName: 'IN', elementInTypeName: 'MID', elementInCost: 6.2, time: '2026-08-04T10:00:00Z' }] }] } } })
+    })
+    await page.goto(`${locale === 'en' ? '' : '/zh-CN'}/live/points`)
+    await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', language: locale })
+    const section = page.getByRole('region', { name: locale === 'en' ? /Gameweek transfers.*GW33/ : /本周转会.*GW33/ })
+    await section.getByRole('button', { name: locale === 'en' ? 'Refresh transfers' : '刷新转会', exact: true }).click()
+    for (const text of ['Incoming Player', 'Outgoing Player', '£5.5m', '£6.2m']) await expect(section).toContainText(text)
+    await expect(section.getByRole('alert')).toHaveCount(0)
+    expect(reads).toBeGreaterThan(0)
+    expect(await section.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await testInfo.attach('LP03-baseline', { contentType: 'application/json', body: JSON.stringify({ variantId: `LP03.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, entryId: session.entryId, readyMs: null, wholeVariantComplete: false }) })
+   } finally { await session.cleanup() }
+  })
+ })
+}
