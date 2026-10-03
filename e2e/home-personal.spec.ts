@@ -5076,11 +5076,14 @@ test(`J13 prepared preview ${scenario} ${locale} ${width}px`, async ({ page }) =
  }
 }
 
+test.describe('AUTH04 explicit baseline context', () => {
+ test.use({ timezoneId: 'Australia/Perth' })
 for (const locale of ['en', 'zh-CN'] as const) {
  for (const width of [1440, 390]) {
   for (const persona of ['anonymous', 'unbound', 'bound'] as const) {
-   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }) => {
+   test(`AUTH04 bind entry identity boundary ${persona} ${locale} ${width}`, async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated identity fixtures')
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
     const prefix = locale === 'en' ? '' : '/zh-CN'
     const session = persona === 'anonymous' ? null : await createSession(persona === 'bound' ? { entryId: 909090 } : {})
     try {
@@ -5128,11 +5131,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
        expect(row).toEqual({ fpl_entry_id: null, fpl_entry_verified_at: null })
       } finally { await sql.end() }
      }
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), language: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', language: locale })
+    await testInfo.attach('AUTH04-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `AUTH04.${persona === 'anonymous' ? 'A' : persona === 'unbound' ? 'U' : 'B'}.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, persona, locale, width, timezone: 'Australia/Perth', theme: 'system', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Identity redirect or unbound validation, no real binding' }) })
     } finally { if (session) await session.cleanup() }
    })
   }
  }
 }
+
+})
 
 for (const profile of [
  { name: 'baseline', timezoneId: 'Australia/Perth', theme: 'system' },
