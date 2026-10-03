@@ -8802,3 +8802,56 @@ test.describe('MATCH03 stale FULL boundary', () => {
   await testInfo.attach('MATCH03-stale-FULL', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedGeneration: newer.liveMatchday.snapshot.revisions.deskGeneration, rejectedGeneration: seed.data.liveMatchday.snapshot.revisions.deskGeneration, reads, readyMs: null, wholeVariantComplete: false }) })
  })
 })
+
+test.describe('MATCH03 stale detail boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 newer desk retains accepted player details', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const newer = structuredClone(seed.data)
+  newer.liveMatchday.snapshot.revisions.deskGeneration += 2
+  newer.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-new-desk'
+  newer.liveMatchday.snapshot.revisions.scoreState = 'f'.repeat(24)
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.matches[0].homeScore = oldMatch.homeScore + 3
+  const newScore = `${oldMatch.homeScore + 3}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.revisions.detailGeneration = 10
+  newer.liveMatchday.snapshot.revisions.detailPublicationId = 'detail10'
+  newer.liveMatchday.snapshot.revisions.playerDetail = 'd'.repeat(24)
+  newer.liveMatchday.snapshot.matches[0].players = [{ id: 257, webName: 'Accepted Bassey', position: 'DEFENDER', teamId: oldMatch.homeTeamId, price: 45, totalPoints: 6, stats: [{ identifier: 'minutes', value: 90 }] }]
+  const staleDetail = structuredClone(newer)
+  staleDetail.liveMatchday.snapshot.revisions.deskGeneration++
+  staleDetail.liveMatchday.snapshot.revisions.deskPublicationId = 'new-desk-old-detail'
+  staleDetail.liveMatchday.snapshot.revisions.scoreState = 'e'.repeat(24)
+  staleDetail.liveMatchday.snapshot.revisions.detailGeneration = 1
+  staleDetail.liveMatchday.snapshot.revisions.detailPublicationId = 'detail1'
+  staleDetail.liveMatchday.snapshot.revisions.playerDetail = 'a'.repeat(24)
+  staleDetail.liveMatchday.snapshot.matches[0].homeScore++
+  staleDetail.liveMatchday.snapshot.matches[0].players[0].webName = 'Obsolete Bassey'
+  const latestScore = `${oldMatch.homeScore + 4}–${oldMatch.awayScore}`
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: reads === 1 ? newer : staleDetail })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  await refresh.click()
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect.poll(() => reads).toBe(1)
+  await page.getByRole('button', { name: '球员列表', exact: true }).click()
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  await refresh.click()
+  await expect.poll(() => reads).toBe(2)
+  await expect(page.getByText(latestScore, { exact: true })).toBeVisible()
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  await expect(page.getByText('Obsolete Bassey', { exact: true })).toHaveCount(0)
+  await testInfo.attach('MATCH03-stale-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedDetailGeneration: 10, rejectedDetailGeneration: 1, acceptedDeskGeneration: staleDetail.liveMatchday.snapshot.revisions.deskGeneration, displayedScore: latestScore, reads, readyMs: null, wholeVariantComplete: false }) })
+ })
+})
