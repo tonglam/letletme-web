@@ -303,6 +303,9 @@ test.describe('AUTH02 planned error states', () => {
      await expect(page.getByRole('main').getByRole('alert')).toHaveText(expected)
      await expect(submit).toBeEnabled()
      await expect(page.locator('form')).toHaveAttribute('aria-busy', 'false')
+     for (const field of form.fields) {
+      await expect(page.getByLabel(zh.Auth[field], { exact: true })).toHaveValue(field === 'email' ? 'fixture@example.invalid' : field === 'name' ? 'Isolated Fixture' : 'IsolatedPassword-42')
+     }
      await expect(page).toHaveURL(url => `${url.pathname}${url.search}` === `/zh-CN${form.path}`)
     }
     expect(intercepted).toEqual([form.endpoint, form.endpoint])
