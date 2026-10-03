@@ -8561,6 +8561,16 @@ test.describe('LP02 bound automatic substitution', () => {
    const outgoing = pitch.getByRole('button', { name: /查看 Player 3 的详情.*Player 3 被 Player 6 替下/ })
    await expect(incoming).toBeVisible()
    await expect(outgoing).toBeVisible()
+   for (const [position, ids] of [['GKP', [1]], ['DEF', [6, 4, 5]], ['MID', [8, 9, 10, 11]], ['FWD', [13, 14, 15]]] as const) {
+    const row = pitch.getByRole('list', { name: position, exact: true })
+    await expect(row.getByRole('button')).toHaveCount(ids.length)
+    const names = await row.getByRole('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')?.match(/Player (\d+)/)?.[1]))
+    expect(names).toEqual(ids.map(String))
+   }
+   const bench = pitch.locator('ol:not([aria-label])')
+   await expect(bench.getByRole('button')).toHaveCount(4)
+   expect(await bench.getByRole('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')?.match(/Player (\d+)/)?.[1]))).toEqual(['2', '3', '7', '12'])
+
    await expect(pitch.getByText('22', { exact: true }).first()).toBeVisible()
    await incoming.click()
    const dialog = page.getByRole('dialog')
