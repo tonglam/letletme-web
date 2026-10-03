@@ -52,8 +52,12 @@ export function useMatchPlayerDetail(eventId?: number, match?: Match, sourceRevi
 	}, [eventId])
 
 	useLayoutEffect(() => {
-		if (detailSourceKey !== sourceKey) requestIdRef.current += 1
-	}, [detailSourceKey, sourceKey])
+		// MatchCard can correlate against the current match snapshot. Other
+		// consumers pass only an event ID and render the selected player directly;
+		// their sourceKey is intentionally null, so comparing it would invalidate
+		// every detail request as soon as a player is selected.
+		if (match && detailSourceKey !== sourceKey) requestIdRef.current += 1
+	}, [detailSourceKey, match, sourceKey])
 
 	const openPlayerDetail = useCallback(async (player: PlayerStat, team: string, teamShort: string) => {
 		const requestId = requestIdRef.current + 1
@@ -127,7 +131,9 @@ export function useMatchPlayerDetail(eventId?: number, match?: Match, sourceRevi
 						: current.stats,
 					// These rows are calculated from stats, not verified official explain.
 					breakdownSource: live ? 'provisional' : current.breakdownSource,
-					breakdownPending: live ? false : current.breakdownPending,
+					// Both reads have settled here. Missing or failed data is an empty
+					// detail state, not a loader that can remain pending forever.
+					breakdownPending: false,
 					pointsBreakdown: live
 						? buildBreakdownFromPlayerLive(
 								live,
