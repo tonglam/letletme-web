@@ -1083,7 +1083,13 @@ test('S08.directed.08 exact context', async ({ page }, testInfo) => {
 					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'public')
 					const privateRead = page.waitForResponse(response => response.url().includes('/api/trends/my-desk?') && response.url().includes('eventId=33'))
 					await mine.click()
-					expect((await privateRead).status()).toBe(200)
+					const privateResponse = await privateRead
+					expect(privateResponse.status()).toBe(200)
+					expect(privateResponse.headers()['cache-control']).toBe('private, no-store')
+					const privatePayload = await privateResponse.json()
+					const privateDesk = privatePayload.trendCohortSnapshot ?? privatePayload
+					expect(privateDesk.cohort).toMatchObject({ id: 'competition:777', access: 'MINE' })
+					expect(privateDesk.eventId).toBe(33)
 					await expect(cohort).toHaveAttribute('aria-busy', 'false')
 					await expect(mine).toHaveAttribute('aria-pressed', 'true')
 					await expect(page).toHaveURL(url => url.searchParams.get('scope') === 'mine' && url.searchParams.get('cohort') === 'competition:777')
@@ -9634,4 +9640,110 @@ test(`LC03 ${availability} first board reports only complete data readiness`, as
   await session.cleanup()
  }
 })
+}
+
+
+test.describe('TR03 bound directed cohort race', () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('TR03 bound late public cohort cannot replace latest GW', async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated bound session only')
+  const session = await createSession({ entryId: 15702 })
+  const locale = 'zh-CN'
+  const width = 390
+  const variant = { theme: 'dark', timezone: 'UTC' }
+  try {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await addSessionCookie(page, session.cookie)
+   const auth = await page.request.get('/api/auth/get-session')
+   expect(auth.ok()).toBe(true)
+   expect((await auth.json()).user.id).toBe(session.userId)
+			const zh = locale === 'zh-CN'
+			// Isolated fault injection: deliver an old response despite cancellation.
+			await page.addInitScript(() => {
+				const original = window.fetch.bind(window)
+				window.fetch = (input, init) => {
+					if (String(input).includes('/api/trends/public-desk?')) {
+						return original(input, { ...init, signal: undefined })
+					}
+					return original(input, init)
+				}
+			})
+			await page.setViewportSize({ width, height: 900 })
+			await page.goto(`${zh ? '/zh-CN' : ''}/explore/selections?scope=public&tournament=777&gw=33`)
+			await expect(page.locator('html')).toHaveClass(variant.theme === 'dark' ? /dark/ : /light/)
+			expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(variant.timezone)
+			const cohort = page.getByRole('combobox', { name: zh ? '当前联赛' : 'Active league', exact: true })
+			const gw = page.getByRole('combobox', { name: zh ? '观察轮次' : 'Gameweek', exact: true })
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Saka', exact: true }).first()).toBeVisible()
+			let release!: () => void
+			const gate = new Promise<void>(resolve => { release = resolve })
+			let oldReady = false
+			await page.route('**/api/trends/public-desk?**', async route => {
+				if (new URL(route.request().url()).searchParams.get('cohortId') !== 'competition:779') return route.continue()
+				const response = await route.fetch()
+				oldReady = true
+				await gate
+				await route.fulfill({ response })
+			})
+			await cohort.selectOption('competition:779')
+			await expect.poll(() => oldReady).toBe(true)
+			await cohort.selectOption('competition:777')
+			await gw.selectOption('32')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			await expect(page.getByRole('tabpanel').getByRole('listitem').first().getByText('64%', { exact: true })).toBeVisible()
+			const oldResponse = page.waitForResponse(response => new URL(response.url()).searchParams.get('cohortId') === 'competition:779')
+			release()
+			await (await oldResponse).finished()
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+			await expect(cohort).toHaveValue('competition:777')
+			await expect(gw).toHaveValue('32')
+			await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Palmer', exact: true })).toHaveCount(0)
+			await expect(page).toHaveURL(url => url.searchParams.get('cohort') === 'competition:777' && url.searchParams.get('gw') === '32')
+			await expect(cohort).toHaveAttribute('aria-busy', 'false')
+			for (const name of zh ? ['持有率', '队长选择', '转会'] : ['Ownership', 'Captaincy', 'Transfers']) {
+				await page.getByRole('tab', { name, exact: true }).click()
+				const rows = page.getByRole('tabpanel').getByRole('listitem')
+				await expect(rows).toHaveCount(name === 'Transfers' || name === '转会' ? 1 : 2)
+				for (const row of await rows.all()) {
+					await expect(row.getByRole('link', { name: 'Saka', exact: true })).toBeVisible()
+					await expect(row.getByText('64%', { exact: true })).toBeVisible()
+				}
+			}
+   expect(await page.evaluate(() => navigator.language)).toBe('zh-CN')
+   await testInfo.attach('TR03-bound-scope-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: 'TR03.state.01', stepId: 'TR03.01', persona: 'B', locale, width, theme: 'dark', timezone: 'UTC', scope: 'PUBLIC while authenticated; MINE isolation not covered', functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+})
+
+
+for (const role of ['anonymous', 'unbound', 'bound'] as const) {
+ test(`TR01 private endpoints enforce ${role} identity`, async ({ page }, testInfo) => {
+  test.skip(process.env.E2E_SSR_REMEDIATION !== '1' || Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated identity boundary')
+  const session = role === 'anonymous' ? null : await createSession(role === 'bound' ? { entryId: 15702 } : {})
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+  const privateReads = async () => {
+   const ledger = await (await fetch(fixture)).json()
+   return ledger.requests.filter((row: { operation: string; variables?: { access?: string } }) => ['TrendCohorts', 'TrendCohortSnapshot'].includes(row.operation) && row.variables?.access === 'MINE')
+  }
+  try {
+   if (session) {
+    await addSessionCookie(page, session.cookie)
+    const auth = await page.request.get('/api/auth/get-session')
+    expect((await auth.json()).user.id).toBe(session.userId)
+   }
+   const before = (await privateReads()).length
+   for (const endpoint of ['/api/trends/my-cohorts', '/api/trends/my-desk?cohortId=competition%3A778&eventId=33&limit=12']) {
+    const response = await page.request.get(endpoint)
+    expect(response.status()).toBe(role === 'bound' ? 200 : 401)
+    expect(response.headers()['cache-control']).toBe('private, no-store')
+    const body = await response.json()
+    if (role !== 'bound') expect(body).toEqual({ error: 'Authentication required' })
+    else if (endpoint.includes('my-cohorts')) expect(body.cohorts).toEqual(expect.arrayContaining([expect.objectContaining({ access: 'MINE', id: 'competition:778' })]))
+    else expect(body.trendCohortSnapshot).toMatchObject({ cohort: { access: 'MINE', id: 'competition:778' }, eventId: 33 })
+   }
+   const after = await privateReads()
+   expect(after.length - before).toBe(role === 'bound' ? 2 : 0)
+   await testInfo.attach('TR01-private-identity', { contentType: 'application/json', body: JSON.stringify({ role, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, upstreamPrivateReads: after.length - before, wholeVariantComplete: false }) })
+  } finally { await session?.cleanup() }
+ })
 }
