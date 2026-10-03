@@ -176,6 +176,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
      if (label === t.password || label === t.confirmPassword) await expect(field).toHaveAttribute('type', 'password')
      await field.fill('')
      await expect(field).toHaveValue('')
+     const nextLabel = form.fields[form.fields.indexOf(label) + 1]
+     if (nextLabel) {
+      await page.keyboard.press('Tab')
+      if (form.path === '/auth/login' && label === t.email) {
+       await expect(page.getByRole('link', { name: t.forgotPassword, exact: true })).toBeFocused()
+       await page.keyboard.press('Tab')
+      }
+      await expect(page.getByLabel(nextLabel, { exact: true })).toBeFocused()
+     }
     }
     expect(authWrites).toBe(0)
    })
