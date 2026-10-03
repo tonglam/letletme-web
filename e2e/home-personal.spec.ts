@@ -9492,7 +9492,7 @@ test.describe('TEAM04 private identity cache boundary', () => {
    try {
     await page.setViewportSize({ width, height: 900 })
     await page.addInitScript(() => localStorage.setItem('theme', 'system'))
-    for (const [index, account] of [0, 1, 0].entries()) {
+    for (const { index, account } of [0, 1, 0].map((account, index) => ({ account, index }))) {
      const session = accounts[account]
      const revision = String(103 + index * 100)
      const identity = { ...managerReview.entry!, id: session.entryId!, entryName: `Private Account ${account} Team` }
