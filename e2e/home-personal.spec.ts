@@ -8910,3 +8910,88 @@ test.describe('MATCH03 delayed HEAD boundary', () => {
   await testInfo.attach('MATCH03-delayed-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedGeneration: newer.liveMatchday.snapshot.revisions.deskGeneration, rejectedGeneration: seed.data.liveMatchday.snapshot.revisions.deskGeneration, reads, readyMs: null, wholeVariantComplete: false }) })
  })
 })
+
+test.describe('MATCH03 unchanged HEAD boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 unchanged HEAD avoids FULL reads', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  let headReads = 0
+  const head = structuredClone(seed.data)
+  delete head.liveMatchday.snapshot.matches
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  await page.route('**/api/graphql', async route => {
+   if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
+   headReads++
+   await route.fulfill({ json: head })
+  })
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: seed.data })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const { resolveLiveRefreshProfile } = await import('../lib/live-refresh')
+  const interval = resolveLiveRefreshProfile(process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE, 'production') === 'conserve' ? 120_000 : 30_000
+  for (let index = 0; index < 3; index++) {
+   const before = headReads
+   const settled = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+   await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+   await settled
+   await expect.poll(() => headReads).toBeGreaterThan(before)
+   await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+   expect(reads).toBe(0)
+  }
+  await testInfo.attach('MATCH03-unchanged-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.01', headReads, fullReads: reads, headFixtureBodyBytes: Buffer.byteLength(JSON.stringify(head)), fullFixtureBodyBytes: Buffer.byteLength(JSON.stringify(seed.data)), byteScope: 'Uncompressed fixture JSON only, not network transfer bytes', readyMs: null, wholeVariantComplete: false }) })
+ })
+})
+
+test.describe('MATCH03 partial detail boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 delayed detail keeps scores and recovers', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  const delayed = structuredClone(seed.data)
+  delayed.liveMatchday.snapshot.revisions.deskGeneration += 1
+  delayed.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-partial-desk'
+  delayed.liveMatchday.snapshot.revisions.scoreState = 'e'.repeat(24)
+  delayed.liveMatchday.snapshot.matches[0].homeScore += 1
+  delayed.liveMatchday.snapshot.detailDelivery = { state: 'DEGRADED', servedFrom: 'REDIS_CURRENT', reasonCodes: ['DETAIL_PENDING'] }
+  const recovered = structuredClone(delayed)
+  recovered.liveMatchday.snapshot.revisions.deskGeneration += 1
+  recovered.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-recovered-desk'
+  recovered.liveMatchday.snapshot.detailDelivery = seed.data.liveMatchday.snapshot.detailDelivery
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ json: reads === 1 ? delayed : recovered })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  await refresh.click()
+  await expect.poll(() => reads).toBe(1)
+  await expect(page.getByText(`${oldMatch.homeScore + 1}–${oldMatch.awayScore}`, { exact: true })).toBeVisible()
+  await expect(page.getByText(/球员数据正在更新/)).toBeVisible()
+  await refresh.click()
+  await expect.poll(() => reads).toBe(2)
+  await expect(page.getByText(`${oldMatch.homeScore + 1}–${oldMatch.awayScore}`, { exact: true })).toBeVisible()
+  await expect(page.getByText(/球员数据正在更新/)).toHaveCount(0)
+  await testInfo.attach('MATCH03-partial-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.03', fullReads: reads, scope: 'READY desk with DEGRADED detail then recovery', readyMs: null, wholeVariantComplete: false }) })
+ })
+})
