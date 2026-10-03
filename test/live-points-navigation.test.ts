@@ -129,6 +129,14 @@ describe('live points navigation context', () => {
 			/href=\{`\/live\/competitions\?tournamentId=\$\{selectedTournament\.tournamentId\}/
 		)
 		assert.match(tournamentReview, /eventId \? `&gw=\$\{eventId\}`/)
+		assert.match(
+			tournamentReview,
+			/reviewReady \|\|\s*\(selectedTournament\.latestFinalizedEventId === null/
+		)
+		assert.match(
+			tournamentReview,
+			/reviewReady \? t\('reviewLiveStandingsLink'\) : t\('reviewLiveLink'\)/
+		)
 	})
 
 	it('keeps player detail selection scoped to player and gameweek', () => {
