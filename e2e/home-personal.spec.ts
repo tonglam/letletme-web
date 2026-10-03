@@ -1911,6 +1911,13 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await live.click()
 			if (publishedJourney) {
 				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions`)
+				for (const name of ['Journey Alternate Classic', 'E2E Classic League']) {
+					await page.getByRole('button', { name: locale === 'zh-CN' ? '经典联赛' : 'Classic', exact: true }).click()
+					const initialTournament = page.getByRole('menuitem', { name, exact: true })
+					await expect(initialTournament).toBeEnabled()
+					await initialTournament.click()
+				}
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6')
 				await page.getByRole('combobox', { name: locale === 'zh-CN' ? '选择轮次' : 'Select gameweek', exact: true }).click()
 				await page.getByRole('option', { name: locale === 'zh-CN' ? '第 4 轮' : 'Gameweek 4', exact: true }).click()
 			}
@@ -2716,8 +2723,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			}
 			for (const playerId of [1, benchPlayerId]) {
 				const opener = pitch.getByRole('button', { name: locale === 'zh-CN' ? `查看 Player ${playerId} 的详情` : `View details for Player ${playerId}`, exact: true })
-				// Model browsers where pointer activation does not focus the button.
-				await opener.evaluate(element => element.addEventListener('mousedown', event => event.preventDefault(), { once: true }))
+				// Exercise the unmodified pointer path in this continuous journey.
 				await opener.click()
 				const dialog = page.getByRole('dialog')
 				await expect(dialog.getByRole('heading', { name: `Player ${playerId}`, exact: true })).toBeVisible()
