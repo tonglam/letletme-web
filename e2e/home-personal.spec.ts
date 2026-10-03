@@ -9393,3 +9393,69 @@ test.describe('PS02 bound directed races', () => {
   })
  }
 })
+
+test.describe('PROFILE04 bound list controls', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light' })
+ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) {
+  test(`PROFILE04 current and other sessions ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated session only; never revoke a session')
+   const session = await createSession({ entryId: 15702 })
+   const t = (locale === 'en' ? enMessages : zhMessages).Sessions
+   const errors: string[] = []
+   const writes: string[] = []
+   let reads = 0
+   let count = 2
+   page.on('pageerror', error => errors.push(error.message))
+   page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/api/auth/') && !['GET', 'HEAD'].includes(request.method())) writes.push(new URL(request.url()).pathname)
+   })
+   try {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'))
+    await addSessionCookie(page, session.cookie)
+    await page.route('**/api/auth/list-sessions', async route => {
+     reads++
+     const response = await route.fetch()
+     expect(response.status()).toBe(200)
+     const rows = await response.json()
+     expect(rows).toHaveLength(1)
+     expect(rows[0].userId).toBe(session.userId)
+     const other = { ...rows[0], id: 'isolated-other-session', token: 'isolated-other-session-token', userAgent: 'Mozilla/5.0 Firefox/120.0' }
+     await route.fulfill({ response, json: count === 2 ? [rows[0], other] : count === 1 ? rows : [] })
+    })
+    await page.goto(`/${locale}/profile/sessions`)
+    const main = page.locator('#main-content')
+    const list = main.getByRole('list', { name: t.listLabel, exact: true })
+    const others = main.getByRole('button', { name: t.signOutOthers, exact: true })
+    const all = main.getByRole('button', { name: t.signOutEverywhere, exact: true })
+    for (const expected of [2, 1, 0]) {
+     if (expected !== 2) { count = expected; await page.reload() }
+     await expect.poll(() => reads).toBe(3 - expected)
+     await expect(main.getByText(t.thisDevice, { exact: true })).toHaveCount(expected ? 1 : 0)
+     if (expected) {
+      await expect(list.getByRole('listitem')).toHaveCount(expected)
+      await expect(list.getByRole('listitem').filter({ hasText: t.thisDevice })).toHaveCount(1)
+      await expect(list.getByRole('button', { name: t.signOut, exact: true })).toHaveCount(expected)
+      for (const button of await list.getByRole('button', { name: t.signOut, exact: true }).all()) await expect(button).toBeEnabled()
+      await expect(all).toBeEnabled()
+     } else {
+      await expect(list).toHaveCount(0)
+      await expect(main.getByText(t.empty, { exact: true })).toBeVisible()
+      await expect(all).toBeDisabled()
+     }
+     if (expected > 1) await expect(others).toBeEnabled()
+     else await expect(others).toBeDisabled()
+     await expect(main.getByText(t.loadFailed, { exact: true })).toHaveCount(0)
+     await expect(main.getByText(t.reauthTitle, { exact: true })).toHaveCount(0)
+    }
+    expect(writes).toEqual([])
+    expect(errors).toEqual([])
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width, timezone: 'Australia/Perth', theme: 'system', locale })
+    await testInfo.attach('PROFILE04-list-controls', { contentType: 'application/json', body: JSON.stringify({ variantId: `PROFILE04.B.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, stepIds: ['PROFILE04.01', 'PROFILE04.02', 'PROFILE04.03'], listCounts: [2, 1, 0], reads, writes, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Real isolated current session plus synthetic other list row; reload reads and count-dependent disabled controls; no revoke clicks', remaining: 'Error/401 historical evidence separate; expired identity and complete performance unproved' }) })
+   } finally {
+    await page.unrouteAll({ behavior: 'wait' })
+    await session.cleanup()
+   }
+  })
+ }
+})
