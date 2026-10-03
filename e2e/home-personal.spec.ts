@@ -1814,7 +1814,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: unavailableRules }) })).ok).toBe(true)
 			await page.goto(`${routePath}?tournamentId=6&view=gameweek&gw=4`)
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
-			const unsettledLink = page.getByRole('link', { name: locale === 'zh-CN' ? '未结算数据请前往 Live' : 'Open Live for unsettled data', exact: true })
+			const unsettledLink = page.getByRole('link', { name: publishedJourney ? (locale === 'zh-CN' ? '查看本轮积分榜' : 'View gameweek standings') : (locale === 'zh-CN' ? '未结算数据请前往 Live' : 'Open Live for unsettled data'), exact: true })
 			if (recoveryMode === 'live-journey-second-entry') {
 				// Keep catalog/view interactions in the same browser journey as the
 				// contextual Live link; no direct navigation between these controls.
@@ -1883,9 +1883,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(page).toHaveURL(url => url.searchParams.get('view') === 'gameweek' && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
 				await testInfo.attach('J11-continuous-review-prefix', { contentType: 'application/json', body: JSON.stringify({ stepIds: ['J11.04', 'J11.05', 'J11.06', 'J11.08', 'J11.09', 'J11.10', 'J11.07'], notApplicable: { 'J11.02': 'adminReadAll false: no scope control', 'J11.03': 'adminReadAll false: no catalog search' }, order: ['assert-admin-controls-absent', 'catalog-next-page', 'clear-selection', 'select-6', 'GW3-ready-revision3', 'GW4-unavailable', 'season', 'earlier-phase', 'phase-next-page', 'current-phase', 'gameweek', 'contextual-live-link'], tournamentId: 6, eventId: 4, seasonRevision: '1', semanticSha256: phase.semanticSha256, wholeJourneyComplete: false, readyMs: null }) })
 			}
-			const live = publishedJourney
-				? page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '实时赛事' : 'Live Competitions', exact: true })
-				: unsettledLink
+			const live = unsettledLink
 			if (publishedJourney) {
 				const review = page.locator('[data-review-ready="true"]')
 				await expect(review).toHaveAttribute('data-review-tournament', '6')
@@ -1896,10 +1894,10 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(row).toHaveCount(1)
 				await expect(row).toContainText('75')
 				await expect(row).toContainText('71')
-				await expect(unsettledLink).toHaveCount(0)
+				await expect(live).toHaveCount(1)
 			}
 			await expect(live).toBeVisible()
-			await expect(live).toHaveAttribute('href', publishedJourney ? `${prefix}/live/competitions` : `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			let recoveryBoardRequests = 0
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
 				await page.route('**/api/live/competitions/6/board', async route => {
@@ -1942,18 +1940,6 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			const selectionResponse = page.waitForResponse(response =>
 				response.url().includes('/api/live/competitions/6/selection-index?') && new URL(response.url()).searchParams.get('eventId') === '4' && response.status() === 200)
 			await live.click()
-			if (publishedJourney) {
-				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions`)
-				for (const name of ['Journey Alternate Classic', 'E2E Classic League']) {
-					await page.getByRole('button', { name: locale === 'zh-CN' ? '经典联赛' : 'Classic', exact: true }).click()
-					const initialTournament = page.getByRole('menuitem', { name, exact: true })
-					await expect(initialTournament).toBeEnabled()
-					await initialTournament.click()
-				}
-				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6')
-				await page.getByRole('combobox', { name: locale === 'zh-CN' ? '选择轮次' : 'Select gameweek', exact: true }).click()
-				await page.getByRole('option', { name: locale === 'zh-CN' ? '第 4 轮' : 'Gameweek 4', exact: true }).click()
-			}
 			if (recoveryMode === 'live-journey-index-retry' || recoveryMode === 'live-journey-index-gone') {
 				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
 				if (locale === 'zh-CN') await page.getByRole('button', { name: '更多筛选', exact: true }).click()
