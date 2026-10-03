@@ -4157,6 +4157,26 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'false')
   await expect(page.locator('[data-manager-ready]').getByRole('alert').filter({ hasText: /200[123]|2026/ })).toHaveCount(0)
+  if (planned) {
+   await page.getByRole('button', { name: '关闭第 1 轮', exact: true }).click()
+   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveCount(0)
+   await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
+   const lateResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/graphql' && response.request().postDataJSON()?.query?.includes('GetMyFplManagerGameweek') && response.request().postDataJSON()?.variables?.eventId === 1)
+   releaseHistory!()
+   const response = await lateResponse
+   expect(response.ok()).toBe(true)
+   await response.finished()
+   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '3')
+   await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
+   await expect(page.getByText('Review Player 1 GW3', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+   await expect(page.getByText('Review Player 1 GW1', { exact: true }).filter({ visible: true })).toHaveCount(0)
+   await expect(page).toHaveURL(url => url.searchParams.get('gw') === '3')
+   await season.click()
+   await history.getByRole('button', { name: '打开第 1 轮', exact: true }).click()
+   await testInfo.attach('TEAM01-closed-request-completion', { contentType: 'application/json', body: JSON.stringify({ closedGw: 1, retainedGw: 3, retainedRevision: '103', lateResponseCompleted: true, readyMs: null, wholeVariantComplete: false }) })
+  }
   releaseHistory!()
   await expect.poll(() => heldChunks.length).toBeGreaterThan(0)
   await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveAttribute('aria-selected', 'true')
@@ -4219,6 +4239,35 @@ for (const locale of (planned ? ['zh-CN'] : ['en', 'zh-CN'])) {
   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(planned ? 'dark' : 'system')
   if (planned) await expect(page.locator('html')).toHaveClass(/dark/)
   else await expect(page.locator('html')).not.toHaveClass(/dark/)
+  if (planned) {
+   const completedHistoryReads = async () => {
+    const ledger = await (await fetch(fixture)).json() as { requests: { operation: string }[] }
+    return ledger.requests.filter(request => request.operation === 'GetMyFplManagerGameweek').length
+   }
+   const readsBeforeCycles = await completedHistoryReads()
+   const browserReads: number[] = []
+   const trackHistory = (request: import('@playwright/test').Request) => {
+    if (new URL(request.url()).pathname === '/api/graphql' && request.postDataJSON()?.query?.includes('GetMyFplManagerGameweek')) browserReads.push(request.postDataJSON().variables.eventId)
+   }
+   page.on('request', trackHistory)
+   for (let cycle = 0; cycle < 5; cycle++) {
+    await season.click()
+    await history.getByRole('button', { name: '打开第 1 轮', exact: true }).click()
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-ready', 'true')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '1')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '101')
+    await expect(page.getByText('Review Player 1 GW1', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+    await page.getByRole('button', { name: '关闭第 1 轮', exact: true }).click()
+    await expect(page.getByRole('tab', { name: 'GW1', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('tab', { name: 'GW3', exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-gw', '3')
+    await expect(page.locator('[data-manager-ready]')).toHaveAttribute('data-manager-revision', '103')
+    expect(await completedHistoryReads()).toBe(readsBeforeCycles)
+    expect(browserReads).toEqual([])
+   }
+   page.off('request', trackHistory)
+   await testInfo.attach('TEAM01-cached-reopen-cycles', { contentType: 'application/json', body: JSON.stringify({ variantIds: ['TEAM01.state.01', 'TEAM01.state.02'], cycles: 5, browserReads, readsBeforeCycles, readsAfterCycles: await completedHistoryReads(), scope: 'Completed-history cache reuse and selected revision after actual close/reopen. Pending races and eight-tab eviction remain separate.', readyMs: null, wholeVariantComplete: false }) })
+  }
   await testInfo.attach('J10-planned-baseline', { body: JSON.stringify({
    variantId: planned ? 'TEAM01.state.02' : `J10.B.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`,
    overlappingVariantIds: planned ? ['TEAM01.state.01'] : [],
@@ -7814,7 +7863,7 @@ test.describe('manager twenty-GW pagination', () => {
   try {
    expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [
     { operation: 'GetMyFplManagerReview', data: { myFplManagerReview: review } },
-    { operation: 'GetMyFplManagerGameweek', variables: { eventId: 4 }, data: { myFplManagerGameweek: gameweek(4) } }
+    ...timeline.map(({ eventId }) => ({ operation: 'GetMyFplManagerGameweek', variables: { eventId }, data: { myFplManagerGameweek: gameweek(eventId) } }))
    ] }) })).ok).toBe(true)
    await addSessionCookie(page, session.cookie)
    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
@@ -7855,6 +7904,25 @@ test.describe('manager twenty-GW pagination', () => {
    await expect(ready).toHaveAttribute('data-manager-revision', '104')
    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
    await expect(page.locator('section[aria-labelledby="team-gw-scoreboard-title"]')).toContainText('Saka (20)')
+   let expectedTabs = [20, 4]
+   for (const eventId of [11, 12, 13, 14, 15, 16, 17, 18, 19]) {
+    await page.getByRole('tab', { name: '赛季复盘', exact: true }).click()
+    await history.getByRole('button', { name: `打开第 ${eventId} 轮`, exact: true }).click()
+    expectedTabs = [...expectedTabs, eventId].slice(-8)
+    await expect(page.getByRole('tab', { name: /^GW\d+$/ })).toHaveText(expectedTabs.map(id => `GW${id}`))
+    await expect(page.getByRole('tab', { name: `GW${eventId}`, exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(ready).toHaveAttribute('data-manager-ready', 'true')
+    await expect(ready).toHaveAttribute('data-manager-entry', String(session.entryId))
+    await expect(ready).toHaveAttribute('data-manager-gw', String(eventId))
+    await expect(ready).toHaveAttribute('data-manager-revision', String(100 + eventId))
+    await expect(page).toHaveURL(url => url.searchParams.get('gw') === String(eventId))
+    await expect(page.locator('section[aria-labelledby="team-gw-scoreboard-title"]')).toContainText('Saka (20)')
+   }
+   await expect(page.getByRole('tab', { name: 'GW11', exact: true })).toHaveCount(0)
+   await page.getByRole('button', { name: '关闭第 19 轮', exact: true }).click()
+   await expect(page.getByRole('tab', { name: 'GW18', exact: true })).toHaveAttribute('aria-selected', 'true')
+   await expect(ready).toHaveAttribute('data-manager-gw', '18')
+   await expect(ready).toHaveAttribute('data-manager-revision', '118')
    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
    await expect(page.locator('html')).toHaveClass(/dark/)
   } finally {
