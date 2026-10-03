@@ -8855,3 +8855,58 @@ test.describe('MATCH03 stale detail boundary', () => {
   await testInfo.attach('MATCH03-stale-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedDetailGeneration: 10, rejectedDetailGeneration: 1, acceptedDeskGeneration: staleDetail.liveMatchday.snapshot.revisions.deskGeneration, displayedScore: latestScore, reads, readyMs: null, wholeVariantComplete: false }) })
  })
 })
+
+test.describe('MATCH03 delayed HEAD boundary', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('MATCH03 delayed HEAD cannot roll back newer FULL', async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-08-04T18:30:00.000Z') })
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  const response = await fetch(`http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'query GetLiveMatchdayV3 { liveMatchday { availability } }', variables: { eventId: 33 } }) })
+  const seed = await response.json()
+  expect(seed.errors).toBeUndefined()
+  const newer = structuredClone(seed.data)
+  newer.liveMatchday.snapshot.revisions.deskGeneration += 2
+  newer.liveMatchday.snapshot.revisions.deskPublicationId = 'match03-new-desk'
+  newer.liveMatchday.snapshot.revisions.scoreState = 'f'.repeat(24)
+  const oldMatch = seed.data.liveMatchday.snapshot.matches[0]
+  const oldScore = `${oldMatch.homeScore}–${oldMatch.awayScore}`
+  newer.liveMatchday.snapshot.matches[0].homeScore = oldMatch.homeScore + 3
+  const newScore = `${oldMatch.homeScore + 3}–${oldMatch.awayScore}`
+  let headReads = 0
+  let releaseHead!: () => void
+  const headGate = new Promise<void>(resolve => { releaseHead = resolve })
+  const head = structuredClone(seed.data)
+  delete head.liveMatchday.snapshot.matches
+  for (const key of ['detailPublicationId', 'detailGeneration', 'playerDetail']) delete head.liveMatchday.snapshot.revisions[key]
+  await page.route('**/api/graphql', async route => {
+   if (!route.request().postData()?.includes('GetLiveMatchdayHead')) return route.continue()
+   headReads++
+   await headGate
+   await route.fulfill({ json: head })
+  })
+  let reads = 0
+  await page.route('**/api/live/matches?*', async route => {
+   reads++
+   await route.fulfill({ status: 200, json: newer })
+  })
+  await page.goto('/zh-CN/live/matches')
+  expect(await page.evaluate(() => ({ width: innerWidth, language: document.documentElement.lang, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }))).toEqual({ width: 390, language: 'zh-CN', timezone: 'UTC' })
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByText(oldScore, { exact: true })).toBeVisible()
+  const refresh = page.getByRole('button', { name: '刷新比赛', exact: true }).filter({ visible: true })
+  const { resolveLiveRefreshProfile } = await import('../lib/live-refresh')
+  const interval = resolveLiveRefreshProfile(process.env.NEXT_PUBLIC_LIVE_REFRESH_PROFILE, 'production') === 'conserve' ? 120_000 : 30_000
+  await page.clock.fastForward(Math.ceil(interval * 1.1) + 1_000)
+  await expect.poll(() => headReads).toBeGreaterThan(0)
+  await refresh.click()
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect.poll(() => reads).toBe(1)
+  const settledHead = page.waitForResponse(response => response.request().postData()?.includes('GetLiveMatchdayHead') === true)
+  releaseHead()
+  await settledHead
+  await page.clock.fastForward(1000)
+  await expect(page.getByText(newScore, { exact: true })).toBeVisible()
+  await expect(page.getByText(oldScore, { exact: true })).toHaveCount(0)
+  await testInfo.attach('MATCH03-delayed-HEAD', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedGeneration: newer.liveMatchday.snapshot.revisions.deskGeneration, rejectedGeneration: seed.data.liveMatchday.snapshot.revisions.deskGeneration, reads, readyMs: null, wholeVariantComplete: false }) })
+ })
+})
