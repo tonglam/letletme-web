@@ -8462,3 +8462,62 @@ test.describe('LP02 bound baseline', () => {
    } finally { await session.cleanup() }
   }) }
 })
+
+test.describe('LP02 bound chip states', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark' })
+for (const chip of ['3xc', 'bboost'] as const) {
+ test(`LP02 bound state chip ${chip}`, async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated chip payload only')
+  const session = await createSession({ entryId: 123 })
+  try {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  await addSessionCookie(page, session.cookie)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const expectedTeamPoints = chip === '3xc' ? 28 : 26
+  let chipReads = 0
+  await page.route('**/api/graphql', async route => {
+   const request = route.request().postDataJSON() as { query?: string }
+   if (!request.query?.includes('GetLiveCalcPoints')) {
+    await route.continue()
+    return
+   }
+   const response = await route.fetch({ url: `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql` })
+   const body = await response.json()
+   const live = body.data.calcLivePointsByEntry
+   live.chip = chip
+   live.score.eventPoints = expectedTeamPoints
+   live.score.netEventPoints = expectedTeamPoints
+   for (const pick of live.pickList) {
+    pick.multiplier = pick.element === 1 ? (chip === '3xc' ? 3 : 2) : (pick.position <= 11 || chip === 'bboost' ? 1 : 0)
+    pick.pickActive = pick.position <= 11 || chip === 'bboost'
+   }
+   chipReads += 1
+   await route.fulfill({ response, json: body })
+  })
+  await page.goto('/zh-CN/live/points')
+  await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+  await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => innerWidth)).toBe(390)
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect.poll(() => chipReads).toBeGreaterThan(0)
+  const pitch = page.getByRole('region', { name: /阵型/ })
+  await expect(pitch.getByText(chip === '3xc' ? 'TC' : 'BB', { exact: true }).first()).toBeVisible()
+  await expect(pitch.getByText(String(expectedTeamPoints), { exact: true }).first()).toBeVisible()
+  for (const [id, rawPoints] of [[1, 6], [15, 1]] as const) {
+   await pitch.getByRole('button', { name: `查看 Player ${id} 的详情`, exact: true }).click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: `Player ${id}`, exact: true })).toBeVisible()
+   await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText('估算', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText(`+${rawPoints}`, { exact: true }).last()).toBeVisible()
+   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+  }
+  await testInfo.attach('LP02-state-context', { contentType: 'application/json', body: JSON.stringify({ variantId: chip === '3xc' ? 'LP02.state.03' : 'LP02.state.02', entryId: session.entryId, gw: 33, chip, expectedTeamPoints, locale: 'zh-CN', width: 390, theme: 'dark', timezone: 'UTC', readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+}
+
+})
