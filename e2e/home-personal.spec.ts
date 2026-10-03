@@ -8521,3 +8521,117 @@ for (const chip of ['3xc', 'bboost'] as const) {
 }
 
 })
+
+test.describe('LP02 bound automatic substitution', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('LP02 state01 published defender swap retains bound context', async ({ page }, testInfo) => {
+  const session = await createSession({ entryId: 123 })
+  let reads = 0
+  try {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/graphql', async route => {
+    if (!route.request().postDataJSON().query?.includes('GetLiveCalcPoints')) return route.continue()
+    const response = await route.fetch({ url: `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql` })
+    const body = await response.json()
+    const live = body.data.calcLivePointsByEntry
+    const order = [1, 3, 4, 5, 8, 9, 10, 11, 13, 14, 15, 2, 6, 7, 12]
+    for (const pick of live.pickList) {
+     pick.position = order.indexOf(pick.element) + 1
+     pick.pickActive = (pick.position <= 11 && pick.element !== 3) || pick.element === 6
+     pick.multiplier = pick.pickActive ? (pick.element === 1 ? 2 : 1) : 0
+     pick.autoSub = pick.element === 6
+     if (pick.element === 3) { pick.minutes = 0; pick.totalPoints = 0; pick.isGwFinished = true; pick.isPlayed = false }
+    }
+    live.score.eventPoints = 22
+    live.score.netEventPoints = 22
+    reads++
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/zh-CN/live/points')
+   await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+   await page.getByRole('button', { name: '刷新', exact: true }).click()
+   await expect.poll(() => reads).toBeGreaterThan(0)
+   await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   expect(await page.evaluate(() => innerWidth)).toBe(390)
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   const pitch = page.getByRole('region', { name: /阵型/ })
+   const incoming = pitch.getByRole('button', { name: /查看 Player 6 的详情.*Player 6 换入，替下 Player 3/ })
+   const outgoing = pitch.getByRole('button', { name: /查看 Player 3 的详情.*Player 3 被 Player 6 替下/ })
+   await expect(incoming).toBeVisible()
+   await expect(outgoing).toBeVisible()
+   await expect(pitch.getByText('22', { exact: true }).first()).toBeVisible()
+   await incoming.click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: 'Player 6', exact: true })).toBeVisible()
+   await expect(dialog.getByText('+1', { exact: true }).last()).toBeVisible()
+   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+   await expect(incoming).toBeFocused()
+   await testInfo.attach('LP02-auto-sub', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP02.state.01', entryId: session.entryId, gw: 33, incoming: 6, outgoing: 3, expectedTeamPoints: 22, readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+})
+
+test.describe('LP02 bound double gameweek', () => {
+ test.use({ timezoneId: 'UTC', colorScheme: 'dark', viewport: { width: 390, height: 844 } })
+ test('LP02 state04 aggregated two-fixture captain points', async ({ page }, testInfo) => {
+  const session = await createSession({ entryId: 123 })
+  let liveReads = 0
+  let explainReads = 0
+  // Two fixture inputs: 90 minutes + fifteen saves, then 90 minutes, total 9.
+  const contributions = [{ identifier: 'minutes', value: 180, points: 4 }, { identifier: 'saves', value: 15, points: 5 }]
+  try {
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   await addSessionCookie(page, session.cookie)
+   await page.route('**/api/graphql', async route => {
+    const query = route.request().postDataJSON().query ?? ''
+    if (!query.includes('GetLiveCalcPoints') && !query.includes('EventLiveExplainBatch')) return route.continue()
+    const response = await route.fetch({ url: `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/graphql` })
+    const body = await response.json()
+    if (query.includes('GetLiveCalcPoints')) {
+     const live = body.data.calcLivePointsByEntry
+     const captain = live.pickList.find((pick: { element: number }) => pick.element === 1)
+     captain.minutes = 180
+     captain.goalsScored = 0
+     captain.saves = 15
+     captain.totalPoints = 9
+     captain.multiplier = 2
+     live.score.eventPoints = 28
+     live.score.netEventPoints = 28
+     liveReads++
+    } else {
+     const captain = body.data.eventLiveExplains.find((item: { elementId: number }) => item.elementId === 1)
+     captain.stats.minutes = 180
+     captain.stats.goalsScored = 0
+     captain.stats.saves = 15
+     captain.contributions = contributions
+     explainReads++
+    }
+    await route.fulfill({ response, json: body })
+   })
+   await page.goto('/zh-CN/live/points')
+   await expect(page.locator('#live-points-entry-id')).toHaveValue(String(session.entryId))
+   await page.getByRole('button', { name: '刷新', exact: true }).click()
+   await expect.poll(() => liveReads).toBeGreaterThan(0)
+   await expect.poll(() => explainReads).toBeGreaterThan(0)
+   await expect(page.locator('#gameweek-jump-input')).toHaveValue('33')
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   expect(await page.evaluate(() => innerWidth)).toBe(390)
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   const pitch = page.getByRole('region', { name: /阵型/ })
+   await expect(pitch.getByText('28', { exact: true }).first()).toBeVisible()
+   const captain = pitch.getByRole('button', { name: '查看 Player 1 的详情', exact: true })
+   await captain.click()
+   const dialog = page.getByRole('dialog')
+   await expect(dialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
+   await expect(dialog.getByText('（180 分钟）', { exact: true })).toBeVisible()
+   await expect(dialog.getByText('+9', { exact: true }).last()).toBeVisible()
+   await expect(dialog.getByText('估算', { exact: true })).toHaveCount(0)
+   await expect(dialog.getByText('+18', { exact: true })).toHaveCount(0)
+   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+   await expect(captain).toBeFocused()
+   await testInfo.attach('LP02-DGW-context', { contentType: 'application/json', body: JSON.stringify({ variantId: 'LP02.state.04', entryId: session.entryId, gw: 33, fixturePoints: [7, 2], rawPoints: 9, captainContribution: 18, teamTotal: 28, readyMs: null, wholeVariantComplete: false }) })
+  } finally { await session.cleanup() }
+ })
+})
