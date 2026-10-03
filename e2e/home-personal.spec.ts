@@ -9269,3 +9269,77 @@ test.describe('PS02 bound squad slot lifecycle', () => {
   })
  }
 })
+
+test.describe('PS02 bound directed races', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ for (const scenario of ['slow', 'out-of-order'] as const) {
+  test(`PS02 bound selection ${scenario}`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1', 'Isolated session and browser fault injection only')
+   const session = await createSession({ entryId: 15702 })
+   let release = () => {}
+   const held = new Promise<void>(resolve => { release = resolve })
+   const events: string[] = []
+   const errors: string[] = []
+   page.on('pageerror', error => errors.push(error.message))
+   try {
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    if (scenario === 'out-of-order') await page.addInitScript(() => {
+     const originalFetch = window.fetch.bind(window)
+     window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? new URL(input, location.origin) : null
+      return url?.pathname === '/api/player-stats/desk' && url.searchParams.get('playerIds')?.split(',').includes('2')
+       ? originalFetch(input, { ...init, signal: undefined }) : originalFetch(input, init)
+     }
+    })
+    await addSessionCookie(page, session.cookie)
+    await page.goto('/zh-CN/explore/player-stats?p1=1')
+    const overall = page.getByRole('region', { name: '球员总览', exact: true })
+    const rail = page.locator('[data-player-stats-navigation-id]')
+    await expect(overall).toContainText('Saka')
+    await expect(rail.getByRole('button')).toHaveCount(15)
+    await expect(rail).toHaveAttribute('aria-busy', 'false')
+    let requests = 0
+    await page.route('**/api/player-stats/desk?**', async route => {
+     const url = new URL(route.request().url())
+     if (!url.searchParams.get('playerIds')?.split(',').includes('2')) return route.continue()
+     requests++
+     events.push('player2-request-held')
+     await held
+     const response = await route.fetch()
+     await route.fulfill({ response })
+     events.push('player2-response-released')
+    })
+    await rail.getByRole('button', { name: 'GKP Player 2', exact: true }).click()
+    await expect.poll(() => requests).toBe(1)
+    // The committed player remains in the URL until the requested detail arrives.
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1')
+    await expect(overall).not.toContainText('Palmer')
+    if (scenario === 'out-of-order') {
+     await rail.getByRole('button', { name: 'GKP Player 1', exact: true }).click()
+     await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && !url.searchParams.has('p2'))
+     await expect(overall).toContainText('Saka')
+     events.push('player1-committed-before-player2-response')
+    }
+    const responseFinished = page.waitForResponse(response => new URL(response.url()).pathname === '/api/player-stats/desk' && new URL(response.url()).searchParams.get('playerIds')?.split(',').includes('2') === true)
+    release()
+    const response = await responseFinished
+    expect(response.status()).toBe(200)
+    expect(await response.finished()).toBeNull()
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    await expect(overall).toContainText(scenario === 'slow' ? 'Palmer' : 'Saka')
+    await expect(overall).not.toContainText(scenario === 'slow' ? 'Saka' : 'Palmer')
+    await expect(page).toHaveURL(url => url.searchParams.get('p1') === (scenario === 'slow' ? '2' : '1') && !url.searchParams.has('p2'))
+    expect(requests).toBe(1)
+    expect(events).toEqual(scenario === 'slow' ? ['player2-request-held', 'player2-response-released'] : ['player2-request-held', 'player1-committed-before-player2-response', 'player2-response-released'])
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    expect(await page.evaluate(() => ({ width: innerWidth, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), locale: document.documentElement.lang }))).toEqual({ width: 390, timezone: 'UTC', theme: 'dark', locale: 'zh-CN' })
+    expect(errors).toEqual([])
+    await testInfo.attach('PS02-directed-proof', { contentType: 'application/json', body: JSON.stringify({ variantId: `PS02.state.0${scenario === 'slow' ? 1 : 2}`, entryId: session.entryId, events, requests, functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Bound MySquad first-slot slow read or stale response after newer selection; successful late response awaited', remaining: 'Complete combined slot lifecycle and performance' }) })
+   } finally {
+    release()
+    await page.unrouteAll({ behavior: 'wait' })
+    await session.cleanup()
+   }
+  })
+ }
+})
