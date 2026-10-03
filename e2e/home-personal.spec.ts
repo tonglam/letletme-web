@@ -8894,6 +8894,7 @@ test.describe('MATCH03 stale detail boundary', () => {
   newer.liveMatchday.snapshot.revisions.detailPublicationId = 'detail10'
   newer.liveMatchday.snapshot.revisions.playerDetail = 'd'.repeat(24)
   newer.liveMatchday.snapshot.matches[0].players = [{ id: 257, webName: 'Accepted Bassey', position: 'DEFENDER', teamId: oldMatch.homeTeamId, price: 45, totalPoints: 6, stats: [{ identifier: 'minutes', value: 90 }] }]
+  newer.liveMatchday.snapshot.matches[0].players.push({ id: 9999, webName: 'Accepted Away Player', position: 'MIDFIELDER', teamId: oldMatch.awayTeamId, price: 55, totalPoints: 2, stats: [{ identifier: 'minutes', value: 90 }] })
   const staleDetail = structuredClone(newer)
   staleDetail.liveMatchday.snapshot.revisions.deskGeneration++
   staleDetail.liveMatchday.snapshot.revisions.deskPublicationId = 'new-desk-old-detail'
@@ -8919,11 +8920,23 @@ test.describe('MATCH03 stale detail boundary', () => {
   await expect.poll(() => reads).toBe(1)
   await page.getByRole('button', { name: '球员列表', exact: true }).click()
   await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  const teamTabs = page.getByRole('region', { name: zhMessages.LiveMatches.playerPoints, exact: true }).getByRole('tab')
+  await expect(teamTabs).toHaveCount(2)
+  await expect(teamTabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+  await teamTabs.nth(1).click()
+  await expect(teamTabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByText('Accepted Away Player', { exact: true })).toBeVisible()
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toHaveCount(0)
+  await teamTabs.nth(0).click()
+  await expect(teamTabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
+  await expect(page.getByText('Accepted Away Player', { exact: true })).toHaveCount(0)
   await refresh.click()
   await expect.poll(() => reads).toBe(2)
   await expect(page.getByText(latestScore, { exact: true })).toBeVisible()
   await expect(page.getByText('Accepted Bassey', { exact: true })).toBeVisible()
   await expect(page.getByText('Obsolete Bassey', { exact: true })).toHaveCount(0)
+  await expect(teamTabs.nth(0)).toHaveAttribute('aria-selected', 'true')
   await testInfo.attach('MATCH03-stale-detail', { contentType: 'application/json', body: JSON.stringify({ variantId: 'MATCH03.state.02', acceptedDetailGeneration: 10, rejectedDetailGeneration: 1, acceptedDeskGeneration: staleDetail.liveMatchday.snapshot.revisions.deskGeneration, displayedScore: latestScore, reads, readyMs: null, wholeVariantComplete: false }) })
  })
 })
