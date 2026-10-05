@@ -131,9 +131,9 @@ export function useMatchPlayerDetail(eventId?: number, match?: Match, sourceRevi
 						: current.stats,
 					// These rows are calculated from stats, not verified official explain.
 					breakdownSource: live ? 'provisional' : current.breakdownSource,
-					// Both reads have settled here. Missing or failed data is an empty
-					// detail state, not a loader that can remain pending forever.
-					breakdownPending: false,
+					// Request loading has settled, but the scoring breakdown remains
+					// pending until live stats can establish its contents.
+					breakdownPending: live ? false : current.breakdownPending,
 					pointsBreakdown: live
 						? buildBreakdownFromPlayerLive(
 								live,
