@@ -719,15 +719,22 @@ test('live points restores transfer details and distinguishes failure from empty
 	})
 })
 
+test.describe('LP04 anonymous refresh planned contexts', () => {
+ test.use({ timezoneId: 'Australia/Perth', colorScheme: 'light', storageState: { cookies: [], origins: [] } })
 for (const locale of ['en', 'zh-CN'] as const) {
 	for (const width of [1440, 390]) {
 		test(`public live points displays transfer details for anonymous visitors ${locale} ${width}px`, async ({
-			page
-		}) => {
+			page, context
+		}, testInfo) => {
 			test.skip(
 				Boolean(process.env.PLAYWRIGHT_BASE_URL),
 				'Uses the deterministic local GraphQL fixture'
 			)
+			expect((await context.cookies()).filter(cookie => /session/i.test(cookie.name))).toHaveLength(0)
+			const auth = await page.request.get('/api/auth/get-session')
+			expect(auth.ok()).toBe(true)
+			expect(await auth.json()).toBeNull()
+			await page.addInitScript(() => localStorage.setItem('theme', 'system'))
 			await page.setViewportSize({ width, height: 900 })
 			let transferRequests = 0
 			await page.route('**/api/graphql', async route => {
@@ -783,9 +790,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			).toBeVisible()
 			await expect.poll(() => section.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
 			expect(transferRequests).toBe(1)
+			await expect(page).toHaveURL(url => url.pathname.endsWith('/live/points/123') && url.searchParams.get('gw') === '33' && url.searchParams.get('tournamentId') === '3')
+			const ready = page.locator('[data-live-points-ready="true"]')
+			await expect(ready).toHaveAttribute('data-live-entry', '123')
+			await expect(ready).toHaveAttribute('data-live-gw', '33')
+			expect(await page.evaluate(() => ({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, theme: localStorage.getItem('theme'), width: innerWidth }))).toEqual({ timezone: 'Australia/Perth', theme: 'system', width })
+			await expect(page.locator('html')).toHaveClass(/\blight\b/)
+			await testInfo.attach('LP04-anonymous-refresh-context', { contentType: 'application/json', body: JSON.stringify({ variantId: `LP04.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base`, locale, width, persona: 'A', theme: 'system', timezone: 'Australia/Perth', entryId: 123, gw: 33, tournamentId: 3, session: null, browserTransferReads: transferRequests, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
 		})
 	}
 }
+
+})
 
 test('public live transfers expose request failures and allow retry without a login gate', async ({
 	page

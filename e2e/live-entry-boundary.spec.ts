@@ -262,3 +262,42 @@ test.describe('S13 directed live entry boundary', () => {
   })
  }
 })
+
+for (const context of [
+ { kind: 'directed', locale: 'zh-CN', width: 390, timezone: 'UTC', theme: 'dark' },
+ ...['en', 'zh-CN'].flatMap(locale => [1440, 390].map(width => ({ kind: 'baseline', locale, width, timezone: 'Australia/Perth', theme: 'system' })))
+]) {
+test.describe(`S19 unknown entry isolated lookup ${context.kind} ${context.locale} ${context.width}`, () => {
+ test.use({ locale: context.locale, timezoneId: context.timezone, colorScheme: context.theme === 'dark' ? 'dark' : 'light', viewport: { width: context.width, height: 900 } })
+ test('S19.directed.02 FPL lookup queued persistence stays in local fixture', async ({ page }, testInfo) => {
+  await page.addInitScript(theme => localStorage.setItem('theme', theme), context.theme)
+  const zh = context.locale === 'zh-CN'
+  const variantId = context.kind === 'directed' ? 'S19.directed.02' : `S19.UNRESOLVED_ROLE.${context.locale}.${context.width === 390 ? 'mobile390' : 'desktop1440'}.base`
+  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}`
+  const entryId = 9910999
+  const seed = await (await fetch(`${fixture}/graphql`, { method:'POST',headers:{'Content-Type':'application/json','X-LetLetMe-Contract':'live-points-v2'},body:JSON.stringify({query:'query GetLiveCalcPoints { fixture }',variables:{entryId,eventId:null}}) })).json()
+  seed.data.calcLivePointsByEntry.entry = entryId
+  seed.data.calcLivePointsByEntry.pickList = []
+  seed.data.calcLivePointsByEntry.availability = 'PENDING'
+  const rules = [
+   {operation:'GetLiveCalcPoints',variables:{entryId},data:seed.data},
+   {operation:'GetEntry',variables:{id:entryId},data:{entryLookup:{status:'FOUND',retryable:false,source:'FPL',persistenceState:'QUEUED',entry:{id:entryId,entryName:'S19 Queued Team',playerName:'Isolated Manager',overallPoints:null,overallRank:null,teamValue:null,bank:null,totalTransfers:null,region:null}}}}
+  ]
+  expect((await fetch(`${fixture}/__performance`,{method:'POST',body:JSON.stringify({reset:true,rules})})).ok).toBe(true)
+  try {
+   await page.goto(`${zh ? '/zh-CN' : ''}/live/points/${entryId}`)
+   await expect(page.getByText(zh ? `正在加载参赛 ID ${entryId} 的实时积分…` : `Loading live points for entry ${entryId}…`,{exact:true})).toBeVisible()
+   await expect(page.locator('[data-live-points-ready="true"]')).toHaveCount(0)
+   await expect(page.getByRole('region',{name:zh ? /阵型/ : /formation/})).toHaveCount(0)
+   const observed = await (await fetch(`${fixture}/__performance`)).json()
+   for (const operation of ['GetEntry','GetLiveCalcPoints']) expect(observed.requests.some((row:{operation:string;variables:{id?:number;entryId?:number}})=>row.operation===operation&&(row.variables.id??row.variables.entryId)===entryId)).toBe(true)
+   await expect(page.locator('html')).toHaveClass(context.theme === 'dark' ? /\bdark\b/ : /\blight\b/)
+   expect(await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(context.timezone)
+   expect(page.viewportSize()?.width).toBe(context.width)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(context.theme)
+   await testInfo.attach('S19-isolated-lookup',{contentType:'application/json',body:JSON.stringify({variantId,entryId,locale:context.locale,width:context.width,theme:context.theme,timezone:context.timezone,source:'local GraphQL substitute',status:'FOUND',persistenceState:'QUEUED',realProducerInvoked:false,readyMs:null,observed})})
+  } finally {await fetch(`${fixture}/__performance`,{method:'POST',body:JSON.stringify({rules:[]})})}
+ })
+})
+
+}

@@ -473,6 +473,64 @@ for (const width of [1440, 390]) {
 	})
 }
 
+for (const { locale, width } of [{ locale: 'en', width: 1440 }, { locale: 'zh-CN', width: 390 }] as const) {
+ test(`PS02 recent selection keeps distinct slots ${locale} ${width}px`, async ({ page }, testInfo) => {
+  const zh = locale === 'zh-CN'
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto(`/${locale}/explore/player-stats?p1=1`)
+  const players = page.getByRole('region', { name: zh ? '球员' : 'Players', exact: true })
+  const overall = page.getByRole('region', { name: zh ? '球员总览' : 'Player overall', exact: true })
+  const editFirst = players.locator('[data-player-stats-edit-slot="first"]')
+  const editSecond = players.locator('[data-player-stats-edit-slot="second"]')
+  const choose = async (name: string) => {
+   const option = players.getByRole('button', { name: new RegExp(`^${name} MID `) })
+   await expect(option).toHaveCount(1)
+   await option.click()
+  }
+  await expect(overall).toContainText('Saka')
+  // Populate recent choices through actual controls in this isolated context.
+  await editFirst.click()
+  await choose('Palmer')
+  await expect(overall).toContainText('Palmer')
+  await editFirst.click()
+  await choose('Saka')
+  await expect(overall).toContainText('Saka')
+  await page.getByRole('button', { name: zh ? '添加对比' : 'Add comparison', exact: true }).click()
+  await choose('Palmer')
+  await expect(page).toHaveURL(url => url.searchParams.get('p1') === '1' && url.searchParams.get('p2') === '2')
+  await expect(overall).toContainText('Palmer')
+  await editFirst.click()
+  const recentPalmer = players.locator('[data-player-stats-recent-player="2"]')
+  await expect(recentPalmer).toHaveCount(1)
+  await recentPalmer.click()
+  await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && !url.searchParams.has('p2'))
+  await expect(overall).toContainText('Palmer')
+  await expect(overall).not.toContainText('Saka')
+  await expect(editSecond).toHaveCount(0)
+  await page.getByRole('button', { name: zh ? '添加对比' : 'Add comparison', exact: true }).click()
+  await choose('Saka')
+  await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+  await expect(overall).toContainText('Saka')
+  await editSecond.click()
+  await expect(recentPalmer).toHaveCount(1)
+  await recentPalmer.click()
+  await expect(editSecond).toBeVisible()
+  await expect(page).toHaveURL(url => url.searchParams.get('p1') === '2' && url.searchParams.get('p2') === '1')
+  await expect(overall).toContainText('Palmer')
+  await expect(overall).toContainText('Saka')
+  await page.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click()
+  await editFirst.click()
+  await expect(players.locator('[data-player-stats-recent-player]')).toHaveCount(2)
+  await players.getByRole('button', { name: zh ? zhCN.PlayerStats.clearRecent : 'Clear', exact: true }).click()
+  await expect(players.locator('[data-player-stats-recent-player]')).toHaveCount(0)
+  await expect(overall).toContainText('Palmer')
+  expect(errors).toEqual([])
+  await testInfo.attach('PS02-slot-lifecycle', { contentType: 'application/json', body: JSON.stringify({ caseId: 'PS02', locale, width, variantAssociations: [], functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false, scope: 'Actual recent selections, first-slot collision clears second, second-slot collision preserves existing selection, clear recent preserves current player', missing: 'Bound persona, MySquad selection, full context dimensions and performance not covered' }) })
+ })
+}
+
 for (const recovery of ['retry', 'remove'] as const) {
 	test(`history restoration ${recovery} preserves the latest comparison intent`, async ({ page }) => {
 		await page.goto('/explore/player-stats?p1=1')

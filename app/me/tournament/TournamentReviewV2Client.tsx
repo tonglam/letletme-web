@@ -2302,14 +2302,12 @@ export default function TournamentReviewV2Client({
 											</button>
 										</div>
 									) : null}
-									{!loading &&
-									(selectedTournament.latestFinalizedEventId === null ||
-										(state !== 'READY' && !hasActivePayload)) ? (
+									{!loading ? (
 										<Link
 											href={`/live/competitions?tournamentId=${selectedTournament.tournamentId}${eventId ? `&gw=${eventId}` : ''}`}
 											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
 										>
-											{t('reviewLiveLink')}
+											{t(state === 'READY' ? 'reviewStandingsLink' : 'reviewLiveLink')}
 										</Link>
 									) : null}
 									{retryPhaseId && view === 'season' && !loading ? (

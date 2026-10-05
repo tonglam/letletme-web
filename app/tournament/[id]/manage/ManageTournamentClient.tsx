@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { PageLoading } from '@/components/feedback/PageLoading'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,8 @@ export default function ManageTournamentClient({
 }) {
 	const t = useTranslations('TournamentManage')
 	const management = useTournamentManagement(tournament)
+
+	if (management.authorizationLost) return <PageLoading variant="form" />
 
 	return (
 		<PageShell>

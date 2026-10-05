@@ -520,7 +520,18 @@ export const canCommitSnapshotResponse = (
 	requestedRevision: string | null,
 	responseRevision: string | null
 ): boolean => {
-	const currentRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
+	const currentMeta = peekEntrySnapshotMeta(entryId)
+	// A mounted page can outlive this short-lived session cache. Its pinned
+	// revision remains valid, but an exact response must not be discarded just
+	// because the metadata entry expired while the page stayed open.
+	if (
+		currentMeta === undefined &&
+		requestedRevision !== null &&
+		responseRevision === requestedRevision
+	) {
+		return true
+	}
+	const currentRevision = currentMeta?.revision ?? null
 	if (currentRevision !== requestedRevision) return false
 	if (requestedRevision === null || responseRevision === requestedRevision)
 		return true
@@ -949,6 +960,7 @@ export const getEntryEventResultCached = async (
 		.then(response => {
 			const gameweek = response.myFplManagerGameweek
 			const responseRevision = gameweek.snapshotMeta?.revision ?? null
+			const currentMeta = peekEntrySnapshotMeta(entryId)
 			if (
 				requestRevision !== null &&
 				!canCommitSnapshotResponse(entryId, requestRevision, responseRevision)
@@ -957,6 +969,13 @@ export const getEntryEventResultCached = async (
 			}
 			if (gameweek.snapshotMeta && gameweek.snapshotMeta.eventId !== eventId) {
 				throw new SnapshotRequestSupersededError()
+			}
+			if (
+				requestRevision !== null &&
+				currentMeta === undefined &&
+				gameweek.snapshotMeta?.revision === requestRevision
+			) {
+				seedEntrySnapshotMeta(entryId, gameweek.snapshotMeta)
 			}
 			const result = eventResultFromManagerGameweek(gameweek)
 			setCacheValue(entryEventCache, cacheKey, result, ttl)

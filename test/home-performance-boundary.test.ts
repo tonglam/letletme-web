@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
+import { createContext, runInContext } from 'node:vm'
 
 const home = readFileSync('app/[locale]/page.tsx', 'utf8')
 const personalDesk = readFileSync('components/home/PersonalDesk.tsx', 'utf8')
@@ -488,7 +489,6 @@ it('keeps synthetic performance URLs deterministic and cache control explicit', 
 	assert.match(metrics, /observationTask = \(async \(\) =>/)
 	assert.match(metrics, /cancelObservation\?\.\(timeoutError\)/)
 	assert.match(metrics, /await observationTask\?\.catch\(\(\) => \{\}\)/)
-	assert.match(metrics, /target\.searchParams\.has\('gw'\)[\s\S]*actual\.searchParams\.get\('gw'\)/)
 	assert.match(metrics, /const expectedGameweek = target\.searchParams\.get\('gw'\)/)
 	assert.match(metrics, /data-competition-gameweek=/)
 	assert.match(readFileSync('scripts/measure-home-performance.mjs', 'utf8'), /navigationComplete:/)
@@ -542,4 +542,226 @@ it('reports non-finite and non-numeric measurements as missing without losing bu
    assert.equal(result.missingReason[key], 'metric value was not a finite number')
   }
  }
+})
+
+
+it('invalid ready telemetry cannot retain a preceding successful duration', async () => {
+ const { installVitals } = await import('../scripts/performance-metrics.mjs')
+ let installedSource = ''
+ await installVitals({ addInitScript: async ({ content }: { content: string }) => { installedSource = content } })
+ const captured: unknown[] = []
+ const browserWindow = {
+  webVitals: Object.fromEntries(['onLCP', 'onCLS', 'onINP', 'onFCP', 'onTTFB'].map(name => [name, () => {}])),
+  fetch: async (_input: string, _init?: { body: string }) => new Response(null, { status: 204 }),
+  __capturePerformanceMetric: (value: unknown) => captured.push(value),
+  __performanceMetrics: undefined as undefined | {
+   ready: Record<string, number>, readyDetails: Record<string, { result: string }>, readySequence: Record<string, number>
+  }
+ }
+ // Exercise the emitted collector initializer, with Web Vitals registration stubbed.
+ // No browser, network, session or production endpoint is involved.
+ const initializerStart = installedSource.indexOf(';(', installedSource.indexOf('globalThis.webVitals = webVitals;'))
+ assert.ok(initializerStart > 0)
+ runInContext(installedSource.slice(initializerStart), createContext({
+  window: browserWindow, location: { href: 'http://localhost/collector-fixture' },
+  navigator: { sendBeacon: () => true }, PerformanceObserver: { supportedEntryTypes: [] },
+  URL, Request, Response
+ }))
+ const send = async (result: string, value: number, navigationId: string, extra: { measurementKind?: string, interactionId?: string } = {}) => {
+  await browserWindow.fetch('/api/vitals', { body: JSON.stringify({ schemaVersion: 2, samples: [
+   { metricName: 'READY', value, result, navigationId, ...extra }
+  ] }) })
+ }
+ for (const result of ['unavailable', 'error']) {
+  await send('ok', 125, 'nav-old')
+  assert.equal(browserWindow.__performanceMetrics?.ready.READY, 125)
+  const sequence = browserWindow.__performanceMetrics?.readySequence.READY
+  const notifications = captured.length
+  await send(result, 0, 'nav-new')
+  assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+  assert.equal(browserWindow.__performanceMetrics?.readyDetails.READY.result, result)
+  assert.equal(browserWindow.__performanceMetrics?.readySequence.READY, sequence)
+  assert.equal(captured.length, notifications + 1)
+  await send('ok', 240, 'nav-new')
+  assert.equal(browserWindow.__performanceMetrics?.ready.READY, 240)
+ }
+ // Excluded interaction telemetry is not a replacement navigation observation.
+ const navigationState = JSON.stringify(browserWindow.__performanceMetrics)
+ const notifications = captured.length
+ for (const extra of [{ measurementKind: 'interaction' }, { interactionId: 'interaction-late' }]) {
+  for (const result of ['ok', 'unavailable', 'error']) {
+   await send(result, 50, 'nav-current', extra)
+   assert.equal(JSON.stringify(browserWindow.__performanceMetrics), navigationState)
+   assert.equal(captured.length, notifications)
+  }
+ }
+ const sendBatch = async (batchId: string, navigationId: string, value: number) => {
+  await browserWindow.fetch('/api/vitals', { body: JSON.stringify({ schemaVersion: 2, batchId, samples: [
+   { metricName: 'READY', result: 'ok', navigationId, value }
+  ] }) })
+ }
+ await sendBatch('batch-a', 'nav-a', 125)
+ await sendBatch('batch-b', 'nav-b', 240)
+ const latestNavigation = JSON.stringify(browserWindow.__performanceMetrics)
+ const beforeReplay = captured.length
+ await sendBatch('batch-a', 'nav-a', 125)
+ assert.equal(JSON.stringify(browserWindow.__performanceMetrics), latestNavigation)
+ assert.equal(captured.length, beforeReplay)
+})
+
+it('navigation report does not pair late failure with the earlier ready time', async () => {
+ const { measureNavigation } = await import('../scripts/performance-metrics.mjs')
+ let source = ''
+ let currentUrl = 'http://localhost/collector-fixture'
+ const location = { href: currentUrl }
+ const browserWindow: Record<string, any> = {
+  webVitals: Object.fromEntries(['onLCP', 'onCLS', 'onINP', 'onFCP', 'onTTFB'].map(name => [name, () => {}])),
+  fetch: async () => new Response(null, { status: 204 })
+ }
+ const sandbox = createContext({
+  window: browserWindow, location, navigator: { sendBeacon: () => true },
+  PerformanceObserver: { supportedEntryTypes: [] }, URL, Request, Response,
+  performance: { now: () => 500, getEntriesByType: () => [], getEntriesByName: () => [] },
+  document: { documentElement: { scrollWidth: 1440 } }, innerWidth: 1440
+ })
+ const emit = async (result: string, value: number) => browserWindow.fetch('/api/vitals', {
+  body: JSON.stringify({ schemaVersion: 2, samples: [{ metricName: 'READY', result, value }] })
+ })
+ const page = {
+  context: () => ({}), setDefaultTimeout: () => {}, on: () => {}, off: () => {},
+  addInitScript: async ({ content }: { content: string }) => { source = content },
+  exposeBinding: async (_name: string, callback: (...args: any[]) => void) => {
+   browserWindow.__capturePerformanceMetric = (metric: unknown) => callback(null, metric)
+  },
+  goto: async (url: string) => {
+   currentUrl = url; location.href = url
+   runInContext(source.slice(source.indexOf(';(', source.indexOf('globalThis.webVitals = webVitals;'))), sandbox)
+   await emit('ok', 125)
+   return { status: () => 200, headers: () => ({}) }
+  },
+  url: () => currentUrl,
+  evaluate: async (fn: (...args: any[]) => unknown, arg: unknown) => runInContext(`(${fn.toString()})(${JSON.stringify(arg)})`, sandbox),
+  waitForFunction: async (fn: (...args: any[]) => unknown, arg: unknown) => {
+   assert.equal(runInContext(`(${fn.toString()})(${JSON.stringify(arg)})`, sandbox), true)
+  },
+  // Deterministically deliver a failure during the collector's settling window.
+  waitForTimeout: async () => { await emit('unavailable', 0) }
+ }
+ const result = await measureNavigation({ version: () => 'isolated-collector-double' },
+  { name: 'desktop', viewport: { width: 1440, height: 900 } }, currentUrl,
+  { page, readyMetric: 'READY' })
+ assert.equal(result.error, null)
+ assert.ok('businessResult' in result)
+ assert.ok('functionalStatus' in result)
+ assert.ok('performanceStatus' in result)
+ assert.equal(result.businessResult, 'unavailable')
+ assert.equal(result.functionalStatus, 'FAIL')
+ assert.equal(result.readyMs, null)
+ assert.equal(result.performanceStatus, 'NOT_OBSERVED')
+})
+
+it('rejects entity and gameweek redirects before collecting readiness', async () => {
+ const { measureNavigation } = await import('../scripts/performance-metrics.mjs')
+ for (const changedKey of ['p1', 'p2', 'tournamentId', 'gw', null]) {
+  const target = new URL('http://localhost/explore/player-stats?p1=13&p2=27&tournamentId=3&gw=4')
+  const redirected = new URL(target)
+  if (changedKey) redirected.searchParams.set(changedKey, '99')
+  let waitedForReady = false
+  const page = {
+   context: () => ({}), setDefaultTimeout: () => {}, on: () => {}, off: () => {},
+   addInitScript: async () => {}, exposeBinding: async () => {},
+   goto: async () => ({ status: () => 200, headers: () => ({}) }),
+   url: () => redirected.href,
+   waitForFunction: async () => { waitedForReady = true },
+   waitForTimeout: async () => {},
+   evaluate: async (_fn: unknown, arg: unknown) => typeof arg === 'string' ? 125 : ({
+    endMs: 200, metrics: { ready: { PLAYER_COMPARE_PAINT: 125 },
+     readyDetails: { PLAYER_COMPARE_PAINT: { result: 'ok' } } }
+   })
+  }
+  const result = await measureNavigation({ version: () => 'isolated-page-double' },
+   { name: 'desktop', viewport: { width: 1440, height: 900 } }, target.href, { page })
+  if (changedKey) {
+   assert.equal(result.error, 'Unexpected response or redirect', changedKey)
+   assert.equal(result.readyMs, null, changedKey)
+   assert.equal(waitedForReady, false, changedKey)
+  } else {
+   assert.equal(result.error, null)
+   assert.equal(result.readyMs, 125)
+   assert.equal(waitedForReady, true)
+  }
+ }
+})
+
+
+it('collector rejects a new batch from a superseded navigation using the route-start identity', async () => {
+ const { installVitals } = await import('../scripts/performance-metrics.mjs')
+ let source = ''
+ await installVitals({ addInitScript: async ({ content }: { content: string }) => { source = content } })
+ let activeNavigationId: string | null = 'nav-a'
+ const browserWindow = {
+  webVitals: Object.fromEntries(['onLCP', 'onCLS', 'onINP', 'onFCP', 'onTTFB'].map(name => [name, () => {}])),
+  fetch: async (_input: string, _init?: { body: string }) => new Response(null, { status: 204 }),
+  __performanceMetrics: undefined as undefined | { ready: Record<string, number> }
+ }
+ const initializerStart = source.indexOf(';(', source.indexOf('globalThis.webVitals = webVitals;'))
+ runInContext(source.slice(initializerStart), createContext({
+  window: browserWindow, location: { href: 'http://localhost/collector-fixture' },
+  navigator: { sendBeacon: () => true }, PerformanceObserver: { supportedEntryTypes: [] },
+  performance: { getEntriesByName: () => activeNavigationId ? [{ detail: { navigationId: activeNavigationId } }] : [] },
+  URL, Request, Response
+ }))
+ const send = async (batchId: string, navigationId: string, value: number) => {
+  await browserWindow.fetch('/api/vitals', { body: JSON.stringify({ schemaVersion: 2, batchId, samples: [
+   { metricName: 'READY', result: 'ok', measurementKind: 'in_page_navigation', navigationId, value }
+  ] }) })
+ }
+ await send('batch-a', 'nav-a', 125)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, 125)
+ activeNavigationId = 'nav-b'
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+ await send('batch-a-before-b', 'nav-a', 129)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+ await send('batch-b', 'nav-b', 240)
+ await send('batch-a-late-new', 'nav-a', 130)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, 240)
+ activeNavigationId = null
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+ await send('batch-missing-identity', 'nav-b', 241)
+ assert.equal(browserWindow.__performanceMetrics?.ready.READY, undefined)
+})
+
+it('missing ready marker does not fabricate successful navigation time', async () => {
+ const { measureNavigation } = await import('../scripts/performance-metrics.mjs')
+ const target = 'http://localhost/explore/player-stats?p1=13'
+ let predicateChecked = false
+ let evaluatedAfterMissingMarker = false
+ const page = {
+  context: () => ({}), setDefaultTimeout: () => {}, on: () => {}, off: () => {},
+  addInitScript: async () => {}, exposeBinding: async () => {},
+  goto: async () => ({ status: () => 200, headers: () => ({}) }),
+  url: () => target,
+  waitForFunction: async (fn: (...args: any[]) => unknown, name: string) => {
+   for (const metrics of [undefined, { ready: {}, readyDetails: {} }]) {
+    const result = runInContext(`(${fn.toString()})(${JSON.stringify(name)})`, createContext({ window: { __performanceMetrics: metrics } }))
+    assert.equal(result, false)
+   }
+   predicateChecked = true
+   throw new Error('fixture missing ready marker')
+  },
+  evaluate: async () => { evaluatedAfterMissingMarker = true },
+  waitForTimeout: async () => {}
+ }
+ const result = await measureNavigation({ version: () => 'isolated-missing-marker-double' },
+  { name: 'desktop', viewport: { width: 1440, height: 900 } }, target, { page })
+ assert.equal(predicateChecked, true)
+ assert.equal(evaluatedAfterMissingMarker, false)
+ assert.equal(result.readyMs, null)
+ assert.equal(result.error, 'fixture missing ready marker')
+ assert.ok('functionalStatus' in result)
+ assert.ok('performanceStatus' in result)
+ assert.ok('navigationComplete' in result)
+ assert.equal(result.functionalStatus, 'NOT_OBSERVED')
+ assert.equal(result.performanceStatus, 'NOT_OBSERVED')
+ assert.equal(result.navigationComplete, false)
 })

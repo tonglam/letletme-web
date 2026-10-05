@@ -1335,7 +1335,8 @@ export default function TournamentClient({
 		!showingLastGood &&
 		(selectedTournamentIsOfficialH2H
 			? officialH2HReady && officialH2HReadyScopeKey === scopeKey
-			: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard)
+			: !isLoadingInitial && contentScopeKey === scopeKey && hasBoard &&
+				isCompleteLiveBoardPage(boardPage))
 	)
 
 	if (entryId <= 0) {

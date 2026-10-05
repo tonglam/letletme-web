@@ -550,7 +550,7 @@ export function usePlayerDetailSlot({
 				return null
 			}
 			if (!Number.isInteger(playerId) || playerId <= 0) return null
-			if (playerDetail?.id === playerId) return playerDetail
+			if (playerDetail?.id === playerId && !isLoading) return playerDetail
 			const placeholder: PlayerDirectoryOption = {
 				id: String(playerId),
 				name: '',
@@ -578,7 +578,7 @@ export function usePlayerDetailSlot({
 			rememberPlayer(player)
 			return result.detail
 		},
-		[eventId, loadPlayerDetail, navigationId, playerDetail, rememberPlayer, t]
+		[eventId, isLoading, loadPlayerDetail, navigationId, playerDetail, rememberPlayer, t]
 	)
 
 	const clearSelection = useCallback(() => {

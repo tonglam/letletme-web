@@ -13,6 +13,12 @@ test.describe(`FIX03 nonterminal ${locale}`, () => {
  if (locale === 'zh-CN') test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
  test('FIX03 nonterminal 5 to 8 to 3 ignores stale results and returns to the seed without requests', async ({ page, context }, testInfo) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Requires isolated fixture controls')
+  await page.addInitScript(() => {
+   const original = window.fetch.bind(window)
+   window.fetch = (input, init) => String(input).includes('/api/fixtures/window?')
+    ? original(input, { ...init, signal: undefined })
+    : original(input, init)
+  })
   if (locale === 'zh-CN') {
    testInfo.annotations.push(...['FIX03.state.01', 'FIX03.state.02'].map(description => ({ type: 'coverage-variant', description })))
    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
@@ -66,13 +72,10 @@ test.describe(`FIX03 nonterminal ${locale}`, () => {
 			release()
 			await done
 			const terminal = await firstTerminal
-			if (terminal === 'failed') {
-				expect(firstRequest?.failure()?.errorText).toMatch(/aborted|cancelled/i)
-			} else {
-				const response = await firstRequest!.response()
-				expect(response?.ok()).toBe(true)
-				await response!.finished()
-			}
+			expect(terminal).toBe('finished')
+			const response = await firstRequest!.response()
+			expect(response?.ok()).toBe(true)
+			await response!.finished()
 			// Observe after the terminal browser event and a rendering opportunity.
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
 			await expect(three).toHaveAttribute('aria-pressed', 'true')
@@ -235,3 +238,31 @@ for (const locale of ['en', 'zh-CN'] as const) for (const width of [1440, 390]) 
   })
  })
 }
+
+
+test.describe('FIX03 first-round matrix directed context', () => {
+ test.use({ locale: 'zh-CN', viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test('FIX03 GW1 renders actual matrix before horizon changes', async ({ page, context }, testInfo) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated first-round context')
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+  expect((await context.cookies()).some(cookie => /session/i.test(cookie.name))).toBe(false)
+  await control([{ operation: 'GetCoreEventContext', data: { coreEventContext: { season: '2627', revision: 'fix03-gw1', sourceCheckedAt: '2026-08-13T09:40:00.000Z', currentEventId: 1, nextEventId: 2, latestFinishedEventId: null, nextDeadlineTime: '2026-08-14T17:30:00.000Z' } } }])
+  await page.goto('/zh-CN/explore/fixtures')
+  const matrix = page.getByRole('region', { name: '球队 FDR', exact: true })
+  const check = async (count: number) => {
+   for (let gw = 1; gw <= count; gw++) await expect(matrix.getByRole('columnheader', { name: `GW${gw}`, exact: true })).toBeVisible()
+   await expect(matrix.getByRole('columnheader', { name: 'GW0', exact: true })).toHaveCount(0)
+   await expect(matrix.getByRole('columnheader', { name: `GW${count + 1}`, exact: true })).toHaveCount(0)
+   await expect(matrix.locator('tbody tr')).toHaveCount(3)
+   await expect(matrix).toContainText('Arsenal')
+  }
+  await check(5)
+  await page.getByRole('button', { name: '3 轮', exact: true }).click()
+  await check(3)
+  await page.getByRole('button', { name: '5 轮', exact: true }).click()
+  await check(5)
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+  await testInfo.attach('FIX03-first-round-matrix', { contentType: 'application/json', body: JSON.stringify({ variantId: 'FIX03.state.03', stepId: 'FIX03.03', fromGw: 1, sequence: [5,3,5], functionalStatus: 'PASS', performanceStatus: 'NOT_RUN', readyMs: null, wholeVariantComplete: false }) })
+ })
+})

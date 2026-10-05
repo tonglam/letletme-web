@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 
 const marketControlPlayers = ['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD'].map((position, index) => ({
  playerId: 801 + index, webName: `Market ${position}`, teamId: 1, teamName: 'Arsenal', teamShortName: 'ARS', position, price: 50 + index, selectedByPercent: 20 - index
@@ -620,6 +621,12 @@ const server = createServer((request, response) => {
 
 		const operation = query.match(/(?:query|mutation)\s+(\w+)/)?.[1] ?? 'anonymous'
 		const observation = { operation, variables, startedAt: Date.now(), finishedAt: null, abortedAt: null }
+		if (variables.access === 'MINE' && ['TrendCohorts', 'TrendCohortSnapshot'].includes(operation)) {
+			try {
+				const context = JSON.parse(Buffer.from(String(request.headers['x-user-context']), 'base64url').toString('utf8'))
+				observation.identityDigest = createHash('sha256').update(JSON.stringify([context.uid, context.eid])).digest('hex')
+			} catch { observation.identityDigest = null }
+		}
 		performanceRequests.push(observation)
 		response.once('finish', () => { observation.finishedAt = Date.now() })
 		response.once('close', () => { if (!response.writableFinished) observation.abortedAt = Date.now() })

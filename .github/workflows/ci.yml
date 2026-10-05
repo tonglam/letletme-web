@@ -166,6 +166,16 @@ jobs:
           E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+      - name: Isolated S08 verified-role E2E
+        run: npx playwright test e2e/home-personal.spec.ts --grep 'S08 role genuine-admin' --workers=1 --trace=on --output=test-results/s08-role-boundary
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          E2E_DIRECT_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
+          E2E_S08_ROLE_BOUNDARY: '1'
+          PLATFORM_ADMIN_USER_IDS: 'e2e-management-platform-admin'
+          PLATFORM_ADMIN_FPL_ENTRY_IDS: '909090'
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - name: SSR slow-dependency and cache isolation E2E
         run: bash e2e/run-fixture-suite.sh ssr
         env:

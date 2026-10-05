@@ -871,7 +871,22 @@ test('anonymous competition redirects cannot be counted as successful content me
 	}
 	const sample = await measureNavigation(browser, { name: 'desktop', viewport: { width: 1440, height: 900 } }, `${baseURL}/live/competitions?tournamentId=6`)
 	expect(sample.error).toContain('Unexpected response or redirect')
-	expect(sample.readyMs).toBeNull()
+ expect(sample.readyMs).toBeNull()
+})
+
+test('navigation measurements correlate RSC-seeded readiness across pages', async ({ browser, baseURL }) => {
+	const { isProductionMeasurementUrl, measureNavigation } = await import('../scripts/performance-metrics.mjs')
+	if (isProductionMeasurementUrl(baseURL ?? '')) {
+		test.skip(true, 'Production measurements use the existing logged-in Chrome tab')
+		return
+	}
+	const profile = { name: 'desktop', viewport: { width: 1440, height: 900 } }
+	for (const pathname of ['/explore/player-stats', '/explore/price-predictions']) {
+		const sample = await measureNavigation(browser, profile, `${baseURL}${pathname}`)
+		expect(sample.error, pathname).toBeNull()
+		expect(sample.readyMs, pathname).toEqual(expect.any(Number))
+		expect(sample.readyMs).toBeGreaterThanOrEqual(0)
+	}
 })
 
 for (const locale of ['en', 'zh-CN']) {
@@ -985,9 +1000,15 @@ for (const locale of ['en', 'zh-CN']) {
 	})
 }
 
-for (const locale of ['en', 'zh-CN']) {
- for (const width of [1440, 390]) {
-  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }) => {
+for (const directed of [false, true]) {
+const timezone = directed ? 'UTC' : 'Australia/Perth'
+const theme = directed ? 'dark' : 'system'
+test.describe(directed ? 'J15 directed anonymous context' : 'J15 original baseline context', () => {
+ test.use({ timezoneId: timezone, colorScheme: directed ? 'dark' : 'light' })
+for (const locale of directed ? ['zh-CN'] : ['en', 'zh-CN']) {
+ for (const width of directed ? [390] : [1440, 390]) {
+  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }, testInfo) => {
+   await page.addInitScript(value => localStorage.setItem('theme', value), theme)
    let prefix = locale === 'en' ? '' : '/zh-CN'
    let zh = locale === 'zh-CN'
    const expectHomeData = async () => {
@@ -1004,6 +1025,7 @@ for (const locale of ['en', 'zh-CN']) {
     await expect(fixtures.locator('[aria-busy="true"]')).toHaveCount(0)
     await expect(fixtures.getByRole('alert')).toHaveCount(0)
    }
+   await testInfo.attach('original-variant', { contentType: 'application/json', body: JSON.stringify({ variantId: directed ? 'J15.state.01' : `J15.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, wholeVariantComplete: false, readyMs: null }) })
    const authWrites: string[] = []
    page.on('request', request => {
     if (new URL(request.url()).pathname.startsWith('/api/auth/') && request.method() !== 'GET') authWrites.push(request.method() + ' ' + new URL(request.url()).pathname)
@@ -1026,6 +1048,9 @@ for (const locale of ['en', 'zh-CN']) {
    await page.goto(prefix || '/')
    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+   expect(await page.evaluate(() => innerWidth)).toBe(width)
    await expectHomeData()
    const nav = page.getByRole('navigation').first()
    const createHref = `${prefix}/competitions/create`
@@ -1071,11 +1096,19 @@ for (const locale of ['en', 'zh-CN']) {
    await expect(page).toHaveURL(url => url.pathname === (prefix || '/'))
    await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toBeVisible()
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+   expect(await page.evaluate(() => innerWidth)).toBe(width)
    await expectHomeData()
    expect(await page.evaluate(() => sessionStorage.getItem('j15-protected-content-observed'))).toBeNull()
    expect(authWrites).toEqual([])
+   if (directed) await expect(page.locator('html')).toHaveClass(/dark/)
+   await testInfo.attach('J15-context-terminal', { contentType: 'application/json', body: JSON.stringify({ variantId: directed ? 'J15.state.01' : `J15.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, timezone, theme, width, initialLocale: locale, finalLocale: nextLocale, authWrites, readyMs: null, performanceStatus: 'NOT_RUN', wholeVariantComplete: false }) })
   })
  }
+}
+
+})
 }
 
 test('repeated shell bootstrap executes theme actions only once', async ({ page }) => {
@@ -1102,24 +1135,56 @@ test('repeated shell bootstrap executes theme actions only once', async ({ page 
  await expect(summary.locator('..')).not.toHaveAttribute('open', '')
 })
 
-for (const width of [1440, 390]) {
- test(`J18 shell preferences and cancelled feedback survive navigation ${width}`, async ({ page }) => {
+for (const scenario of ['baseline', 'state.01'] as const) {
+ const timezone = scenario === 'baseline' ? 'Australia/Perth' : 'UTC'
+ const initialTheme = scenario === 'baseline' ? 'system' : 'dark'
+ test.describe(`J18 original ${scenario} context`, () => {
+ test.use({ timezoneId: timezone, colorScheme: scenario === 'baseline' ? 'light' : 'dark' })
+for (const locale of scenario === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
+for (const width of scenario === 'baseline' ? [1440, 390] : [390]) {
+ test(`J18 shell preferences and cancelled feedback survive navigation ${locale} ${width}`, async ({ page }, testInfo) => {
+  await page.addInitScript(theme => { if (localStorage.getItem('theme') === null) localStorage.setItem('theme', theme) }, initialTheme)
   await page.setViewportSize({ width, height: 900 })
   const submissions: string[] = []
   await page.route('**/api/bug-reports', async route => { submissions.push(route.request().method()); await route.abort() })
-  await page.goto('/')
-  await expect(page).toHaveURL(url => url.pathname === '/')
+  await page.goto(locale === 'en' ? '/' : '/zh-CN')
+  await expect(page).toHaveURL(url => url.pathname === (locale === 'en' ? '/' : '/zh-CN'))
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(timezone)
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(initialTheme)
+  expect(await page.evaluate(() => innerWidth)).toBe(width)
+  await testInfo.attach('J18-baseline-context', { contentType: 'application/json', body: JSON.stringify({ variantId: scenario === 'state.01' ? 'J18.state.01' : `J18.A.${locale}.${width === 1440 ? 'desktop1440' : 'mobile390'}.base`, localeJourney: locale === 'en' ? 'en to zh-CN' : 'zh-CN to en to zh-CN', themeJourney: `${initialTheme} to dark`, timezone, width, wholeVariantComplete: false, readyMs: null }) })
   await expect(page.locator('[data-home-audience-hint="public"]')).toHaveCount(1)
   const homeMatches = page.locator('[data-home-matches]')
   await expect(homeMatches).toHaveAttribute('data-home-fixtures-event', '33')
   await expect(homeMatches.getByText('GW33', { exact: true })).toBeVisible()
   await expect(homeMatches.locator('[aria-busy="true"]')).toHaveCount(0)
-  await expect(page.locator('[data-countdown-card="dark"]')).toContainText('Gameweek 34')
+  await expect(page.locator('[data-countdown-card="dark"]')).toContainText(locale === 'en' ? 'Gameweek 34' : '34')
+  if (locale === 'zh-CN') {
+  await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
+   const english = page.getByRole('radio', { name: 'English', exact: true })
+   const englishHref = await english.getAttribute('href')
+   expect(englishHref).toBeTruthy()
+   await english.click()
+   await expect(page).toHaveURL(url => url.pathname === new URL(englishHref!, url).pathname)
+   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  }
   await page.locator('details[data-locale-picker] > summary').filter({ visible: true }).click()
   await page.getByRole('radio', { name: '简体中文', exact: true }).click()
   await expect(page).toHaveURL(/\/zh-CN$/)
   await page.getByRole('contentinfo').getByRole('link', { name: '市场', exact: true }).click()
   await expect(page).toHaveURL(/\/zh-CN\/explore\/market$/)
+  const ownership = page.locator('#market-ownership-share')
+  await expect(ownership.getByRole('link', { name: '每日', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(ownership.locator('a[aria-current="date"]')).toHaveAttribute('href', /period=DAILY.*date=2026-08-03/)
+  await expect(ownership).toContainText('Saka')
+  await expect(ownership).toContainText('+1')
+  const marketPlayer = page.locator('main a[href="/zh-CN/explore/player-stats?p1=1"]').filter({ visible: true }).first()
+  await expect(marketPlayer).toContainText('Saka')
+  await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0)
+  await marketPlayer.click()
+  await expect(page).toHaveURL(url => url.pathname === '/zh-CN/explore/player-stats' && url.searchParams.get('p1') === '1')
+  await expect(page.getByRole('region', { name: '球员总览', exact: true })).toContainText('Saka')
+
   await page.locator('summary[aria-label="切换配色主题"]').filter({ visible: true }).click()
   await page.locator('[data-theme-choice="dark"]').filter({ visible: true }).click()
   await expect(page.locator('html')).toHaveClass(/dark/)
@@ -1133,6 +1198,11 @@ for (const width of [1440, 390]) {
   const qr = page.locator('details[data-mini-program-popover]')
   await qr.locator(':scope > summary').click()
   await expect(qr.getByRole('group')).toBeVisible()
+  const qrBounds = await qr.getByRole('group').boundingBox()
+  expect(qrBounds).not.toBeNull()
+  expect(qrBounds!.x).toBeGreaterThanOrEqual(0)
+  expect(qrBounds!.x + qrBounds!.width).toBeLessThanOrEqual(width)
+
   await qr.locator(':scope > summary').click()
   await expect(qr).not.toHaveAttribute('open', '')
   await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: 'LetLetMe', exact: true }).click()
@@ -1140,4 +1210,9 @@ for (const width of [1440, 390]) {
   await expect(page.locator('html')).toHaveClass(/dark/)
   expect(submissions).toEqual([])
  })
+}
+
+}
+})
+
 }

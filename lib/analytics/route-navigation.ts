@@ -23,6 +23,13 @@ let currentRouteNavigation: RouteNavigationStart | null = null
 let pendingBackgroundResume: BackgroundResumeStart | null = null
 const readyInteractionStarts = new Map<string, number>()
 
+function publishNavigationIdentity(navigationId?: string): void {
+	// A single bounded entry lets diagnostics correlate without arrival-order guesses.
+	performance.clearMarks('letletme-active-navigation')
+	if (navigationId) performance.mark('letletme-active-navigation', { detail: { navigationId } })
+}
+
+
 type ElementPaintEntry = {
 	identifier?: string
 	startTime: number
@@ -54,6 +61,7 @@ export function markRouteReadyStart(
 		startedAt,
 		navigationId: createPerformanceCorrelationId('nav')
 	}
+	publishNavigationIdentity(currentRouteNavigation.navigationId)
 }
 
 /** Called by Next's pre-hydration client instrumentation when a route starts. */
@@ -68,6 +76,7 @@ export function markRouteNavigationStart(
 	} catch {
 		// Instrumentation must never interfere with navigation.
 		currentRouteNavigation = null
+		publishNavigationIdentity()
 	}
 }
 
@@ -80,6 +89,7 @@ export function markBackgroundResumeStart(
 	// A visibility resume starts a fresh measurement context. A stale route
 	// navigation clock must not win classification for the resumed page.
 	currentRouteNavigation = null
+	publishNavigationIdentity()
 	pendingBackgroundResume = {
 		pathname: normalizePathname(pathname),
 		startedAt
@@ -95,15 +105,26 @@ function documentNavigationStart(): number | null {
 /** Share an identity across markers using the same document or route clock. */
 export function routeReadyNavigationId(
 	pathname: string,
-	documentStart = documentNavigationStart()
+	documentStart = documentNavigationStart(),
+	preferredNavigationId?: string
 ): string | undefined {
 	const path = normalizePathname(pathname)
 	if (currentRouteNavigation) {
-		return currentRouteNavigation.pathname === path
-			? currentRouteNavigation.navigationId : undefined
+		if (currentRouteNavigation.pathname !== path) return undefined
+		if (preferredNavigationId) {
+			currentRouteNavigation = {
+				...currentRouteNavigation,
+				navigationId: preferredNavigationId
+			}
+			publishNavigationIdentity(preferredNavigationId)
+		}
+		return currentRouteNavigation.navigationId
 	}
 	if (!documentClockAvailable || pendingBackgroundResume || documentStart === null) return undefined
-	return documentNavigationId ??= createPerformanceCorrelationId('nav')
+	if (preferredNavigationId) documentNavigationId = preferredNavigationId
+	documentNavigationId ??= createPerformanceCorrelationId('nav')
+	publishNavigationIdentity(documentNavigationId)
+	return documentNavigationId
 }
 
 /** Returns the latest browser-recorded paint time for one annotated RSC element. */
@@ -298,6 +319,7 @@ export function clearRouteReadyStart(
 
 export function resetRouteNavigationStartForTests(): void {
 	documentClockAvailable = true
+	publishNavigationIdentity()
 	documentNavigationId = undefined
 	currentRouteNavigation = null
 	pendingBackgroundResume = null

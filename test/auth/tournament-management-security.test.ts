@@ -10,6 +10,26 @@ import {
 } from '../../lib/tournament/management-security'
 
 describe('tournament management boundary', () => {
+	for (const action of ['retry_setup', 'retry_roster', 'pause', 'resume', 'enable_official_sync']) {
+		it(`rejects client authority injection for ${action}`, () => {
+			for (const injected of [
+				{ adminEntryId: 999 },
+				{ platformAdmin: true },
+				{ adminEntryId: 999, platformAdmin: true }
+			]) {
+				assert.throws(
+					() => buildAuthoritativeTournamentAction({ action, ...injected }, 15702),
+					InvalidTournamentManagementPayloadError
+				)
+			}
+			assert.deepEqual(buildAuthoritativeTournamentAction({ action }, 15702), {
+				action,
+				adminEntryId: 15702,
+				platformAdmin: false
+			})
+		})
+	}
+
 	it('uses the verified server-side entry as the administrator', () => {
 		assert.deepEqual(
 			buildAuthoritativeTournamentRename({ name: '  Secure Cup  ' }, 15702),

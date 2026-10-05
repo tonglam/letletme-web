@@ -7,19 +7,42 @@ import {
 	type EventLiveExplainResponse,
 	type PlayerLiveResponse,
 } from '@/lib/graphql/operations/live'
-import type { PlayerStat } from '@/types/match'
+import type { Match, PlayerStat } from '@/types/match'
 import type { PlayerDetail } from '@/types/player-detail'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { buildBreakdownFromPlayerLive, createBasePlayerDetail } from './match-card-model'
 
-export function useMatchPlayerDetail(eventId?: number) {
-	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
+export function useMatchPlayerDetail(eventId?: number, match?: Match, sourceRevision?: string) {
+	const [loadedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
 	const [isOpen, setIsOpen] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
+	const [selection, setSelection] = useState<{ element?: number; name: string; teamShort: string; eventId?: number } | null>(null)
+	const [detailSourceKey, setDetailSourceKey] = useState<string | null>(null)
+	const currentTeam = selection && match
+		? [match.homeTeam, match.awayTeam].find(team => team.shortName === selection.teamShort)
+		: undefined
+	const currentPlayer = selection && selection.eventId === eventId
+		? currentTeam?.players.find(player => selection.element !== undefined
+			? player.element === selection.element
+			: player.player === selection.name)
+		: undefined
+	const sourceKey = currentPlayer && currentTeam
+		? JSON.stringify([eventId, sourceRevision, match?.id, currentTeam.shortName, currentPlayer])
+		: null
+	const selectedPlayer = !match ? loadedPlayer : currentPlayer && currentTeam
+		? detailSourceKey === sourceKey && loadedPlayer
+			? loadedPlayer
+			: createBasePlayerDetail(currentPlayer, currentTeam.name, currentTeam.shortName)
+		: null
 	const requestIdRef = useRef(0)
+	const detailRequestsRef = useRef(new Map<string, Promise<[
+		PromiseSettledResult<EventLiveExplainResponse>,
+		PromiseSettledResult<PlayerLiveResponse>
+	]>>())
 
 	useEffect(() => {
 		requestIdRef.current += 1
+		setSelection(null)
 		setSelectedPlayer(null)
 		setIsOpen(false)
 		setIsLoading(false)
@@ -28,26 +51,60 @@ export function useMatchPlayerDetail(eventId?: number) {
 		}
 	}, [eventId])
 
+	useLayoutEffect(() => {
+		// MatchCard can correlate against the current match snapshot. Other
+		// consumers pass only an event ID and render the selected player directly;
+		// their sourceKey is intentionally null, so comparing it would invalidate
+		// every detail request as soon as a player is selected.
+		if (match && detailSourceKey !== sourceKey) requestIdRef.current += 1
+	}, [detailSourceKey, match, sourceKey])
+
 	const openPlayerDetail = useCallback(async (player: PlayerStat, team: string, teamShort: string) => {
 		const requestId = requestIdRef.current + 1
 		requestIdRef.current = requestId
+		const requestKey = JSON.stringify([eventId, sourceRevision, match?.id, teamShort, player])
+		setSelection({ element: player.element, name: player.player, teamShort, eventId })
+		setDetailSourceKey(requestKey)
 		setSelectedPlayer(createBasePlayerDetail(player, team, teamShort))
 		setIsOpen(true)
 		setIsLoading(Boolean(player.element && eventId))
 		if (!player.element || !eventId) return
 
 		try {
-			const [explainResult, liveResult] = await Promise.allSettled([
-				executeQuery<EventLiveExplainResponse>(GET_EVENT_LIVE_EXPLAIN, { eventId, elementId: player.element }),
-				executeQuery<PlayerLiveResponse>(GET_PLAYER_LIVE, { playerId: player.element, eventId }),
-			])
+			let request = detailRequestsRef.current.get(requestKey)
+			if (!request) {
+				// A changed publication must not reuse executeQuery's in-flight result
+				// for the previous source revision. This cache only coalesces repeats
+				// within the same player/source identity.
+				const controller = new AbortController()
+				request = Promise.allSettled([
+					executeQuery<EventLiveExplainResponse>(
+						GET_EVENT_LIVE_EXPLAIN,
+						{ eventId, elementId: player.element },
+						{ signal: controller.signal }
+					),
+					executeQuery<PlayerLiveResponse>(
+						GET_PLAYER_LIVE,
+						{ playerId: player.element, eventId },
+						{ signal: controller.signal }
+					)
+				])
+				detailRequestsRef.current.set(requestKey, request)
+				void request.finally(() => {
+					if (detailRequestsRef.current.get(requestKey) === request) {
+						detailRequestsRef.current.delete(requestKey)
+					}
+				})
+			}
+			const [explainResult, liveResult] = await request
 			if (requestIdRef.current !== requestId) return
 			for (const result of [explainResult, liveResult]) {
 				if (result.status === 'rejected') console.warn('Live player detail unavailable:', result.reason)
 			}
 			setSelectedPlayer((current) => {
-				if (!current) return current
-				const explain = explainResult.status === 'fulfilled' ? explainResult.value.eventLiveExplain : null
+				if (!current || requestIdRef.current !== requestId) return current
+				const explanation = explainResult.status === 'fulfilled' ? explainResult.value.eventLiveExplain : null
+				const explain = explanation?.elementId === player.element ? explanation : null
 				const live = liveResult.status === 'fulfilled' ? liveResult.value.playerLive : null
 				return {
 					...current,
@@ -72,6 +129,11 @@ export function useMatchPlayerDetail(eventId?: number) {
 							redCards: live.redCards,
 						}
 						: current.stats,
+					// These rows are calculated from stats, not verified official explain.
+					breakdownSource: live ? 'provisional' : current.breakdownSource,
+					// Request loading has settled, but the scoring breakdown remains
+					// pending until live stats can establish its contents.
+					breakdownPending: live ? false : current.breakdownPending,
 					pointsBreakdown: live
 						? buildBreakdownFromPlayerLive(
 								live,
@@ -86,7 +148,18 @@ export function useMatchPlayerDetail(eventId?: number) {
 		} finally {
 			if (requestIdRef.current === requestId) setIsLoading(false)
 		}
-	}, [eventId])
+	}, [eventId, match?.id, sourceRevision])
+
+	useEffect(() => {
+		if (
+			!isOpen ||
+			!currentPlayer ||
+			!currentTeam ||
+			!sourceKey ||
+			detailSourceKey === sourceKey
+		) return
+		void openPlayerDetail(currentPlayer, currentTeam.name, currentTeam.shortName)
+	}, [currentPlayer, currentTeam, detailSourceKey, isOpen, openPlayerDetail, sourceKey])
 
 	const closePlayerDetail = useCallback(() => {
 		requestIdRef.current += 1
@@ -94,5 +167,6 @@ export function useMatchPlayerDetail(eventId?: number) {
 		setIsLoading(false)
 	}, [])
 
-	return { closePlayerDetail, isLoading, isOpen, openPlayerDetail, selectedPlayer }
+	const sourceChanged = Boolean(match && currentPlayer && sourceKey && detailSourceKey !== sourceKey)
+	return { closePlayerDetail, isLoading: isOpen && Boolean(selectedPlayer) && (isLoading || sourceChanged), isOpen: isOpen && selectedPlayer !== null, openPlayerDetail, selectedPlayer }
 }
