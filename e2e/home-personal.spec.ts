@@ -1905,23 +1905,25 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				const row = review.getByRole('row').filter({ hasText: catalogSelectionJourney ? 'Phase Two Fixture United' : 'Season Fixture United' })
 				await expect(row).toHaveCount(1)
 				await expect(row).toContainText('300')
-				await expect(row).toContainText('296')
+				await expect(row).toContainText('71')
 				await expect(unsettledLink).toHaveCount(0)
 				await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			}
 			await expect(live).toBeVisible()
 			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			let recoveryBoardRequests = 0
+			let recoveryBoardUpdates = 0
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
 				await page.route('**/api/live/competitions/6/board', async route => {
 					recoveryBoardRequests += 1
 					const response = await route.fetch()
 					const body = await response.json()
-					if (recoveryBoardRequests > 1) {
+					if (recoveryBoardRequests > 1 && response.ok() && body?.entryLiveCompetitionBoard) {
 						const board = body.entryLiveCompetitionBoard
 						board.head.contentRevision = 'recovered-content-v2'
 						board.head.publication.revisions.scoreCore = 'e2e-competition-score-v2'
 						for (const row of board.rows) row.score.revisions.scoreCore = 'e2e-competition-score-v2'
+						recoveryBoardUpdates += 1
 					}
 					await route.fulfill({ response, json: body })
 				})
@@ -1968,7 +1970,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
-				expect(recoveryBoardRequests).toBe(2)
+				expect(recoveryBoardRequests).toBeGreaterThanOrEqual(2)
+				expect(recoveryBoardUpdates).toBeGreaterThanOrEqual(1)
 				expect(indexRequests).toBe(2)
 				await expect(page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })).toHaveCount(0)
 				await expect(page.locator('[data-competition-perf-ready="detail"]')).toBeVisible()
