@@ -2303,13 +2303,14 @@ export default function TournamentReviewV2Client({
 										</div>
 									) : null}
 									{!loading &&
-									(selectedTournament.latestFinalizedEventId === null ||
-										(state !== 'READY' && !hasActivePayload)) ? (
+										(reviewReady ||
+											(selectedTournament.latestFinalizedEventId === null ||
+												(state !== 'READY' && !hasActivePayload))) ? (
 										<Link
 											href={`/live/competitions?tournamentId=${selectedTournament.tournamentId}${eventId ? `&gw=${eventId}` : ''}`}
 											className="mt-3 inline-block text-sm font-medium text-indigo-700 underline-offset-2 hover:underline"
 										>
-											{t('reviewLiveLink')}
+											{reviewReady ? t('reviewLiveStandingsLink') : t('reviewLiveLink')}
 										</Link>
 									) : null}
 									{retryPhaseId && view === 'season' && !loading ? (
