@@ -175,16 +175,24 @@ export function useLivePlayerDetail({
 		}
 		setIsLoading(true)
 		void Promise.allSettled([
-			executeQuery<EventLiveExplainResponse>(
-				GET_EVENT_LIVE_EXPLAIN,
-				{ eventId: selection.eventId, elementId },
-				{ cache: 'no-store', suppressErrorLog: true }
-			),
-			executeQuery<PlayerLiveResponse>(
-				GET_PLAYER_LIVE,
-				{ playerId: elementId, eventId: selection.eventId },
-				{ cache: 'no-store', suppressErrorLog: true }
-			)
+				executeQuery<EventLiveExplainResponse>(
+					GET_EVENT_LIVE_EXPLAIN,
+					{ eventId: selection.eventId, elementId },
+					{
+						cache: 'no-store',
+						suppressErrorLog: true,
+						dependencyCooldown: 'neutral'
+					}
+				),
+				executeQuery<PlayerLiveResponse>(
+					GET_PLAYER_LIVE,
+					{ playerId: elementId, eventId: selection.eventId },
+					{
+						cache: 'no-store',
+						suppressErrorLog: true,
+						dependencyCooldown: 'neutral'
+					}
+				)
 		]).then(([explainResult, liveResult]) => {
 			if (
 				cancelled ||

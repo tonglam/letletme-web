@@ -621,7 +621,10 @@ const server = createServer((request, response) => {
 		const operation = query.match(/(?:query|mutation)\s+(\w+)/)?.[1] ?? 'anonymous'
 		const observation = { operation, variables, startedAt: Date.now(), finishedAt: null, abortedAt: null }
 		performanceRequests.push(observation)
-		response.once('finish', () => { observation.finishedAt = Date.now() })
+	response.once('finish', () => {
+		observation.finishedAt = Date.now()
+		observation.status = response.statusCode
+	})
 		response.once('close', () => { if (!response.writableFinished) observation.abortedAt = Date.now() })
 		const rule = performanceRules.find(rule =>
 			operation === rule.operation && Object.entries(rule.variables ?? {}).every(([key, value]) => JSON.stringify(variables[key]) === JSON.stringify(value))
