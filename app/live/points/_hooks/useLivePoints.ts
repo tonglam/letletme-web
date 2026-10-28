@@ -398,6 +398,8 @@ export function useLivePoints({
 					{ eventId, elementIds },
 					{
 						cache: 'no-store',
+						// Optional detail failures must not block the primary points or league board.
+						dependencyCooldown: 'neutral',
 						suppressErrorLog: shouldSuppressOfficialErrorsForEvent(eventId)
 					}
 				)
@@ -431,9 +433,6 @@ export function useLivePoints({
 				setStartingPlayers(enrichedPlayers.filter(player => !player.isBench))
 				setBenchPlayers(enrichedPlayers.filter(player => player.isBench))
 			} catch (explainError) {
-				if (lastExplainAttemptAtRef.current === now) {
-					lastExplainAttemptAtRef.current = 0
-				}
 				if (!shouldSuppressOfficialErrorsForEvent(eventId)) {
 					console.warn('Failed to fetch explain stats batch:', explainError)
 				}
@@ -796,6 +795,7 @@ export function useLivePoints({
 
 	const refresh = useCallback(async () => {
 		if (selectedGameweek !== undefined) {
+			lastExplainAttemptAtRef.current = 0
 			if (readyMeasurementMode === 'recovery') {
 				setReadyRecoveryAttempt(attempt => attempt + 1)
 				startReadyClock(activeEntryId, selectedGameweek)

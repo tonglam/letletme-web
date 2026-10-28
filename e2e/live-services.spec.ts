@@ -2366,3 +2366,36 @@ for (const chip of ['3xc', 'bboost'] as const) {
   }
  })
 }
+
+test('a failed optional explanation batch does not block a manual points refresh', async ({ page }) => {
+	test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Uses the deterministic local GraphQL fixture')
+	let pointsRequests = 0
+	let explanationRequests = 0
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (payload.query?.includes('EventLiveExplainBatch')) {
+			explanationRequests += 1
+			await route.fulfill({
+				status: 503,
+				headers: { 'Retry-After': '300' },
+				json: { errors: [{ message: 'Optional detail unavailable', extensions: { code: 'DEPENDENCY_UNAVAILABLE' } }] }
+			})
+			return
+		}
+		if (payload.query?.includes('GetLiveCalcPoints')) pointsRequests += 1
+		await continueToGraphqlFixture(route)
+	})
+	const firstFailure = page.waitForResponse(response =>
+		response.url().endsWith('/api/graphql') &&
+		Boolean(response.request().postDataJSON()?.query?.includes('EventLiveExplainBatch'))
+	)
+	await page.goto('/live/points/123')
+	await (await firstFailure).finished()
+	const pitch = page.getByRole('region', { name: /formation/ })
+	await expect(pitch.getByRole('button', { name: /View details for Player/ })).toHaveCount(15)
+	await expect.poll(() => explanationRequests).toBe(1)
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+	await expect.poll(() => pointsRequests).toBe(1)
+	await expect.poll(() => explanationRequests).toBe(2)
+	await expect(pitch.getByRole('button', { name: /View details for Player/ })).toHaveCount(15)
+})
