@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { tournamentNameSchema } from '../app/tournament/[id]/manage/_lib/tournament-management'
 
 import {
 	computeTournamentPlan,
@@ -194,4 +196,19 @@ describe('tournament creation model', () => {
 			)
 		}
 	})
+})
+
+
+it('returns field errors for invalid creation and settings forms with the installed Zod resolver', async () => {
+	const options = { fields: {}, shouldUseNativeValidation: false }
+	const created = await zodResolver(tournamentFormSchema)({
+		tournamentName: '', participantSource: 'official',
+		leagueUrl: 'https://fantasy.premierleague.com/leagues/12345/standings',
+		groupFormat: 'none', startGameweek: 'GW1', endGameweek: 'GW38', knockoutFormat: 'none',
+	}, {}, options)
+	assert.ok(created.errors.tournamentName?.message)
+	assert.deepEqual(created.values, {})
+	const renamed = await zodResolver(tournamentNameSchema)({ name: '' }, {}, options)
+	assert.ok(renamed.errors.name?.message)
+	assert.deepEqual(renamed.values, {})
 })
