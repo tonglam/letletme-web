@@ -2,7 +2,7 @@
 
 ## Stack
 
-[Better Auth](https://better-auth.com) v1.6.23 · Drizzle ORM · Supabase Postgres (`bauth` schema) · Resend (email delivery)
+[Better Auth](https://better-auth.com) v1.7.14 · Drizzle ORM · Supabase Postgres (`bauth` schema) · Resend (email delivery)
 
 **Providers:** Email + Password · Google OAuth
 

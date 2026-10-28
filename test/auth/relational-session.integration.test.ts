@@ -41,9 +41,9 @@ test('relational auth reads preserve fresh identity and rejection boundaries', {
 		await fixture`insert into bauth.account (id,account_id,provider_id,user_id) values (${id},${id},'test',${id})`
 		for (const joins of [false, true]) {
 			const auth = betterAuth({
-				baseURL: 'http://localhost:3217', secret, experimental: { joins },
+				baseURL: 'http://localhost:3217', secret,
 				database: drizzleAdapter(db, { provider: 'pg', schema }),
-				advanced: { cookiePrefix: 'relational' },
+				advanced: { cookiePrefix: 'relational', database: { joins } },
 				session: { cookieCache: { enabled: false } },
 				user: { additionalFields: {
 					fplEntryId: { type: 'number', required: false, input: false },
@@ -77,9 +77,10 @@ test('relational auth reads preserve fresh identity and rejection boundaries', {
 			assert.equal(sessions.length, 1)
 			assert.equal(sessions[0].user.id, id)
 			selects = 0
-			const oauth = await context.internalAdapter.findOAuthUser(email, id, 'test')
-			assert.equal(oauth?.user.id, id)
-			assert.equal(oauth?.linkedAccount?.id, id)
+			const oauth = await context.internalAdapter.findAccountOwnerByKey({ providerId: 'test', accountId: id })
+			if (oauth?.kind !== 'owned') assert.fail('Expected an owned provider account')
+			assert.equal(oauth.user.id, id)
+			assert.equal(oauth.account.id, id)
 			assert.equal(selects, joins ? 1 : 2)
 			selects = 0
 			const found = await context.internalAdapter.findUserByEmail(email, { includeAccounts: true })

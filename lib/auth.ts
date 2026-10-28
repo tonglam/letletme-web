@@ -31,8 +31,6 @@ const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
 
 export const authConfig = {
 	baseURL,
-	// Read associated auth records in one query while retaining fresh session checks.
-	experimental: { joins: true },
 	database: instrumentAuthDatabaseAdapter(
 		drizzleAdapter(db, {
 			provider: 'pg',
@@ -159,6 +157,8 @@ export const authConfig = {
 		}
 	},
 	advanced: {
+		// Read associated auth records in one query while retaining fresh session checks.
+		database: { joins: true },
 		cookiePrefix: AUTH_COOKIE_PREFIX,
 		useSecureCookies: process.env.NODE_ENV === 'production',
 		crossSubDomainCookies: { enabled: false },
