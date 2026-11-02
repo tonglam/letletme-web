@@ -14,7 +14,8 @@ daily_dir=$backup_root/daily
 weekly_dir=$backup_root/weekly
 secret_file=/etc/letletme-redis/admin.secret
 install -d -o root -g root -m 0700 "$daily_dir" "$weekly_dir"
-export REDISCLI_AUTH=$(< "$secret_file")
+REDISCLI_AUTH=$(< "$secret_file")
+export REDISCLI_AUTH
 
 redis_cli=(redis-cli -h 127.0.0.1 -p 6379 --no-auth-warning)
 max_replication_offset_lag_bytes=${REDIS_MAX_REPLICATION_OFFSET_LAG_BYTES:-1048576}
@@ -41,7 +42,10 @@ replica_is_healthy() {
 		$last_io =~ ^[0-9]+$ &&
 		$last_io -le 30 &&
 		$read_only == 1 &&
-		$syncing == 0 ]]
+		$syncing == 0 ]] || {
+		echo "Redis replica check failed: link, last I/O, read-only or sync state unhealthy" >&2
+		return 1
+	}
 }
 
 primary_has_healthy_replicas() {
@@ -49,8 +53,14 @@ primary_has_healthy_replicas() {
 	local connected master_offset
 	connected=$(field connected_slaves "$input")
 	master_offset=$(field master_repl_offset "$input")
-	[[ $connected =~ ^[0-9]+$ && $connected -gt 0 ]] || return 1
-	[[ $master_offset =~ ^[0-9]+$ ]] || return 1
+	[[ $connected =~ ^[0-9]+$ && $connected -gt 0 ]] || {
+		echo "Redis primary check failed: no connected replicas" >&2
+		return 1
+	}
+	[[ $master_offset =~ ^[0-9]+$ ]] || {
+		echo "Redis primary check failed: invalid replication offset" >&2
+		return 1
+	}
 	[[ $max_replication_offset_lag_bytes =~ ^[0-9]+$ ]] || return 1
 
 	local healthy=0 line host port state lag replica_offset read_only read_only_output offset_lag
@@ -68,11 +78,15 @@ primary_has_healthy_replicas() {
 				read_only=''
 			fi
 		fi
-		if [[ $state == online && $lag =~ ^[0-9]+$ && $lag -le 30 && $replica_offset =~ ^[0-9]+$ && $read_only == 1 ]] && (( master_offset >= replica_offset )); then
+		if [[ $state == online && $lag =~ ^[0-9]+$ && $lag -le 30 && $replica_offset =~ ^[0-9]+$ && ($read_only == 1 || $read_only == yes) ]] && (( master_offset >= replica_offset )); then
 			offset_lag=$((master_offset - replica_offset))
 			if (( offset_lag <= max_replication_offset_lag_bytes )); then
 				healthy=$((healthy + 1))
+			else
+				echo "Redis replica check failed: offset lag exceeds limit" >&2
 			fi
+		else
+			echo "Redis replica check failed: offline, stale ACK, invalid offset or read-only probe failed" >&2
 		fi
 	done < <(grep -E '^slave[0-9]+:' <<<"$input" || true)
 	[[ $healthy -eq $connected ]]
@@ -83,16 +97,36 @@ replication_is_healthy() {
 	case $(field role "$input") in
 		slave) replica_is_healthy "$input" ;;
 		master) primary_has_healthy_replicas "$input" ;;
-		*) return 1 ;;
+		*) echo "Redis replication check failed: unsupported role" >&2; return 1 ;;
 	esac
 }
 
-replication_before=$("${redis_cli[@]}" INFO replication)
-role=$(field role "$replication_before")
-if ! replication_is_healthy "$replication_before"; then
-	echo "Redis replication topology is stale or disconnected (role=$role); refusing backup" >&2
-	exit 1
-fi
+# Re-read the topology after transient network/ACK lag; never relax its checks.
+# Seven attempts, five seconds apart, with bounded Redis commands.
+wait_for_healthy_replication() {
+	local stage=$1 attempt replication
+	for attempt in {1..7}; do
+		if replication=$(timeout "${replica_probe_timeout_seconds}s" "${redis_cli[@]}" INFO replication 2>/dev/null); then
+			if replication_is_healthy "$replication"; then
+				role=$(field role "$replication")
+				if (( attempt > 1 )); then
+					echo "Redis replication recovered: stage=$stage attempt=$attempt" >&2
+				fi
+				return 0
+			fi
+		else
+			echo "Redis replication INFO probe failed or timed out" >&2
+		fi
+		echo "Redis replication unhealthy: stage=$stage attempt=$attempt/7" >&2
+		if (( attempt < 7 )); then
+			sleep 5
+		fi
+	done
+	echo "Redis replication remained unhealthy: stage=$stage; refusing backup" >&2
+	return 1
+}
+
+wait_for_healthy_replication before-bgsave
 
 tmp=''
 checksum_tmp=''
@@ -118,11 +152,7 @@ for _ in $(seq 1 120); do
 done
 [[ $in_progress == 0 && $status == ok ]]
 
-replication_after=$("${redis_cli[@]}" INFO replication)
-if ! replication_is_healthy "$replication_after"; then
-	echo "Redis replication topology became stale or disconnected; refusing backup" >&2
-	exit 1
-fi
+wait_for_healthy_replication after-bgsave
 
 redis_dir=$("${redis_cli[@]}" CONFIG GET dir | tail -n 1)
 dbfilename=$("${redis_cli[@]}" CONFIG GET dbfilename | tail -n 1)
@@ -133,11 +163,7 @@ checksum_tmp=$(mktemp "$daily_dir/.redis-$timestamp.XXXXXX.sha256")
 install -o root -g root -m 0600 "$redis_dir/$dbfilename" "$tmp"
 redis-check-rdb "$tmp" >/dev/null
 
-replication_after_copy=$("${redis_cli[@]}" INFO replication)
-if ! replication_is_healthy "$replication_after_copy"; then
-	echo "Redis replication topology became stale or disconnected; refusing backup" >&2
-	exit 1
-fi
+wait_for_healthy_replication after-copy
 
 checksum=$(sha256sum "$tmp" | awk '{print $1}')
 printf '%s  %s\n' "$checksum" "$(basename "$target")" > "$checksum_tmp"
