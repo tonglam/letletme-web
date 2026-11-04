@@ -985,9 +985,15 @@ for (const locale of ['en', 'zh-CN']) {
 	})
 }
 
-for (const locale of ['en', 'zh-CN']) {
- for (const width of [1440, 390]) {
-  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }) => {
+for (const profile of ['baseline', 'anonymous'] as const) {
+for (const locale of profile === 'baseline' ? ['en', 'zh-CN'] : ['zh-CN']) {
+ for (const width of profile === 'baseline' ? [1440, 390] : [390]) {
+ test.describe(`J15 planned ${profile} ${locale} ${width}`, () => {
+ test.use({ timezoneId: profile === 'baseline' ? 'Australia/Perth' : 'UTC', colorScheme: profile === 'baseline' ? 'light' : 'dark' })
+  test(`J15 guest auth help click journey ${locale} ${width}px`, async ({ page }, testInfo) => {
+   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Fixture context and no production authentication submissions')
+   const theme = profile === 'baseline' ? 'system' : 'dark'
+   await page.addInitScript(value => localStorage.setItem('theme', value), theme)
    let prefix = locale === 'en' ? '' : '/zh-CN'
    let zh = locale === 'zh-CN'
    const expectHomeData = async () => {
@@ -1074,8 +1080,15 @@ for (const locale of ['en', 'zh-CN']) {
    await expectHomeData()
    expect(await page.evaluate(() => sessionStorage.getItem('j15-protected-content-observed'))).toBeNull()
    expect(authWrites).toEqual([])
+   expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe(theme)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(profile === 'baseline' ? 'Australia/Perth' : 'UTC')
+   if (profile !== 'baseline') await expect(page.locator('html')).toHaveClass(/dark/)
+   await testInfo.attach('J15-planned-context', { body: JSON.stringify({ variantId: profile === 'baseline' ? `J15.A.${locale}.${width === 390 ? 'mobile390' : 'desktop1440'}.base` : 'J15.state.01', locale, finalLocale: zh ? 'zh-CN' : 'en', viewport: page.viewportSize(), theme, timezone: profile === 'baseline' ? 'Australia/Perth' : 'UTC', scenario: profile, authWrites, protectedContentObserved: false, scope: 'Actual protected create entry to login, locale switch, forgot-password, signup, login and homepage; no authentication writes.', wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN' }), contentType: 'application/json' })
   })
+ })
  }
+}
+
 }
 
 test('repeated shell bootstrap executes theme actions only once', async ({ page }) => {
