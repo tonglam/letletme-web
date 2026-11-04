@@ -1154,8 +1154,10 @@ describe('live tournament filter visibility', () => {
 
 		assert.match(
 			h2hSource,
-			/hasLoaded && isUsableOfficialH2HSnapshot\(snapshot/
+			/hasLoaded && \(isFutureEvent/
 		)
+		assert.match(h2hSource, /schedule\?\.eventId === eventId && schedule.availability === 'READY'/)
+		assert.match(h2hSource, /isUsableOfficialH2HSnapshot\(snapshot, \{ eventId \}\)/)
 		assert.match(clientSource, /initialSnapshot=\{null\}/)
 		assert.match(clientSource, /onReadyChange=\{handleOfficialH2HReadyChange\}/)
 	})

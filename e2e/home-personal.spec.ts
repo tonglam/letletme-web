@@ -6919,3 +6919,37 @@ test('J10 first historical gameweek overlaps UI chunks and data', async ({ page 
   await session.cleanup()
  }
 })
+
+test('official H2H future rounds read the persisted schedule without live publications', async ({ page }) => {
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker fixture suite')
+ const session = await createSession({ entryId: 15702 })
+ const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
+ const tournament = { id: 6, name: 'Future Official H2H', leagueType: 'H2H', groupMode: 'BATTLE_RACES', rosterMode: 'OFFICIAL_SYNC', totalTeamNum: 3, setupStatus: 'READY', standingsReadyAt: '2026-09-01T00:00:00.000Z', setupHasWarnings: false, warningSummaries: [] }
+ const side = (entryId: number | null, entryName: string) => ({ availability: 'PENDING', entryId, entryName, playerName: null, isAverage: entryId === null, points: null, netPoints: null })
+ const rules = [
+  { operation: 'GetEntryTournaments', data: { entryTournaments: [tournament] } },
+  ...[10, 11].map(eventId => ({ operation: 'GetTournamentOfficialH2HSchedule', variables: { tournamentId: 6, eventId }, data: { tournamentOfficialH2HSchedule: { eventId, availability: 'READY', matches: [
+   { officialMatchId: eventId * 100, eventId, groupId: 1, sourceOrder: 0, phase: 'REGULAR', knockoutName: null, tiebreak: null, isBye: false, availability: 'PENDING', home: side(15702, `GW${eventId} Home`), away: side(456, `GW${eventId} Away`) },
+   { officialMatchId: eventId * 100 + 1, eventId, groupId: 1, sourceOrder: 1, phase: 'REGULAR', knockoutName: null, tiebreak: null, isBye: true, availability: 'PENDING', home: side(789, `GW${eventId} Third`), away: side(null, 'Average') },
+  ] } } })),
+  { operation: 'GetTournamentOfficialH2HHistory', data: { tournamentOfficialH2HHistory: { eventId: 10, availability: 'READY', matches: [] } } },
+ ]
+ try {
+  expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
+  await addSessionCookie(page, session.cookie)
+  await page.goto('/zh-CN/live/competitions?tournamentId=6&gw=10')
+  const panel = page.getByRole('tabpanel', { name: /本轮对阵/ })
+  await expect(panel.getByText('GW10 Home', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW10 Away', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW10 Third', { exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /对战积分榜/ })).toHaveCount(0)
+  await expect(page.getByText('刷新失败', { exact: false })).toHaveCount(0)
+  await page.getByRole('link', { name: '下一轮', exact: true }).click()
+  await expect(panel.getByText('GW11 Home', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW10 Home', { exact: true })).toHaveCount(0)
+  await page.screenshot({ path: '/tmp/h2h-future-fixtures.png', fullPage: true })
+ } finally {
+  await fetch(fixture, { method: 'DELETE' })
+  await session.cleanup()
+ }
+})

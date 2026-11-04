@@ -1181,6 +1181,44 @@ export const GET_TOURNAMENT_OFFICIAL_H2H_HISTORY = `
   }
 `
 
+export const GET_TOURNAMENT_OFFICIAL_H2H_SCHEDULE = `
+  query GetTournamentOfficialH2HSchedule($tournamentId: Int!, $eventId: Int!) {
+    tournamentOfficialH2HSchedule(tournamentId: $tournamentId, eventId: $eventId) {
+      eventId
+      availability
+      matches {
+        officialMatchId
+        eventId
+        groupId
+        sourceOrder
+        phase
+        knockoutName
+        tiebreak
+        isBye
+        availability
+        home {
+          availability
+          entryId
+          entryName
+          playerName
+          isAverage
+          points
+          netPoints
+        }
+        away {
+          availability
+          entryId
+          entryName
+          playerName
+          isAverage
+          points
+          netPoints
+        }
+      }
+    }
+  }
+`
+
 export interface TournamentOfficialH2H {
 	eventId: number
 	availability: 'READY' | 'PENDING' | 'MISSING' | 'ERROR'
@@ -1268,3 +1306,7 @@ export interface TournamentOfficialH2HHistoryResponse {
 }
 
 // Query to fetch entry result for a specific event
+
+export interface TournamentOfficialH2HScheduleResponse {
+	tournamentOfficialH2HSchedule: TournamentOfficialH2HHistory
+}

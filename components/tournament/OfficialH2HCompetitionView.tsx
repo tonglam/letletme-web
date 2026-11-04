@@ -12,6 +12,9 @@ import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_OFFICIAL_H2H_HISTORY,
+	GET_TOURNAMENT_OFFICIAL_H2H_SCHEDULE,
+	type TournamentOfficialH2HScheduleResponse,
+	type TournamentOfficialH2HHistory,
 	type LeagueLiveHead,
 	type TournamentOfficialH2HHistoryMatch,
 	type TournamentOfficialH2HHistoryResponse,
@@ -245,7 +248,7 @@ function MatchCard({
 	tournamentId,
 	viewerEntryId
 }: {
-	match: TournamentOfficialH2HLiveMatch
+	match: Omit<TournamentOfficialH2HLiveMatch, 'delivery' | 'revisions' | 'times'>
 	tournamentId: number
 	viewerEntryId?: number
 }) {
@@ -491,6 +494,7 @@ export function OfficialH2HCompetitionView({
 	const isPageActive = usePageActive()
 	const [snapshot, setSnapshot] = useState(initialSnapshot)
 	const snapshotRef = useRef(initialSnapshot)
+	const [schedule, setSchedule] = useState<TournamentOfficialH2HHistory | null>(null)
 	const [head, setHead] = useState<LeagueLiveHead | null>(null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [refreshFailed, setRefreshFailed] = useState(false)
@@ -514,6 +518,7 @@ export function OfficialH2HCompetitionView({
 		async () => undefined
 	)
 	const boardsShareRef = useRef<HTMLElement | null>(null)
+	const isFutureEvent = activeEventId != null && eventId > activeEventId
 	const isCurrentEvent = activeEventId === eventId
 	const showStandings = shouldShowOfficialH2HStandings(eventId, activeEventId)
 
@@ -523,9 +528,11 @@ export function OfficialH2HCompetitionView({
 		// Deep links redirect without a server snapshot, so readiness must wait
 		// for the first client fetch to settle before reporting a usable board.
 		onReadyChange?.(
-			hasLoaded && isUsableOfficialH2HSnapshot(snapshot, { eventId })
+			hasLoaded && (isFutureEvent
+				? schedule?.eventId === eventId && schedule.availability === 'READY'
+				: isUsableOfficialH2HSnapshot(snapshot, { eventId }))
 		)
-	}, [eventId, hasLoaded, onReadyChange, snapshot])
+	}, [eventId, hasLoaded, isFutureEvent, onReadyChange, schedule, snapshot])
 
 	const loadMatchupHistory = useCallback(
 		(force = false) => {
@@ -632,6 +639,17 @@ export function OfficialH2HCompetitionView({
 				)
 			try {
 				setIsRefreshing(true)
+				if (isFutureEvent) {
+					const result = await settle(executeQuery<TournamentOfficialH2HScheduleResponse>(
+						GET_TOURNAMENT_OFFICIAL_H2H_SCHEDULE,
+						{ tournamentId, eventId },
+						{ cache: 'no-store', contract: 'live-points-v2' }
+					))
+					if (result.ok) setSchedule(result.value.tournamentOfficialH2HSchedule)
+					setRefreshFailed(!result.ok)
+					setHasLoaded(true)
+					return
+				}
 				const snapshotResult = await settle(
 					executeQuery<TournamentOfficialH2HResponse>(
 						GET_TOURNAMENT_OFFICIAL_H2H,
@@ -706,12 +724,12 @@ export function OfficialH2HCompetitionView({
 			if (inFlightRef.current === request) inFlightRef.current = null
 		})
 		return request
-	}, [eventId, tournamentId])
+	}, [eventId, isFutureEvent, tournamentId])
 
 	useEffect(() => {
-		if (!isPageActive || snapshot?.eventId === eventId) return
+		if (!isPageActive || (isFutureEvent ? schedule?.eventId === eventId : snapshot?.eventId === eventId)) return
 		void refresh()
-	}, [eventId, isPageActive, refresh, snapshot?.eventId])
+	}, [eventId, isFutureEvent, isPageActive, refresh, schedule?.eventId, snapshot?.eventId])
 
 	useEffect(() => {
 		if (!isCurrentEvent || !isPageActive) return
@@ -754,7 +772,9 @@ export function OfficialH2HCompetitionView({
 			),
 		[snapshot?.standings?.rows]
 	)
-	const matches = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
+	const matches = isFutureEvent
+		? (schedule?.eventId === eventId ? schedule.matches : EMPTY_OFFICIAL_H2H_MATCHES)
+		: snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
 	const viewerStanding = useMemo(
 		() =>
 			standings.find(standing => standing.entryId === viewerEntryId) ?? null,
@@ -968,7 +988,9 @@ export function OfficialH2HCompetitionView({
 							aria-hidden="true"
 						/>
 						<p className="text-sm font-medium text-muted-foreground">
-							{awaitingSchedule
+							{refreshFailed
+								? t('officialH2HLiveUnavailable', { event: eventId })
+								: awaitingSchedule
 								? t('officialH2HAwaitingGameweek', { event: eventId })
 								: t('officialH2HNoFixtures', { event: eventId })}
 						</p>
@@ -1029,6 +1051,7 @@ export function OfficialH2HCompetitionView({
 			displayDelivery,
 			standings,
 			showStandings,
+			refreshFailed,
 			t,
 			tournamentId,
 			viewerEntryId
@@ -1187,7 +1210,11 @@ export function OfficialH2HCompetitionView({
 					variant="warning"
 					className="rounded-xl"
 				>
-					<AlertDescription>{t('officialH2HRefreshFallback')}</AlertDescription>
+					<AlertDescription>
+						{isFutureEvent
+							? t('officialH2HLiveUnavailable', { event: eventId })
+							: t('officialH2HRefreshFallback')}
+					</AlertDescription>
 				</Alert>
 			) : null}
 
