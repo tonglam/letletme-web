@@ -3655,6 +3655,7 @@ test(`J08 official H2H standings and fixtures preserve round identity ${locale} 
    const value = officialH2HFixture(eventId, tournamentId)
    return [
     { operation: 'GetTournamentOfficialH2H', variables: { tournamentId, eventId }, data: { tournamentOfficialH2H: value.snapshot } },
+    { operation: 'GetTournamentOfficialH2HSchedule', variables: { tournamentId, eventId }, data: { tournamentOfficialH2HSchedule: { eventId, availability: 'READY', matches: value.snapshot.matches.map(match => ({ ...match, availability: 'PENDING', home: { ...match.home, availability: 'PENDING', points: null, netPoints: null }, away: { ...match.away, availability: 'PENDING', points: null, netPoints: null } })) } } },
     { operation: 'GetLeagueLiveHead', variables: { tournamentId, eventId }, data: { leagueLiveHead: value.head } },
     { operation: 'GetTournamentOfficialH2HHistory', variables: { tournamentId, eventId }, data: { tournamentOfficialH2HHistory: { tournamentId, eventId, matches: [] } } },
    ]
@@ -6928,25 +6929,25 @@ test('J08 official H2H future rounds read the persisted schedule without live pu
  const side = (entryId: number | null, entryName: string) => ({ availability: 'PENDING', entryId, entryName, playerName: null, isAverage: entryId === null, points: null, netPoints: null })
  const rules = [
   { operation: 'GetEntryTournaments', data: { entryTournaments: [tournament] } },
-  ...[10, 11].map(eventId => ({ operation: 'GetTournamentOfficialH2HSchedule', variables: { tournamentId: 6, eventId }, data: { tournamentOfficialH2HSchedule: { eventId, availability: 'READY', matches: [
+  ...[34, 35].map(eventId => ({ operation: 'GetTournamentOfficialH2HSchedule', variables: { tournamentId: 6, eventId }, data: { tournamentOfficialH2HSchedule: { eventId, availability: 'READY', matches: [
    { officialMatchId: eventId * 100, eventId, groupId: 1, sourceOrder: 0, phase: 'REGULAR', knockoutName: null, tiebreak: null, isBye: false, availability: 'PENDING', home: side(15702, `GW${eventId} Home`), away: side(456, `GW${eventId} Away`) },
    { officialMatchId: eventId * 100 + 1, eventId, groupId: 1, sourceOrder: 1, phase: 'REGULAR', knockoutName: null, tiebreak: null, isBye: true, availability: 'PENDING', home: side(789, `GW${eventId} Third`), away: side(null, 'Average') },
   ] } } })),
-  { operation: 'GetTournamentOfficialH2HHistory', data: { tournamentOfficialH2HHistory: { eventId: 10, availability: 'READY', matches: [] } } },
+  { operation: 'GetTournamentOfficialH2HHistory', data: { tournamentOfficialH2HHistory: { eventId: 34, availability: 'READY', matches: [] } } },
  ]
  try {
   expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules }) })).ok).toBe(true)
   await addSessionCookie(page, session.cookie)
-  await page.goto('/zh-CN/live/competitions?tournamentId=6&gw=10')
+  await page.goto('/zh-CN/live/competitions?tournamentId=6&gw=34')
   const panel = page.getByRole('tabpanel', { name: /本轮对阵/ })
-  await expect(panel.getByText('GW10 Home', { exact: true })).toBeVisible()
-  await expect(panel.getByText('GW10 Away', { exact: true })).toBeVisible()
-  await expect(panel.getByText('GW10 Third', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW34 Home', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW34 Away', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW34 Third', { exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: /对战积分榜/ })).toHaveCount(0)
   await expect(page.getByText('刷新失败', { exact: false })).toHaveCount(0)
   await page.getByRole('link', { name: '下一轮', exact: true }).click()
-  await expect(panel.getByText('GW11 Home', { exact: true })).toBeVisible()
-  await expect(panel.getByText('GW10 Home', { exact: true })).toHaveCount(0)
+  await expect(panel.getByText('GW35 Home', { exact: true })).toBeVisible()
+  await expect(panel.getByText('GW34 Home', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: '/tmp/h2h-future-fixtures.png', fullPage: true })
  } finally {
   await fetch(fixture, { method: 'DELETE' })
