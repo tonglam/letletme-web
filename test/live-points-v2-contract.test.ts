@@ -96,6 +96,7 @@ describe('Live Points V2 web contract', () => {
 			'leagueLiveHead',
 			'tournamentOfficialH2H',
 			'tournamentOfficialH2HHistory',
+			'tournamentOfficialH2HSchedule',
 			'tournamentSelectionIndex',
 			'tournamentEntrySquads',
 			'tournamentDetailDesk',
