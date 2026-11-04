@@ -312,3 +312,64 @@ test.describe('BRIEF02 exact planned states', () => {
   })
  }
 })
+
+test.describe('J17 exact planned state contexts', () => {
+ test.use({ viewport: { width: 390, height: 900 }, timezoneId: 'UTC', colorScheme: 'dark' })
+ test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'Isolated feature flag and publication fixtures only')
+ test.afterEach(async () => { await control() })
+ for (const [variantId, scenario] of [
+  ['J17.state.01', 'enabled'], ['J17.state.02', 'disabled'],
+  ['J17.state.03', 'published'], ['J17.state.04', 'missing-story']
+ ] as const) {
+  test(`${variantId} ${scenario === 'disabled' ? 'feature-disabled' : scenario}`, async ({ page }, testInfo) => {
+   test.skip(process.env.BRIEFING_PUBLIC_ENABLED !== (scenario === 'disabled' ? 'false' : 'true'), 'Requires matching explicitly configured standalone runtime')
+   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+   const story = { id: 'j17-planned', slug: 'j17-planned', storyRevision: 12, title: 'J17 已发布文章', summary: 'J17 指定版本摘要', sourceName: 'Fixture source', sourceUrl: 'https://example.invalid/j17-planned', sourceCheckedAt: '2026-09-15T10:00:00Z', expiresAt: null }
+   const externalRequests: string[] = []
+   await page.route('https://example.invalid/**', async route => { externalRequests.push(route.request().url()); await route.abort() })
+   await control(scenario === 'disabled' ? [] : [
+    { operation: 'BriefingWeek', variables: { locale: 'ZH_CN' }, data: { briefingWeek: { state: 'READY', revision: 12, publicationId: 'j17-planned-publication', publishedAt: '2026-09-15T11:00:00Z', sourceCheckedAt: story.sourceCheckedAt, staleAt: null, event: { seasonCode: '2627', eventId: 5, name: 'J17 GW5', deadlineTime: null }, featured: [story], sections: [] } } },
+    { operation: 'BriefingStory', variables: { locale: 'ZH_CN', slug: story.slug }, data: { briefingStory: scenario === 'missing-story' ? null : { state: 'READY', canonicalSlug: story.slug, story } } }
+   ])
+   if (scenario === 'disabled') {
+    for (const path of ['/briefing', '/briefing/week', '/briefing/story/j17-planned']) {
+     await page.goto(`/zh-CN${path}`)
+     await expect(page.getByRole('heading', { name: '找不到页面', exact: true })).toBeVisible()
+     await expect(page.locator('article')).toHaveCount(0)
+    }
+   } else {
+    await page.goto('/zh-CN/briefing/week')
+    await expect(page.getByText('J17 GW5', { exact: true })).toBeVisible()
+    await expect(page.getByText('12', { exact: true })).toBeVisible()
+    await page.getByRole('link', { name: story.title, exact: true }).click()
+    await expect(page).toHaveURL(/\/zh-CN\/briefing\/story\/j17-planned$/)
+    if (scenario === 'missing-story') {
+     await expect(page.getByRole('heading', { name: '资讯暂时不可用', exact: true })).toBeVisible()
+     await expect(page.locator('article')).toHaveCount(0)
+     await expect(page.getByText(story.summary, { exact: true })).toHaveCount(0)
+    } else {
+     await expect(page.getByRole('heading', { level: 1, name: story.title, exact: true })).toBeVisible()
+     await expect(page.getByText(story.summary, { exact: true })).toBeVisible()
+     const source = page.locator(`article a[href="${story.sourceUrl}"]`)
+     await expect(source).toHaveAttribute('target', '_blank')
+     await expect(source).toHaveAttribute('rel', /noopener/)
+     await expect(source).toHaveAttribute('rel', /noreferrer/)
+     await page.locator('article a[href="/zh-CN/briefing/week"]').click()
+     await expect(page.getByRole('link', { name: story.title, exact: true })).toBeVisible()
+     await expect(page.getByText('J17 GW5', { exact: true })).toBeVisible()
+    }
+   }
+   await expect(page.locator('html')).toHaveClass(/dark/)
+   expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('UTC')
+   expect(externalRequests).toEqual([])
+   const observations = await (await fetch(fixture)).json()
+   const reads = observations.requests.filter((row: { operation: string }) => row.operation.startsWith('Briefing'))
+   if (scenario === 'disabled') expect(reads).toEqual([])
+   else {
+    expect(reads.some((row: { operation: string }) => row.operation === 'BriefingStory')).toBe(true)
+    expect(reads.every((row: { variables: { locale: string } }) => row.variables.locale === 'ZH_CN')).toBe(true)
+   }
+   await testInfo.attach('J17-planned-state', { body: JSON.stringify({ variantId, scenario, locale: 'zh-CN', viewport: page.viewportSize(), timezone: 'UTC', theme: 'dark', publicationId: scenario === 'disabled' ? null : 'j17-planned-publication', revision: scenario === 'disabled' ? null : 12, publicationReads: reads.length, externalRequests, wholeJourneyPass: false, readyMs: null, performanceStatus: 'NOT_RUN', scope: 'Explicit feature runtime, direct week entry, actual story/back link or closed terminal state; no invented site navigation entry.' }), contentType: 'application/json' })
+  })
+ }
+})
