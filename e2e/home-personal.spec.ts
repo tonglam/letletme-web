@@ -6920,7 +6920,7 @@ test('J10 first historical gameweek overlaps UI chunks and data', async ({ page 
  }
 })
 
-test('official H2H future rounds read the persisted schedule without live publications', async ({ page }) => {
+test('J08 official H2H future rounds read the persisted schedule without live publications', async ({ page }) => {
  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL) || process.env.E2E_SSR_REMEDIATION !== '1' || process.env.E2E_LIVE_HYDRATION !== '1', 'Dedicated isolated single-worker fixture suite')
  const session = await createSession({ entryId: 15702 })
  const fixture = `http://127.0.0.1:${process.env.E2E_GRAPHQL_PORT ?? '4100'}/__performance`
