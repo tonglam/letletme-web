@@ -396,10 +396,11 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 		))
 		releasePlayerOne()
 		for (const response of await lateResponses) await response.finished()
-		if (outcome === 'failed') {
+		if (hasFailure) {
+			// Optional detail reads do not change the shared dependency cooldown.
 			await expect.poll(() => page.evaluate(() =>
 				Number(sessionStorage.getItem('letletme:dependency-cooldown-until-v1') || 0)
-			)).toBeGreaterThan(0)
+			)).toBe(0)
 		}
 		await page.clock.runFor(50)
 	}
@@ -440,7 +441,6 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 		// Closing deliberately clears the hook cache; reopening issues fresh reads.
 		await firstDialog.getByRole('button', { name: 'Close', exact: true }).click()
 		await expect(page.getByRole('dialog')).toHaveCount(0)
-		if (hasFailure) await page.clock.fastForward(61_000)
 		await pitch.getByRole('button', { name: 'View details for Player 1', exact: true }).click()
 		await expect.poll(() => playerOneRequestCount).toBe(4)
 		await expect(page.getByRole('dialog').getByText('Goals', { exact: true })).toBeVisible()
@@ -478,7 +478,6 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 		await expect(pitch).toBeVisible()
 		expect(playerOneRequestCount).toBe(2)
 		expect(playerTwoRequestCount).toBe(0)
-		if (hasFailure) await page.clock.fastForward(61_000)
 		await pitch.getByRole('button', { name: 'View details for Player 1', exact: true }).click()
 		await expect.poll(() => playerOneRequestCount).toBe(4)
 		const reopened = page.getByRole('dialog')
@@ -506,13 +505,6 @@ test(`live player detail settles ${outcome} late responses with ${lateTarget} se
 
 	await secondDialog.getByRole('button', { name: 'Close', exact: true }).click()
 	await expect(page.getByRole('dialog')).toHaveCount(0)
-	if (hasFailure) {
-	// Dependency failures can extend the shared cooldown up to 60 seconds.
-	// Advance the deterministic clock before exercising the explicit
-	// recovery read; a manual refresh must not bypass a live server cooldown.
-	// Partial success can legitimately clear shared cooldown; do not assert order-dependent storage.
-	await page.clock.fastForward(61_000)
-	}
 	await pitch
 		.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()

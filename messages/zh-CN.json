@@ -2415,6 +2415,7 @@
 		"reviewPreviousReady": "查看上一个已完成快照（第 {gameweek} 轮）",
 		"reviewPreviousReadyHint": "最新已结算轮次仍在准备中；这里是明确的历史查看入口。",
 		"reviewLiveLink": "未结算数据请前往 Live",
+		"reviewLiveStandingsLink": "查看实时榜",
 		"reviewFutureDirection": "数据分析路线",
 		"reviewFutureDirectionHint": "在这套快照基础上继续扩展赛事数据分析与复盘能力。",
 		"reviewPayloadMissing": "已结算发布缺少对应赛制数据。",

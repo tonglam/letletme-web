@@ -1204,7 +1204,7 @@ test('live points reloads a repeated entry without stranding the loading state',
 	}
 })
 
-for (const scenarioMode of ['classic-mobile', 'partial-mobile', 'loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-ready-mobile', 'live-journey-stale-mobile', 'live-journey-dgw-mobile', 'live-journey-auto-sub-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
+for (const scenarioMode of ['classic-mobile', 'partial-mobile', 'loading-layout', 'settlement-time', 'none', 'tournament-race', 'retry-button', 'tab-reentry', 'partial-ssr-seed', 'failed-ssr-seed', 'search-empty', 'catalog-pagination', 'catalog-race', 'catalog-retry', 'catalog-deep-link', 'gw-route', 'live-journey', 'live-journey-second-entry', 'live-journey-published', 'live-journey-modal-race', 'live-journey-ready-mobile', 'live-journey-stale-mobile', 'live-journey-dgw-mobile', 'live-journey-auto-sub-mobile', 'live-journey-pinned', 'live-journey-pinned-ready', 'live-journey-pinned-large', 'live-journey-index-retry', 'live-journey-index-gone', 'live-journey-index-gone-new-revision', 'live-journey-sort', 'live-journey-focus'] as const) {
 const plannedReview = scenarioMode === 'classic-mobile' || scenarioMode === 'partial-mobile'
 const recoveryMode = scenarioMode === 'classic-mobile' ? 'none' : scenarioMode === 'partial-mobile' ? 'partial-ssr-seed' : scenarioMode
 const comparisonJourney = recoveryMode.startsWith('live-journey-pinned')
@@ -1214,12 +1214,14 @@ const plannedStateJourney = plannedState !== null
 const captainPoints = plannedState === 'DGW' ? 7 : 6
 const squadPoints = plannedState === 'DGW' ? 24 : 22
 const benchPlayerId = plannedState === 'auto-sub' ? 6 : 12
+const modalRaceJourney = recoveryMode === 'live-journey-modal-race'
 const publishedJourney = recoveryMode === 'live-journey-published' || plannedStateJourney
-const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney
+const formalJourney = recoveryMode === 'live-journey-second-entry' || publishedJourney || modalRaceJourney
+const catalogSelectionJourney = recoveryMode === 'live-journey-published'
 const journeyTimezone = plannedStateJourney || plannedComparison || plannedReview ? 'UTC' : 'Australia/Perth'
 const journeyTheme = plannedStateJourney || plannedComparison || plannedReview ? 'dark' : 'system'
-for (const locale of plannedStateJourney || plannedComparison || plannedReview ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
-for (const catalogWidth of plannedStateJourney || plannedComparison || plannedReview ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
+for (const locale of plannedStateJourney || plannedComparison || plannedReview || modalRaceJourney ? ['zh-CN'] : recoveryMode === 'loading-layout' || recoveryMode === 'settlement-time' || recoveryMode === 'none' || recoveryMode === 'tournament-race' || recoveryMode === 'search-empty' || recoveryMode.startsWith('catalog-') || recoveryMode === 'gw-route' || recoveryMode.startsWith('live-journey') ? ['en', 'zh-CN'] : ['en']) {
+for (const catalogWidth of plannedStateJourney || plannedComparison || plannedReview || modalRaceJourney ? [390] : recoveryMode.startsWith('catalog-') || recoveryMode === 'tournament-race' || recoveryMode === 'live-journey-focus' || formalJourney || comparisonJourney ? [1440, 390] : [0]) {
 const routePath = locale === 'zh-CN' ? '/zh-CN/my-fpl/competitions' : '/my-fpl/competitions'
 const fixturesPath = locale === 'zh-CN' ? '/zh-CN/explore/fixtures' : '/explore/fixtures'
 const partialSsrSeed = recoveryMode === 'partial-ssr-seed' || recoveryMode === 'failed-ssr-seed'
@@ -1242,7 +1244,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	}
 	const session = await createSession({ entryId: 123 })
 	if (formalJourney || comparisonJourney || plannedReview) await page.addInitScript(theme => localStorage.setItem('theme', theme), journeyTheme)
-	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	const phase = { phaseId: 'points-1', format: 'POINTS', startEventId: catalogSelectionJourney ? 3 : 1, endEventId: 4, state: 'READY', revision: '1', semanticSha256: 'a'.repeat(64), settledAt: '2026-09-15T00:00:00Z', publishedAt: '2026-09-15T01:00:00Z', correctedAt: null }
+	const phaseTwo = { ...phase, phaseId: 'points-2', startEventId: 1, endEventId: 2, revision: '2', semanticSha256: 'b'.repeat(64), publishedAt: '2026-09-15T02:00:00Z' }
 	if (recoveryMode === 'settlement-time') {
 		phase.settledAt = '2026-09-15T18:00:00Z'
 		phase.publishedAt = '2026-09-15T19:00:00Z'
@@ -1258,17 +1261,153 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	const reviewTournamentId = recoveryMode.startsWith('live-journey') ? 6 : 77
 	const scope = { ...phase, tournamentId: reviewTournamentId, eventId: 4, rowCount: 1, expectedSubjectCount: 1, readySubjectCount: 1, notApplicableSubjectCount: 0 }
 	const rules = [
-		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: recoveryMode === 'search-empty', pageInfo, edges: [{ cursor: '77', node: { tournamentId: reviewTournamentId, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: [phase], state: 'READY' } }] } } },
-		{ operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: reviewTournamentId, throughEventId: 4, latestFinalizedEventId: 4, phases: [phase] } } },
+		{ operation: 'GetMyTournamentReviewCatalog', data: { myTournamentReviewCatalog: { state: 'READY', asOf: phase.publishedAt, viewerEntryId: 123, adminReadAll: recoveryMode === 'search-empty', pageInfo, edges: [{ cursor: '77', node: { tournamentId: reviewTournamentId, name: 'Fixture Review Cup', creator: 'Fixture', leagueId: 77, leagueType: 'CLASSIC', totalTeamNum: 1, latestFinalizedEventId: 4, previousReadyEventId: 3, setupStatus: 'READY', latestFinalizedScope: { ...scope, repairState: 'NONE' }, phaseSummaries: catalogSelectionJourney ? [phaseTwo, phase] : [phase], state: 'READY' } }] } } },
+		{ operation: 'GetMyTournamentSeasonReview', data: { myTournamentSeasonReview: { state: 'READY', tournamentId: reviewTournamentId, throughEventId: 4, latestFinalizedEventId: 4, phases: catalogSelectionJourney ? [phaseTwo, phase] : [phase] } } },
 		{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'READY', scope, payload: { format: 'POINTS', points } } } },
 		...['POINTS_STANDINGS', 'POINTS_TRAJECTORIES'].map(section => ({ operation: pointsSectionOperation, variables: { section }, data: { myTournamentSeasonReviewSection: { ...phase, tournamentId: reviewTournamentId, throughEventId: 4, section, points, h2h: null, knockout: null, pageInfo } } }))
 	]
+	const catalogJourneyRules: Array<{ operation: string; variables?: Record<string, unknown>; data: unknown }> = []
+	let catalogJourneyCatalogRule: (typeof rules)[number] | null = null
+	if (catalogSelectionJourney) {
+		const catalogData = rules[0].data
+		if (!('myTournamentReviewCatalog' in catalogData) || !catalogData.myTournamentReviewCatalog) throw new Error('Missing catalog fixture')
+		const catalog = catalogData.myTournamentReviewCatalog
+		const targetEdge = { ...catalog.edges[0], cursor: String(reviewTournamentId) }
+		const initialTournamentId = 77
+		const initialScope = { ...scope, tournamentId: initialTournamentId }
+		const initialTournamentEdge = {
+			...targetEdge,
+			cursor: String(initialTournamentId),
+			node: {
+				...targetEdge.node,
+				tournamentId: initialTournamentId,
+				name: 'Catalog Starting Cup',
+				phaseSummaries: [phase],
+				latestFinalizedScope: { ...initialScope, repairState: 'NONE' }
+			}
+		}
+		catalogJourneyCatalogRule = {
+			...rules[0],
+			data: {
+				myTournamentReviewCatalog: {
+					...catalog,
+					edges: [initialTournamentEdge, ...catalog.edges]
+				}
+			}
+		}
+		catalogJourneyRules.push({
+			operation: 'GetMyTournamentSeasonReview',
+			variables: { tournamentId: initialTournamentId },
+			data: {
+				myTournamentSeasonReview: {
+					state: 'READY',
+					tournamentId: initialTournamentId,
+					throughEventId: 4,
+					latestFinalizedEventId: 4,
+					phases: [phase]
+				}
+			}
+		})
+		const initialPoints = {
+			...points,
+			rows: points.rows.map(row => ({ ...row, entryName: 'Catalog Starting United' }))
+		}
+		catalogJourneyRules.push({
+			operation: 'GetMyTournamentGameweekReview',
+			variables: { tournamentId: initialTournamentId, eventId: 4 },
+			data: {
+				myTournamentGameweekReview: {
+					state: 'READY',
+					scope: initialScope,
+					payload: { format: 'POINTS', points: initialPoints }
+				}
+			}
+		})
+		const gw3Points = {
+			...points,
+			grossPointsTotal: 33,
+			netPointsTotal: 29,
+			rows: points.rows.map(row => ({
+				...row,
+				entryName: 'GW3 Fixture United',
+				grossPoints: 33,
+				netPoints: 29,
+				eventRank: 1
+			}))
+		}
+		catalogJourneyRules.push({
+			operation: 'GetMyTournamentGameweekReview',
+			variables: { tournamentId: reviewTournamentId, eventId: 3 },
+			data: {
+				myTournamentGameweekReview: {
+					state: 'READY',
+					scope: { ...scope, eventId: 3 },
+					payload: { format: 'POINTS', points: gw3Points }
+				}
+			}
+		})
+		const phaseTwoCursor = 'phase-two-standings-page-2'
+		const phaseTwoFirstPoints = {
+			...points,
+			hasNextPage: true,
+			nextCursor: phaseTwoCursor,
+			rows: [{ ...points.rows[0], entryId: 124, entryName: 'Phase Two Fixture United', rank: 1 }]
+		}
+		const phaseTwoNextPoints = {
+			...points,
+			hasNextPage: false,
+			nextCursor: null,
+			rows: [{ ...points.rows[0], entryId: 125, entryName: 'Phase Two Next United', rank: 2 }]
+		}
+		const phaseTwoSection = (section: string, sectionPoints: Omit<typeof points, 'nextCursor'> & { nextCursor: string | null }, hasNextPage: boolean, endCursor: string | null) => ({
+			...phaseTwo,
+			tournamentId: reviewTournamentId,
+			throughEventId: 4,
+			section,
+			points: sectionPoints,
+			h2h: null,
+			knockout: null,
+			pageInfo: { hasNextPage, endCursor }
+		})
+		catalogJourneyRules.push(
+			{
+				operation: pointsSectionOperation,
+				variables: { tournamentId: reviewTournamentId, phaseId: phaseTwo.phaseId, section: 'POINTS_STANDINGS', after: phaseTwoCursor },
+				data: { myTournamentSeasonReviewSection: phaseTwoSection('POINTS_STANDINGS', phaseTwoNextPoints, false, null) }
+			},
+			{
+				operation: pointsSectionOperation,
+				variables: { tournamentId: reviewTournamentId, phaseId: phaseTwo.phaseId, section: 'POINTS_STANDINGS' },
+				data: { myTournamentSeasonReviewSection: phaseTwoSection('POINTS_STANDINGS', phaseTwoFirstPoints, true, phaseTwoCursor) }
+			},
+			{
+				operation: pointsSectionOperation,
+				variables: { tournamentId: reviewTournamentId, phaseId: phaseTwo.phaseId, section: 'POINTS_TRAJECTORIES' },
+				data: { myTournamentSeasonReviewSection: phaseTwoSection('POINTS_TRAJECTORIES', points, false, null) }
+			}
+		)
+	}
+	const fixtureReviewRules = catalogJourneyCatalogRule
+		? [catalogJourneyCatalogRule, ...rules.slice(1)]
+		: rules
 	let releaseSections!: () => void
 	const gate = new Promise<void>(resolve => { releaseSections = resolve })
 	let sectionRequests = 0
+	const sectionRequestVariables: Record<string, unknown>[] = []
 	let secondSectionRequests = 0
 	let viewNavigationRequests = 0
 	let readyReports = 0
+	const assertNoFailedGraphqlFixtureRequests = async () => {
+		type FixtureRequest = { operation: string; variables: Record<string, unknown>; status?: number; finishedAt: number | null; abortedAt: number | null }
+		const readRequests = async () => await (await fetch(fixture)).json() as { requests: FixtureRequest[] }
+		await expect.poll(async () => {
+			const observed = await readRequests()
+			return observed.requests.filter(request => request.finishedAt === null && request.abortedAt === null)
+		}).toEqual([])
+		const observed = await readRequests()
+		const failures = observed.requests.filter(request => typeof request.status === 'number' && request.status >= 500)
+		expect(failures, 'unexpected GraphQL fixture 5xx responses').toEqual([])
+	}
 	await page.route('**/api/vitals', async route => {
 		const samples = route.request().postDataJSON().samples ?? []
 		for (const sample of samples) {
@@ -1306,6 +1445,13 @@ test(`SSR remediation tournament season sections load on demand without a false 
 	try {
 		expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: [...rules, ...comparisonRules] }) })).ok).toBe(true)
 		await addSessionCookie(page, session.cookie)
+		let holdCaptainDetailRequests = false
+		let captainDetailRequestGate: Promise<void> | null = null
+		let captainDetailRequestsStarted: (() => void) | null = null
+		let captainDetailRequestCount = 0
+		let failPlayerDetailRequestsFor: number | null = null
+		let failPlayerDetailRequestCount = 0
+		let failSinglePlayerDetailRequest: { playerId: number; operation: 'EventLiveExplainPlayer' | 'PlayerLive' } | null = null
 		await page.route('**/api/graphql', async route => {
 			const payload = route.request().postDataJSON()
 			// This navigation fixture has no official player breakdown. Return a
@@ -1314,7 +1460,24 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			if (formalJourney && /query (PlayerLive|EventLiveExplainPlayer)\b/.test(payload.query ?? '')) {
 				const playerId = Number(payload.variables.playerId ?? payload.variables.elementId)
 				expect(payload.variables.eventId).toBe(4)
-				expect([1, benchPlayerId]).toContain(playerId)
+				expect([1, benchPlayerId, ...(modalRaceJourney ? [13, 14] : [])]).toContain(playerId)
+				if (holdCaptainDetailRequests && playerId === 1 && captainDetailRequestGate) {
+					captainDetailRequestCount += 1
+					if (captainDetailRequestCount === 2) captainDetailRequestsStarted?.()
+					await captainDetailRequestGate
+				}
+				if (failPlayerDetailRequestsFor === playerId) {
+					failPlayerDetailRequestCount += 1
+					if (failPlayerDetailRequestCount <= 2) {
+						return route.fulfill({ status: 503, json: { errors: [{ message: 'Player detail temporarily unavailable' }] } })
+					}
+				}
+				if (
+					failSinglePlayerDetailRequest?.playerId === playerId &&
+					payload.query?.includes(failSinglePlayerDetailRequest.operation)
+				) {
+					return route.fulfill({ status: 503, json: { errors: [{ message: 'Player explain temporarily unavailable' }] } })
+				}
 				const stats = { minutes: plannedState === 'DGW' && playerId === 1 ? 90 : 45, goalsScored: playerId === 1 ? 1 : 0, assists: 0, cleanSheets: 0, goalsConceded: playerId === 1 ? 2 : 0, defensiveContribution: 0, ownGoals: 0, penaltiesSaved: 0, penaltiesMissed: 0, yellowCards: 0, redCards: 0, saves: 0, bonus: 0 }
 				const contributions = [{ identifier: 'minutes', value: 45, points: 1 }, ...(playerId === 1 ? [{ identifier: 'goals_scored', value: 1, points: 6 }, { identifier: 'goals_conceded', value: 2, points: -1 }] : [])]
 				// The public operation selects aggregated contributions, not fixture
@@ -1341,7 +1504,9 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				return route.continue()
 			}
 			sectionRequests += 1
-			expect(payload.variables).toMatchObject({ tournamentId: 77, throughEventId: 4, phaseId: phase.phaseId, revision: '1', semanticSha256: phase.semanticSha256 })
+			sectionRequestVariables.push(payload.variables)
+			const requestPhase = payload.variables.phaseId === phaseTwo.phaseId ? phaseTwo : phase
+			expect(payload.variables).toMatchObject({ tournamentId: catalogSelectionJourney ? 6 : 77, throughEventId: 4, phaseId: requestPhase.phaseId, revision: requestPhase.revision, semanticSha256: requestPhase.semanticSha256 })
 			await gate
 			if (failFirstSections && sectionRequests <= 2) {
 				await route.fulfill({ status: 503, headers: { 'retry-after': '0' }, json: { errors: [{ message: 'Section temporarily unavailable' }] } })
@@ -1620,44 +1785,149 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					await route.fulfill({ response, json: body })
 				})
 			}
+			const liveContextResponse = await fetch(fixture.replace('/__performance', '/graphql'), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ query: 'query GetLiveContext { __typename }' })
+			})
+			const liveContextSeed = await liveContextResponse.json()
+			expect(liveContextSeed.errors).toBeUndefined()
+			Object.assign(liveContextSeed.data.coreEventContext, {
+				currentEventId: 4,
+				nextEventId: 5,
+				latestFinishedEventId: 3
+			})
+			Object.assign(liveContextSeed.data.liveContext, {
+				eventId: 4,
+				nextEventId: 5,
+				anchorEventId: 4,
+				latestFinalizedEventId: 3,
+				state: 'LIVE_ACTIVE',
+				windowState: 'LIVE_ACTIVE',
+				producerState: 'LIVE_ACTIVE',
+				dataAvailability: 'FRESH',
+				delivery: {
+					...liveContextSeed.data.liveContext.delivery,
+					state: 'FRESH',
+					reasonCodes: []
+				}
+			})
+			const liveContextRule = { operation: 'GetLiveContext', data: liveContextSeed.data }
 			const unavailableRules = [
 				...comparisonRules,
 				...secondEntryRules,
+				...catalogJourneyRules,
+				liveContextRule,
+				...(modalRaceJourney ? [{ operation: 'EventLiveExplainBatch', variables: { eventId: 4 }, data: { eventLiveExplains: [] } }] : []),
 				...(publishedJourney ? [] : [{ operation: 'GetMyTournamentGameweekReview', data: { myTournamentGameweekReview: { state: 'UNAVAILABLE', scope: null, payload: null } } }]),
-				...rules
+				...fixtureReviewRules
 			]
 			expect((await fetch(fixture, { method: 'POST', body: JSON.stringify({ rules: unavailableRules }) })).ok).toBe(true)
-			await page.goto(`${routePath}?tournamentId=6&view=gameweek&gw=4`)
+			await page.goto(`${routePath}?tournamentId=${catalogSelectionJourney ? 77 : 6}&view=gameweek&gw=4`)
+			if (catalogSelectionJourney) {
+				const initialReview = page.locator('[data-review-ready="true"]')
+				await expect(initialReview).toHaveAttribute('data-review-tournament', '77')
+				await expect(initialReview).toHaveAttribute('data-review-gw', '4')
+				await expect(page.getByRole('cell', { name: /Catalog Starting United/ })).toBeVisible()
+				const reviewSelectors = page.getByRole('complementary').getByRole('combobox')
+				await expect(reviewSelectors).toHaveCount(2)
+				await reviewSelectors.nth(0).selectOption('6')
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+				const selectedReview = page.locator('[data-review-ready="true"]')
+				await expect(selectedReview).toHaveAttribute('data-review-tournament', '6')
+				await expect(selectedReview).toHaveAttribute('data-review-gw', '4')
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+				await expect(reviewSelectors.nth(1).locator('option[value="3"]')).toHaveCount(1)
+				await reviewSelectors.nth(1).selectOption('3')
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '3')
+				await expect(selectedReview).toHaveAttribute('data-review-gw', '3')
+				await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toBeVisible()
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toHaveCount(0)
+				await reviewSelectors.nth(1).selectOption('4')
+				await expect(page).toHaveURL(url => url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
+				await expect(selectedReview).toHaveAttribute('data-review-gw', '4')
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+				await expect(page.getByRole('cell', { name: /GW3 Fixture United/ })).toHaveCount(0)
+				releaseSections()
+				const seasonTab = page.getByRole('tab', { name: locale === 'zh-CN' ? '赛季' : 'Season', exact: true })
+				const gameweekTab = page.getByRole('tab', { name: locale === 'zh-CN' ? '轮次' : 'Gameweek', exact: true })
+				await seasonTab.click()
+				await expect.poll(() => sectionRequests).toBe(2)
+				await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-view', 'season')
+				await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-tournament', '6')
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
+				await gameweekTab.click()
+				await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-view', 'gameweek')
+				expect(sectionRequests).toBe(2)
+				await seasonTab.click()
+				await expect(page.locator('[data-review-ready="true"]')).toHaveAttribute('data-review-view', 'season')
+				expect(sectionRequests).toBe(2)
+				const phaseTabs = page.getByRole('tablist', { name: locale === 'zh-CN' ? '赛事阶段' : 'Tournament phases' })
+				const phaseTwoTab = phaseTabs.getByRole('tab', { name: /(?:积分赛|Points).*GW\s*1[–-]2/ })
+				await phaseTwoTab.click()
+				await expect.poll(() => sectionRequests).toBe(4)
+				const phaseReview = page.locator('[data-review-ready="true"]')
+				await expect(phaseReview).toHaveAttribute('data-review-phase', 'points-2')
+				await expect(phaseReview).toHaveAttribute('data-review-revision', '2')
+				await expect(page.getByRole('cell', { name: /Phase Two Fixture United/ })).toBeVisible()
+				await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toHaveCount(0)
+				await expect(page.getByRole('cell', { name: /Phase Two Next United/ })).toHaveCount(0)
+				await page.getByRole('button', { name: locale === 'zh-CN' ? '加载更多' : 'Load more', exact: true }).click()
+				await expect.poll(() => sectionRequests).toBe(5)
+				await expect(page.getByRole('cell', { name: /Phase Two Next United/ })).toBeVisible()
+				await expect(page.getByRole('button', { name: locale === 'zh-CN' ? '加载更多' : 'Load more', exact: true })).toHaveCount(0)
+				const observed = await (await fetch(fixture)).json() as { requests: Array<{ operation: string; variables: Record<string, unknown> }> }
+				const eventReads = observed.requests
+					.filter(request => request.operation === 'GetMyTournamentGameweekReview')
+					.map(request => request.variables)
+				expect(eventReads).toEqual(expect.arrayContaining([
+					expect.objectContaining({ tournamentId: 77, eventId: 4 }),
+					expect.objectContaining({ tournamentId: 6, eventId: 3 }),
+					expect.objectContaining({ tournamentId: 6, eventId: 4 })
+				]))
+				expect(sectionRequestVariables).toEqual(expect.arrayContaining([
+					expect.objectContaining({ tournamentId: 6, phaseId: 'points-2', section: 'POINTS_STANDINGS', revision: '2', semanticSha256: 'b'.repeat(64) }),
+					expect.objectContaining({ tournamentId: 6, phaseId: 'points-2', section: 'POINTS_TRAJECTORIES', revision: '2', semanticSha256: 'b'.repeat(64) }),
+					expect.objectContaining({ tournamentId: 6, phaseId: 'points-2', section: 'POINTS_STANDINGS', after: 'phase-two-standings-page-2', revision: '2', semanticSha256: 'b'.repeat(64) })
+				]))
+			}
 			const prefix = locale === 'zh-CN' ? '/zh-CN' : ''
 			const unsettledLink = page.getByRole('link', { name: locale === 'zh-CN' ? '未结算数据请前往 Live' : 'Open Live for unsettled data', exact: true })
 			const live = publishedJourney
-				? page.getByRole('contentinfo').getByRole('link', { name: locale === 'zh-CN' ? '实时赛事' : 'Live Competitions', exact: true })
+				? page.locator('[data-review-ready="true"]').getByRole('link', { name: locale === 'zh-CN' ? '查看实时榜' : 'View live standings', exact: true })
 				: unsettledLink
 			if (publishedJourney) {
 				const review = page.locator('[data-review-ready="true"]')
 				await expect(review).toHaveAttribute('data-review-tournament', '6')
 				await expect(review).toHaveAttribute('data-review-gw', '4')
-				await expect(review).toHaveAttribute('data-review-revision', '1')
-				await expect(review).toHaveAttribute('data-review-hash', 'a'.repeat(64))
-				const row = review.getByRole('row').filter({ hasText: 'Season Fixture United' })
+				await expect(review).toHaveAttribute('data-review-revision', catalogSelectionJourney ? '2' : '1')
+				await expect(review).toHaveAttribute('data-review-hash', (catalogSelectionJourney ? 'b' : 'a').repeat(64))
+				const row = review.getByRole('row').filter({ hasText: catalogSelectionJourney ? 'Phase Two Fixture United' : 'Season Fixture United' })
 				await expect(row).toHaveCount(1)
-				await expect(row).toContainText('75')
-				await expect(row).toContainText('71')
+				const cells = row.getByRole('cell')
+				await expect(cells).toHaveCount(6)
+				await expect(cells.nth(2)).toHaveText(catalogSelectionJourney ? '300' : '75')
+				await expect(cells.nth(3)).toHaveText('4')
+				await expect(cells.nth(4)).toHaveText(catalogSelectionJourney ? '296' : '71')
+				await expect(cells.nth(5)).toHaveText('300')
 				await expect(unsettledLink).toHaveCount(0)
+				await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			}
 			await expect(live).toBeVisible()
-			await expect(live).toHaveAttribute('href', publishedJourney ? `${prefix}/live/competitions` : `${prefix}/live/competitions?tournamentId=6&gw=4`)
+			await expect(live).toHaveAttribute('href', `${prefix}/live/competitions?tournamentId=6&gw=4`)
 			let recoveryBoardRequests = 0
+			let recoveryBoardUpdates = 0
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
 				await page.route('**/api/live/competitions/6/board', async route => {
 					recoveryBoardRequests += 1
 					const response = await route.fetch()
 					const body = await response.json()
-					if (recoveryBoardRequests > 1) {
+					if (recoveryBoardRequests > 1 && response.ok() && body?.entryLiveCompetitionBoard) {
 						const board = body.entryLiveCompetitionBoard
 						board.head.contentRevision = 'recovered-content-v2'
 						board.head.publication.revisions.scoreCore = 'e2e-competition-score-v2'
 						for (const row of board.rows) row.score.revisions.scoreCore = 'e2e-competition-score-v2'
+						recoveryBoardUpdates += 1
 					}
 					await route.fulfill({ response, json: body })
 				})
@@ -1680,9 +1950,12 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				response.url().includes('/api/live/competitions/6/selection-index?') && new URL(response.url()).searchParams.get('eventId') === '4' && response.status() === 200)
 			await live.click()
 			if (publishedJourney) {
-				await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions`)
-				await page.getByRole('combobox', { name: locale === 'zh-CN' ? '选择轮次' : 'Select gameweek', exact: true }).click()
-				await page.getByRole('option', { name: locale === 'zh-CN' ? '第 4 轮' : 'Gameweek 4', exact: true }).click()
+				await expect(page).toHaveURL(url =>
+					url.pathname === `${prefix}/live/competitions` &&
+					url.searchParams.get('tournamentId') === '6' &&
+					url.searchParams.get('gw') === '4'
+				)
+				await expect(page.locator('[data-competition-perf-ready="detail"][data-competition-tournament-id="6"][data-competition-gameweek="4"]')).toBeVisible()
 			}
 			if (recoveryMode === 'live-journey-index-retry' || recoveryMode === 'live-journey-index-gone') {
 				await expect(page.getByRole('link', { name: /E2E United/ }).filter({ visible: true })).toBeVisible()
@@ -1701,7 +1974,8 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			})
 			await expect(page).toHaveURL(url => url.pathname === `${prefix}/live/competitions` && url.searchParams.get('tournamentId') === '6' && url.searchParams.get('gw') === '4')
 			if (recoveryMode === 'live-journey-index-gone-new-revision') {
-				expect(recoveryBoardRequests).toBe(2)
+				expect(recoveryBoardRequests).toBeGreaterThanOrEqual(2)
+				expect(recoveryBoardUpdates).toBeGreaterThanOrEqual(1)
 				expect(indexRequests).toBe(2)
 				await expect(page.getByRole('alert').filter({ hasText: locale === 'zh-CN' ? '筛选选项暂时不可用' : 'Filter options are temporarily unavailable' })).toHaveCount(0)
 				await expect(page.locator('[data-competition-perf-ready="detail"]')).toBeVisible()
@@ -2237,6 +2511,144 @@ test(`SSR remediation tournament season sections load on demand without a false 
 				await expect(dialog).toHaveCount(0)
 				await expect(row).toBeFocused()
 			}
+			if (modalRaceJourney) {
+				let releaseCaptainRequests!: () => void
+				let markCaptainRequestsStarted!: () => void
+				const captainRequestsGate = new Promise<void>(resolve => {
+					releaseCaptainRequests = resolve
+				})
+				const captainRequestsStarted = new Promise<void>(resolve => {
+					markCaptainRequestsStarted = resolve
+				})
+				captainDetailRequestCount = 0
+				captainDetailRequestGate = captainRequestsGate
+				captainDetailRequestsStarted = markCaptainRequestsStarted
+				holdCaptainDetailRequests = true
+				const captain = pitch.getByRole('button', {
+					name: locale === 'zh-CN' ? '查看 Player 1 的详情' : 'View details for Player 1',
+					exact: true
+				})
+				const bench = pitch.getByRole('button', {
+					name: locale === 'zh-CN' ? `查看 Player ${benchPlayerId} 的详情` : `View details for Player ${benchPlayerId}`,
+					exact: true
+				})
+				const dialog = page.getByRole('dialog')
+				try {
+					await captain.click()
+					await captainRequestsStarted
+					expect(captainDetailRequestCount).toBe(2)
+					await expect(dialog.getByRole('heading', { name: 'Player 1', exact: true })).toBeVisible()
+					await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toBeVisible()
+					await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+					await expect(dialog).toHaveCount(0)
+
+					await bench.click()
+					await expect(dialog.getByRole('heading', { name: `Player ${benchPlayerId}`, exact: true })).toBeVisible()
+					await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+					const lateCaptainResponses = Promise.all([
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('EventLiveExplainPlayer') && payload.variables?.elementId === 1
+						}),
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('PlayerLive') && payload.variables?.playerId === 1
+						})
+					])
+					releaseCaptainRequests()
+					await lateCaptainResponses
+					await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+					await expect(dialog.getByRole('heading', { name: `Player ${benchPlayerId}`, exact: true })).toBeVisible()
+					await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+					await expect(dialog.getByRole('listitem')).toHaveCount(2)
+					const values = await dialog.getByRole('listitem').locator(':scope > span:last-child').allTextContents()
+					expect(values.map(value => Number(value.replace(/\s/g, '')))).toEqual([1, 1])
+				} finally {
+					releaseCaptainRequests()
+					holdCaptainDetailRequests = false
+					captainDetailRequestGate = null
+					captainDetailRequestsStarted = null
+				}
+				await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+				await expect(dialog).toHaveCount(0)
+				const retryPlayer = pitch.getByRole('button', {
+					name: '查看 Player 13 的详情',
+					exact: true
+				})
+				failPlayerDetailRequestsFor = 13
+				failPlayerDetailRequestCount = 0
+				try {
+					const firstFailureResponses = Promise.all([
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('EventLiveExplainPlayer') && payload.variables?.elementId === 13
+						}),
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('PlayerLive') && payload.variables?.playerId === 13
+						})
+					])
+					await retryPlayer.click()
+					const failed = await firstFailureResponses
+					expect(failed.map(response => response.status())).toEqual([503, 503])
+					await expect(dialog.getByRole('heading', { name: 'Player 13', exact: true })).toBeVisible()
+					await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+					expect(failPlayerDetailRequestCount).toBe(2)
+					await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+					await expect(dialog).toHaveCount(0)
+
+					const recoveryResponses = Promise.all([
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('EventLiveExplainPlayer') && payload.variables?.elementId === 13
+						}),
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('PlayerLive') && payload.variables?.playerId === 13
+						})
+					])
+					await retryPlayer.click()
+					const recovered = await recoveryResponses
+					expect(recovered.map(response => response.status())).toEqual([200, 200])
+					await expect(dialog.getByRole('heading', { name: 'Player 13', exact: true })).toBeVisible()
+					await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+					expect(failPlayerDetailRequestCount).toBe(4)
+					await expect(dialog.getByRole('listitem')).toHaveCount(2)
+					const values = await dialog.getByRole('listitem').locator(':scope > span:last-child').allTextContents()
+					expect(values.map(value => Number(value.replace(/\s/g, '')))).toEqual([1, 1])
+				} finally {
+					failPlayerDetailRequestsFor = null
+				}
+				await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+				await expect(dialog).toHaveCount(0)
+				const partialPlayer = pitch.getByRole('button', { name: '查看 Player 14 的详情', exact: true })
+				failSinglePlayerDetailRequest = { playerId: 14, operation: 'EventLiveExplainPlayer' }
+				try {
+					const partialResponses = Promise.all([
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('EventLiveExplainPlayer') && payload.variables?.elementId === 14
+						}),
+						page.waitForResponse(response => {
+							const payload = response.request().postDataJSON()
+							return payload.query?.includes('PlayerLive') && payload.variables?.playerId === 14
+						})
+					])
+					await partialPlayer.click()
+					const [explainResponse, liveResponse] = await partialResponses
+					expect([explainResponse.status(), liveResponse.status()]).toEqual([503, 200])
+					await expect(dialog.getByRole('heading', { name: 'Player 14', exact: true })).toBeVisible()
+					await expect(dialog.getByText('正在加载积分明细…', { exact: true })).toHaveCount(0)
+					await expect(dialog.getByText('估算', { exact: true })).toBeVisible()
+					await expect(dialog.getByRole('listitem')).toHaveCount(2)
+					const values = await dialog.getByRole('listitem').locator(':scope > span:last-child').allTextContents()
+					expect(values.map(value => Number(value.replace(/\s/g, '')))).toEqual([1, 1])
+				} finally {
+					failSinglePlayerDetailRequest = null
+				}
+				await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+				await expect(dialog).toHaveCount(0)
+			}
 			// J07.11: browser history directly from the team, before the page-level return.
 			const originalTeamUrl = page.url()
 			await page.goBack()
@@ -2289,12 +2701,13 @@ test(`SSR remediation tournament season sections load on demand without a false 
 					variantIds: plannedStateJourney ? [`J06.state.${plannedState === 'ready' ? '01' : plannedState === 'stale' ? '02' : plannedState === 'DGW' ? '03' : '04'}`] : ['J06', 'J11'].map(caseId => `${caseId}.B.${locale}.${catalogWidth === 390 ? 'mobile390' : 'desktop1440'}.base`),
 					locale, viewport: { width: catalogWidth, height: 900 }, theme: journeyTheme, timezone: journeyTimezone, scenario: plannedState ?? 'baseline',
 					tournamentId: 6, gameweek: 4, entries: [15702, 6733550], formalDetailPlayers: [1, benchPlayerId], searchAssertions: ['hit', 'empty', 'clear-restores-both'],
+					reviewCatalogSelection: catalogSelectionJourney ? { initialTournamentId: 77, selectedTournamentId: 6, selectedGameweeks: [3, 4], viewSequence: ['gameweek', 'season', 'gameweek'], actualControls: ['tournament selector', 'gameweek selector', 'view tabs'] } : null,
 					controlAssertions: publishedJourney ? { captainIds: [1], chips: ['TRIPLE_CAPTAIN', 'BENCH_BOOST', 'WILDCARD', 'FREE_HIT', 'MANAGER'], sortColumns: ['TOTAL_POINTS', 'OVERALL_RANK', 'TEAM_VALUE', 'TRANSFER_COST', 'EVENT_POINTS'], sortDirections: ['ASC', 'DESC'], cursor: 'j06-page-1', appendedEntry: 9000001 } : null,
-						reviewStart: publishedJourney ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
+					reviewStart: catalogSelectionJourney ? 'catalog T77 READY, then user selects T6 and GW3→GW4' : publishedJourney ? 'READY revision1 hash a*64 with row75/71' : 'UNAVAILABLE',
 					formation: '3-4-3', startingCount: 11, benchCount: 4, viceCaptainId: 8, captainRawPoints: captainPoints, captainMultiplier: 2, captainContribution: captainPoints * 2, activeSquadTotal: squadPoints,
 					doubleGameweekAggregatedAppearances: plannedState === 'DGW' ? { minutes: 90, points: 2, assumedFixtures: 2, fixtureIdsObserved: false } : null, autoSub: plannedState === 'auto-sub' ? { playerIn: 12, playerOut: 11 } : null,
 					wholeCaseComplete: false, wholeVariantComplete: false, readyMs: null, eventToPaintMs: null,
-					missingReason: publishedJourney ? 'Ownership/team-count option enumeration, alternate competition phases, and controlled production performance remain open; captain/chip filters, five sort columns and cursor pagination are asserted.' : 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
+					missingReason: publishedJourney ? 'Catalog selection and GW3-to-GW4 selection are exercised only in this isolated fixture; ownership/team-count option enumeration, alternate competition phases, full matrix bindings and controlled production performance remain open.' : 'Scoped formal detail/navigation assertions; complete catalog/filter/phase matrix and production performance not covered.'
 				}) })
 			}
 
@@ -2480,6 +2893,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
             await expect(more).toHaveCount(0)
             await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-tournament', '77')
             await expect(page.locator('[data-review-ready]')).toHaveAttribute('data-review-gw', '4')
+            if (recoveryMode === 'catalog-pagination' || recoveryMode === 'catalog-race') await assertNoFailedGraphqlFixtureRequests()
             return
         }
 		if (recoveryMode === 'search-empty') {
@@ -2505,6 +2919,7 @@ test(`SSR remediation tournament season sections load on demand without a false 
 			await page.getByRole('button', { name: locale === 'zh-CN' ? '清除搜索' : 'Clear search', exact: true }).click()
 			await expect(page.getByRole('cell', { name: /Season Fixture United/ })).toBeVisible()
 			await expect(page.getByRole('textbox', { name: locale === 'zh-CN' ? '搜索赛事' : 'Search tournaments', exact: true })).toHaveValue('')
+			await assertNoFailedGraphqlFixtureRequests()
 			return
 		}
 		if (partialSsrSeed) {

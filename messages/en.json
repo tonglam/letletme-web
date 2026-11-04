@@ -2415,6 +2415,7 @@
 		"reviewPreviousReady": "View previous completed snapshot (GW{gameweek})",
 		"reviewPreviousReadyHint": "The latest finalized gameweek is still being prepared. This is an explicit historical view.",
 		"reviewLiveLink": "Open Live for unsettled data",
+		"reviewLiveStandingsLink": "View live standings",
 		"reviewFutureDirection": "Analysis roadmap",
 		"reviewFutureDirectionHint": "This foundation supports deeper tournament data analysis and retrospectives.",
 		"reviewPayloadMissing": "The finalized publication has no format payload.",
