@@ -279,7 +279,10 @@ export async function proxy(req: NextRequest) {
 
 	// Protected routes must observe entry verification and revocation immediately,
 	// rather than trusting the five-minute session cookie cache.
-	const authTiming = pathname === '/live/competitions' ? new RequestTiming() : null
+	const authTimingScope = pathname === '/live/competitions'
+		? 'live-competition-page'
+		: pathname === '/live/points' ? 'live-points-page' : null
+	const authTiming = authTimingScope ? new RequestTiming() : null
 	let session: Awaited<ReturnType<typeof getAuthorizationSession>>
 	try {
 		session = authTiming
@@ -292,7 +295,7 @@ export async function proxy(req: NextRequest) {
 			: await getAuthorizationSession(req.headers)
 	} finally {
 		if (authTiming) console.info('[proxy-auth]', {
-			scope: 'live-competition-page',
+			scope: authTimingScope,
 			region: process.env.VERCEL_REGION ?? null,
 			durationMs: Number(authTiming.elapsedMs().toFixed(2)),
 			stages: authTiming.snapshot()
