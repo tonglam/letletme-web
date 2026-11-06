@@ -160,7 +160,10 @@ export async function POST(request: NextRequest) {
 	}
 
 	let session = null
-	if (shouldResolveGraphQLProxySession(request.headers)) {
+	if (
+		!authorization.value &&
+		shouldResolveGraphQLProxySession(request.headers)
+	) {
 		try {
 			const { getAuthorizationSession } = await import('@/lib/auth')
 			session = await requestTiming.measure('sessionLookup', () =>
@@ -189,6 +192,31 @@ export async function POST(request: NextRequest) {
 		}
 	}
 
+	let miniAdminHeaders = {}
+	if (
+		secret &&
+		ingress?.ok &&
+		ingress.trafficClass === 'mini' &&
+		effectiveWorkload === 'interactive' &&
+		authorization.value
+	) {
+		try {
+			const { getMiniProgramTournamentAdminHeaders } =
+				await import('@/lib/miniprogram-account')
+			const token = authorization.value.slice('Bearer '.length)
+			miniAdminHeaders = await requestTiming.measure('sessionLookup', () =>
+				getMiniProgramTournamentAdminHeaders(token, secret)
+			)
+		} catch (error) {
+			// GraphQL still validates the bearer and can serve ordinary membership reads.
+			logSafeAuthDiagnostic(
+				'error',
+				'graphql proxy mini admin attestation failed',
+				error
+			)
+		}
+	}
+
 	const forwardHeaders = requestTiming.measureSync('headerBuild', () => {
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
@@ -205,7 +233,7 @@ export async function POST(request: NextRequest) {
 			headers.Authorization = authorization.value
 		}
 		if (secret && ingress?.ok) {
-			Object.assign(headers, ingress.headers)
+			Object.assign(headers, ingress.headers, miniAdminHeaders)
 			if (session?.user) {
 				Object.assign(
 					headers,

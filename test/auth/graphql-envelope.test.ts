@@ -229,3 +229,27 @@ describe('production GraphQL envelope contract', () => {
 		assert.equal(unverifiedPayload.adm, false)
 	})
 })
+
+it('uses a dedicated audience for the Mini tournament read role', () => {
+	const headers = buildGraphQLUserContextHeaders(
+		{
+			id: 'linked-admin',
+			fplEntryId: 123,
+			fplEntryVerifiedAt: '2026-08-21T00:00:00.000Z'
+		},
+		SECRET,
+		1_700_000_000,
+		'123',
+		'linked-admin',
+		'letletme-graphql-mini-tournament-read'
+	)
+	const payload = Buffer.from(headers['X-User-Context'], 'base64url').toString(
+		'utf8'
+	)
+	assert.equal(JSON.parse(payload).aud, 'letletme-graphql-mini-tournament-read')
+	assert.equal(JSON.parse(payload).adm, true)
+	assert.equal(
+		createHmac('sha256', SECRET).update(payload).digest('base64url'),
+		headers['X-User-Context-Sig']
+	)
+})
