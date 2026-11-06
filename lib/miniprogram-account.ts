@@ -6,6 +6,8 @@ import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { parseFplEntryId } from '@/lib/fpl-binding-core'
 import { validateFplEntry } from '@/lib/fpl'
+import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
+import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 import { sendMiniProgramEmailCode } from '@/lib/mailer'
 import {
 	MiniProgramAuthError,
@@ -328,6 +330,31 @@ async function resolveAccountByToken(token: string): Promise<{
 		deviceId: session.deviceId,
 		webUserId: session.userId,
 		account
+	}
+}
+
+export async function getMiniProgramTournamentAdminHeaders(
+	token: string,
+	secret: string
+): Promise<Record<string, string>> {
+	const entryIds = process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS
+	const userIds = process.env.PLATFORM_ADMIN_USER_IDS
+	if (!entryIds?.trim() || !userIds?.trim()) return {}
+	try {
+		const { account } = await resolveAccountByToken(token)
+		const user = await loadWebUser(account.linkedWebUserId)
+		if (!user || !isPlatformAdminIdentity(user, entryIds, userIds)) return {}
+		return buildGraphQLUserContextHeaders(
+			user,
+			secret,
+			undefined,
+			entryIds,
+			userIds,
+			'letletme-graphql-mini-tournament-read'
+		)
+	} catch (error) {
+		if (error instanceof MiniProgramAuthError && error.status === 401) return {}
+		throw error
 	}
 }
 

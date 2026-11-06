@@ -12,7 +12,8 @@ export function buildGraphQLUserContextHeaders(
 	secret: string,
 	nowSeconds = Math.floor(Date.now() / 1000),
 	platformAdminEntryConfig = process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS,
-	platformAdminUserConfig = process.env.PLATFORM_ADMIN_USER_IDS
+	platformAdminUserConfig = process.env.PLATFORM_ADMIN_USER_IDS,
+	audience = 'letletme-graphql'
 ): Record<string, string> {
 	const verifiedAtCandidate = user.fplEntryVerifiedAt
 		? new Date(user.fplEntryVerifiedAt)
@@ -29,7 +30,7 @@ export function buildGraphQLUserContextHeaders(
 			? user.fplEntryId
 			: null
 	const envelope = {
-		aud: 'letletme-graphql',
+		aud: audience,
 		uid: user.id,
 		eid: entryId,
 		evat: verifiedAt,
